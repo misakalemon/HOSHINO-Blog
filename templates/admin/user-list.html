@@ -1,0 +1,26 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}用户管理{% endblock %}
+{% block admin_content %}
+<div class="admin-header">
+    <h3>用户管理</h3>
+    <a href="{{ url_for('admin.new_user') }}" class="btn btn-primary">+ 新建用户</a>
+</div>
+<div class="admin-card">
+    <table class="admin-table">
+        <tr><th>ID</th><th>用户名</th><th>邮箱</th><th>显示名</th><th>角色</th><th>文章数</th><th>创建时间</th></tr>
+        {% for u in users %}
+        <tr>
+            <td>{{ u.id }}</td>
+            <td><strong style="color:#fff">{{ u.username }}</strong></td>
+            <td>{{ u.email }}</td>
+            <td>{{ u.display_name or '-' }}</td>
+            <td><span class="badge {{ 'badge-admin' if u.is_admin else 'badge-user' }}">{{ '管理员' if u.is_admin else '用户' }}</span></td>
+            <td>{{ u.posts.count() }}</td>
+            <td>{{ format_date(u.created_at, '%Y-%m-%d') }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" style="color:var(--text-muted)">暂无用户</td></tr>
+        {% endfor %}
+    </table>
+</div>
+{% endblock %}

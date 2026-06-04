@@ -1,0 +1,11 @@
+Flask==3.1.0
+Flask-SQLAlchemy==3.1.1
+Flask-Login==0.6.3
+Flask-WTF==1.2.2
+WTForms==3.2.1
+Markdown==3.7
+Pygments==2.19.1
+Pillow==11.1.0
+python-dotenv==1.1.0
+# MySQL 支持（可选：使用 MySQL 时取消注释）
+# pymysql==1.1.1

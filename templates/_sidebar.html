@@ -1,0 +1,36 @@
+<div class="widget">
+    <h4 class="widget-title">最新文章</h4>
+    <ul class="recent-list">
+        {% for rp in recent_posts %}
+        <li class="recent-item">
+            <div class="thumb{% if not rp.cover_image %} no-image{% endif %}">
+                <a href="{{ url_for('blog.single_post', slug=rp.slug) }}">
+                    {% if rp.cover_image %}
+                    <img src="{{ url_for('static', filename=rp.cover_image) }}" alt="{{ rp.title }}" loading="lazy">
+                    {% else %}
+                    <svg viewBox="0 0 24 24" fill="none" width="24" height="24"><use href="#icon-blog"/></svg>
+                    {% endif %}
+                </a>
+            </div>
+            <div class="info">
+                <div class="date">{{ format_date(rp.created_at, '%Y/%m/%d') }}</div>
+                <h5><a href="{{ url_for('blog.single_post', slug=rp.slug) }}">{{ rp.title }}</a></h5>
+            </div>
+        </li>
+        {% else %}
+        <li style="color:var(--text-muted); font-size:13px">暂无文章</li>
+        {% endfor %}
+    </ul>
+</div>
+
+<div class="widget">
+    <h4 class="widget-title">分类</h4>
+    <ul class="cat-list">
+        <li><a href="{{ url_for('blog.index') }}">全部分类 <span>{{ recent_posts|length if recent_posts else 0 }}</span></a></li>
+        {% for cat in categories %}
+        <li><a href="{{ url_for('blog.category', slug=cat.slug) }}">{{ cat.name }} <span>{{ cat.post_count() }}</span></a></li>
+        {% else %}
+        <li style="color:var(--text-muted); font-size:13px">暂无分类</li>
+        {% endfor %}
+    </ul>
+</div>

@@ -1,0 +1,183 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}{{ '编辑' if editing else '新建' }}文章{% endblock %}
+{% block extra_head %}
+<style>
+  /* --- 零依赖富文本编辑器样式 --- */
+  #rte-toolbar {
+    display: flex; flex-wrap: wrap; gap: 2px;
+    padding: 8px 12px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px 12px 0 0;
+    border-bottom: none;
+  }
+  #rte-toolbar button {
+    padding: 6px 10px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    font-family: 'Inter', system-ui, sans-serif;
+    transition: all 0.2s;
+    line-height: 1;
+  }
+  #rte-toolbar button:hover { background: rgba(255,255,255,0.06); color: var(--accent-cyan); }
+  #rte-toolbar .sep { width: 1px; background: var(--border-subtle); margin: 4px 2px; }
+  #rte-content {
+    min-height: 350px;
+    padding: 16px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border-subtle);
+    border-radius: 0 0 12px 12px;
+    color: var(--text-primary);
+    font-size: 15px;
+    line-height: 1.8;
+    outline: none;
+    overflow-y: auto;
+  }
+  #rte-content:focus { border-color: var(--accent-cyan); box-shadow: 0 0 12px rgba(0,240,255,0.06); }
+  #rte-content h1 { font-size: 28px; font-weight: 700; color: #fff; margin: 16px 0 8px; }
+  #rte-content h2 { font-size: 22px; font-weight: 700; color: #fff; margin: 14px 0 6px; }
+  #rte-content h3 { font-size: 18px; font-weight: 600; color: var(--accent-cyan); margin: 12px 0 6px; }
+  #rte-content p { margin-bottom: 8px; }
+  #rte-content blockquote {
+    border-left: 3px solid var(--accent-purple);
+    padding: 8px 16px;
+    margin: 12px 0;
+    background: rgba(124,58,237,0.06);
+    border-radius: 0 8px 8px 0;
+    color: var(--text-secondary);
+    font-style: italic;
+  }
+  #rte-content pre {
+    background: rgba(0,0,0,0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    overflow-x: auto;
+    margin: 12px 0;
+    color: var(--accent-green);
+  }
+  #rte-content a { color: var(--accent-cyan); text-decoration: underline; }
+  #rte-content ul, #rte-content ol { padding-left: 24px; margin-bottom: 8px; }
+  #rte-content ul li { list-style: disc; margin-bottom: 4px; }
+  #rte-content ol li { list-style: decimal; margin-bottom: 4px; }
+  #rte-content img { max-width: 100%; border-radius: 8px; margin: 8px 0; }
+
+  /* 字段错误提示 */
+  .field-error { color: var(--accent-pink); font-size: 12px; margin-top: 4px; }
+</style>
+{% endblock %}
+{% block admin_content %}
+<div class="admin-header">
+    <h3>{{ '编辑' if editing else '新建' }}文章</h3>
+    <a href="{{ url_for('admin.post_list') }}" class="btn btn-ghost">← 返回</a>
+</div>
+<div class="admin-card">
+    <form method="POST" id="post-form">
+        {{ form.hidden_tag() }}
+        <div class="form-group">
+            <label>标题</label>
+            <input type="text" name="title" value="{{ form.title.data or '' }}" required>
+            {% if form.title.errors %}<div class="field-error">{{ form.title.errors[0] }}</div>{% endif %}
+        </div>
+        <div class="form-group">
+            <label>链接标识 (Slug)</label>
+            <input type="text" name="slug" value="{{ form.slug.data or '' }}" required placeholder="my-post-title">
+            {% if form.slug.errors %}<div class="field-error">{{ form.slug.errors[0] }}</div>{% endif %}
+        </div>
+        <div class="form-group">
+            <label>摘要</label>
+            <textarea name="summary" rows="2">{{ form.summary.data or '' }}</textarea>
+        </div>
+        <div class="form-group">
+            <label>正文</label>
+            <!-- 零依赖富文本编辑器工具栏 -->
+            <div id="rte-toolbar">
+                <button type="button" onclick="rteCmd('formatBlock','h1')" title="标题1">H1</button>
+                <button type="button" onclick="rteCmd('formatBlock','h2')" title="标题2">H2</button>
+                <button type="button" onclick="rteCmd('formatBlock','h3')" title="标题3">H3</button>
+                <button type="button" onclick="rteCmd('formatBlock','p')" title="正文">P</button>
+                <span class="sep"></span>
+                <button type="button" onclick="rteCmd('bold')" title="粗体"><b>B</b></button>
+                <button type="button" onclick="rteCmd('italic')" title="斜体"><i>I</i></button>
+                <button type="button" onclick="rteCmd('underline')" title="下划线"><u>U</u></button>
+                <button type="button" onclick="rteCmd('strikeThrough')" title="删除线"><s>S</s></button>
+                <span class="sep"></span>
+                <button type="button" onclick="rteCmd('insertUnorderedList')" title="无序列表">UL</button>
+                <button type="button" onclick="rteCmd('insertOrderedList')" title="有序列表">OL</button>
+                <span class="sep"></span>
+                <button type="button" onclick="rteCmd('formatBlock','blockquote')" title="引用">❝</button>
+                <button type="button" onclick="rteCodeBlock()" title="代码块">&lt;/&gt;</button>
+                <button type="button" onclick="rteLink()" title="插入链接">🔗</button>
+                <span class="sep"></span>
+                <button type="button" onclick="rteCmd('removeFormat')" title="清除格式">✕</button>
+            </div>
+            <!-- 编辑器区域 -->
+            <div id="rte-content" contenteditable="true">{{ form.content.data|safe if form.content.data else '' }}</div>
+            <!-- 隐藏字段，表单提交时写入 -->
+            <textarea name="content" id="content-field" style="display:none">{{ form.content.data or '' }}</textarea>
+            {% if form.content.errors %}<div class="field-error">{{ form.content.errors[0] }}</div>{% endif %}
+        </div>
+        <script>
+        (function() {
+          'use strict';
+          // 执行编辑器命令
+          window.rteCmd = function(cmd, val) {
+            var rte = document.getElementById('rte-content');
+            rte.focus();
+            document.execCommand(cmd, false, val);
+          };
+          // 插入代码块
+          window.rteCodeBlock = function() {
+            var sel = window.getSelection().toString();
+            if (sel) {
+              document.execCommand('insertHTML', false, '<pre><code>' + sel + '</code></pre>');
+            } else {
+              document.execCommand('insertHTML', false, '<pre><code>在这里写代码</code></pre>');
+            }
+          };
+          // 插入链接
+          window.rteLink = function() {
+            var url = prompt('输入链接地址：', 'https://');
+            if (url) document.execCommand('createLink', false, url);
+          };
+
+          // 表单提交：将富文本内容同步到隐藏 textarea
+          var form = document.getElementById('post-form');
+          var hidden = document.getElementById('content-field');
+          var rte = document.getElementById('rte-content');
+
+          form.addEventListener('submit', function() {
+            hidden.value = rte.innerHTML;
+          });
+        })();
+        </script>
+        <div class="admin-row">
+            <div>
+                <div class="form-group">
+                    <label>分类</label>
+                    <select name="category">
+                        {% for val, label in form.category.choices %}
+                        <option value="{{ val }}" {% if form.category.data == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div>
+                <div class="form-group">
+                    <label>封面图片路径</label>
+                    <input type="text" name="cover_image" value="{{ form.cover_image.data or '' }}" placeholder="images/categories/xxx.jpg">
+                </div>
+            </div>
+        </div>
+        <div class="form-group">
+            <label><input type="checkbox" name="is_published" {% if form.is_published.data %}checked{% endif %}> 发布</label>
+        </div>
+        <button type="submit" class="btn btn-primary" id="submit-btn">{{ '更新' if editing else '创建' }}</button>
+    </form>
+</div>
+{% endblock %}

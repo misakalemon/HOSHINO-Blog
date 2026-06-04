@@ -1,0 +1,17 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}{{ '编辑' if editing else '新建' }}分类{% endblock %}
+{% block admin_content %}
+<div class="admin-header">
+    <h3>{{ '编辑' if editing else '新建' }}分类</h3>
+    <a href="{{ url_for('admin.category_list') }}" class="btn btn-ghost">← 返回</a>
+</div>
+<div class="admin-card">
+    <form method="POST">
+        {{ form.hidden_tag() }}
+        <div class="form-group"><label>名称</label><input type="text" name="name" value="{{ form.name.data or '' }}" required></div>
+        <div class="form-group"><label>链接标识 (Slug)</label><input type="text" name="slug" value="{{ form.slug.data or '' }}" required></div>
+        <div class="form-group"><label>描述</label><textarea name="description" rows="3">{{ form.description.data or '' }}</textarea></div>
+        <button type="submit" class="btn btn-primary">{{ '更新' if editing else '创建' }}</button>
+    </form>
+</div>
+{% endblock %}

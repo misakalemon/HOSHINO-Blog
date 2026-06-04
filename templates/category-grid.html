@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+{% block title %}{{ category.name }} - HOSHINO Blog{% endblock %}
+{% block content %}
+
+<div class="page-header">
+    <div class="container">
+        <h1>分类：{{ category.name }}</h1>
+        {% if category.description %}
+        <p>{{ category.description }}</p>
+        {% endif %}
+    </div>
+</div>
+
+<section style="padding-bottom:60px">
+    <div class="container">
+        <div class="row">
+            <div class="col-8">
+                {% if posts.items %}
+                <div class="post-grid">
+                    {% for post in posts.items %}
+                    <article class="post-card">
+                        <a href="{{ url_for('blog.single_post', slug=post.slug) }}" class="cover {% if not post.cover_image %}no-image{% endif %}">
+                            {% if post.cover_image %}
+                            <img src="{{ url_for('static', filename=post.cover_image) }}" alt="{{ post.title }}" loading="lazy">
+                            {% else %}
+                            <svg viewBox="0 0 24 24" fill="none"><use href="#icon-blog"/></svg>
+                            {% endif %}
+                        </a>
+                        <div class="body">
+                            <div class="meta">
+                                <span class="category">{{ category.name }}</span>
+                                <span class="date">{{ format_date(post.created_at, '%Y/%m/%d') }}</span>
+                            </div>
+                            <h3><a href="{{ url_for('blog.single_post', slug=post.slug) }}">{{ post.title }}</a></h3>
+                            <p class="excerpt">{{ truncate_text(post.summary or post.content|striptags, 180) }}</p>
+                        </div>
+                        <div class="footer-card">
+                            <div class="author">
+                                <span>{{ post.author.display_name or post.author.username }}</span>
+                            </div>
+                        </div>
+                    </article>
+                    {% endfor %}
+                </div>
+
+                {% if posts.pages > 1 %}
+                <div class="pagination-wrap">
+                    <ul class="pagination">
+                        {% if posts.has_prev %}
+                        <li><a href="{{ url_for('blog.category', slug=category.slug, page=posts.prev_num) }}">‹</a></li>
+                        {% endif %}
+                        {% for pn in posts.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                            {% if pn %}
+                            <li {% if pn==posts.page %}class="active"{% endif %}>
+                                <a href="{{ url_for('blog.category', slug=category.slug, page=pn) }}">{{ pn }}</a>
+                            </li>
+                            {% else %}
+                            <li><span>···</span></li>
+                            {% endif %}
+                        {% endfor %}
+                        {% if posts.has_next %}
+                        <li><a href="{{ url_for('blog.category', slug=category.slug, page=posts.next_num) }}">›</a></li>
+                        {% endif %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                {% else %}
+                <div class="empty-state">
+                    <h2>该分类暂无文章</h2>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="col-4">
+                <aside class="sidebar">
+                    {% include '_sidebar.html' %}
+                </aside>
+            </div>
+        </div>
+    </div>
+</section>
+
+{% endblock %}

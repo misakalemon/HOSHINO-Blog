@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}管理后台{% endblock %} · HOSHINO Blog</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tech.css') }}">
+    {% block extra_head %}{% endblock %}
+    <style>
+      /* Admin 专用扩展 — 复用 frontend 的暗色科技变量 */
+      :root {
+        --sidebar-w: 240px;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-family: 'Inter', system-ui, sans-serif;
+        display: flex;
+        min-height: 100vh;
+      }
+
+      /* --- 侧边栏 --- */
+      .admin-sidebar {
+        width: var(--sidebar-w);
+        background: var(--bg-secondary);
+        border-right: 1px solid var(--border-subtle);
+        padding: 24px 16px;
+        position: fixed;
+        top: 0; left: 0;
+        height: 100vh;
+        overflow-y: auto;
+        z-index: 100;
+      }
+      .admin-sidebar .logo {
+        font-size: 20px;
+        font-weight: 800;
+        background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin-bottom: 28px;
+        display: block;
+      }
+      .admin-sidebar .section-title {
+        color: var(--text-muted);
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        margin: 20px 0 8px;
+        padding-left: 12px;
+      }
+      .admin-sidebar a {
+        display: block;
+        color: var(--text-secondary);
+        padding: 10px 12px;
+        border-radius: var(--radius);
+        font-size: 13px;
+        font-weight: 500;
+        transition: all 0.2s;
+        margin-bottom: 2px;
+      }
+      .admin-sidebar a:hover { background: rgba(255,255,255,0.04); color: #fff; }
+      .admin-sidebar a.active {
+        background: rgba(0,240,255,0.08);
+        color: var(--accent-cyan);
+        border-left: 2px solid var(--accent-cyan);
+      }
+      .admin-sidebar .logout-link { color: var(--accent-pink) !important; margin-top: 12px; }
+      .admin-sidebar .logout-link:hover { background: rgba(255,45,120,0.08) !important; }
+
+      /* --- 主区域 --- */
+      .admin-main {
+        margin-left: var(--sidebar-w);
+        flex: 1;
+        padding: 28px 32px;
+        min-height: 100vh;
+      }
+      .admin-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 28px;
+      }
+      .admin-header h3 {
+        font-size: 22px;
+        font-weight: 700;
+        background: linear-gradient(135deg, #fff, var(--accent-cyan));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      /* --- Flash 消息 --- */
+      .flash {
+        padding: 12px 16px;
+        border-radius: var(--radius);
+        margin-bottom: 20px;
+        font-size: 13px;
+      }
+      .flash.success {
+        background: rgba(0,255,136,0.1);
+        border: 1px solid var(--accent-green);
+        color: var(--accent-green);
+      }
+      .flash.error {
+        background: rgba(255,45,120,0.1);
+        border: 1px solid var(--accent-pink);
+        color: var(--accent-pink);
+      }
+
+      /* --- 卡片 --- */
+      .admin-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        margin-bottom: 20px;
+      }
+      .admin-card h5 {
+        font-size: 14px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--accent-cyan);
+        margin-bottom: 16px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--border-subtle);
+      }
+      .card-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px,1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+      .stat-card {
+        text-align: center;
+        padding: 28px 16px;
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-lg);
+        transition: all 0.3s;
+      }
+      .stat-card:hover {
+        border-color: var(--accent-cyan);
+        box-shadow: 0 0 24px rgba(0,240,255,0.08);
+      }
+      .stat-card .num {
+        font-size: 36px;
+        font-weight: 800;
+        background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+      .stat-card .label {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-top: 6px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+
+      /* --- 表格 --- */
+      .admin-table { width: 100%; border-collapse: collapse; }
+      .admin-table th {
+        padding: 12px 14px;
+        text-align: left;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--text-muted);
+        border-bottom: 1px solid var(--border-subtle);
+      }
+      .admin-table td {
+        padding: 12px 14px;
+        font-size: 14px;
+        color: var(--text-secondary);
+        border-bottom: 1px solid rgba(255,255,255,0.03);
+      }
+      .admin-table tr:hover td { background: rgba(255,255,255,0.02); }
+      .admin-table td a { color: var(--accent-cyan); font-weight: 500; }
+      .admin-table td a:hover { color: #fff; }
+
+      /* --- 状态徽章 --- */
+      .badge {
+        display: inline-block;
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .badge-published, .badge-approved, .badge-admin {
+        background: rgba(0,255,136,0.12);
+        color: var(--accent-green);
+        border: 1px solid rgba(0,255,136,0.2);
+      }
+      .badge-draft, .badge-user {
+        background: rgba(255,255,255,0.05);
+        color: var(--text-muted);
+        border: 1px solid rgba(255,255,255,0.08);
+      }
+      .badge-pending {
+        background: rgba(255,45,120,0.12);
+        color: var(--accent-pink);
+        border: 1px solid rgba(255,45,120,0.2);
+      }
+
+      /* --- 按钮 (复用 tech.css 的 .btn, .btn-primary) --- */
+      .btn-danger {
+        background: rgba(255,45,120,0.1);
+        border: 1px solid rgba(255,45,120,0.2);
+        color: var(--accent-pink);
+      }
+      .btn-danger:hover {
+        background: var(--accent-pink);
+        color: #fff;
+        box-shadow: 0 0 16px rgba(255,45,120,0.3);
+      }
+      .btn-sm { padding: 6px 14px; font-size: 12px; }
+
+      /* --- 表单 (复用 .form-group, 微调) --- */
+      .admin-card .form-group label {
+        color: var(--text-secondary);
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 6px;
+      }
+      .admin-card .form-group input[type=checkbox] {
+        width: auto;
+        accent-color: var(--accent-cyan);
+        margin-right: 6px;
+      }
+
+      .admin-row { display: flex; gap: 16px; flex-wrap: wrap; }
+      .admin-row > * { flex: 1; min-width: 200px; }
+
+      /* --- 响应式 --- */
+      @media (max-width: 768px) {
+        :root { --sidebar-w: 60px; }
+        .admin-sidebar { padding: 16px 8px; }
+        .admin-sidebar .logo { font-size: 0; }
+        .admin-sidebar .logo::after { content: '//'; font-size: 18px; -webkit-text-fill-color: var(--accent-cyan); }
+        .admin-sidebar a { font-size: 0; padding: 10px 4px; text-align: center; }
+        .admin-sidebar .section-title { display: none; }
+        .admin-main { padding: 20px 14px; }
+        .admin-row { flex-direction: column; }
+        .admin-table { font-size: 12px; }
+        .admin-table th, .admin-table td { padding: 8px 6px; }
+      }
+    </style>
+</head>
+<body>
+
+<!-- 侧边栏 -->
+<div class="admin-sidebar">
+    <a href="{{ url_for('admin.dashboard') }}" class="logo">// HOSHINO</a>
+
+    <div class="section-title">内容</div>
+    <a href="{{ url_for('admin.dashboard') }}" {% if request.endpoint == 'admin.dashboard' %}class="active"{% endif %}>📊 仪表盘</a>
+    <a href="{{ url_for('admin.post_list') }}" {% if request.endpoint and 'post' in request.endpoint %}class="active"{% endif %}>📝 文章</a>
+    <a href="{{ url_for('admin.category_list') }}" {% if request.endpoint and 'category' in request.endpoint %}class="active"{% endif %}>🏷️ 分类</a>
+    <a href="{{ url_for('admin.comment_list') }}" {% if request.endpoint and 'comment' in request.endpoint %}class="active"{% endif %}>💬 评论</a>
+
+    <div class="section-title">系统</div>
+    <a href="{{ url_for('admin.user_list') }}" {% if request.endpoint and 'user' in request.endpoint %}class="active"{% endif %}>👥 用户</a>
+    <a href="{{ url_for('admin.profile') }}" {% if request.endpoint == 'admin.profile' %}class="active"{% endif %}>👤 个人资料</a>
+
+    <a href="{{ url_for('blog.index') }}" style="color:var(--text-muted);margin-top:20px">🌐 查看网站</a>
+    <a href="{{ url_for('admin.logout') }}" class="logout-link">✕ 退出登录</a>
+</div>
+
+<!-- 主内容 -->
+<div class="admin-main">
+    {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% if msgs %}
+    {% for cat, msg in msgs %}
+    <div class="flash {{ cat }}">{{ msg }}</div>
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    {% block admin_content %}{% endblock %}
+</div>
+
+</body>
+</html>

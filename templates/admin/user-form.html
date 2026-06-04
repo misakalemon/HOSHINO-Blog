@@ -1,0 +1,20 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}{{ '编辑' if editing else '新建' }}用户{% endblock %}
+{% block admin_content %}
+<div class="admin-header">
+    <h3>{{ '编辑' if editing else '新建' }}用户</h3>
+    <a href="{{ url_for('admin.user_list') }}" class="btn btn-ghost">← 返回</a>
+</div>
+<div class="admin-card">
+    <form method="POST">
+        {{ form.hidden_tag() }}
+        <div class="form-group"><label>用户名</label><input type="text" name="username" value="{{ form.username.data or '' }}" required></div>
+        <div class="form-group"><label>邮箱</label><input type="email" name="email" value="{{ form.email.data or '' }}" required></div>
+        <div class="form-group"><label>密码{{ '(留空则保持不变)' if editing else '' }}</label><input type="password" name="password" {{ 'required' if not editing else '' }}></div>
+        <div class="form-group"><label>显示名</label><input type="text" name="display_name" value="{{ form.display_name.data or '' }}"></div>
+        <div class="form-group"><label>个人简介</label><textarea name="bio" rows="3">{{ form.bio.data or '' }}</textarea></div>
+        <div class="form-group"><label><input type="checkbox" name="is_admin" {% if form.is_admin.data %}checked{% endif %}> 管理员</label></div>
+        <button type="submit" class="btn btn-primary">{{ '更新' if editing else '创建' }}</button>
+    </form>
+</div>
+{% endblock %}

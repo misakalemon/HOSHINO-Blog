@@ -1,0 +1,28 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}分类管理{% endblock %}
+{% block admin_content %}
+<div class="admin-header">
+    <h3>分类管理</h3>
+    <a href="{{ url_for('admin.new_category') }}" class="btn btn-primary">+ 新建分类</a>
+</div>
+<div class="admin-card">
+    <table class="admin-table">
+        <tr><th>名称</th><th>Slug</th><th>文章数</th><th>操作</th></tr>
+        {% for cat in categories %}
+        <tr>
+            <td><strong style="color:#fff">{{ cat.name }}</strong></td>
+            <td>{{ cat.slug }}</td>
+            <td>{{ cat.post_count() }}</td>
+            <td style="white-space:nowrap">
+                <a href="{{ url_for('admin.edit_category', id=cat.id) }}" class="btn btn-primary btn-sm">编辑</a>
+                <form method="POST" action="{{ url_for('admin.delete_category', id=cat.id) }}" style="display:inline" onsubmit="return confirm('确定删除 {{ cat.name }}？相关文章将变为未分类。')">
+                    <button class="btn btn-danger btn-sm">删除</button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" style="color:var(--text-muted)">暂无分类</td></tr>
+        {% endfor %}
+    </table>
+</div>
+{% endblock %}

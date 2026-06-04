@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+{% block title %}HOSHINO Blog{% endblock %}
+{% block content %}
+
+{% if search_query %}
+<div class="page-header">
+    <div class="container">
+        <h1>搜索：{{ search_query }}</h1>
+        <p>找到 {{ posts.total if posts.total is defined else 0 }} 篇相关文章</p>
+    </div>
+</div>
+{% else %}
+<div class="page-header">
+    <div class="container">
+        <h1>文章列表</h1>
+        <p>探索科技与创新的边界</p>
+    </div>
+</div>
+{% endif %}
+
+<section style="padding-bottom:60px">
+    <div class="container">
+        <div class="row">
+            <!-- 主内容 -->
+            <div class="col-8">
+                {% if posts.items %}
+                <div class="post-grid">
+                    {% for post in posts.items %}
+                    <article class="post-card">
+                        <a href="{{ url_for('blog.single_post', slug=post.slug) }}" class="cover {% if not post.cover_image %}no-image{% endif %}">
+                            {% if post.cover_image %}
+                            <img src="{{ url_for('static', filename=post.cover_image) }}" alt="{{ post.title }}" loading="lazy">
+                            {% else %}
+                            <svg viewBox="0 0 24 24" fill="none"><use href="#icon-blog"/></svg>
+                            {% endif %}
+                        </a>
+                        <div class="body">
+                            <div class="meta">
+                                {% if post.category %}
+                                <span class="category">{{ post.category.name }}</span>
+                                {% endif %}
+                                <span class="date">{{ format_date(post.created_at, '%Y/%m/%d') }}</span>
+                            </div>
+                            <h3><a href="{{ url_for('blog.single_post', slug=post.slug) }}">{{ post.title }}</a></h3>
+                            <p class="excerpt">{{ truncate_text(post.summary or post.content|striptags, 180) }}</p>
+                        </div>
+                        <div class="footer-card">
+                            <div class="author">
+                                <img src="{{ url_for('static', filename=post.author.avatar) }}" alt="{{ post.author.display_name or post.author.username }}">
+                                <span>{{ post.author.display_name or post.author.username }}</span>
+                            </div>
+                        <div class="comments">
+                          <svg width="14" height="14" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:2px"><use href="#icon-comment"/></svg>
+                          {{ post.published_comments() }}
+                        </div>
+                    </article>
+                    {% endfor %}
+                </div>
+
+                {% if posts.pages > 1 %}
+                <div class="pagination-wrap">
+                    <ul class="pagination">
+                        {% if posts.has_prev %}
+                        <li><a href="{{ url_for('blog.index', page=posts.prev_num, category=current_category) }}">‹</a></li>
+                        {% endif %}
+                        {% for page_num in posts.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                            {% if page_num %}
+                            <li {% if page_num == posts.page %}class="active"{% endif %}>
+                                <a href="{{ url_for('blog.index', page=page_num, category=current_category) }}">{{ page_num }}</a>
+                            </li>
+                            {% else %}
+                            <li><span>···</span></li>
+                            {% endif %}
+                        {% endfor %}
+                        {% if posts.has_next %}
+                        <li><a href="{{ url_for('blog.index', page=posts.next_num, category=current_category) }}">›</a></li>
+                        {% endif %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                {% else %}
+                <div class="empty-state">
+                    <h2>暂无文章</h2>
+                    <p>发布后文章将在此显示。</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- 侧边栏 -->
+            <div class="col-4">
+                <aside class="sidebar">
+                    {% include '_sidebar.html' %}
+                </aside>
+            </div>
+        </div>
+    </div>
+</section>
+
+{% endblock %}
