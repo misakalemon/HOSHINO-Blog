@@ -378,3 +378,8 @@ MIT License
 ---
 
 *HOSHINO Blog — 暗色科技风个人博客系统*
+
+---
+
+> 🤖 本项目由 **DeepSeek-V4-Pro** 辅助生成  
+> 代码托管于 [GitCode](https://gitcode.com/hoshino5/polor_blog)
