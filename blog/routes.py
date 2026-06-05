@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import datetime, os, io, logging
-from flask import render_template, request, redirect, url_for, abort, jsonify, send_file
+from flask import render_template, request, redirect, url_for, abort, jsonify, send_file, Response
 from . import blog_bp
 from .models import db, Post, Category, Comment
 from .forms import CommentForm
@@ -163,20 +163,20 @@ def thumbnail():
     if not path:
         abort(404)
     from flask import current_app
-    # 缩略图缓存目录
     cache_dir = os.path.join(current_app.root_path, 'static', '.thumb_cache')
     os.makedirs(cache_dir, exist_ok=True)
     cache_key = f'{path.replace("/","_")}_{w}.webp'
     cache_path = os.path.join(cache_dir, cache_key)
     
-    # 如果缓存存在且原始文件没变，直接返回缓存
     img_path = os.path.join(current_app.root_path, 'static', path.lstrip('/'))
+    
+    # 缓存命中且原始文件未变
     if os.path.isfile(cache_path):
         img_mtime = os.path.getmtime(img_path) if os.path.isfile(img_path) else 0
         cache_mtime = os.path.getmtime(cache_path)
         if cache_mtime > img_mtime:
-            logger.debug('缩略图缓存命中: %s', cache_key)
-            return send_file(cache_path, mimetype='image/webp', max_age=86400*30)
+            with open(cache_path, 'rb') as f:
+                return Response(f.read(), mimetype='image/webp', headers={'Cache-Control': 'public, max-age=2592000'})
     
     if not os.path.isfile(img_path):
         logger.warning('缩略图文件不存在: path=%s', path)
@@ -189,10 +189,9 @@ def thumbnail():
         new_h = int(img.height * ratio)
         if ratio < 1:
             img = img.resize((new_w, new_h), Image.LANCZOS)
-        # 统一保存为 WebP（更小体积）
         img.save(cache_path, 'WEBP', quality=80, optimize=True)
-        logger.debug('缩略图生成: %s %dx%d -> %dx%d', cache_key, img.width, img.height, new_w, new_h)
-        return send_file(cache_path, mimetype='image/webp', max_age=86400*30)
+        with open(cache_path, 'rb') as f:
+            return Response(f.read(), mimetype='image/webp', headers={'Cache-Control': 'public, max-age=2592000'})
     except Exception as e:
         logger.error('缩略图生成失败: path=%s error=%s', path, str(e))
         abort(500)
