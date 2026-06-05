@@ -798,8 +798,41 @@ body::before {
 .alert-success { background: rgba(0, 255, 136, 0.1); border: 1px solid var(--accent-green); color: var(--accent-green); }
 
 /* ==========================================
-   响应式
+   工具面板
    ========================================== */
+.tools-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; opacity:0; pointer-events:none; transition:opacity 0.3s; }
+.tools-overlay.show { opacity:1; pointer-events:auto; }
+.tools-panel { position:fixed; top:0; right:-420px; width:400px; max-width:100vw; height:100vh; background:var(--bg-secondary); border-left:1px solid var(--border-subtle); z-index:10000; display:flex; flex-direction:column; transition:right 0.35s cubic-bezier(0.4,0,0.2,1); box-shadow:-8px 0 40px rgba(0,0,0,0.4); }
+.tools-panel.open { right:0; }
+.tools-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--border-subtle); flex-shrink:0; }
+.tools-header h3 { font-size:16px; font-weight:700; color:#fff; }
+.tools-close { background:none; border:none; color:var(--text-muted); font-size:20px; cursor:pointer; padding:4px 8px; border-radius:6px; transition:all 0.2s; }
+.tools-close:hover { background:rgba(255,255,255,0.05); color:#fff; }
+.tools-body { flex:1; overflow-y:auto; padding:16px 20px; }
+.tools-tabs { display:flex; gap:4px; margin-bottom:16px; flex-wrap:wrap; }
+.tool-tab { padding:6px 14px; border-radius:8px; border:1px solid var(--border-subtle); background:transparent; color:var(--text-secondary); font-size:12px; cursor:pointer; font-family:inherit; transition:all 0.2s; }
+.tool-tab:hover { border-color:var(--accent-cyan); color:var(--accent-cyan); }
+.tool-tab.active { background:rgba(0,240,255,0.1); border-color:var(--accent-cyan); color:var(--accent-cyan); font-weight:600; }
+.tool-panel { display:none; }
+.tool-panel.active { display:block; }
+.tool-actions { display:flex; gap:6px; margin:8px 0; flex-wrap:wrap; }
+.tool-actions .btn { padding:6px 14px !important; font-size:12px !important; }
+.tool-field { margin-bottom:8px; }
+.tool-field label { display:block; font-size:11px; color:var(--text-muted); margin-bottom:2px; text-transform:uppercase; letter-spacing:0.5px; }
+.tool-field input { width:100%; padding:8px 12px; background:rgba(255,255,255,0.04); border:1px solid var(--border-subtle); border-radius:8px; color:var(--text-primary); font-size:13px; font-family:var(--font-mono); outline:none; transition:all 0.2s; }
+.tool-field input:focus { border-color:var(--accent-cyan); }
+.tool-field input[readonly] { opacity:0.6; }
+.tool-stats { display:flex; gap:16px; margin-top:8px; font-size:13px; color:var(--text-secondary); flex-wrap:wrap; }
+.tool-stats strong { color:var(--accent-cyan); }
+.tools-body textarea { width:100%; padding:10px 12px; background:rgba(255,255,255,0.04); border:1px solid var(--border-subtle); border-radius:8px; color:var(--text-primary); font-size:13px; font-family:var(--font-mono); outline:none; resize:vertical; transition:all 0.2s; line-height:1.5; }
+.tools-body textarea:focus { border-color:var(--accent-cyan); }
+.tools-body textarea[readonly] { opacity:0.6; }
+@media (max-width:480px) {
+  .tools-panel { width:100vw; right:-100vw; }
+  .tools-body { padding:12px; }
+  .tools-tabs { gap:2px; }
+  .tool-tab { padding:5px 10px; font-size:11px; }
+}
 
 /* 大屏 1025-1200px */
 @media (max-width: 1200px) {
