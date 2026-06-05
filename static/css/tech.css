@@ -1028,7 +1028,8 @@ body::before {
   .nav-write-btn { padding: 4px 12px !important; font-size: 12px !important; }
   
   /* 文章网格 */
-  .post-grid { column-count: 1; }
+  .post-grid { column-count: 2; column-gap: 10px; }
+  .post-card { margin-bottom: 12px; }
   .post-card .cover { max-height: 180px; }
   .post-card .body { padding: 10px 12px; }
   .post-card .body h3 { font-size: 15px; }
