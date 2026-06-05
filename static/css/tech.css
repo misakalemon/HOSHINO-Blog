@@ -197,6 +197,26 @@ body::before {
 .nav-toggle.open span:nth-child(2) { opacity: 0; }
 .nav-toggle.open span:nth-child(3) { transform: rotate(-45deg) translate(5px,-5px); }
 
+/* 登录按钮 */
+.nav-login-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary) !important;
+  transition: all 0.3s;
+  flex-shrink: 0;
+}
+.nav-login-btn:hover {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan) !important;
+  box-shadow: 0 0 12px rgba(0,240,255,0.1);
+}
+.nav-login-btn::after { display: none !important; }
+
 /* 写文章按钮 (HarmonyOS 风格) */
 .nav-write-btn {
   display: inline-flex !important;
