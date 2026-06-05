@@ -548,6 +548,12 @@ body::before {
   font-weight: 700;
 }
 
+/* 页码跳转 */
+.page-jump { display: flex; align-items: center; gap: 8px; margin-left: 12px; }
+.page-jump input { width: 56px; padding: 6px 8px; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 6px; color: var(--text-primary); font-size: 13px; text-align: center; outline: none; }
+.page-jump input:focus { border-color: var(--accent-cyan); }
+.page-jump input::-webkit-inner-spin-button { -webkit-appearance: none; }
+
 /* ==========================================
    文章详情
    ========================================== */
@@ -1054,6 +1060,8 @@ body::before {
   
   /* 分页 */
   .pagination li a, .pagination li span { width: 34px; height: 34px; font-size: 12px; }
+  .page-jump { margin-left: 0; margin-top: 8px; }
+  .page-jump input { width: 48px; padding: 4px 6px; font-size: 12px; }
   
   /* 页面内容 */
   .page-content h2 { font-size: 22px; }

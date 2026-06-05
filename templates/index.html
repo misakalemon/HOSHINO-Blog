@@ -67,6 +67,10 @@
                         <li><a href="{{ url_for('blog.index', page=posts.next_num, category=current_category) }}">›</a></li>
                         {% endif %}
                     </ul>
+                    <div class="page-jump">
+                        <span style="color:var(--text-muted);font-size:12px">共 {{ posts.pages }} 页</span>
+                        <input type="number" min="1" max="{{ posts.pages }}" placeholder="跳转" onkeydown="if(event.key=='Enter'){var p=parseInt(this.value);if(p>=1&&p<={{ posts.pages }})window.location='{{ url_for('blog.index', category=current_category) }}?page='+p;}">
+                    </div>
                 </div>
                 {% endif %}
 
