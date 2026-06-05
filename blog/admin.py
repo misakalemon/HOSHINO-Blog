@@ -248,7 +248,12 @@ def profile():
     if form.validate_on_submit():
         current_user.display_name = form.display_name.data
         current_user.bio = form.bio.data
-        if form.email.data:
+        # 邮箱：有修改时才更新，并检查唯一性
+        if form.email.data and form.email.data != current_user.email:
+            existing = User.query.filter_by(email=form.email.data).first()
+            if existing:
+                flash('\u90ae\u7bb1\u5df2\u88ab\u5176\u4ed6\u8d26\u6237\u4f7f\u7528', 'error')
+                return render_template('admin/profile.html', form=form)
             current_user.email = form.email.data
         if form.password.data:
             current_user.set_password(form.password.data)
