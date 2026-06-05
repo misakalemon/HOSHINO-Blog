@@ -322,11 +322,13 @@ body::before {
    文章卡片
    ========================================== */
 .post-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 24px;
+  display: block;
+  column-count: 2;
+  column-gap: 20px;
 }
 .post-card {
+  break-inside: avoid;
+  margin-bottom: 20px;
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
@@ -885,20 +887,20 @@ body::before {
 /* 大屏 1025-1200px */
 @media (max-width: 1200px) {
   .container { max-width: 100%; padding: 0 16px; }
-  .post-grid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+  .post-grid { column-count: 2; column-gap: 16px; }
 }
 
 /* 平板横屏 901-1024px */
 @media (max-width: 1024px) {
   .row .col-4 { width: 100%; }
   .sidebar { position: static; }
-  .post-grid { grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .post-grid { column-count: 2; column-gap: 14px; }
   .container { padding: 0 14px; }
 }
 
 /* 平板竖屏 641-900px */
 @media (max-width: 900px) {
-  .post-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .post-grid { column-count: 2; column-gap: 14px; }
   .page-header { padding: 80px 0 30px; }
   .page-header h1 { font-size: 28px; }
   .row { flex-direction: column; }
@@ -1026,7 +1028,7 @@ body::before {
   .nav-write-btn { padding: 4px 12px !important; font-size: 12px !important; }
   
   /* 文章网格 */
-  .post-grid { grid-template-columns: 1fr; gap: 12px; }
+  .post-grid { column-count: 1; }
   .post-card .cover { max-height: 180px; }
   .post-card .body { padding: 10px 12px; }
   .post-card .body h3 { font-size: 15px; }
