@@ -153,10 +153,64 @@
     });
   });
 
+  // === 涟漪点击光效 ===
+  const ripples = [];
+  document.addEventListener('click', function(e) {
+    ripples.push({
+      x: e.clientX, y: e.clientY,
+      radius: 0, maxRadius: 120,
+      alpha: 0.6, life: 1,
+      hue: getComputedStyle(document.documentElement).getPropertyValue('--glow-hue').trim() || 185,
+      sat: '80%', lig: '60%'
+    });
+    // 同时爆发一些粒子
+    for (let i = 0; i < 12; i++) {
+      const p = createParticle();
+      p.x = e.clientX + (Math.random() - 0.5) * 60;
+      p.y = e.clientY + (Math.random() - 0.5) * 60;
+      p.speedX = (Math.random() - 0.5) * 2;
+      p.speedY = (Math.random() - 0.5) * 2 - 1.5;
+      p.life = 0.8 + Math.random() * 0.2;
+      p.decay = 0.008 + Math.random() * 0.006;
+      p.radius = 1 + Math.random() * 3;
+      particles.push(p);
+    }
+    // 保持粒子总数
+    while (particles.length > 80) particles.shift();
+  });
+
+  function drawRipples() {
+    for (let i = ripples.length - 1; i >= 0; i--) {
+      const r = ripples[i];
+      r.radius += 4;
+      r.life -= 0.02;
+      r.alpha *= 0.96;
+      if (r.life <= 0 || r.radius > r.maxRadius) {
+        ripples.splice(i, 1);
+        continue;
+      }
+      ctx.beginPath();
+      ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+      ctx.strokeStyle = `hsla(${r.hue}, ${r.sat}, ${r.lig}, ${r.alpha * r.life})`;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      // 内圈光晕
+      const innerGlow = ctx.createRadialGradient(r.x, r.y, 0, r.x, r.y, r.radius * 0.6);
+      innerGlow.addColorStop(0, `hsla(${r.hue}, ${r.sat}, ${r.lig}, ${r.alpha * r.life * 0.3})`);
+      innerGlow.addColorStop(1, 'transparent');
+      ctx.beginPath();
+      ctx.arc(r.x, r.y, r.radius * 0.6, 0, Math.PI * 2);
+      ctx.fillStyle = innerGlow;
+      ctx.fill();
+    }
+  }
+
   // === 主循环 ===
   function animate() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     updateParticles(mouseX, mouseY);
     drawParticles();
+    drawRipples();
     updateGlow();
     requestAnimationFrame(animate);
   }
