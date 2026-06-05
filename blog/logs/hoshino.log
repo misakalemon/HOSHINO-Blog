@@ -1,0 +1,16 @@
+[2026-06-05 14:32:33] INFO     [root:setup_logging:82] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[2026-06-05 14:32:33] INFO     [root:setup_logging:83] 日志系统初始化完成
+[2026-06-05 14:32:33] INFO     [root:setup_logging:84] 日志文件: /home/moyu/openclaw/workspace/polor_blog/blog/logs/hoshino.log
+[2026-06-05 14:32:33] INFO     [root:setup_logging:85] 错误日志: /home/moyu/openclaw/workspace/polor_blog/blog/logs/error.log
+[2026-06-05 14:32:33] INFO     [root:setup_logging:86] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[2026-06-05 14:32:33] INFO     [root:create_app:13] 应用启动中...
+[2026-06-05 14:32:33] INFO     [root:create_app:21] 数据库初始化完成
+[2026-06-05 14:32:33] INFO     [root:create_app:39] 蓝图注册完成
+[2026-06-05 14:32:33] INFO     [root:<module>:52] ==================================================
+[2026-06-05 14:32:33] INFO     [root:<module>:53] 服务启动: http://0.0.0.0:5000  debug=False
+[2026-06-05 14:32:33] INFO     [root:<module>:54] ==================================================
+[2026-06-05 14:32:33] INFO     [werkzeug:_log:97] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.10.105:5000
+[2026-06-05 14:32:33] INFO     [werkzeug:_log:97] [33mPress CTRL+C to quit[0m

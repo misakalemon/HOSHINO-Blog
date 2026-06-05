@@ -1,9 +1,11 @@
-import datetime, os, uuid
+import datetime, os, uuid, logging
 from flask import render_template, redirect, url_for, request, flash, abort, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
 from . import admin_bp
 from .models import db, User, Post, Category, Comment
 from .forms import LoginForm, PostForm, CategoryForm, UserForm, ProfileForm
+
+logger = logging.getLogger(__name__)
 
 
 @admin_bp.route('/login', methods=['GET', 'POST'])
@@ -16,7 +18,9 @@ def login():
         if user and user.check_password(form.password.data) and user.is_active:
             login_user(user)
             next_page = request.args.get('next')
+            logger.info('管理员登录成功: username=%s ip=%s', form.username.data, request.remote_addr)
             return redirect(next_page or url_for('admin.dashboard'))
+        logger.warning('管理员登录失败: username=%s ip=%s', form.username.data, request.remote_addr)
         flash('\u7528\u6237\u540d\u6216\u5bc6\u7801\u9519\u8bef', 'error')
     return render_template('login.html', form=form)
 
@@ -83,6 +87,7 @@ def new_post():
         )
         db.session.add(post)
         db.session.commit()
+        logger.info('创建文章: id=%d title="%s" slug=%s author=%s', post.id, post.title, post.slug, current_user.username)
         flash('\u6587\u7ae0\u5df2\u53d1\u5e03', 'success')
         return redirect(url_for('admin.post_list'))
     return render_template('admin/post-form.html', form=form, editing=False)
@@ -259,12 +264,14 @@ def profile():
                     upload_dir = os.path.join(current_app.root_path, 'static', 'uploads')
                     os.makedirs(upload_dir, exist_ok=True)
                     file.save(os.path.join(upload_dir, filename))
+                    old_avatar = current_user.avatar
                     current_user.avatar = 'uploads/' + filename
+                    logger.info('更新头像: user=%s old=%s new=%s', current_user.username, old_avatar, current_user.avatar)
         # 邮箱：有修改时才更新，并检查唯一性
         if form.email.data and form.email.data != current_user.email:
             existing = User.query.filter_by(email=form.email.data).first()
             if existing:
-                flash('\u90ae\u7bb1\u5df2\u88ab\u5176\u4ed6\u8d26\u6237\u4f7f\u7528', 'error')
+                logger.warning('邮箱已被占用: user=%s email=%s', current_user.username, form.email.data)
                 return render_template('admin/profile.html', form=form)
             current_user.email = form.email.data
         if form.password.data:

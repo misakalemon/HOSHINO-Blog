@@ -1,8 +1,10 @@
-import datetime, os, io
+import datetime, os, io, logging
 from flask import render_template, request, redirect, url_for, abort, jsonify, send_file
 from . import blog_bp
 from .models import db, Post, Category, Comment
 from .forms import CommentForm
+
+logger = logging.getLogger(__name__)
 
 
 @blog_bp.route('/')
@@ -162,21 +164,26 @@ def thumbnail():
     from flask import current_app
     img_path = os.path.join(current_app.root_path, 'static', path.lstrip('/'))
     if not os.path.isfile(img_path):
+        logger.warning('缩略图文件不存在: path=%s full=%s', path, img_path)
         abort(404)
-    from PIL import Image
-    img = Image.open(img_path)
-    # 计算缩放比例，保持宽高比
-    ratio = min(w / img.width, 1.0)  # 不放大，只缩小
-    new_w = int(img.width * ratio)
-    new_h = int(img.height * ratio)
-    if ratio < 1:
-        img = img.resize((new_w, new_h), Image.LANCZOS)
-    buf = io.BytesIO()
-    ext = os.path.splitext(path)[1].lower()
-    fmt = 'JPEG' if ext in ('.jpg', '.jpeg') else 'PNG' if ext == '.png' else 'WEBP'
-    img.save(buf, fmt, quality=85, optimize=True)
-    buf.seek(0)
-    return send_file(buf, mimetype=f'image/{fmt.lower()}')
+    try:
+        from PIL import Image
+        img = Image.open(img_path)
+        ratio = min(w / img.width, 1.0)
+        new_w = int(img.width * ratio)
+        new_h = int(img.height * ratio)
+        if ratio < 1:
+            img = img.resize((new_w, new_h), Image.LANCZOS)
+        buf = io.BytesIO()
+        ext = os.path.splitext(path)[1].lower()
+        fmt = 'JPEG' if ext in ('.jpg', '.jpeg') else 'PNG' if ext == '.png' else 'WEBP'
+        img.save(buf, fmt, quality=85, optimize=True)
+        buf.seek(0)
+        logger.debug('缩略图: path=%s w=%d %dx%d -> %dx%d', path, w, img.width, img.height, new_w, new_h)
+        return send_file(buf, mimetype=f'image/{fmt.lower()}')
+    except Exception as e:
+        logger.error('缩略图生成失败: path=%s error=%s', path, str(e))
+        abort(500)
 
 
 @blog_bp.app_template_global()
