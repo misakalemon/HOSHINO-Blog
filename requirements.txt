@@ -1,14 +1,41 @@
+# ============================================
+# HOSHINO Blog 依赖清单
+# 安装：pip install -r requirements.txt
+# ============================================
+
+# --- Web 框架 ---
 Flask==3.1.0
+Werkzeug==3.1.8
+Jinja2==3.1.6
+itsdangerous==2.2.0
+blinker==1.9.0
+
+# --- 数据库 ---
+SQLAlchemy==2.0.50
 Flask-SQLAlchemy==3.1.1
+
+# --- 认证 ---
 Flask-Login==0.6.3
-Flask-WTF==1.2.2
+
+# --- 表单 ---
 WTForms==3.2.1
-Markdown==3.7
-Pygments==2.19.1
-Pillow==11.1.0
+Flask-WTF==1.2.2
+email-validator==2.3.0
+
+# --- 图片处理 ---
+pillow==11.1.0
+
+# --- 压缩 ---
+Flask-Compress==1.24
+brotli==1.2.0
+backports.zstd==1.5.0
+
+# --- 环境变量 ---
 python-dotenv==1.1.0
-Flask-Compress==1.17
-# MySQL 支持（可选：使用 MySQL 时取消注释）
-# pymysql==1.1.1
-# 邮箱验证（Email() 验证器必需）
-email_validator==2.2.0
+
+# --- MySQL 支持（可选） ---
+# PyMySQL==1.2.0
+
+# --- Markdown 渲染（可选，用于兼容） ---
+# Markdown==3.7
+# Pygments==2.19.1
