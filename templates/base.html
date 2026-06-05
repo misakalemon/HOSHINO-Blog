@@ -300,6 +300,7 @@
       <button class="tool-tab" data-tool="json" onclick="switchTool('json')">JSON</button>
       <button class="tool-tab" data-tool="timestamp" onclick="switchTool('timestamp')">时间戳</button>
       <button class="tool-tab" data-tool="hash" onclick="switchTool('hash')">哈希</button>
+      <button class="tool-tab" data-tool="imagezip" onclick="switchTool('imagezip')">图片压缩</button>
     </div>
     <!-- Base64 -->
     <div class="tool-panel active" id="tool-base64">
@@ -354,6 +355,55 @@
       <div class="tool-field"><label>MD5</label><input id="hash-md5" readonly></div>
       <div class="tool-field"><label>SHA-1</label><input id="hash-sha1" readonly></div>
       <div class="tool-field"><label>SHA-256</label><input id="hash-sha256" readonly></div>
+    </div>
+    <!-- 图片压缩 -->
+    <div class="tool-panel" id="tool-imagezip">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+        <div style="flex:1;min-width:120px">
+          <div class="tool-field"><label>质量 <span id="iz-q-val">80%</span></label>
+            <input type="range" id="iz-quality" min="1" max="100" value="80" oninput="izUpdate()" style="width:100%">
+          </div>
+        </div>
+        <div style="flex:1;min-width:120px">
+          <div class="tool-field"><label>最大宽度</label>
+            <select id="iz-maxw" onchange="izUpdate()" style="width:100%;padding:8px;background:rgba(255,255,255,0.04);border:1px solid var(--border-subtle);border-radius:8px;color:var(--text-primary);font-size:13px;outline:none">
+              <option value="0">原图尺寸</option>
+              <option value="3840">3840 (4K)</option>
+              <option value="2560">2560 (2K)</option>
+              <option value="1920" selected>1920 (全高清)</option>
+              <option value="1280">1280 (HD)</option>
+              <option value="800">800</option>
+              <option value="400">400</option>
+            </select>
+          </div>
+        </div>
+        <div style="flex:1;min-width:100px">
+          <div class="tool-field"><label>输出格式</label>
+            <select id="iz-fmt" onchange="izUpdate()" style="width:100%;padding:8px;background:rgba(255,255,255,0.04);border:1px solid var(--border-subtle);border-radius:8px;color:var(--text-primary);font-size:13px;outline:none">
+              <option value="image/jpeg">JPEG</option>
+              <option value="image/webp">WebP</option>
+              <option value="image/png">PNG</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" onclick="izSelect()">📁 选择图片</button>
+        <button class="btn btn-ghost btn-sm" onclick="izDownload()" id="iz-dlbtn" disabled>⬇ 下载</button>
+      </div>
+      <input type="file" id="iz-input" accept="image/*" style="display:none" onchange="izLoad()">
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:180px">
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">原图</div>
+          <div id="iz-original" style="background:rgba(255,255,255,0.02);border-radius:8px;padding:8px;text-align:center;min-height:100px;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--text-muted);overflow:hidden">请选择图片</div>
+          <div id="iz-originfo" style="font-size:11px;color:var(--text-muted);margin-top:4px"></div>
+        </div>
+        <div style="flex:1;min-width:180px">
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">压缩后</div>
+          <div id="iz-result" style="background:rgba(255,255,255,0.02);border-radius:8px;padding:8px;text-align:center;min-height:100px;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--text-muted);overflow:hidden">等待压缩...</div>
+          <div id="iz-resinfo" style="font-size:11px;color:var(--text-muted);margin-top:4px;word-break:break-all"></div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -458,6 +508,58 @@ function buf2hex(b) { return Array.from(new Uint8Array(b)).map(function(x){retur
 // 清空
 function clearTool(name) {
   document.querySelectorAll('#tool-' + name + ' textarea').forEach(function(t){ t.value=''; });
+}
+// 图片压缩
+var izSrcImg = null, izBlobUrl = null;
+function izSelect() { document.getElementById('iz-input').click(); }
+function izLoad() {
+  var f = document.getElementById('iz-input').files[0];
+  if (!f) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var img = new Image();
+    img.onload = function() {
+      izSrcImg = img;
+      document.getElementById('iz-original').innerHTML = '<img src="'+e.target.result+'" style="max-width:100%;max-height:140px;border-radius:6px">';
+      var kb = (f.size / 1024).toFixed(1);
+      document.getElementById('iz-originfo').textContent = img.width+'×'+img.height+' · '+kb+'KB · '+f.type;
+      izUpdate();
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(f);
+}
+function izUpdate() {
+  if (!izSrcImg) return;
+  var q = parseInt(document.getElementById('iz-quality').value);
+  document.getElementById('iz-q-val').textContent = q + '%';
+  var maxw = parseInt(document.getElementById('iz-maxw').value);
+  var fmt = document.getElementById('iz-fmt').value;
+  var w = izSrcImg.width, h = izSrcImg.height;
+  if (maxw > 0 && w > maxw) { h = Math.round(h * maxw / w); w = maxw; }
+  var c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  var ctx = c.getContext('2d');
+  ctx.drawImage(izSrcImg, 0, 0, w, h);
+  var quality = q / 100;
+  c.toBlob(function(blob) {
+    if (izBlobUrl) URL.revokeObjectURL(izBlobUrl);
+    izBlobUrl = URL.createObjectURL(blob);
+    document.getElementById('iz-result').innerHTML = '<img src="'+izBlobUrl+'" style="max-width:100%;max-height:140px;border-radius:6px">';
+    var kb = (blob.size / 1024).toFixed(1);
+    var origKb = ((izSrcImg.width * izSrcImg.height * 3) / 1024).toFixed(1);
+    var ratio = ((1 - blob.size / (izSrcImg.width * izSrcImg.height * 3)) * 100).toFixed(0);
+    document.getElementById('iz-resinfo').innerHTML = w+'×'+h+' · '+kb+'KB · 压缩率 '+ratio+'%';
+    document.getElementById('iz-dlbtn').disabled = false;
+  }, fmt, quality);
+}
+function izDownload() {
+  if (!izBlobUrl) return;
+  var a = document.createElement('a');
+  a.href = izBlobUrl;
+  var ext = { 'image/jpeg':'.jpg','image/webp':'.webp','image/png':'.png' };
+  a.download = 'compressed' + (ext[document.getElementById('iz-fmt').value] || '.jpg');
+  a.click();
 }
 </script>
 
