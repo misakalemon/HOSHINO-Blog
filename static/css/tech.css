@@ -800,27 +800,151 @@ body::before {
 /* ==========================================
    响应式
    ========================================== */
+
+/* 大屏 1025-1200px */
+@media (max-width: 1200px) {
+  .container { max-width: 100%; padding: 0 16px; }
+  .post-grid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+}
+
+/* 平板横屏 901-1024px */
 @media (max-width: 1024px) {
   .row .col-4 { width: 100%; }
   .sidebar { position: static; }
+  .post-grid { grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .container { padding: 0 14px; }
 }
+
+/* 平板竖屏 641-900px */
+@media (max-width: 900px) {
+  .post-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .page-header { padding: 80px 0 30px; }
+  .page-header h1 { font-size: 28px; }
+  .row { flex-direction: column; }
+  .navbar-inner { flex-wrap: wrap; height: auto; padding: 10px 0; gap: 8px; }
+  .navbar-links { flex-wrap: wrap; gap: 10px; width: 100%; justify-content: center; }
+  .search-form input { width: 140px; }
+  .search-form input:focus { width: 160px; }
+  /* 文章详情 */
+  .post-detail { max-width: 100%; }
+  .post-detail .post-content { font-size: 15px; }
+}
+
+/* 手机 641px以下 */
 @media (max-width: 640px) {
   .custom-cursor { display: none; }
   body { cursor: auto; }
+  input[type="range"]::-webkit-slider-thumb { cursor: pointer; }
+  .container { padding: 0 12px; }
+  .page-header { padding: 70px 0 24px; }
+  .page-header h1 { font-size: 24px; }
+  .page-header p { font-size: 14px; }
+  .row { flex-direction: column; gap: 0; }
+  .row .col-8,
+  .row .col-4 { width: 100%; }
+  .sidebar { position: static; margin-top: 24px; }
+  
+  /* 导航栏 */
+  .navbar { padding: 0 12px; }
+  .navbar-inner { flex-wrap: wrap; height: auto; padding: 8px 0; gap: 6px; justify-content: center; }
+  .navbar-logo { font-size: 18px; }
+  .navbar-links { flex-wrap: wrap; gap: 8px; width: 100%; justify-content: center; }
+  .navbar-links a { font-size: 12px; padding: 2px 0; }
+  .search-form { width: 100%; justify-content: center; margin-top: 4px; }
+  .search-form input { width: 100%; max-width: 240px; }
+  .search-form input:focus { width: 100%; }
+  .nav-write-btn { padding: 4px 12px !important; font-size: 12px !important; }
+  
+  /* 文章网格 */
+  .post-grid { grid-template-columns: 1fr; gap: 12px; }
+  .post-card .cover { max-height: 180px; }
+  .post-card .body { padding: 10px 12px; }
+  .post-card .body h3 { font-size: 15px; }
+  .post-card .cover .cover-category { font-size: 10px; padding: 2px 8px; }
+  .meta-line { font-size: 11px; gap: 6px; }
+  
+  /* 文章详情 */
+  .post-detail { max-width: 100%; }
+  .post-detail .post-meta { flex-wrap: wrap; gap: 8px; font-size: 12px; }
+  .post-detail .post-content { font-size: 14px; line-height: 1.7; }
+  .post-detail .featured-image { border-radius: 12px; }
+  
+  /* 作者框 */
+  .author-box { flex-direction: column; text-align: center; padding: 16px; }
+  .author-box img { width: 48px; height: 48px; }
+  
+  /* 评论区 */
+  .comments-section h4 { font-size: 16px; }
+  .comment-form { padding: 16px; }
+  .comment-item { padding: 12px; }
+  
+  /* 分页 */
+  .pagination li a, .pagination li span { width: 34px; height: 34px; font-size: 12px; }
+  
+  /* 页面内容 */
+  .page-content h2 { font-size: 22px; }
+  .page-content { font-size: 14px; }
+  
+  /* 登录框 */
+  .login-box { padding: 24px 16px; }
+  
+  /* 侧边栏 */
+  .widget { padding: 16px; }
+  .recent-list .recent-item .thumb { width: 48px; height: 48px; }
+  .recent-list .recent-item .info h5 { font-size: 12px; }
+  
+  /* 页脚 */
+  .footer { padding: 24px 0; margin-top: 40px; }
 }
+
+/* 小手机 400px以下 */
+@media (max-width: 400px) {
+  .container { padding: 0 8px; }
+  .page-header { padding: 60px 0 20px; }
+  .page-header h1 { font-size: 20px; }
+  .navbar-links { gap: 6px; }
+  .navbar-links a { font-size: 11px; }
+  .nav-write-btn { padding: 3px 8px !important; font-size: 11px !important; }
+  .post-card .body h3 { font-size: 14px; }
+  .meta-line { font-size: 10px; gap: 4px; flex-wrap: wrap; }
+  .meta-avatar { width: 16px; height: 16px; }
+  .widget { padding: 12px; }
+  .widget-title { font-size: 12px; }
+}
+
+/* ===== 后台管理响应式 ===== */
 @media (max-width: 768px) {
-  .navbar-links { gap: 16px; }
-  .navbar-links a { font-size: 13px; }
-  .search-form input { width: 120px; }
-  .search-form input:focus { width: 140px; }
-  .post-grid { grid-template-columns: 1fr; }
-  .page-header h1 { font-size: 32px; }
-  .row { flex-direction: column; }
+  .admin-main { margin-left: 0; padding: 16px 12px; }
+  .admin-sidebar { width: 100%; height: auto; position: relative; padding: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .admin-sidebar .logo { margin-bottom: 0; font-size: 16px; }
+  .admin-sidebar .section-title { display: none; }
+  .admin-sidebar a { font-size: 12px; padding: 6px 10px; white-space: nowrap; }
+  .admin-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .admin-header h3 { font-size: 18px; }
+  .admin-card { padding: 16px; }
+  .card-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .stat-card { padding: 16px; }
+  .stat-card .num { font-size: 28px; }
+  .admin-table { font-size: 12px; }
+  .admin-table th, .admin-table td { padding: 8px 6px; }
+  .admin-row { flex-direction: column; gap: 0; }
+  /* 编辑器工具栏换行 */
+  #rte-toolbar { gap: 1px; padding: 4px; }
+  #rte-toolbar button, #rte-toolbar select { padding: 4px 6px; font-size: 11px; }
+  #rte-content { min-height: 250px; padding: 10px; font-size: 14px; }
+  .steps { flex-direction: column; gap: 4px; }
+  .step { padding: 8px; font-size: 12px; }
 }
+
 @media (max-width: 480px) {
-  .navbar-links { gap: 12px; }
-  .navbar-links a { font-size: 12px; }
-  .search-form input { width: 90px; }
-  .search-form input:focus { width: 110px; }
-  .container { padding: 0 14px; }
+  .admin-main { padding: 12px 8px; }
+  .card-grid { grid-template-columns: 1fr; }
+  .admin-table { font-size: 11px; }
+  .admin-table th, .admin-table td { padding: 6px 4px; white-space: nowrap; }
+  .admin-table td a { word-break: break-all; }
+  .btn { padding: 8px 14px; font-size: 12px; }
+  .steps { flex-direction: column; }
+  .cover-upload { padding: 20px; min-height: 120px; }
+  #rte-toolbar { overflow-x: auto; flex-wrap: nowrap; justify-content: flex-start; }
+  #rte-toolbar button, #rte-toolbar select { flex-shrink: 0; }
 }
