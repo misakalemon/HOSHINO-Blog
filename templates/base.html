@@ -267,6 +267,10 @@
               <svg width="16" height="16" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:4px"><use href="#icon-write"/></svg>
               工具
             </a>
+            <a href="{{ url_for('admin.login') if not current_user.is_authenticated else url_for('admin.dashboard') }}" class="sidebar-login-link">
+              <svg width="16" height="16" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:4px"><use href="#icon-user"/></svg>
+              {% if current_user.is_authenticated %}{{ current_user.display_name or current_user.username }}{% else %}登录{% endif %}
+            </a>
             <a href="{{ url_for('admin.new_post') }}" class="nav-write-btn">
               <svg width="14" height="14" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:4px"><use href="#icon-write"/></svg>
               写文章
@@ -288,6 +292,9 @@
         </a>
     </div>
 </nav>
+
+<!-- 侧边栏遮罩 -->
+<div class="nav-overlay" id="navOverlay" onclick="toggleNav()"></div>
 
 <!-- 页面内容 -->
 {% block content %}{% endblock %}
@@ -428,6 +435,7 @@ function toggleTools() {
 function toggleNav() {
   document.getElementById('navToggle').classList.toggle('open');
   document.querySelector('.navbar-links').classList.toggle('open');
+  document.getElementById('navOverlay').classList.toggle('show');
 }
 function switchTool(name) {
   document.querySelectorAll('.tool-panel').forEach(function(p) { p.classList.remove('active'); });
