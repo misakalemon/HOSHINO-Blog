@@ -166,15 +166,9 @@ def thumbnail():
     img_path = os.path.join(current_app.root_path, 'static', path.lstrip('/'))
     if not os.path.isfile(img_path):
         logger.warning('缩略图文件不存在: path=%s full=%s', path, img_path)
-        # 使用默认占位图
-        if 'avatar' in path:
-            fallback = os.path.join(current_app.root_path, 'static', 'images', 'avatar', 'main-avatar.jpg')
-        else:
-            fallback = os.path.join(current_app.root_path, 'static', 'images', 'categories', 'category-item-1.jpg')
-        if os.path.isfile(fallback):
-            img_path = fallback
-        else:
-            abort(404)
+        # 返回 1x1 透明像素，避免浏览器显示裂图
+        return send_file(io.BytesIO(b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00\x21\xf9\x04\x00\x00\x00\x00\x00\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00\x3b'), 
+                        mimetype='image/gif')
     try:
         from PIL import Image
         img = Image.open(img_path)
