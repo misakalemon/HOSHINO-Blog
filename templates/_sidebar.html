@@ -6,7 +6,7 @@
             <div class="thumb{% if not rp.cover_image %} no-image{% endif %}">
                 <a href="{{ url_for('blog.single_post', slug=rp.slug) }}">
                     {% if rp.cover_image %}
-                    <img src="{{ url_for('static', filename=rp.cover_image) }}" alt="{{ rp.title }}" loading="lazy">
+                    <img src="{{ url_for('blog.thumbnail', path=rp.cover_image, w=120) }}" alt="{{ rp.title }}" loading="lazy">
                     {% else %}
                     <svg viewBox="0 0 24 24" fill="none" width="24" height="24"><use href="#icon-blog"/></svg>
                     {% endif %}

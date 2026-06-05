@@ -1,5 +1,5 @@
-import datetime
-from flask import render_template, request, redirect, url_for, abort, jsonify
+import datetime, os, io
+from flask import render_template, request, redirect, url_for, abort, jsonify, send_file
 from . import blog_bp
 from .models import db, Post, Category, Comment
 from .forms import CommentForm
@@ -151,6 +151,32 @@ def rss_feed():
     response = make_response(render_template('rss.xml', posts=posts))
     response.headers['Content-Type'] = 'application/xml'
     return response
+
+
+@blog_bp.route('/thumb')
+def thumbnail():
+    path = request.args.get('path', '')
+    w = request.args.get('w', 400, type=int)
+    if not path:
+        abort(404)
+    from flask import current_app
+    img_path = os.path.join(current_app.root_path, 'static', path.lstrip('/'))
+    if not os.path.isfile(img_path):
+        abort(404)
+    from PIL import Image
+    img = Image.open(img_path)
+    # 计算缩放比例，保持宽高比
+    ratio = min(w / img.width, 1.0)  # 不放大，只缩小
+    new_w = int(img.width * ratio)
+    new_h = int(img.height * ratio)
+    if ratio < 1:
+        img = img.resize((new_w, new_h), Image.LANCZOS)
+    buf = io.BytesIO()
+    ext = os.path.splitext(path)[1].lower()
+    fmt = 'JPEG' if ext in ('.jpg', '.jpeg') else 'PNG' if ext == '.png' else 'WEBP'
+    img.save(buf, fmt, quality=85, optimize=True)
+    buf.seek(0)
+    return send_file(buf, mimetype=f'image/{fmt.lower()}')
 
 
 @blog_bp.app_template_global()

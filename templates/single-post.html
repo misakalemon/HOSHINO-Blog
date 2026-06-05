@@ -22,7 +22,7 @@
                 <div class="post-detail">
                     {% if post.cover_image %}
                     <div class="featured-image">
-                        <img src="{{ url_for('static', filename=post.cover_image) }}" alt="{{ post.title }}">
+                        <img src="{{ url_for('blog.thumbnail', path=post.cover_image, w=800) }}" alt="{{ post.title }}">
                     </div>
                     {% endif %}
 
