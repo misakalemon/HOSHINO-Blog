@@ -24,6 +24,11 @@
   --font-mono: 'Fira Code', 'JetBrains Mono', monospace;
   --radius: 12px;
   --radius-lg: 20px;
+  /* 光感系统变量 */
+  --glow-hue: 185;
+  --glow-saturation: 80%;
+  --glow-lightness: 55%;
+  --glow-opacity: 0.4;
 }
 
 /* --- 重置 --- */
@@ -39,20 +44,6 @@ body {
   position: relative;
 }
 
-/* 鼠标跟随光晕 (HarmonyOS 光感效果) */
-#cursor-glow {
-  position: fixed;
-  width: 500px;
-  height: 500px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(0,240,255,0.07) 0%, rgba(124,58,237,0.04) 30%, transparent 70%);
-  pointer-events: none;
-  z-index: 0;
-  transform: translate(-50%, -50%);
-  transition: opacity 0.2s;
-  will-change: transform;
-  opacity: 0;
-}
 a { color: var(--accent-cyan); text-decoration: none; transition: all 0.3s; }
 a:hover { color: #fff; text-shadow: 0 0 8px var(--accent-cyan); }
 img { max-width: 100%; height: auto; display: block; }
@@ -69,6 +60,92 @@ body::before {
     radial-gradient(ellipse at 50% 50%, rgba(0, 255, 136, 0.03) 0%, transparent 50%);
   pointer-events: none;
   z-index: 0;
+}
+
+/* ===== HarmonyOS 光感系统 ===== */
+/* 环境光散射层 */
+.ambient-veil {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(ellipse at 50% 50%,
+    hsla(var(--glow-hue), var(--glow-saturation), var(--glow-lightness), 0.06) 0%,
+    transparent 70%);
+  transition: background 1.2s ease;
+  mix-blend-mode: screen;
+}
+
+/* 主光晕层 */
+.glow-orb {
+  position: fixed;
+  pointer-events: none;
+  z-index: 1;
+  width: 520px;
+  height: 520px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle at center,
+    hsla(var(--glow-hue), var(--glow-saturation), var(--glow-lightness), var(--glow-opacity)) 0%,
+    hsla(var(--glow-hue), var(--glow-saturation), calc(var(--glow-lightness) - 15%), 0.25) 22%,
+    hsla(var(--glow-hue), var(--glow-saturation), calc(var(--glow-lightness) - 28%), 0.10) 45%,
+    hsla(var(--glow-hue), calc(var(--glow-saturation) * 0.6), calc(var(--glow-lightness) - 35%), 0.03) 65%,
+    transparent 100%);
+  will-change: left, top;
+  filter: blur(2px);
+  transition: background 1.2s ease;
+  mix-blend-mode: screen;
+}
+
+/* 内核光晕 */
+.glow-core {
+  position: fixed;
+  pointer-events: none;
+  z-index: 2;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle at center,
+    hsla(var(--glow-hue), var(--glow-saturation), calc(var(--glow-lightness) + 18%), 0.7) 0%,
+    hsla(var(--glow-hue), var(--glow-saturation), var(--glow-lightness), 0.35) 30%,
+    hsla(var(--glow-hue), var(--glow-saturation), calc(var(--glow-lightness) - 20%), 0.08) 60%,
+    transparent 100%);
+  will-change: left, top;
+  filter: blur(0.5px);
+  transition: background 1.2s ease;
+  mix-blend-mode: screen;
+}
+
+/* 粒子 Canvas */
+#particleCanvas {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* 自定义光标 */
+.custom-cursor {
+  position: fixed;
+  pointer-events: none;
+  z-index: 100;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.15);
+  transform: translate(-50%, -50%);
+  transition: width 0.25s ease, height 0.25s ease, border-color 0.25s ease, background 0.25s ease;
+  mix-blend-mode: difference;
+  box-shadow: 0 0 16px rgba(200, 210, 240, 0.5);
+}
+.custom-cursor.hovering {
+  width: 28px;
+  height: 28px;
+  border-color: rgba(180, 200, 240, 0.9);
+  background: rgba(180, 200, 240, 0.25);
+  box-shadow: 0 0 28px rgba(180, 200, 240, 0.7);
 }
 
 /* --- 滚动条 --- */
@@ -760,6 +837,10 @@ body::before {
 @media (max-width: 1024px) {
   .row .col-4 { width: 100%; }
   .sidebar { position: static; }
+}
+@media (max-width: 640px) {
+  .custom-cursor { display: none; }
+  body { cursor: auto; }
 }
 @media (max-width: 768px) {
   .navbar-links { gap: 16px; }

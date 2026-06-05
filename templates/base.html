@@ -17,35 +17,156 @@
     {% block extra_head %}{% endblock %}
 </head>
 <body>
-<div id="cursor-glow"></div>
+<!-- 环境光散射层 -->
+<div class="ambient-veil" id="ambientVeil"></div>
+<!-- 主光晕 -->
+<div class="glow-orb" id="glowOrb"></div>
+<div class="glow-core" id="glowCore"></div>
+<!-- 粒子 Canvas -->
+<canvas id="particleCanvas"></canvas>
+<!-- 自定义光标 -->
+<div class="custom-cursor" id="customCursor"></div>
 
 <script>
 (function() {
   'use strict';
-  var glow = document.getElementById('cursor-glow');
-  var rafId = null;
-  var mx = 0, my = 0;
-  var isVisible = false;
+  const glowOrb = document.getElementById('glowOrb');
+  const glowCore = document.getElementById('glowCore');
+  const ambientVeil = document.getElementById('ambientVeil');
+  const canvas = document.getElementById('particleCanvas');
+  const ctx = canvas.getContext('2d');
+  const customCursor = document.getElementById('customCursor');
 
+  let mouseX = window.innerWidth / 2, mouseY = window.innerHeight / 2;
+  let glowOrbX = mouseX, glowOrbY = mouseY;
+  let glowCoreX = mouseX, glowCoreY = mouseY;
+  let particles = [];
+  const PARTICLE_COUNT = 40;
+  let isHoveringInteractive = false;
+
+  // === Canvas 尺寸 ===
+  function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+  window.addEventListener('resize', resizeCanvas);
+
+  // === 粒子 ===
+  function createParticle() {
+    const hue = 185 + (Math.random() - 0.5) * 30;
+    return {
+      x: Math.random() * canvas.width, y: Math.random() * canvas.height,
+      radius: 1.5 + Math.random() * 4,
+      speedX: (Math.random() - 0.5) * 0.3, speedY: (Math.random() - 0.5) * 0.3 - 0.1,
+      alpha: 0.08 + Math.random() * 0.3,
+      alphaFlicker: Math.random() * Math.PI * 2,
+      alphaFlickerSpeed: 0.01 + Math.random() * 0.04,
+      hue: hue, saturation: 70 + Math.random() * 20, lightness: 55 + Math.random() * 20,
+      life: 1, decay: 0.0003 + Math.random() * 0.001,
+    };
+  }
+
+  function initParticles() {
+    particles = [];
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      const p = createParticle();
+      p.y = Math.random() * canvas.height;
+      p.life = Math.random();
+      particles.push(p);
+    }
+  }
+
+  function updateParticles(mx, my) {
+    for (const p of particles) {
+      const dx = mx - p.x, dy = my - p.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 300 && dist > 1) {
+        const force = (1 - dist / 300) * 0.04;
+        p.speedX += (dx / dist) * force;
+        p.speedY += (dy / dist) * force;
+      }
+      p.speedX *= 0.999;
+      p.speedY *= 0.999;
+      p.speedX += (Math.random() - 0.5) * 0.03;
+      p.speedY += (Math.random() - 0.5) * 0.02 - 0.02;
+      p.x += p.speedX;
+      p.y += p.speedY;
+      p.life -= p.decay;
+      p.alphaFlicker += p.alphaFlickerSpeed;
+      if (p.life <= 0 || p.y < -30 || p.x < -30 || p.x > canvas.width + 30) {
+        Object.assign(p, createParticle());
+        p.y = canvas.height + 10 + Math.random() * 30;
+        p.x = Math.random() * canvas.width;
+        p.life = 1;
+        p.speedY = -0.2 - Math.random() * 0.5;
+      }
+    }
+  }
+
+  function drawParticles() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (const p of particles) {
+      const flickerAlpha = p.alpha * (0.65 + 0.35 * Math.sin(p.alphaFlicker));
+      const alpha = Math.max(0.02, Math.min(0.7, flickerAlpha * p.life));
+      const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.radius * 3);
+      gradient.addColorStop(0, `hsla(${p.hue}, ${p.saturation}%, ${p.lightness}%, ${alpha})`);
+      gradient.addColorStop(0.5, `hsla(${p.hue}, ${p.saturation}%, ${p.lightness}%, ${alpha * 0.4})`);
+      gradient.addColorStop(1, 'transparent');
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius * 3, 0, Math.PI * 2);
+      ctx.fillStyle = gradient;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius * 0.6, 0, Math.PI * 2);
+      ctx.fillStyle = `hsla(${p.hue}, ${p.saturation}%, ${Math.min(100, p.lightness + 25)}%, ${alpha * 1.3})`;
+      ctx.fill();
+    }
+  }
+
+  // === 光晕追踪 ===
+  function updateGlow() {
+    const orbLerp = 0.06, coreLerp = 0.12;
+    glowOrbX += (mouseX - glowOrbX) * orbLerp;
+    glowOrbY += (mouseY - glowOrbY) * orbLerp;
+    glowCoreX += (mouseX - glowCoreX) * coreLerp;
+    glowCoreY += (mouseY - glowCoreY) * coreLerp;
+    glowOrb.style.left = glowOrbX + 'px';
+    glowOrb.style.top = glowOrbY + 'px';
+    glowCore.style.left = glowCoreX + 'px';
+    glowCore.style.top = glowCoreY + 'px';
+    ambientVeil.style.background = 'radial-gradient(ellipse at ' + mouseX + 'px ' + mouseY + 'px, hsla(var(--glow-hue), var(--glow-saturation), var(--glow-lightness), 0.06) 0%, transparent 70%)';
+  }
+
+  // === 事件 ===
   document.addEventListener('mousemove', function(e) {
-    mx = e.clientX;
-    my = e.clientY;
-    if (!isVisible) {
-      isVisible = true;
-      glow.style.opacity = '1';
-    }
-    if (!rafId) {
-      rafId = requestAnimationFrame(function() {
-        glow.style.transform = 'translate(' + mx + 'px, ' + my + 'px) translate(-50%, -50%)';
-        rafId = null;
-      });
-    }
+    mouseX += (e.clientX - mouseX) * 0.5;
+    mouseY += (e.clientY - mouseY) * 0.5;
+    customCursor.style.left = e.clientX + 'px';
+    customCursor.style.top = e.clientY + 'px';
   });
 
-  document.addEventListener('mouseleave', function() {
-    isVisible = false;
-    glow.style.opacity = '0';
+  document.querySelectorAll('button, input, select, textarea, a, .scene-chip, .mode-btn').forEach(function(el) {
+    el.addEventListener('mouseenter', function() {
+      isHoveringInteractive = true;
+      customCursor.classList.add('hovering');
+    });
+    el.addEventListener('mouseleave', function() {
+      isHoveringInteractive = false;
+      customCursor.classList.remove('hovering');
+    });
   });
+
+  // === 主循环 ===
+  function animate() {
+    updateParticles(mouseX, mouseY);
+    drawParticles();
+    updateGlow();
+    requestAnimationFrame(animate);
+  }
+
+  // === 初始化 ===
+  resizeCanvas();
+  initParticles();
+  glowOrbX = mouseX; glowOrbY = mouseY;
+  glowCoreX = mouseX; glowCoreY = mouseY;
+  animate();
 })();
 </script>
 
