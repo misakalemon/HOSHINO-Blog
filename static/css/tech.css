@@ -945,9 +945,10 @@ body::before {
     display: flex;
     align-items: center;
     gap: 12px;
+    color: #d0d8e8;
   }
   .navbar-links a::after { display: none; }
-  .navbar-links a:hover { background: rgba(255,255,255,0.04); }
+  .navbar-links.open a:hover { color: #fff; background: rgba(255,255,255,0.06); }
   .navbar-links .nav-write-btn { 
     font-size: 14px !important; 
     padding: 12px 24px !important;
@@ -981,6 +982,7 @@ body::before {
     border-top: 1px solid rgba(255,255,255,0.06);
     margin-top: auto;
     color: var(--accent-cyan) !important;
+    font-weight: 600;
   }
   
   /* 登录移入侧边栏 */
