@@ -167,8 +167,10 @@ def thumbnail():
     img_path = os.path.join(current_app.root_path, 'static', path.lstrip('/'))
     
     if not os.path.isfile(img_path):
-        logger.warning('缩略图文件不存在: path=%s full=%s', path, img_path)
-        abort(404)
+        logger.warning('缩略图文件不存在: path=%s', path)
+        # 返回 1x1 透明像素，不报 404
+        return Response(b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00!\xf9\x04\x00\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;', 
+                       mimetype='image/gif', headers={'Cache-Control': 'no-cache'})
     
     # 缩略图缓存（使用原格式，避免 WebP 兼容问题）
     ext = os.path.splitext(path)[1].lower() or '.jpg'
