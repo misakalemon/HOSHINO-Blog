@@ -24,3 +24,7 @@ HarmonyOS_Icons.zip
 
 # Logs
 blog/logs/*.log
+
+# Uploads (用户上传文件)
+static/uploads/*
+!static/uploads/.gitkeep
