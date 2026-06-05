@@ -19,9 +19,6 @@
 <body>
 <!-- 环境光散射层 -->
 <div class="ambient-veil" id="ambientVeil"></div>
-<!-- 主光晕 -->
-<div class="glow-orb" id="glowOrb"></div>
-<div class="glow-core" id="glowCore"></div>
 <!-- 粒子 Canvas -->
 <canvas id="particleCanvas"></canvas>
 <!-- 自定义光标 -->
@@ -30,16 +27,12 @@
 <script>
 (function() {
   'use strict';
-  const glowOrb = document.getElementById('glowOrb');
-  const glowCore = document.getElementById('glowCore');
   const ambientVeil = document.getElementById('ambientVeil');
   const canvas = document.getElementById('particleCanvas');
   const ctx = canvas.getContext('2d');
   const customCursor = document.getElementById('customCursor');
 
   let mouseX = window.innerWidth / 2, mouseY = window.innerHeight / 2;
-  let glowOrbX = mouseX, glowOrbY = mouseY;
-  let glowCoreX = mouseX, glowCoreY = mouseY;
   let particles = [];
   const PARTICLE_COUNT = 40;
   let isHoveringInteractive = false;
@@ -122,15 +115,6 @@
 
   // === 光晕追踪 ===
   function updateGlow() {
-    const orbLerp = 0.06, coreLerp = 0.12;
-    glowOrbX += (mouseX - glowOrbX) * orbLerp;
-    glowOrbY += (mouseY - glowOrbY) * orbLerp;
-    glowCoreX += (mouseX - glowCoreX) * coreLerp;
-    glowCoreY += (mouseY - glowCoreY) * coreLerp;
-    glowOrb.style.left = glowOrbX + 'px';
-    glowOrb.style.top = glowOrbY + 'px';
-    glowCore.style.left = glowCoreX + 'px';
-    glowCore.style.top = glowCoreY + 'px';
     ambientVeil.style.background = 'radial-gradient(ellipse at ' + mouseX + 'px ' + mouseY + 'px, hsla(var(--glow-hue), var(--glow-saturation), var(--glow-lightness), 0.06) 0%, transparent 70%)';
   }
 
@@ -218,8 +202,6 @@
   // === 初始化 ===
   resizeCanvas();
   initParticles();
-  glowOrbX = mouseX; glowOrbY = mouseY;
-  glowCoreX = mouseX; glowCoreY = mouseY;
   animate();
 })();
 </script>
