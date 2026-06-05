@@ -309,11 +309,11 @@
         .stat-card .num { font-size: 22px; }
         .stat-card .label { font-size: 11px; }
         
-        /* 统一表格 - 横向滚动 */
-        .admin-table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
-        .admin-table { width: 100%; min-width: 500px; }
-        .admin-table th { font-size: 11px; padding: 8px 6px; }
-        .admin-table td { font-size: 13px; padding: 8px 6px; }
+        /* 统一表格 - 内部横向滚动，不溢出页面 */
+        .admin-table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100vw; }
+        .admin-table { min-width: 500px; }
+        .admin-table th { font-size: 11px; padding: 8px 6px; white-space: nowrap; }
+        .admin-table td { font-size: 13px; padding: 8px 6px; white-space: nowrap; }
         
         /* 统一按钮和表单 */
         .btn { font-size: 12px; padding: 6px 12px; }
