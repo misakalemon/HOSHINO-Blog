@@ -259,14 +259,28 @@ def profile():
             if file and file.filename:
                 ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'png'
                 if ext in ('png', 'jpg', 'jpeg', 'gif', 'webp'):
+                    from PIL import Image
+                    import io as _io
+                    img = Image.open(file)
+                    # 头像缩放到 200px 宽
+                    ratio = min(200 / img.width, 1.0)
+                    if ratio < 1:
+                        new_w = int(img.width * ratio)
+                        new_h = int(img.height * ratio)
+                        img = img.resize((new_w, new_h), Image.LANCZOS)
+                    buf = _io.BytesIO()
+                    fmt = 'JPEG' if ext in ('jpg', 'jpeg') else 'PNG'
+                    img.save(buf, fmt, quality=85, optimize=True)
+                    buf.seek(0)
                     filename = 'avatar_' + str(uuid.uuid4()) + '.' + ext
                     from flask import current_app
                     upload_dir = os.path.join(current_app.root_path, 'static', 'uploads')
                     os.makedirs(upload_dir, exist_ok=True)
-                    file.save(os.path.join(upload_dir, filename))
+                    with open(os.path.join(upload_dir, filename), 'wb') as f:
+                        f.write(buf.getvalue())
                     old_avatar = current_user.avatar
                     current_user.avatar = 'uploads/' + filename
-                    logger.info('更新头像: user=%s old=%s new=%s', current_user.username, old_avatar, current_user.avatar)
+                    logger.info('更新头像: user=%s old=%s new=%s (%dx%d, %dKB)', current_user.username, old_avatar, current_user.avatar, img.width, img.height, buf.tell()//1024)
         # 邮箱：有修改时才更新，并检查唯一性
         if form.email.data and form.email.data != current_user.email:
             existing = User.query.filter_by(email=form.email.data).first()
@@ -295,10 +309,34 @@ def upload_image():
     ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'png'
     if ext not in ('png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'):
         return jsonify({'error': '不支持的图片格式'}), 400
+    
+    from PIL import Image
+    import io as _io
+    # 读取图片并压缩
+    img = Image.open(file)
+    # 限制最大尺寸（宽1920，高1080），保持宽高比
+    max_w, max_h = 1920, 1080
+    if img.width > max_w or img.height > max_h:
+        ratio = min(max_w / img.width, max_h / img.height, 1.0)
+        new_w = int(img.width * ratio)
+        new_h = int(img.height * ratio)
+        img = img.resize((new_w, new_h), Image.LANCZOS)
+    
+    # 保存到 BytesIO 再写入磁盘
+    buf = _io.BytesIO()
+    fmt = 'JPEG' if ext in ('jpg', 'jpeg') else 'PNG'
+    if ext == 'webp': fmt = 'WEBP'
+    if ext == 'gif': fmt = 'GIF'
+    img.save(buf, fmt, quality=85, optimize=True)
+    buf.seek(0)
+    
     filename = str(uuid.uuid4()) + '.' + ext
     from flask import current_app
     upload_dir = os.path.join(current_app.root_path, 'static', 'uploads')
     os.makedirs(upload_dir, exist_ok=True)
-    file.save(os.path.join(upload_dir, filename))
+    with open(os.path.join(upload_dir, filename), 'wb') as f:
+        f.write(buf.getvalue())
+    
+    logger.info('图片上传: %s → uploads/%s (%dx%d, %dKB)', file.filename, filename, img.width, img.height, buf.tell()//1024)
     url = url_for('static', filename='uploads/' + filename)
     return jsonify({'url': url})

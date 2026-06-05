@@ -713,3 +713,93 @@ Exception: Install 'email_validator' for email validation support.
 [2026-06-05 15:09:53] DEBUG    [blog.routes:thumbnail:182] 缩略图: path=uploads/a97b4827-b058-4c24-9bc1-52cfa5100c26.png w=400 400x250 -> 400x250
 [2026-06-05 15:09:53] INFO     [root:log_request:118]   192.168.10.58 GET     200 /thumb                                   -
 [2026-06-05 15:09:53] INFO     [werkzeug:_log:97] 192.168.10.58 - - [05/Jun/2026 15:09:53] "GET /thumb?path=uploads/a97b4827-b058-4c24-9bc1-52cfa5100c26.png&w=400 HTTP/1.1" 200 -
+[2026-06-05 15:11:48] INFO     [root:log_request:118]   192.168.10.58 GET     200 /                                        -
+[2026-06-05 15:11:48] INFO     [werkzeug:_log:97] 192.168.10.58 - - [05/Jun/2026 15:11:48] "GET / HTTP/1.1" 200 -
+[2026-06-05 15:11:48] INFO     [werkzeug:_log:97] 192.168.10.58 - - [05/Jun/2026 15:11:48] "GET /static/css/tech.css HTTP/1.1" 200 -
+[2026-06-05 15:11:48] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'IHDR' 16 13
+[2026-06-05 15:11:48] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'sRGB' 41 1
+[2026-06-05 15:11:48] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'gAMA' 54 4
+[2026-06-05 15:11:48] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'IDAT' 70 65466
+[2026-06-05 15:11:48] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'IHDR' 16 13
+[2026-06-05 15:11:48] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'IHDR' 16 13
+[2026-06-05 15:11:48] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'pHYs' 41 9
+[2026-06-05 15:11:48] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'sRGB' 41 1
+[2026-06-05 15:11:48] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'IDAT' 62 8192
+[2026-06-05 15:11:48] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'gAMA' 54 4
+[2026-06-05 15:11:48] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'pHYs' 70 9
+[2026-06-05 15:11:48] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'IDAT' 91 65445
+[2026-06-05 15:11:48] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'IHDR' 16 13
+[2026-06-05 15:11:48] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'pHYs' 41 9
+[2026-06-05 15:11:48] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'IDAT' 62 8192
+[2026-06-05 15:11:48] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'IHDR' 16 13
+[2026-06-05 15:11:48] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'sRGB' 41 1
+[2026-06-05 15:11:48] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'gAMA' 54 4
+[2026-06-05 15:11:48] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'IDAT' 70 65466
+[2026-06-05 15:11:48] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'IHDR' 16 13
+[2026-06-05 15:11:48] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'sRGB' 41 1
+[2026-06-05 15:11:48] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'gAMA' 54 4
+[2026-06-05 15:11:48] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'IDAT' 70 65466
+[2026-06-05 15:11:48] DEBUG    [blog.routes:thumbnail:182] 缩略图: path=uploads/c445a289-a656-47b9-8ea3-9c38bc370d31.png w=120 120x80 -> 120x80
+[2026-06-05 15:11:48] INFO     [root:log_request:118]   192.168.10.58 GET     200 /thumb                                   -
+[2026-06-05 15:11:48] INFO     [werkzeug:_log:97] 192.168.10.58 - - [05/Jun/2026 15:11:48] "GET /thumb?path=uploads/c445a289-a656-47b9-8ea3-9c38bc370d31.png&w=120 HTTP/1.1" 200 -
+[2026-06-05 15:11:48] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'IHDR' 16 13
+[2026-06-05 15:11:48] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'sRGB' 41 1
+[2026-06-05 15:11:48] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'gAMA' 54 4
+[2026-06-05 15:11:48] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'pHYs' 70 9
+[2026-06-05 15:11:48] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'IDAT' 91 65445
+[2026-06-05 15:11:49] DEBUG    [blog.routes:thumbnail:182] 缩略图: path=uploads/avatar_137906f7-8db8-4039-8718-33d3551364bc.png w=48 48x30 -> 48x30
+[2026-06-05 15:11:49] INFO     [root:log_request:118]   192.168.10.58 GET     200 /thumb                                   -
+[2026-06-05 15:11:49] INFO     [werkzeug:_log:97] 192.168.10.58 - - [05/Jun/2026 15:11:49] "GET /thumb?path=uploads/avatar_137906f7-8db8-4039-8718-33d3551364bc.png&w=48 HTTP/1.1" 200 -
+[2026-06-05 15:11:49] INFO     [werkzeug:_log:97] 192.168.10.58 - - [05/Jun/2026 15:11:49] "[36mGET /static/images/logo/favicon.svg HTTP/1.1[0m" 304 -
+[2026-06-05 15:11:49] DEBUG    [blog.routes:thumbnail:182] 缩略图: path=uploads/a97b4827-b058-4c24-9bc1-52cfa5100c26.png w=120 120x75 -> 120x75
+[2026-06-05 15:11:49] INFO     [root:log_request:118]   192.168.10.58 GET     200 /thumb                                   -
+[2026-06-05 15:11:49] INFO     [werkzeug:_log:97] 192.168.10.58 - - [05/Jun/2026 15:11:49] "GET /thumb?path=uploads/a97b4827-b058-4c24-9bc1-52cfa5100c26.png&w=120 HTTP/1.1" 200 -
+[2026-06-05 15:11:49] DEBUG    [blog.routes:thumbnail:182] 缩略图: path=uploads/c445a289-a656-47b9-8ea3-9c38bc370d31.png w=400 400x268 -> 400x268
+[2026-06-05 15:11:49] INFO     [root:log_request:118]   192.168.10.58 GET     200 /thumb                                   -
+[2026-06-05 15:11:49] INFO     [werkzeug:_log:97] 192.168.10.58 - - [05/Jun/2026 15:11:49] "GET /thumb?path=uploads/c445a289-a656-47b9-8ea3-9c38bc370d31.png&w=400 HTTP/1.1" 200 -
+[2026-06-05 15:11:49] DEBUG    [blog.routes:thumbnail:182] 缩略图: path=uploads/d1e1b96d-8477-47a6-840a-b26839f192a5.png w=400 400x225 -> 400x225
+[2026-06-05 15:11:49] INFO     [root:log_request:118]   192.168.10.58 GET     200 /thumb                                   -
+[2026-06-05 15:11:49] INFO     [werkzeug:_log:97] 192.168.10.58 - - [05/Jun/2026 15:11:49] "GET /thumb?path=uploads/d1e1b96d-8477-47a6-840a-b26839f192a5.png&w=400 HTTP/1.1" 200 -
+[2026-06-05 15:11:49] DEBUG    [blog.routes:thumbnail:182] 缩略图: path=uploads/d1e1b96d-8477-47a6-840a-b26839f192a5.png w=120 120x67 -> 120x67
+[2026-06-05 15:11:49] INFO     [root:log_request:118]   192.168.10.58 GET     200 /thumb                                   -
+[2026-06-05 15:11:49] INFO     [werkzeug:_log:97] 192.168.10.58 - - [05/Jun/2026 15:11:49] "GET /thumb?path=uploads/d1e1b96d-8477-47a6-840a-b26839f192a5.png&w=120 HTTP/1.1" 200 -
+[2026-06-05 15:11:49] DEBUG    [blog.routes:thumbnail:182] 缩略图: path=uploads/a97b4827-b058-4c24-9bc1-52cfa5100c26.png w=400 400x250 -> 400x250
+[2026-06-05 15:11:49] INFO     [root:log_request:118]   192.168.10.58 GET     200 /thumb                                   -
+[2026-06-05 15:11:49] INFO     [werkzeug:_log:97] 192.168.10.58 - - [05/Jun/2026 15:11:49] "GET /thumb?path=uploads/a97b4827-b058-4c24-9bc1-52cfa5100c26.png&w=400 HTTP/1.1" 200 -
+[2026-06-05 15:12:07] INFO     [root:log_request:118]   192.168.10.58 GET     200 /post/在 ESP32 上玩转 OpenHarmony：可行性评估、内核对比与驱动移植实战 -
+[2026-06-05 15:12:07] INFO     [werkzeug:_log:97] 192.168.10.58 - - [05/Jun/2026 15:12:07] "GET /post/在%20ESP32%20上玩转%20OpenHarmony：可行性评估、内核对比与驱动移植实战 HTTP/1.1" 200 -
+[2026-06-05 15:12:07] INFO     [werkzeug:_log:97] 192.168.10.58 - - [05/Jun/2026 15:12:07] "[36mGET /static/css/tech.css HTTP/1.1[0m" 304 -
+[2026-06-05 15:12:07] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'IHDR' 16 13
+[2026-06-05 15:12:07] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'pHYs' 41 9
+[2026-06-05 15:12:07] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'IDAT' 62 8192
+[2026-06-05 15:12:07] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'IHDR' 16 13
+[2026-06-05 15:12:07] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'sRGB' 41 1
+[2026-06-05 15:12:07] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'gAMA' 54 4
+[2026-06-05 15:12:07] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'IDAT' 70 65466
+[2026-06-05 15:12:07] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'IHDR' 16 13
+[2026-06-05 15:12:07] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'pHYs' 41 9
+[2026-06-05 15:12:07] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'IDAT' 62 8192
+[2026-06-05 15:12:07] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'IHDR' 16 13
+[2026-06-05 15:12:07] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'sRGB' 41 1
+[2026-06-05 15:12:07] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'gAMA' 54 4
+[2026-06-05 15:12:07] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'IHDR' 16 13
+[2026-06-05 15:12:07] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'sRGB' 41 1
+[2026-06-05 15:12:07] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'gAMA' 54 4
+[2026-06-05 15:12:07] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'IDAT' 70 65466
+[2026-06-05 15:12:07] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'pHYs' 70 9
+[2026-06-05 15:12:07] DEBUG    [PIL.PngImagePlugin:call:198] STREAM b'IDAT' 91 65445
+[2026-06-05 15:12:08] DEBUG    [blog.routes:thumbnail:182] 缩略图: path=uploads/c445a289-a656-47b9-8ea3-9c38bc370d31.png w=120 120x80 -> 120x80
+[2026-06-05 15:12:08] INFO     [root:log_request:118]   192.168.10.58 GET     200 /thumb                                   -
+[2026-06-05 15:12:08] INFO     [werkzeug:_log:97] 192.168.10.58 - - [05/Jun/2026 15:12:08] "GET /thumb?path=uploads/c445a289-a656-47b9-8ea3-9c38bc370d31.png&w=120 HTTP/1.1" 200 -
+[2026-06-05 15:12:08] DEBUG    [blog.routes:thumbnail:182] 缩略图: path=uploads/avatar_137906f7-8db8-4039-8718-33d3551364bc.png w=120 120x75 -> 120x75
+[2026-06-05 15:12:08] INFO     [root:log_request:118]   192.168.10.58 GET     200 /thumb                                   -
+[2026-06-05 15:12:08] INFO     [werkzeug:_log:97] 192.168.10.58 - - [05/Jun/2026 15:12:08] "GET /thumb?path=uploads/avatar_137906f7-8db8-4039-8718-33d3551364bc.png&w=120 HTTP/1.1" 200 -
+[2026-06-05 15:12:08] DEBUG    [blog.routes:thumbnail:182] 缩略图: path=uploads/a97b4827-b058-4c24-9bc1-52cfa5100c26.png w=120 120x75 -> 120x75
+[2026-06-05 15:12:08] INFO     [root:log_request:118]   192.168.10.58 GET     200 /thumb                                   -
+[2026-06-05 15:12:08] INFO     [werkzeug:_log:97] 192.168.10.58 - - [05/Jun/2026 15:12:08] "GET /thumb?path=uploads/a97b4827-b058-4c24-9bc1-52cfa5100c26.png&w=120 HTTP/1.1" 200 -
+[2026-06-05 15:12:08] DEBUG    [blog.routes:thumbnail:182] 缩略图: path=uploads/d1e1b96d-8477-47a6-840a-b26839f192a5.png w=120 120x67 -> 120x67
+[2026-06-05 15:12:08] INFO     [root:log_request:118]   192.168.10.58 GET     200 /thumb                                   -
+[2026-06-05 15:12:08] INFO     [werkzeug:_log:97] 192.168.10.58 - - [05/Jun/2026 15:12:08] "GET /thumb?path=uploads/d1e1b96d-8477-47a6-840a-b26839f192a5.png&w=120 HTTP/1.1" 200 -
+[2026-06-05 15:12:09] DEBUG    [blog.routes:thumbnail:182] 缩略图: path=uploads/c445a289-a656-47b9-8ea3-9c38bc370d31.png w=800 800x537 -> 800x537
+[2026-06-05 15:12:09] INFO     [root:log_request:118]   192.168.10.58 GET     200 /thumb                                   -
+[2026-06-05 15:12:09] INFO     [werkzeug:_log:97] 192.168.10.58 - - [05/Jun/2026 15:12:09] "GET /thumb?path=uploads/c445a289-a656-47b9-8ea3-9c38bc370d31.png&w=800 HTTP/1.1" 200 -
