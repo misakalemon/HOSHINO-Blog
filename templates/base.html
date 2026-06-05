@@ -277,6 +277,9 @@
                   <svg width="16" height="16" viewBox="0 0 24 24" style="vertical-align:middle"><use href="#icon-search"/></svg>
                 </button>
             </form>
+            <button class="nav-toggle" id="navToggle" onclick="toggleNav()">
+              <span></span><span></span><span></span>
+            </button>
         </div>
     </div>
 </nav>
@@ -416,6 +419,10 @@ function toggleTools() {
   panel.classList.toggle('open');
   overlay.classList.toggle('show');
   if (!open) { initTimestamp(); }
+}
+function toggleNav() {
+  document.getElementById('navToggle').classList.toggle('open');
+  document.querySelector('.navbar-links').classList.toggle('open');
 }
 function switchTool(name) {
   document.querySelectorAll('.tool-panel').forEach(function(p) { p.classList.remove('active'); });
@@ -577,6 +584,9 @@ function izDownload() {
             <a href="{{ url_for('blog.rss_feed') }}" title="RSS">
               <svg width="18" height="18" viewBox="0 0 24 24" style="vertical-align:middle"><use href="#icon-rss"/></svg>
             </a>
+            <button class="nav-toggle" id="navToggle" onclick="toggleNav()">
+              <span></span><span></span><span></span>
+            </button>
         </div>
     </footer>
 

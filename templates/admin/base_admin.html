@@ -241,15 +241,47 @@
       .admin-row { display: flex; gap: 16px; flex-wrap: wrap; }
       .admin-row > * { flex: 1; min-width: 200px; }
 
+      /* 管理后台汉堡菜单按钮 */
+      .admin-toggle {
+        display: none;
+        flex-direction: column;
+        gap: 5px;
+        cursor: pointer;
+        background: none;
+        border: none;
+        padding: 12px;
+        z-index: 10000;
+        position: fixed;
+        top: 8px;
+        left: 8px;
+      }
+      .admin-toggle span {
+        display: block;
+        width: 24px;
+        height: 2px;
+        background: var(--text-primary);
+        border-radius: 2px;
+        transition: all 0.3s;
+      }
+      .admin-toggle.open span:nth-child(1) { transform: rotate(45deg) translate(5px,5px); }
+      .admin-toggle.open span:nth-child(2) { opacity: 0; }
+      .admin-toggle.open span:nth-child(3) { transform: rotate(-45deg) translate(5px,-5px); }
+
       /* --- 响应式 --- */
       @media (max-width: 768px) {
-        :root { --sidebar-w: 60px; }
-        .admin-sidebar { padding: 16px 8px; }
-        .admin-sidebar .logo { font-size: 0; }
-        .admin-sidebar .logo::after { content: '//'; font-size: 18px; -webkit-text-fill-color: var(--accent-cyan); }
-        .admin-sidebar a { font-size: 0; padding: 10px 4px; text-align: center; }
-        .admin-sidebar .section-title { display: none; }
-        .admin-main { padding: 20px 14px; }
+        :root { --sidebar-w: 0px; }
+        .admin-toggle { display: flex !important; }
+        .admin-sidebar {
+          position: fixed;
+          left: -280px;
+          width: 260px;
+          height: 100vh;
+          z-index: 9999;
+          transition: left 0.3s ease;
+          display: block !important;
+        }
+        .admin-sidebar.open { left: 0; }
+        .admin-main { margin-left: 0; padding: 20px 14px; padding-top: 70px; }
         .admin-row { flex-direction: column; }
         .admin-table { font-size: 12px; }
         .admin-table th, .admin-table td { padding: 8px 6px; }
@@ -259,7 +291,10 @@
 <body>
 
 <!-- 侧边栏 -->
-<div class="admin-sidebar">
+<button class="admin-toggle" id="adminToggle" onclick="toggleAdminSidebar()">
+  <span></span><span></span><span></span>
+</button>
+<div class="admin-sidebar" id="adminSidebar">
     <a href="{{ url_for('admin.dashboard') }}" class="logo">// HOSHINO</a>
 
     <div class="section-title">内容</div>
@@ -288,6 +323,13 @@
 
     {% block admin_content %}{% endblock %}
 </div>
+
+<script>
+function toggleAdminSidebar() {
+  document.getElementById('adminToggle').classList.toggle('open');
+  document.getElementById('adminSidebar').classList.toggle('open');
+}
+</script>
 
 </body>
 </html>

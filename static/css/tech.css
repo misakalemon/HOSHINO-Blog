@@ -173,6 +173,30 @@ body::before {
 .navbar-links a:hover { color: #fff; }
 .navbar-links a:hover::after { width: 100%; }
 
+/* 汉堡菜单按钮（桌面隐藏） */
+.nav-toggle {
+  display: none;
+  flex-direction: column;
+  gap: 5px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 8px;
+  z-index: 1000;
+  position: relative;
+}
+.nav-toggle span {
+  display: block;
+  width: 24px;
+  height: 2px;
+  background: var(--text-primary);
+  border-radius: 2px;
+  transition: all 0.3s;
+}
+.nav-toggle.open span:nth-child(1) { transform: rotate(45deg) translate(5px,5px); }
+.nav-toggle.open span:nth-child(2) { opacity: 0; }
+.nav-toggle.open span:nth-child(3) { transform: rotate(-45deg) translate(5px,-5px); }
+
 /* 写文章按钮 (HarmonyOS 风格) */
 .nav-write-btn {
   display: inline-flex !important;
@@ -318,7 +342,7 @@ body::before {
   position: relative;
   flex-shrink: 0;
   width: 100%;
-  display: flex;
+  line-height: 0;
 }
 .post-card .cover img {
   width: 100%;
@@ -870,6 +894,28 @@ body::before {
   body { cursor: auto; }
   input[type="range"]::-webkit-slider-thumb { cursor: pointer; }
   .container { padding: 0 12px; }
+  
+  /* 汉堡菜单按钮 */
+  .nav-toggle { display: flex !important; }
+  .navbar-links { 
+    display: none; 
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(10,10,26,0.97);
+    backdrop-filter: blur(20px);
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    z-index: 999;
+    padding: 20px;
+  }
+  .navbar-links.open { display: flex; }
+  .navbar-links a { font-size: 18px; padding: 10px; }
+  .navbar-links .nav-write-btn { font-size: 16px !important; padding: 12px 28px !important; }
+  .navbar-links .search-form { width: 80%; max-width: 300px; margin-top: 10px; }
+  .navbar-links .search-form input { width: 100%; }
+  .nav-write-btn { position: relative; z-index: 1000; }
   .page-header { padding: 70px 0 24px; }
   .page-header h1 { font-size: 24px; }
   .page-header p { font-size: 14px; }
