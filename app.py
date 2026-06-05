@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import os
 from flask import Flask
 from flask_login import LoginManager
@@ -6,6 +7,9 @@ from flask_login import LoginManager
 def create_app():
     app = Flask(__name__)
     app.config.from_object('config.ActiveConfig')
+    # 跨平台编码配置
+    app.config['JSON_AS_ASCII'] = False       # JSON 返回中文而非 \\u 转义
+    app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
     # 初始化日志（必须先于其他初始化）
     from blog.logger import setup_logging, log_request

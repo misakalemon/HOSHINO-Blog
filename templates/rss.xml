@@ -3,7 +3,7 @@
   <channel>
     <title>HOSHINO Blog</title>
     <link>{{ url_for('blog.index', _external=True) }}</link>
-    <description>Personal Blog</description>
+    <description>个人博客</description>
     <language>zh-CN</language>
     <atom:link href="{{ url_for('blog.rss_feed', _external=True) }}" rel="self" type="application/rss+xml"/>
     {% for post in posts %}

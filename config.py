@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import os
 
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -28,6 +29,7 @@ class MySQLConfig(Config):
         'pool_recycle': 3600,
         'pool_pre_ping': True,
         'max_overflow': 5,
+        'connect_args': {'charset': 'utf8mb4'},
     }
 
 

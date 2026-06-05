@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import datetime, os, io, logging
 from flask import render_template, request, redirect, url_for, abort, jsonify, send_file
 from . import blog_bp
@@ -151,7 +152,7 @@ def rss_feed():
         Post.created_at.desc()).limit(20).all()
     from flask import make_response
     response = make_response(render_template('rss.xml', posts=posts))
-    response.headers['Content-Type'] = 'application/xml'
+    response.headers['Content-Type'] = 'application/xml; charset=utf-8'
     return response
 
 

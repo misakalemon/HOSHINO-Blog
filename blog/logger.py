@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 HOSHINO Blog 日志模块
 记录请求、数据库操作、错误详细信息到文件和终端
@@ -89,7 +90,14 @@ def setup_logging(app):
 
 
 def log_request(response):
-    """请求日志中间件：记录每次 HTTP 请求"""
+    """请求日志中间件：记录每次 HTTP 请求 + 统一编码"""
+    # 确保所有响应使用 UTF-8 编码
+    content_type = response.content_type or ''
+    if 'charset' not in content_type and 'text/' in content_type:
+        response.headers['Content-Type'] = content_type + '; charset=utf-8'
+    # 安全头
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    
     logger = logging.getLogger()
     if request.path.startswith('/static/') or request.path == '/favicon.ico':
         return response  # 静态文件不记录
