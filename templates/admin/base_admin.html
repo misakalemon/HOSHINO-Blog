@@ -302,7 +302,7 @@
         .admin-header h3 { font-size: 16px; }
         
         /* 统一卡片 */
-        .admin-card { padding: 12px 10px; max-width: 100%; }
+        .admin-card { padding: 12px 10px; max-width: 100%; min-width: 0; }
         .admin-card h5 { font-size: 12px; }
         .card-grid { grid-template-columns: 1fr 1fr; gap: 8px; max-width: 100%; }
         .stat-card { padding: 12px 8px; }
@@ -314,6 +314,9 @@
         .admin-table { min-width: 500px; }
         .admin-table th { font-size: 11px; padding: 8px 6px; white-space: nowrap; }
         .admin-table td { font-size: 13px; padding: 8px 6px; white-space: nowrap; }
+        
+        /* 统一 flex 子项不压缩 */
+        .admin-row > * { min-width: 0; max-width: 100%; }
         
         /* 统一按钮和表单 */
         .btn { font-size: 12px; padding: 6px 12px; }
