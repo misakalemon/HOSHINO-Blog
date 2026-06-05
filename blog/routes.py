@@ -166,7 +166,15 @@ def thumbnail():
     img_path = os.path.join(current_app.root_path, 'static', path.lstrip('/'))
     if not os.path.isfile(img_path):
         logger.warning('缩略图文件不存在: path=%s full=%s', path, img_path)
-        abort(404)
+        # 使用默认占位图
+        if 'avatar' in path:
+            fallback = os.path.join(current_app.root_path, 'static', 'images', 'avatar', 'main-avatar.jpg')
+        else:
+            fallback = os.path.join(current_app.root_path, 'static', 'images', 'categories', 'category-item-1.jpg')
+        if os.path.isfile(fallback):
+            img_path = fallback
+        else:
+            abort(404)
     try:
         from PIL import Image
         img = Image.open(img_path)
