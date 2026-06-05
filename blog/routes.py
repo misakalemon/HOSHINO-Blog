@@ -13,7 +13,7 @@ def index():
     page = request.args.get('page', 1, type=int)
     category_slug = request.args.get('category', None)
 
-    query = Post.query.filter_by(is_published=True)
+    query = Post.query.options(db.joinedload(Post.author)).filter_by(is_published=True)
     if category_slug:
         cat = Category.query.filter_by(slug=category_slug).first_or_404()
         query = query.filter_by(category_id=cat.id)
@@ -163,7 +163,21 @@ def thumbnail():
     if not path:
         abort(404)
     from flask import current_app
+    # 缩略图缓存目录
+    cache_dir = os.path.join(current_app.root_path, 'static', '.thumb_cache')
+    os.makedirs(cache_dir, exist_ok=True)
+    cache_key = f'{path.replace("/","_")}_{w}.webp'
+    cache_path = os.path.join(cache_dir, cache_key)
+    
+    # 如果缓存存在且原始文件没变，直接返回缓存
     img_path = os.path.join(current_app.root_path, 'static', path.lstrip('/'))
+    if os.path.isfile(cache_path):
+        img_mtime = os.path.getmtime(img_path) if os.path.isfile(img_path) else 0
+        cache_mtime = os.path.getmtime(cache_path)
+        if cache_mtime > img_mtime:
+            logger.debug('缩略图缓存命中: %s', cache_key)
+            return send_file(cache_path, mimetype='image/webp', max_age=86400*30)
+    
     if not os.path.isfile(img_path):
         logger.warning('缩略图文件不存在: path=%s', path)
         abort(404)
@@ -175,13 +189,10 @@ def thumbnail():
         new_h = int(img.height * ratio)
         if ratio < 1:
             img = img.resize((new_w, new_h), Image.LANCZOS)
-        buf = io.BytesIO()
-        ext = os.path.splitext(path)[1].lower()
-        fmt = 'JPEG' if ext in ('.jpg', '.jpeg') else 'PNG' if ext == '.png' else 'WEBP'
-        img.save(buf, fmt, quality=85, optimize=True)
-        buf.seek(0)
-        logger.debug('缩略图: path=%s w=%d %dx%d -> %dx%d', path, w, img.width, img.height, new_w, new_h)
-        return send_file(buf, mimetype=f'image/{fmt.lower()}')
+        # 统一保存为 WebP（更小体积）
+        img.save(cache_path, 'WEBP', quality=80, optimize=True)
+        logger.debug('缩略图生成: %s %dx%d -> %dx%d', cache_key, img.width, img.height, new_w, new_h)
+        return send_file(cache_path, mimetype='image/webp', max_age=86400*30)
     except Exception as e:
         logger.error('缩略图生成失败: path=%s error=%s', path, str(e))
         abort(500)

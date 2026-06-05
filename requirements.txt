@@ -7,6 +7,7 @@ Markdown==3.7
 Pygments==2.19.1
 Pillow==11.1.0
 python-dotenv==1.1.0
+Flask-Compress==1.17
 # MySQL 支持（可选：使用 MySQL 时取消注释）
 # pymysql==1.1.1
 # 邮箱验证（Email() 验证器必需）

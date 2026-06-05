@@ -2,6 +2,9 @@
 import os
 from flask import Flask
 from flask_login import LoginManager
+from flask_compress import Compress
+
+compress = Compress()
 
 
 def create_app():
@@ -10,6 +13,11 @@ def create_app():
     # 跨平台编码配置
     app.config['JSON_AS_ASCII'] = False       # JSON 返回中文而非 \\u 转义
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
+    # 压缩配置
+    app.config['COMPRESS_MIMETYPES'] = ['text/html', 'text/css', 'text/javascript', 
+                                        'application/json', 'application/xml']
+    app.config['COMPRESS_LEVEL'] = 6
+    app.config['COMPRESS_MIN_SIZE'] = 500
 
     # 初始化日志（必须先于其他初始化）
     from blog.logger import setup_logging, log_request
@@ -41,6 +49,10 @@ def create_app():
     app.register_blueprint(blog_bp)
     app.register_blueprint(admin_bp)
     logger.info('蓝图注册完成')
+    
+    # 初始化压缩
+    compress.init_app(app)
+    logger.info('Gzip 压缩已启用')
 
     # Request 日志中间件（在所有请求之后记录）
     app.after_request(log_request)
