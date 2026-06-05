@@ -17,6 +17,37 @@
     {% block extra_head %}{% endblock %}
 </head>
 <body>
+<div id="cursor-glow"></div>
+
+<script>
+(function() {
+  'use strict';
+  var glow = document.getElementById('cursor-glow');
+  var rafId = null;
+  var mx = 0, my = 0;
+  var isVisible = false;
+
+  document.addEventListener('mousemove', function(e) {
+    mx = e.clientX;
+    my = e.clientY;
+    if (!isVisible) {
+      isVisible = true;
+      glow.style.opacity = '1';
+    }
+    if (!rafId) {
+      rafId = requestAnimationFrame(function() {
+        glow.style.transform = 'translate(' + mx + 'px, ' + my + 'px) translate(-50%, -50%)';
+        rafId = null;
+      });
+    }
+  });
+
+  document.addEventListener('mouseleave', function() {
+    isVisible = false;
+    glow.style.opacity = '0';
+  });
+})();
+</script>
 
 <!-- SVG 图标库 (HarmonyOS 风格) -->
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
