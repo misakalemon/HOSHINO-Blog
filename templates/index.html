@@ -33,25 +33,18 @@
                             {% else %}
                             <svg viewBox="0 0 24 24" fill="none"><use href="#icon-blog"/></svg>
                             {% endif %}
+                            {% if post.category %}
+                            <span class="cover-category">{{ post.category.name }}</span>
+                            {% endif %}
                         </a>
                         <div class="body">
-                            <div class="meta">
-                                {% if post.category %}
-                                <span class="category">{{ post.category.name }}</span>
-                                {% endif %}
-                                <span class="date">{{ format_date(post.created_at, '%Y/%m/%d') }}</span>
-                            </div>
                             <h3><a href="{{ url_for('blog.single_post', slug=post.slug) }}">{{ post.title }}</a></h3>
-                            <p class="excerpt">{{ truncate_text(post.summary or post.content|striptags, 180) }}</p>
-                        </div>
-                        <div class="footer-card">
-                            <div class="author">
-                                <img src="{{ url_for('static', filename=post.author.avatar) }}" alt="{{ post.author.display_name or post.author.username }}">
-                                <span>{{ post.author.display_name or post.author.username }}</span>
+                            <div class="meta-line">
+                                <img src="{{ url_for('static', filename=post.author.avatar) }}" alt="{{ post.author.display_name or post.author.username }}" class="meta-avatar">
+                                <span class="meta-author">{{ post.author.display_name or post.author.username }}</span>
+                                <span class="meta-date">{{ format_date(post.created_at, '%Y/%m/%d') }}</span>
+                                <span class="meta-comments"><svg width="12" height="12" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:2px"><use href="#icon-comment"/></svg>{{ post.published_comments() }}</span>
                             </div>
-                        <div class="comments">
-                          <svg width="14" height="14" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:2px"><use href="#icon-comment"/></svg>
-                          {{ post.published_comments() }}
                         </div>
                     </article>
                     {% endfor %}
