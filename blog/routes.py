@@ -7,6 +7,32 @@ from .forms import CommentForm
 
 logger = logging.getLogger(__name__)
 
+# 缩略图缓存版本（修改此值使旧缓存自动失效并清理）
+# v1 = WebP 格式 (已弃用)
+# v2 = JPEG/PNG 原格式
+THUMB_CACHE_VER = 'v2'
+_last_cache_cleanup = 0
+
+def cleanup_old_cache(cache_dir, current_ver):
+    """清除旧版本缩略图缓存（每小时最多执行一次）"""
+    global _last_cache_cleanup
+    import time
+    now = time.time()
+    if now - _last_cache_cleanup < 3600:
+        return
+    _last_cache_cleanup = now
+    if not os.path.isdir(cache_dir):
+        return
+    for fname in os.listdir(cache_dir):
+        if fname.startswith(current_ver + '_'):
+            continue  # 当前版本保留
+        if fname.startswith('v1_') or fname.startswith('v0_'):
+            try:
+                os.remove(os.path.join(cache_dir, fname))
+                logger.debug('清除旧缓存: %s', fname)
+            except:
+                pass
+
 
 @blog_bp.route('/')
 def index():
@@ -168,16 +194,18 @@ def thumbnail():
     
     if not os.path.isfile(img_path):
         logger.warning('缩略图文件不存在: path=%s', path)
-        # 返回 1x1 透明像素，不报 404
-        return Response(b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00!\xf9\x04\x00\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;', 
+        return Response(b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00!\xf9\x04\x00\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;',
                        mimetype='image/gif', headers={'Cache-Control': 'no-cache'})
     
-    # 缩略图缓存（使用原格式，避免 WebP 兼容问题）
+    # 缩略图缓存（版本前缀，升级时自动失效）
     ext = os.path.splitext(path)[1].lower() or '.jpg'
-    cache_key = f'{path.replace("/","_")}_{w}{ext}'
+    cache_key = f'{THUMB_CACHE_VER}_{path.replace("/","_")}_{w}{ext}'
     cache_dir = os.path.join(current_app.root_path, 'static', '.thumb_cache')
     cache_path = os.path.join(cache_dir, cache_key)
     os.makedirs(cache_dir, exist_ok=True)
+    
+    # 清除旧版本缓存（异步，不阻塞请求）
+    cleanup_old_cache(cache_dir, THUMB_CACHE_VER)
     
     # 缓存命中
     if os.path.isfile(cache_path):
