@@ -268,8 +268,13 @@
               工具
             </a>
             <a href="{{ url_for('admin.login') if not current_user.is_authenticated else url_for('admin.dashboard') }}" class="sidebar-login-link">
+              {% if current_user.is_authenticated %}
+              <img src="{{ url_for('blog.thumbnail', path=current_user.avatar, w=36) }}" alt="avatar" style="width:22px;height:22px;border-radius:50%;object-fit:cover;flex-shrink:0">
+              <span>{{ current_user.display_name or current_user.username }}</span>
+              {% else %}
               <svg width="16" height="16" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:4px"><use href="#icon-user"/></svg>
-              {% if current_user.is_authenticated %}{{ current_user.display_name or current_user.username }}{% else %}登录{% endif %}
+              登录
+              {% endif %}
             </a>
             <a href="{{ url_for('admin.new_post') }}" class="nav-write-btn">
               <svg width="14" height="14" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:4px"><use href="#icon-write"/></svg>
@@ -288,7 +293,11 @@
         <a href="{{ url_for('admin.login') if not current_user.is_authenticated else url_for('admin.dashboard') }}" 
            class="nav-login-btn"
            title="{{ current_user.display_name or current_user.username if current_user.is_authenticated else '登录' }}">
+          {% if current_user.is_authenticated %}
+          <img src="{{ url_for('blog.thumbnail', path=current_user.avatar, w=36) }}" alt="avatar" style="width:28px;height:28px;border-radius:50%;object-fit:cover">
+          {% else %}
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><use href="#icon-user"/></svg>
+          {% endif %}
         </a>
     </div>
 </nav>
