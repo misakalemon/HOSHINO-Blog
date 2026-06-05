@@ -279,7 +279,7 @@
       }
       .admin-overlay.show { display: block; }
 
-      /* --- 响应式 --- */
+      /* --- 响应式 (手机端卡片布局) --- */
       @media (max-width: 768px) {
         :root { --sidebar-w: 0px; }
         html, body { overflow-x: hidden; max-width: 100vw; }
@@ -295,39 +295,85 @@
         .admin-sidebar a:hover { background: rgba(255,255,255,0.06); color: #fff; }
         .admin-sidebar .section-title { font-size: 11px; padding-left: 20px; }
         
-        /* 主内容区 - 严格限制宽度不溢出 */
-        .admin-main { margin-left: 0; padding: 12px 10px; max-width: 100vw; overflow-x: hidden; }
+        /* 主内容 */
+        .admin-main { margin-left: 0; padding: 12px; max-width: 100vw; }
         .admin-container { max-width: 100%; padding: 0; }
-        .admin-header { flex-direction: column; align-items: flex-start; gap: 8px; padding-left: 0; }
-        .admin-header h3 { font-size: 16px; }
+        .admin-header { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; padding: 0; margin-bottom: 16px; }
+        .admin-header h3 { font-size: 17px; margin: 0; }
+        .admin-header .btn { flex-shrink: 0; }
         
-        /* 统一卡片 */
-        .admin-card { padding: 12px 10px; max-width: 100%; min-width: 0; }
-        .admin-card h5 { font-size: 12px; }
-        .card-grid { grid-template-columns: 1fr 1fr; gap: 8px; max-width: 100%; }
-        .stat-card { padding: 12px 8px; }
-        .stat-card .num { font-size: 22px; }
-        .stat-card .label { font-size: 11px; }
+        /* 统计卡片网格 */
+        .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+        .stat-card { padding: 14px 8px; text-align: center; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); }
+        .stat-card .num { font-size: 24px; font-weight: 800; background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .stat-card .label { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
         
-        /* 统一表格 - 直接缩小适配屏幕，不滚动 */
-        .admin-table-wrapper { max-width: 100%; }
-        .admin-table { width: 100%; table-layout: fixed; }
-        .admin-table th { font-size: 10px; padding: 6px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .admin-table td { font-size: 12px; padding: 6px 4px; overflow: hidden; text-overflow: ellipsis; }
-        .admin-table td:last-child { white-space: nowrap; } /* 操作列不截断 */
+        /* ===== 表格 → 卡片列表 ===== */
+        /* 隐藏表头 */
+        .admin-table thead { display: none; }
+        /* 每一行变成独立卡片 */
+        .admin-table, .admin-table tbody, .admin-table tr { display: block; width: 100%; }
+        .admin-table tr {
+          background: var(--bg-card);
+          border: 1px solid var(--border-subtle);
+          border-radius: var(--radius-lg);
+          padding: 12px;
+          margin-bottom: 8px;
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 6px;
+        }
+        /* 每个单元格变成标签+值 */
+        .admin-table td {
+          display: block;
+          font-size: 13px;
+          padding: 2px 0;
+          border: none;
+          color: var(--text-secondary);
+          flex: 1 1 100%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        /* 用 data-label 属性显示字段名 */
+        .admin-table td::before {
+          content: attr(data-label);
+          display: inline-block;
+          font-size: 10px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          color: var(--text-muted);
+          margin-right: 6px;
+          min-width: 50px;
+        }
+        /* 操作列 (最后一个 td) 单独处理 - 全宽显示按钮 */
+        .admin-table td:last-child {
+          flex: 1 1 100%;
+          display: flex;
+          gap: 6px;
+          padding-top: 8px;
+          margin-top: 6px;
+          border-top: 1px solid var(--border-subtle);
+          justify-content: flex-end;
+        }
+        .admin-table td:last-child::before { display: none; }
+        .admin-table td:last-child .btn { flex: 1; text-align: center; justify-content: center; }
         
-        /* 统一 flex 子项不压缩 */
-        .admin-row > * { min-width: 0; max-width: 100%; }
+        /* 空状态显示 */
+        .admin-table tr[style*="color:var(--text-muted)"] { display: block; text-align: center; padding: 20px; color: var(--text-muted) !important; }
         
-        /* 统一按钮和表单 */
-        .btn { font-size: 12px; padding: 6px 12px; }
-        .btn-sm { font-size: 11px; padding: 4px 8px; }
-        .form-group label { font-size: 11px; }
-        .form-group input, .form-group select, .form-group textarea { font-size: 13px; padding: 8px 10px; }
+        /* 按钮 */
+        .btn { font-size: 13px; padding: 8px 14px; }
+        .btn-sm { font-size: 12px; padding: 6px 12px; }
+        
+        /* 表单 */
+        .form-group label { font-size: 12px; }
+        .form-group input, .form-group select, .form-group textarea { font-size: 14px; padding: 10px 12px; }
         
         .admin-row { flex-direction: column; }
         .steps { flex-direction: column; gap: 4px; }
-        .step { padding: 8px; font-size: 12px; }
+        .step { padding: 10px; font-size: 13px; }
         #rte-toolbar { overflow-x: auto; flex-wrap: nowrap; }
       }
     /* 统一后台页面宽度 */

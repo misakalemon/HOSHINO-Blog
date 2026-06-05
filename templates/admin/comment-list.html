@@ -10,11 +10,11 @@
         <tr><th>作者</th><th>内容</th><th>文章</th><th>日期</th><th>操作</th></tr>
         {% for c in pending %}
         <tr>
-            <td>{{ c.author_name }}</td>
-            <td>{{ c.content[:50] }}{% if c.content|length > 50 %}…{% endif %}</td>
-            <td><a href="{{ url_for('admin.edit_post', id=c.post.id) }}">{{ c.post.title[:30] }}{% if c.post.title|length > 30 %}…{% endif %}</a></td>
-            <td>{{ format_date(c.created_at, '%Y-%m-%d') }}</td>
-            <td style="white-space:nowrap">
+            <td data-label="作者">{{ c.author_name }}</td>
+            <td data-label="内容">{{ c.content[:50] }}{% if c.content|length > 50 %}…{% endif %}</td>
+            <td data-label="文章"><a href="{{ url_for('admin.edit_post', id=c.post.id) }}">{{ c.post.title[:30] }}{% if c.post.title|length > 30 %}…{% endif %}</a></td>
+            <td data-label="日期">{{ format_date(c.created_at, '%Y-%m-%d') }}</td>
+            <td data-label="操作">
                 <form method="POST" action="{{ url_for('admin.approve_comment', id=c.id) }}" style="display:inline">
                     <button class="btn btn-primary btn-sm">通过</button>
                 </form>
@@ -37,11 +37,11 @@
         <tr><th>作者</th><th>内容</th><th>文章</th><th>日期</th><th>操作</th></tr>
         {% for c in approved %}
         <tr>
-            <td>{{ c.author_name }}</td>
-            <td>{{ c.content[:50] }}{% if c.content|length > 50 %}…{% endif %}</td>
-            <td>{{ c.post.title[:30] }}{% if c.post.title|length > 30 %}…{% endif %}</td>
-            <td>{{ format_date(c.created_at, '%Y-%m-%d') }}</td>
-            <td>
+            <td data-label="作者">{{ c.author_name }}</td>
+            <td data-label="内容">{{ c.content[:50] }}{% if c.content|length > 50 %}…{% endif %}</td>
+            <td data-label="文章">{{ c.post.title[:30] }}{% if c.post.title|length > 30 %}…{% endif %}</td>
+            <td data-label="日期">{{ format_date(c.created_at, '%Y-%m-%d') }}</td>
+            <td data-label="操作">
                 <form method="POST" action="{{ url_for('admin.delete_comment', id=c.id) }}" style="display:inline" onsubmit="return confirm('确定删除？')">
                     <button class="btn btn-danger btn-sm">删除</button>
                 </form>

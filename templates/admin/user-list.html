@@ -11,13 +11,13 @@
         <tr><th>ID</th><th>用户名</th><th>邮箱</th><th>显示名</th><th>角色</th><th>文章数</th><th>创建时间</th></tr>
         {% for u in users %}
         <tr>
-            <td>{{ u.id }}</td>
-            <td><strong style="color:#fff">{{ u.username }}</strong></td>
-            <td>{{ u.email }}</td>
-            <td>{{ u.display_name or '-' }}</td>
-            <td><span class="badge {{ 'badge-admin' if u.is_admin else 'badge-user' }}">{{ '管理员' if u.is_admin else '用户' }}</span></td>
-            <td>{{ u.posts.count() }}</td>
-            <td>{{ format_date(u.created_at, '%Y-%m-%d') }}</td>
+            <td data-label="ID">{{ u.id }}</td>
+            <td data-label="用户名"><strong style="color:#fff">{{ u.username }}</strong></td>
+            <td data-label="邮箱">{{ u.email }}</td>
+            <td data-label="显示名">{{ u.display_name or '-' }}</td>
+            <td data-label="角色"><span class="badge {{ 'badge-admin' if u.is_admin else 'badge-user' }}">{{ '管理员' if u.is_admin else '用户' }}</span></td>
+            <td data-label="文章数">{{ u.posts.count() }}</td>
+            <td data-label="创建时间">{{ format_date(u.created_at, '%Y-%m-%d') }}</td>
         </tr>
         {% else %}
         <tr><td colspan="7" style="color:var(--text-muted)">暂无用户</td></tr>

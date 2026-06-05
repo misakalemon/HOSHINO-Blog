@@ -19,9 +19,9 @@
                 <tr><th>标题</th><th>状态</th><th>日期</th></tr>
                 {% for p in recent_posts %}
                 <tr>
-                    <td>{{ p.title[:40] }}{% if p.title|length > 40 %}…{% endif %}</td>
-                    <td><span class="badge {{ 'badge-published' if p.is_published else 'badge-draft' }}">{{ '已发布' if p.is_published else '草稿' }}</span></td>
-                    <td>{{ format_date(p.created_at, '%Y-%m-%d') }}</td>
+                    <td data-label="标题">{{ p.title[:40] }}{% if p.title|length > 40 %}…{% endif %}</td>
+                    <td data-label="状态"><span class="badge {{ 'badge-published' if p.is_published else 'badge-draft' }}">{{ '已发布' if p.is_published else '草稿' }}</span></td>
+                    <td data-label="日期">{{ format_date(p.created_at, '%Y-%m-%d') }}</td>
                 </tr>
                 {% else %}
                 <tr><td colspan="3" style="color:var(--text-muted)">暂无文章</td></tr>
@@ -38,9 +38,9 @@
                 <tr><th>内容</th><th>文章</th><th>日期</th></tr>
                 {% for c in recent_comments %}
                 <tr>
-                    <td>{{ c.content[:30] }}{% if c.content|length > 30 %}…{% endif %}</td>
-                    <td>{{ c.post.title[:20] }}{% if c.post.title|length > 20 %}…{% endif %}</td>
-                    <td>{{ format_date(c.created_at, '%m/%d') }}</td>
+                    <td data-label="内容">{{ c.content[:30] }}{% if c.content|length > 30 %}…{% endif %}</td>
+                    <td data-label="文章">{{ c.post.title[:20] }}{% if c.post.title|length > 20 %}…{% endif %}</td>
+                    <td data-label="日期">{{ format_date(c.created_at, '%m/%d') }}</td>
                 </tr>
                 {% else %}
                 <tr><td colspan="3" style="color:var(--text-muted)">所有评论已审核</td></tr>
