@@ -110,15 +110,30 @@
                         <option value="pre">代码块</option>
                         <option value="blockquote">引用</option>
                     </select>
+                    <select onchange="rte('fontSize',this.value);this.selectedIndex=0" title="字体大小">
+                        <option value="">字号</option>
+                        <option value="1">极小</option>
+                        <option value="2">小</option>
+                        <option value="3">正常</option>
+                        <option value="4">中大</option>
+                        <option value="5">大</option>
+                        <option value="6">很大</option>
+                        <option value="7">极大</option>
+                    </select>
                     <span class="sep"></span>
                     <button type="button" onclick="rte('bold')" title="粗体"><b>B</b></button>
                     <button type="button" onclick="rte('italic')" title="斜体"><i>I</i></button>
                     <button type="button" onclick="rte('underline')" title="下划线"><u>U</u></button>
                     <button type="button" onclick="rte('strikeThrough')" title="删除线"><s>S</s></button>
+                    <button type="button" onclick="rte('superscript')" title="上标">x²</button>
+                    <button type="button" onclick="rte('subscript')" title="下标">x₂</button>
                     <span class="sep"></span>
-                    <button type="button" onclick="rte('justifyLeft')" title="左对齐">≡</button>
-                    <button type="button" onclick="rte('justifyCenter')" title="居中">≡</button>
-                    <button type="button" onclick="rte('justifyRight')" title="右对齐">≡</button>
+                    <input type="color" onchange="rte('foreColor',this.value)" title="文字颜色" style="width:28px;height:28px;padding:2px;border:1px solid var(--border-subtle);border-radius:6px;background:transparent;cursor:pointer">
+                    <input type="color" onchange="rte('hiliteColor',this.value)" title="背景高亮" style="width:28px;height:28px;padding:2px;border:1px solid var(--border-subtle);border-radius:6px;background:transparent;cursor:pointer">
+                    <span class="sep"></span>
+                    <button type="button" onclick="rte('justifyLeft')" title="左对齐">◀</button>
+                    <button type="button" onclick="rte('justifyCenter')" title="居中">♦</button>
+                    <button type="button" onclick="rte('justifyRight')" title="右对齐">▶</button>
                     <span class="sep"></span>
                     <button type="button" onclick="rte('insertUnorderedList')" title="无序列表">UL</button>
                     <button type="button" onclick="rte('insertOrderedList')" title="有序列表">OL</button>
