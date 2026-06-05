@@ -248,6 +248,18 @@ def profile():
     if form.validate_on_submit():
         current_user.display_name = form.display_name.data
         current_user.bio = form.bio.data
+        # 头像上传
+        if 'avatar' in request.files:
+            file = request.files['avatar']
+            if file and file.filename:
+                ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'png'
+                if ext in ('png', 'jpg', 'jpeg', 'gif', 'webp'):
+                    filename = 'avatar_' + str(uuid.uuid4()) + '.' + ext
+                    from flask import current_app
+                    upload_dir = os.path.join(current_app.root_path, 'static', 'uploads')
+                    os.makedirs(upload_dir, exist_ok=True)
+                    file.save(os.path.join(upload_dir, filename))
+                    current_user.avatar = 'uploads/' + filename
         # 邮箱：有修改时才更新，并检查唯一性
         if form.email.data and form.email.data != current_user.email:
             existing = User.query.filter_by(email=form.email.data).first()

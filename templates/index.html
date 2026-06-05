@@ -40,7 +40,7 @@
                         <div class="body">
                             <h3><a href="{{ url_for('blog.single_post', slug=post.slug) }}">{{ post.title }}</a></h3>
                             <div class="meta-line">
-                                <img src="{{ url_for('static', filename=post.author.avatar) }}" alt="{{ post.author.display_name or post.author.username }}" class="meta-avatar">
+                                <img src="{{ url_for('blog.thumbnail', path=post.author.avatar, w=48) }}" alt="{{ post.author.display_name or post.author.username }}" class="meta-avatar">
                                 <span class="meta-author">{{ post.author.display_name or post.author.username }}</span>
                                 <span class="meta-date">{{ format_date(post.created_at, '%Y/%m/%d') }}</span>
                                 <span class="meta-comments"><svg width="12" height="12" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:2px"><use href="#icon-comment"/></svg>{{ post.published_comments() }}</span>
