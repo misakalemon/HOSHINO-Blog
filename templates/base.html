@@ -137,6 +137,17 @@
     });
   });
 
+  // === 边缘光效追踪 ===
+  document.querySelectorAll('.post-card, .widget, .author-box, .comment-form, .comment-item').forEach(function(el) {
+    el.addEventListener('mousemove', function(e) {
+      const rect = el.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width * 100).toFixed(1);
+      const y = ((e.clientY - rect.top) / rect.height * 100).toFixed(1);
+      el.style.setProperty('--mx', x + '%');
+      el.style.setProperty('--my', y + '%');
+    });
+  });
+
   // === 涟漪点击光效 ===
   const ripples = [];
   document.addEventListener('click', function(e) {

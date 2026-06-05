@@ -286,6 +286,24 @@ body::before {
   transition: all 0.4s;
   position: relative;
 }
+.post-card::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: radial-gradient(200px circle at var(--mx, 50%) var(--my, 50%), rgba(0,240,255,0.35), transparent 60%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s;
+  z-index: 0;
+}
+.post-card:hover::before {
+  opacity: 1;
+}
 .post-card:hover {
   border-color: var(--accent-cyan);
   box-shadow: 0 0 30px rgba(0, 240, 255, 0.1);
@@ -380,6 +398,25 @@ body::before {
   border-radius: var(--radius-lg);
   padding: 24px;
   margin-bottom: 24px;
+  position: relative;
+}
+.widget::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: radial-gradient(180px circle at var(--mx, 50%) var(--my, 50%), rgba(0,240,255,0.25), transparent 60%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s;
+  z-index: 0;
+}
+.widget:hover::before {
+  opacity: 1;
 }
 .widget-title {
   font-size: 14px;
