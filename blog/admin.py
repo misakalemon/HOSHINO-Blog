@@ -1,5 +1,5 @@
-import datetime
-from flask import render_template, redirect, url_for, request, flash, abort
+import datetime, os, uuid
+from flask import render_template, redirect, url_for, request, flash, abort, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
 from . import admin_bp
 from .models import db, User, Post, Category, Comment
@@ -256,3 +256,25 @@ def profile():
         flash('\u4e2a\u4eba\u8d44\u6599\u5df2\u66f4\u65b0', 'success')
         return redirect(url_for('admin.profile'))
     return render_template('admin/profile.html', form=form)
+
+
+# ===== Image Upload =====
+
+@admin_bp.route('/upload-image', methods=['POST'])
+@login_required
+def upload_image():
+    if 'image' not in request.files:
+        return jsonify({'error': '未选择文件'}), 400
+    file = request.files['image']
+    if file.filename == '':
+        return jsonify({'error': '未选择文件'}), 400
+    ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'png'
+    if ext not in ('png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'):
+        return jsonify({'error': '不支持的图片格式'}), 400
+    filename = str(uuid.uuid4()) + '.' + ext
+    from flask import current_app
+    upload_dir = os.path.join(current_app.root_path, 'static', 'uploads')
+    os.makedirs(upload_dir, exist_ok=True)
+    file.save(os.path.join(upload_dir, filename))
+    url = url_for('static', filename='uploads/' + filename)
+    return jsonify({'url': url})
