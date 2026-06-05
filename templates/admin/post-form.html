@@ -47,6 +47,8 @@
 #rte-content td, #rte-content th { border:1px solid var(--border-subtle); padding:8px 12px; }
 #rte-content th { background:rgba(255,255,255,0.04); font-weight:600; color:#fff; }
 #rte-content hr { border:none; border-top:1px dashed var(--border-subtle); margin:20px 0; }
+#rte-content code { background:rgba(124,58,237,0.15); padding:2px 6px; border-radius:4px; font-family:'JetBrains Mono',monospace; font-size:0.9em; color:var(--accent-cyan); }
+#rte-content pre code { background:none; padding:0; color:inherit; font-size:inherit; }
 
 /* 预览区域 */
 #cover-preview { margin-top:12px; }
@@ -143,8 +145,10 @@
                     <span class="sep"></span>
                     <button type="button" onclick="rte('insertHorizontalRule')" title="分割线">—</button>
                     <button type="button" onclick="rteInsertTable()" title="插入表格">⊞</button>
+                    <button type="button" onclick="rteCode()" title="行内代码">&lt;/&gt;</button>
                     <button type="button" onclick="rteLink()" title="插入链接">🔗</button>
                     <button type="button" onclick="rteImage()" title="插入图片">🖼</button>
+                    <button type="button" onclick="rteMarkdown()" title="导入 Markdown">📄</button>
                     <span class="sep"></span>
                     <button type="button" onclick="rte('removeFormat')" title="清除格式">✕</button>
                 </div>
@@ -227,6 +231,76 @@ function rteIndent(dir) { rte(dir > 0 ? 'indent' : 'outdent'); }
 function rteLink() {
   var url = prompt('输入链接地址：', 'https://');
   if (url) { rte('createLink', false, url); }
+}
+function rteCode() {
+  var sel = window.getSelection().toString();
+  if (sel) {
+    rte('insertHTML', false, '<code>' + sel.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</code>');
+  } else {
+    rte('insertHTML', false, '<code>代码</code>');
+  }
+}
+function rteMarkdown() {
+  var input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.md,.markdown,text/markdown';
+  input.onchange = function() {
+    var file = input.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var md = e.target.result;
+      var html = simpleMDtoHTML(md);
+      document.getElementById('rte-content').focus();
+      document.execCommand('insertHTML', false, html);
+    };
+    reader.readAsText(file, 'UTF-8');
+  };
+  input.click();
+}
+function simpleMDtoHTML(md) {
+  // 简单的 Markdown → HTML 转换
+  var lines = md.split('\n');
+  var html = '';
+  var inCode = false;
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+    // 代码块 ``` 或 ~~~
+    if (/^```/.test(line) || /^~~~/.test(line)) {
+      if (inCode) { html += '</code></pre>\n'; inCode = false; }
+      else { html += '<pre><code>'; inCode = true; }
+      continue;
+    }
+    if (inCode) { html += line + '\n'; continue; }
+    // 标题
+    var hMatch = line.match(/^(#{1,6})\s+(.+)/);
+    if (hMatch) { html += '<h' + hMatch[1].length + '>' + inlineMD(hMatch[2]) + '</h' + hMatch[1].length + '>\n'; continue; }
+    // 分割线
+    if (/^---+\s*$/.test(line) || /^\*\*\*+\s*$/.test(line)) { html += '<hr>\n'; continue; }
+    // 空行
+    if (!line.trim()) { html += '<p>\n'; continue; }
+    // 引用
+    var qMatch = line.match(/^>\s*(.*)/);
+    if (qMatch) { html += '<blockquote>' + inlineMD(qMatch[1]) + '</blockquote>\n'; continue; }
+    // 无序列表
+    var ulMatch = line.match(/^[\s]*[-*+]\s+(.+)/);
+    if (ulMatch) { html += '<li>' + inlineMD(ulMatch[1]) + '</li>\n'; continue; }
+    // 有序列表
+    var olMatch = line.match(/^[\s]*\d+\.\s+(.+)/);
+    if (olMatch) { html += '<li>' + inlineMD(olMatch[1]) + '</li>\n'; continue; }
+    // 普通段落
+    html += '<p>' + inlineMD(line) + '</p>\n';
+  }
+  if (inCode) html += '</code></pre>\n';
+  return html;
+}
+function inlineMD(text) {
+  return text
+    .replace(/`([^`]+)`/g, '<code>$1</code>')         // 行内代码
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')   // **粗体**
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')               // *斜体*
+    .replace(/~~(.+?)~~/g, '<del>$1</del>')             // ~~删除线~~
+    .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2">$1</a>'); // [链接](url)
 }
 function rteInsertTable() {
   var rows = prompt('行数：', '3'), cols = prompt('列数：', '3');
