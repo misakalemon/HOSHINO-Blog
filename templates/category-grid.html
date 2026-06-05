@@ -25,9 +25,9 @@
                             {% else %}
                             <svg viewBox="0 0 24 24" fill="none"><use href="#icon-blog"/></svg>
                             {% endif %}
-                            <span class="cover-category">{{ category.name }}</span>
                         </a>
                         <div class="body">
+                            <span class="post-category">{{ category.name }}</span>
                             <h3><a href="{{ url_for('blog.single_post', slug=post.slug) }}">{{ post.title }}</a></h3>
                             <div class="meta-line">
                                 <span class="meta-author">{{ post.author.display_name or post.author.username }}</span>

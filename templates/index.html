@@ -33,11 +33,11 @@
                             {% else %}
                             <svg viewBox="0 0 24 24" fill="none"><use href="#icon-blog"/></svg>
                             {% endif %}
-                            {% if post.category %}
-                            <span class="cover-category">{{ post.category.name }}</span>
-                            {% endif %}
                         </a>
                         <div class="body">
+                            {% if post.category %}
+                            <span class="post-category">{{ post.category.name }}</span>
+                            {% endif %}
                             <h3><a href="{{ url_for('blog.single_post', slug=post.slug) }}">{{ post.title }}</a></h3>
                             <div class="meta-line">
                                 <img src="{{ url_for('blog.thumbnail', path=post.author.avatar, w=48) }}" alt="{{ post.author.display_name or post.author.username }}" class="meta-avatar">
