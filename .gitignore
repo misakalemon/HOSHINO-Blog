@@ -7,7 +7,7 @@ venv/
 *.egg
 
 # Database
-blog.db
+*.db
 
 # IDE
 .idea/
