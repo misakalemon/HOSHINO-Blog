@@ -312,6 +312,12 @@
         .step { padding: 8px; font-size: 12px; }
         #rte-toolbar { overflow-x: auto; flex-wrap: nowrap; }
       }
+    /* 统一后台页面宽度 */
+    .admin-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      width: 100%;
+    }
     </style>
 </head>
 <body>
@@ -340,6 +346,7 @@
 
 <!-- 主内容 -->
 <div class="admin-main">
+    <div class="admin-container">
     {% with msgs = get_flashed_messages(with_categories=true) %}
     {% if msgs %}
     {% for cat, msg in msgs %}
@@ -349,6 +356,7 @@
     {% endwith %}
 
     {% block admin_content %}{% endblock %}
+    </div>
 </div>
 
 <script>
