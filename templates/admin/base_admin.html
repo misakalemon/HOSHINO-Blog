@@ -296,7 +296,7 @@
         .admin-sidebar .section-title { font-size: 11px; padding-left: 20px; }
         
         /* 主内容 */
-        .admin-main { margin-left: 0; padding: 12px; max-width: 100vw; }
+        .admin-main { margin-left: 0; padding: 12px; padding-left: 50px; max-width: 100vw; }
         .admin-container { max-width: 100%; padding: 0; }
         .admin-header { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; padding: 0; margin-bottom: 16px; }
         .admin-header h3 { font-size: 17px; margin: 0; }
@@ -393,17 +393,12 @@
 <div class="admin-overlay" id="adminOverlay" onclick="toggleAdminSidebar()"></div>
 <div class="admin-sidebar" id="adminSidebar">
     <a href="{{ url_for('admin.dashboard') }}" class="logo">// HOSHINO</a>
-
-    <div class="section-title">内容</div>
     <a href="{{ url_for('admin.dashboard') }}" {% if request.endpoint == 'admin.dashboard' %}class="active"{% endif %}>📊 仪表盘</a>
     <a href="{{ url_for('admin.post_list') }}" {% if request.endpoint and 'post' in request.endpoint %}class="active"{% endif %}>📝 文章</a>
     <a href="{{ url_for('admin.category_list') }}" {% if request.endpoint and 'category' in request.endpoint %}class="active"{% endif %}>🏷️ 分类</a>
     <a href="{{ url_for('admin.comment_list') }}" {% if request.endpoint and 'comment' in request.endpoint %}class="active"{% endif %}>💬 评论</a>
-
-    <div class="section-title">系统</div>
     <a href="{{ url_for('admin.user_list') }}" {% if request.endpoint and 'user' in request.endpoint %}class="active"{% endif %}>👥 用户</a>
     <a href="{{ url_for('admin.profile') }}" {% if request.endpoint == 'admin.profile' %}class="active"{% endif %}>👤 个人资料</a>
-
     <a href="{{ url_for('blog.index') }}" style="color:var(--text-muted);margin-top:20px">🌐 查看网站</a>
     <a href="{{ url_for('admin.logout') }}" class="logout-link">✕ 退出登录</a>
 </div>
