@@ -19,11 +19,9 @@
                 <div class="post-grid">
                     {% for post in posts.items %}
                     <article class="post-card">
-                        <a href="{{ url_for('blog.single_post', slug=post.slug) }}" class="cover {% if not post.cover_image %}no-image{% endif %}">
+                        <a href="{{ url_for('blog.single_post', slug=post.slug) }}" class="cover">
                             {% if post.cover_image %}
-                            <img src="{{ url_for('blog.thumbnail', path=post.cover_image, w=400) }}" alt="{{ post.title }}" loading="lazy" onerror="this.outerHTML='<div class=\'no-cover\'><span>无封面</span></div>'">
-                            {% else %}
-                            <div class="no-cover"><span>无封面</span></div>
+                            <img src="{{ url_for('blog.thumbnail', path=post.cover_image, w=400) }}" alt="{{ post.title }}" loading="lazy" onerror="this.style.display='none'">
                             {% endif %}
                         </a>
                         <div class="body">
