@@ -6,6 +6,7 @@
     <a href="{{ url_for('admin.new_user') }}" class="btn btn-primary">+ 新建用户</a>
 </div>
 <div class="admin-card">
+    <div class="admin-table-wrapper">
     <table class="admin-table">
         <tr><th>ID</th><th>用户名</th><th>邮箱</th><th>显示名</th><th>角色</th><th>文章数</th><th>创建时间</th></tr>
         {% for u in users %}
@@ -22,5 +23,6 @@
         <tr><td colspan="7" style="color:var(--text-muted)">暂无用户</td></tr>
         {% endfor %}
     </table>
+    </div>
 </div>
 {% endblock %}

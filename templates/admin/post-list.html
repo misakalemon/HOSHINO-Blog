@@ -6,6 +6,7 @@
     <a href="{{ url_for('admin.new_post') }}" class="btn btn-primary">+ 新建文章</a>
 </div>
 <div class="admin-card">
+    <div class="admin-table-wrapper">
     <table class="admin-table">
         <tr><th>标题</th><th>分类</th><th>状态</th><th>日期</th><th>操作</th></tr>
         {% for p in posts.items %}
@@ -25,5 +26,6 @@
         <tr><td colspan="5" style="color:var(--text-muted)">暂无文章 · <a href="{{ url_for('admin.new_post') }}">新建一篇</a></td></tr>
         {% endfor %}
     </table>
+    </div>
 </div>
 {% endblock %}

@@ -5,6 +5,7 @@
 
 <div class="admin-card">
     <h5>待审核（{{ pending|length }}）</h5>
+    <div class="admin-table-wrapper">
     <table class="admin-table">
         <tr><th>作者</th><th>内容</th><th>文章</th><th>日期</th><th>操作</th></tr>
         {% for c in pending %}
@@ -26,10 +27,12 @@
         <tr><td colspan="5" style="color:var(--text-muted)">暂无待审核评论</td></tr>
         {% endfor %}
     </table>
+    </div>
 </div>
 
 <div class="admin-card">
     <h5>已通过（{{ approved|length }}）</h5>
+    <div class="admin-table-wrapper">
     <table class="admin-table">
         <tr><th>作者</th><th>内容</th><th>文章</th><th>日期</th><th>操作</th></tr>
         {% for c in approved %}
@@ -48,5 +51,6 @@
         <tr><td colspan="5" style="color:var(--text-muted)">暂无已通过评论</td></tr>
         {% endfor %}
     </table>
+    </div>
 </div>
 {% endblock %}
