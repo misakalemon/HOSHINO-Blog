@@ -21,9 +21,9 @@
                     <article class="post-card">
                         <a href="{{ url_for('blog.single_post', slug=post.slug) }}" class="cover {% if not post.cover_image %}no-image{% endif %}">
                             {% if post.cover_image %}
-                            <img src="{{ url_for('blog.thumbnail', path=post.cover_image, w=400) }}" alt="{{ post.title }}" loading="lazy" onerror="this.outerHTML='<svg viewBox=\'0 0 24 24\' fill=\'none\' style=\'width:48px;height:48px;opacity:0.4\'><use href=\'#icon-blog\'/></svg>'">
+                            <img src="{{ url_for('blog.thumbnail', path=post.cover_image, w=400) }}" alt="{{ post.title }}" loading="lazy" onerror="this.outerHTML='<div class=\'no-cover\'><span>无封面</span></div>'">
                             {% else %}
-                            <svg viewBox="0 0 24 24" fill="none"><use href="#icon-blog"/></svg>
+                            <div class="no-cover"><span>无封面</span></div>
                             {% endif %}
                         </a>
                         <div class="body">

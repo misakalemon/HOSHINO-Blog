@@ -322,12 +322,13 @@ body::before {
    文章卡片
    ========================================== */
 .post-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
+  display: block;
+  column-count: 2;
+  column-gap: 20px;
 }
 .post-card {
   break-inside: avoid;
+  page-break-inside: avoid;
   margin-bottom: 20px;
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
@@ -335,8 +336,8 @@ body::before {
   overflow: hidden;
   transition: all 0.4s;
   position: relative;
-  display: flex;
-  flex-direction: column;
+  display: inline-block;
+  width: 100%;
 }
 .post-card::before {
   content: '';
@@ -370,12 +371,25 @@ body::before {
   line-height: 0;
   min-height: 120px;
 }
+.post-card .cover .no-cover {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 120px;
+  background: linear-gradient(135deg, var(--bg-secondary), rgba(124,58,237,0.1), rgba(0,240,255,0.05));
+  font-size: 13px;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+}
+.post-card .cover .no-cover span {
+  opacity: 0.5;
+}
 .post-card .cover img {
   width: 100%;
   height: auto;
   display: block;
   transition: transform 0.5s;
-  aspect-ratio: auto;
+  transform: translateZ(0);
 }
 .post-card:hover .cover img { transform: scale(1.03); }
 .post-card .cover::after {
@@ -887,20 +901,20 @@ body::before {
 /* 大屏 1025-1200px */
 @media (max-width: 1200px) {
   .container { max-width: 100%; padding: 0 16px; }
-  .post-grid { grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .post-grid { column-count: 2; column-gap: 16px; }
 }
 
 /* 平板横屏 901-1024px */
 @media (max-width: 1024px) {
   .row .col-4 { width: 100%; }
   .sidebar { position: static; }
-  .post-grid { grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .post-grid { column-count: 2; column-gap: 14px; }
   .container { padding: 0 14px; }
 }
 
 /* 平板竖屏 641-900px */
 @media (max-width: 900px) {
-  .post-grid { grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .post-grid { column-count: 2; column-gap: 14px; }
   .page-header { padding: 80px 0 30px; }
   .page-header h1 { font-size: 28px; }
   .row { flex-direction: column; }
@@ -1028,7 +1042,7 @@ body::before {
   .nav-write-btn { padding: 4px 12px !important; font-size: 12px !important; }
   
   /* 文章网格 */
-  .post-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .post-grid { column-count: 2; column-gap: 10px; }
   .post-card { margin-bottom: 10px; }
   .post-card .cover { max-height: none; }
   .post-card .body { padding: 10px 12px; }
