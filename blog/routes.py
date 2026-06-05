@@ -163,38 +163,48 @@ def thumbnail():
     if not path:
         abort(404)
     from flask import current_app
-    cache_dir = os.path.join(current_app.root_path, 'static', '.thumb_cache')
-    os.makedirs(cache_dir, exist_ok=True)
-    cache_key = f'{path.replace("/","_")}_{w}.webp'
-    cache_path = os.path.join(cache_dir, cache_key)
-    
+    import mimetypes
     img_path = os.path.join(current_app.root_path, 'static', path.lstrip('/'))
     
-    # 缓存命中且原始文件未变
-    if os.path.isfile(cache_path):
-        img_mtime = os.path.getmtime(img_path) if os.path.isfile(img_path) else 0
-        cache_mtime = os.path.getmtime(cache_path)
-        if cache_mtime > img_mtime:
-            with open(cache_path, 'rb') as f:
-                return Response(f.read(), mimetype='image/webp', headers={'Cache-Control': 'public, max-age=2592000'})
-    
     if not os.path.isfile(img_path):
-        logger.warning('缩略图文件不存在: path=%s', path)
+        logger.warning('缩略图文件不存在: path=%s full=%s', path, img_path)
         abort(404)
+    
+    # 缩略图缓存（使用原格式，避免 WebP 兼容问题）
+    ext = os.path.splitext(path)[1].lower() or '.jpg'
+    cache_key = f'{path.replace("/","_")}_{w}{ext}'
+    cache_dir = os.path.join(current_app.root_path, 'static', '.thumb_cache')
+    cache_path = os.path.join(cache_dir, cache_key)
+    os.makedirs(cache_dir, exist_ok=True)
+    
+    # 缓存命中
+    if os.path.isfile(cache_path):
+        img_mtime = os.path.getmtime(img_path)
+        cache_mtime = os.path.getmtime(cache_path)
+        if cache_mtime >= img_mtime:
+            with open(cache_path, 'rb') as f:
+                return Response(f.read(), mimetype=mimetypes.guess_type(cache_key)[0] or 'image/jpeg',
+                              headers={'Cache-Control': 'public, max-age=2592000'})
+    
     try:
         from PIL import Image
         img = Image.open(img_path)
         ratio = min(w / img.width, 1.0)
-        new_w = int(img.width * ratio)
-        new_h = int(img.height * ratio)
         if ratio < 1:
+            new_w = int(img.width * ratio)
+            new_h = int(img.height * ratio)
             img = img.resize((new_w, new_h), Image.LANCZOS)
-        img.save(cache_path, 'WEBP', quality=80, optimize=True)
+        # 保持原格式（不用 WebP，Windows 兼容更好）
+        fmt = 'JPEG' if ext in ('.jpg', '.jpeg') else 'PNG'
+        img.save(cache_path, fmt, quality=85, optimize=True)
         with open(cache_path, 'rb') as f:
-            return Response(f.read(), mimetype='image/webp', headers={'Cache-Control': 'public, max-age=2592000'})
+            return Response(f.read(), mimetype=mimetypes.guess_type(cache_key)[0] or 'image/jpeg',
+                          headers={'Cache-Control': 'public, max-age=2592000'})
     except Exception as e:
-        logger.error('缩略图生成失败: path=%s error=%s', path, str(e))
-        abort(500)
+        logger.error('缩略图失败: path=%s w=%d error=%s', path, w, str(e), exc_info=True)
+        # 出错时返回原始图片
+        with open(img_path, 'rb') as f:
+            return Response(f.read(), mimetype=mimetypes.guess_type(path)[0] or 'image/jpeg')
 
 
 @blog_bp.app_template_global()
