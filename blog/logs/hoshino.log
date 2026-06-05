@@ -14,3 +14,90 @@
  * Running on http://127.0.0.1:5000
  * Running on http://192.168.10.105:5000
 [2026-06-05 14:32:33] INFO     [werkzeug:_log:97] [33mPress CTRL+C to quit[0m
+[2026-06-05 14:33:51] INFO     [root:setup_logging:82] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[2026-06-05 14:33:51] INFO     [root:setup_logging:83] 日志系统初始化完成
+[2026-06-05 14:33:51] INFO     [root:setup_logging:84] 日志文件: /home/moyu/openclaw/workspace/polor_blog/blog/logs/hoshino.log
+[2026-06-05 14:33:51] INFO     [root:setup_logging:85] 错误日志: /home/moyu/openclaw/workspace/polor_blog/blog/logs/error.log
+[2026-06-05 14:33:51] INFO     [root:setup_logging:86] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[2026-06-05 14:33:51] INFO     [root:create_app:13] 应用启动中...
+[2026-06-05 14:33:51] INFO     [root:create_app:21] 数据库初始化完成
+[2026-06-05 14:33:51] INFO     [root:create_app:39] 蓝图注册完成
+[2026-06-05 14:33:51] INFO     [root:<module>:52] ==================================================
+[2026-06-05 14:33:51] INFO     [root:<module>:53] 服务启动: http://0.0.0.0:5000  debug=False
+[2026-06-05 14:33:51] INFO     [root:<module>:54] ==================================================
+[2026-06-05 14:33:51] INFO     [werkzeug:_log:97] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.10.105:5000
+[2026-06-05 14:33:51] INFO     [werkzeug:_log:97] [33mPress CTRL+C to quit[0m
+[2026-06-05 14:34:04] ERROR    [root:log_exception:875] Exception on /admin/profile [POST]
+Traceback (most recent call last):
+  File "/home/moyu/anaconda3/envs/blog_env/lib/python3.12/site-packages/wtforms/validators.py", line 401, in __call__
+    import email_validator
+ModuleNotFoundError: No module named 'email_validator'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/moyu/anaconda3/envs/blog_env/lib/python3.12/site-packages/flask/app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/moyu/anaconda3/envs/blog_env/lib/python3.12/site-packages/flask/app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/moyu/anaconda3/envs/blog_env/lib/python3.12/site-packages/flask/app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/moyu/anaconda3/envs/blog_env/lib/python3.12/site-packages/flask/app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/moyu/anaconda3/envs/blog_env/lib/python3.12/site-packages/flask_login/utils.py", line 290, in decorated_view
+    return current_app.ensure_sync(func)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/moyu/openclaw/workspace/polor_blog/blog/admin.py", line 253, in profile
+    if form.validate_on_submit():
+       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/moyu/anaconda3/envs/blog_env/lib/python3.12/site-packages/flask_wtf/form.py", line 86, in validate_on_submit
+    return self.is_submitted() and self.validate(extra_validators=extra_validators)
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/moyu/anaconda3/envs/blog_env/lib/python3.12/site-packages/wtforms/form.py", line 330, in validate
+    return super().validate(extra)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/moyu/anaconda3/envs/blog_env/lib/python3.12/site-packages/wtforms/form.py", line 147, in validate
+    if not field.validate(self, extra):
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/moyu/anaconda3/envs/blog_env/lib/python3.12/site-packages/wtforms/fields/core.py", line 234, in validate
+    stop_validation = self._run_validation_chain(form, chain)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/moyu/anaconda3/envs/blog_env/lib/python3.12/site-packages/wtforms/fields/core.py", line 254, in _run_validation_chain
+    validator(form, self)
+  File "/home/moyu/anaconda3/envs/blog_env/lib/python3.12/site-packages/wtforms/validators.py", line 403, in __call__
+    raise Exception(
+Exception: Install 'email_validator' for email validation support.
+[2026-06-05 14:34:04] ERROR    [root:log_request:114]   192.168.10.58 POST    500 /admin/profile                           -
+[2026-06-05 14:34:04] INFO     [werkzeug:_log:97] 192.168.10.58 - - [05/Jun/2026 14:34:04] "[35m[1mPOST /admin/profile HTTP/1.1[0m" 500 -
+[2026-06-05 14:36:16] INFO     [root:setup_logging:82] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[2026-06-05 14:36:16] INFO     [root:setup_logging:83] 日志系统初始化完成
+[2026-06-05 14:36:16] INFO     [root:setup_logging:84] 日志文件: /home/moyu/openclaw/workspace/polor_blog/blog/logs/hoshino.log
+[2026-06-05 14:36:16] INFO     [root:setup_logging:85] 错误日志: /home/moyu/openclaw/workspace/polor_blog/blog/logs/error.log
+[2026-06-05 14:36:16] INFO     [root:setup_logging:86] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[2026-06-05 14:36:16] INFO     [root:create_app:13] 应用启动中...
+[2026-06-05 14:36:16] INFO     [root:create_app:21] 数据库初始化完成
+[2026-06-05 14:36:16] INFO     [root:create_app:39] 蓝图注册完成
+[2026-06-05 14:36:16] INFO     [root:<module>:52] ==================================================
+[2026-06-05 14:36:16] INFO     [root:<module>:53] 服务启动: http://0.0.0.0:5000  debug=False
+[2026-06-05 14:36:16] INFO     [root:<module>:54] ==================================================
+[2026-06-05 14:36:16] INFO     [werkzeug:_log:97] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.10.105:5000
+[2026-06-05 14:36:16] INFO     [werkzeug:_log:97] [33mPress CTRL+C to quit[0m
+[2026-06-05 14:36:18] INFO     [root:log_request:118]       127.0.0.1 GET     200 /admin/login                             -
+[2026-06-05 14:36:18] INFO     [werkzeug:_log:97] 127.0.0.1 - - [05/Jun/2026 14:36:18] "GET /admin/login HTTP/1.1" 200 -
+[2026-06-05 14:36:18] INFO     [blog.admin:login:21] 管理员登录成功: username=admin ip=127.0.0.1
+[2026-06-05 14:36:18] INFO     [root:log_request:118]       127.0.0.1 POST    302 /admin/login                             -
+[2026-06-05 14:36:18] INFO     [werkzeug:_log:97] 127.0.0.1 - - [05/Jun/2026 14:36:18] "[32mPOST /admin/login HTTP/1.1[0m" 302 -
+[2026-06-05 14:36:18] INFO     [root:log_request:118]       127.0.0.1 GET     302 /admin/profile                           -
+[2026-06-05 14:36:18] INFO     [werkzeug:_log:97] 127.0.0.1 - - [05/Jun/2026 14:36:18] "[32mGET /admin/profile HTTP/1.1[0m" 302 -
+[2026-06-05 14:36:18] INFO     [root:log_request:118]       127.0.0.1 POST    302 /admin/profile                           -
+[2026-06-05 14:36:18] INFO     [werkzeug:_log:97] 127.0.0.1 - - [05/Jun/2026 14:36:18] "[32mPOST /admin/profile HTTP/1.1[0m" 302 -

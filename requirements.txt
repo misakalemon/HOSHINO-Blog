@@ -9,3 +9,5 @@ Pillow==11.1.0
 python-dotenv==1.1.0
 # MySQL 支持（可选：使用 MySQL 时取消注释）
 # pymysql==1.1.1
+# 邮箱验证（Email() 验证器必需）
+email_validator==2.2.0
