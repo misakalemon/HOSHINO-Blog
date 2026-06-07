@@ -322,7 +322,7 @@ function rteImage() {
     var file = input.files[0];
     if (!file) return;
     var formData = new FormData();
-    formData.append('image', file);
+    formData.append('file', file);
     fetch('{{ url_for("admin.upload_image") }}', { method:'POST', body:formData })
     .then(function(r) { return r.json(); })
     .then(function(data) {
@@ -349,7 +349,7 @@ document.getElementById('coverInput').addEventListener('change', function() {
   var file = this.files[0];
   if (!file) return;
   var formData = new FormData();
-  formData.append('image', file);
+  formData.append('file', file);
   fetch('{{ url_for("admin.upload_image") }}', { method:'POST', body:formData })
   .then(function(r) { return r.json(); })
   .then(function(data) {
