@@ -1,22 +1,259 @@
 # -*- coding: utf-8 -*-
-import datetime, os, io, logging
-from flask import render_template, request, redirect, url_for, abort, jsonify, send_file, Response
+"""
+HOSHINO Blog — 前台路由
+
+处理所有公开访问的页面：
+首页文章列表、文章详情、分类筛选、关于、联系、
+全文搜索、RSS 订阅、缩略图生成。
+"""
+import datetime
+import os
+import time
+import logging
+from flask import render_template, request, redirect, url_for, abort, Response
 from . import blog_bp
 from .models import db, Post, Category, Comment
 from .forms import CommentForm
 
 logger = logging.getLogger(__name__)
 
-# 缩略图缓存版本（修改此值使旧缓存自动失效并清理）
-# v1 = WebP 格式 (已弃用)
-# v2 = JPEG/PNG 原格式
+# 缩略图缓存版本号（修改此值使旧缓存自动失效并清理）
 THUMB_CACHE_VER = 'v2'
+
+
+# ── 首页：文章瀑布流 ──────────────────────────
+@blog_bp.route('/')
+def index():
+    """首页：分页显示已发布的文章列表，支持按分类筛选。"""
+    page = request.args.get('page', 1, type=int)
+    category_slug = request.args.get('category', None)
+
+    # 基础查询：只取已发布的文章，同时加载作者信息
+    query = Post.query.options(db.joinedload(Post.author)).filter_by(is_published=True)
+    # 按分类筛选（多对多关联）
+    if category_slug:
+        cat = Category.query.filter_by(slug=category_slug).first_or_404()
+        query = query.filter(Post.categories.any(id=cat.id))
+
+    # 分页（按创建时间倒序）
+    posts = query.order_by(Post.created_at.desc()).paginate(
+        page=page, per_page=6, error_out=False
+    )
+    categories = Category.query.order_by(Category.name).all()
+    recent_posts = Post.query.filter_by(is_published=True).order_by(
+        Post.created_at.desc()).limit(4).all()
+
+    return render_template('index.html',
+        posts=posts, categories=categories,
+        recent_posts=recent_posts, current_category=category_slug
+    )
+
+
+# ── 文章详情页 ─────────────────────────────────
+@blog_bp.route('/post/<slug>', methods=['GET', 'POST'])
+def single_post(slug):
+    """文章详情：渲染 Markdown 正文 + 评论列表 + 评论表单。"""
+    post = Post.query.filter_by(slug=slug, is_published=True).first_or_404()
+    categories = Category.query.order_by(Category.name).all()
+    recent_posts = Post.query.filter_by(is_published=True).order_by(
+        Post.created_at.desc()).limit(4).all()
+    form = CommentForm()
+
+    # 处理评论提交
+    if form.validate_on_submit():
+        comment = Comment(
+            post_id=post.id,
+            author_name=form.author_name.data,
+            author_email=form.author_email.data,
+            content=form.content.data,
+            is_approved=False  # 需要管理员审核
+        )
+        db.session.add(comment)
+        db.session.commit()
+        return redirect(url_for('blog.single_post', slug=slug) + '#comments')
+
+    # 将 Markdown 渲染为 HTML（支持代码高亮、表格）
+    from markdown import markdown
+    post.content = markdown(post.content, extensions=[
+        'fenced_code', 'codehilite', 'tables'
+    ])
+
+    return render_template('single-post.html',
+        post=post, categories=categories,
+        recent_posts=recent_posts, form=form
+    )
+
+
+# ── 分类文章列表 ───────────────────────────────
+@blog_bp.route('/category/<slug>')
+def category(slug):
+    """按分类查看文章列表（多对多关联筛选）。"""
+    cat = Category.query.filter_by(slug=slug).first_or_404()
+    page = request.args.get('page', 1, type=int)
+    posts = Post.query.filter(
+        Post.categories.any(id=cat.id), Post.is_published == True
+    ).order_by(Post.created_at.desc()).paginate(
+        page=page, per_page=6, error_out=False
+    )
+    categories = Category.query.order_by(Category.name).all()
+    recent_posts = Post.query.filter_by(is_published=True).order_by(
+        Post.created_at.desc()).limit(4).all()
+    return render_template('category-grid.html',
+        category=cat, posts=posts,
+        categories=categories, recent_posts=recent_posts
+    )
+
+
+# ── 关于页 ─────────────────────────────────────
+@blog_bp.route('/about')
+def about():
+    """关于页面。"""
+    categories = Category.query.order_by(Category.name).all()
+    recent_posts = Post.query.filter_by(is_published=True).order_by(
+        Post.created_at.desc()).limit(4).all()
+    return render_template('about.html', categories=categories, recent_posts=recent_posts)
+
+
+# ── 联系页 ─────────────────────────────────────
+@blog_bp.route('/contact', methods=['GET', 'POST'])
+def contact():
+    """联系页面：提交留言表单。"""
+    categories = Category.query.order_by(Category.name).all()
+    recent_posts = Post.query.filter_by(is_published=True).order_by(
+        Post.created_at.desc()).limit(4).all()
+    message_sent = False
+    if request.method == 'POST':
+        name = request.form.get('name', '')
+        email = request.form.get('email', '')
+        message = request.form.get('message', '')
+        if name and email and message:
+            message_sent = True  # 生产环境应改为发送邮件
+    return render_template('contact.html',
+        categories=categories, recent_posts=recent_posts,
+        message_sent=message_sent
+    )
+
+
+# ── 全文搜索 ───────────────────────────────────
+@blog_bp.route('/search')
+def search():
+    """搜索文章：匹配标题、摘要、正文。"""
+    q = request.args.get('q', '').strip()
+    page = request.args.get('page', 1, type=int)
+    if not q:
+        return redirect(url_for('blog.index'))
+    categories = Category.query.order_by(Category.name).all()
+    recent_posts = Post.query.filter_by(is_published=True).order_by(
+        Post.created_at.desc()).limit(4).all()
+    results = Post.query.filter(
+        Post.is_published == True,
+        db.or_(
+            Post.title.ilike(f'%{q}%'),
+            Post.summary.ilike(f'%{q}%'),
+            Post.content.ilike(f'%{q}%')
+        )
+    ).order_by(Post.created_at.desc()).paginate(
+        page=page, per_page=6, error_out=False
+    )
+    return render_template('index.html',
+        posts=results, categories=categories,
+        recent_posts=recent_posts, search_query=q,
+        current_category=None
+    )
+
+
+# ── RSS 订阅 ───────────────────────────────────
+@blog_bp.route('/feed.xml')
+def rss_feed():
+    """RSS/Atom 订阅源。"""
+    posts = Post.query.filter_by(is_published=True).order_by(
+        Post.created_at.desc()).limit(20).all()
+    response = Response(render_template('rss.xml', posts=posts))
+    response.headers['Content-Type'] = 'application/xml; charset=utf-8'
+    return response
+
+
+# ── 缩略图生成 ─────────────────────────────────
+@blog_bp.route('/thumb')
+def thumbnail():
+    """动态生成图片缩略图并缓存到磁盘。
+
+    参数：
+        path - 图片相对路径（相对于 static/）
+        w    - 目标宽度（px）
+
+    特性：
+        - 保持原格式（JPEG/PNG），不转 WebP（兼容性更好）
+        - 磁盘缓存 + 版本号控制（升级时自动失效）
+        - 出错时返回原始图片
+    """
+    path = request.args.get('path', '')
+    w = request.args.get('w', 400, type=int)
+    if not path:
+        abort(404)
+    from flask import current_app
+    import mimetypes
+    img_path = os.path.join(current_app.root_path, 'static', path.lstrip('/'))
+    if not os.path.isfile(img_path):
+        logger.warning('缩略图不存在: %s', path)
+        # 返回 1×1 透明 GIF
+        return Response(
+            b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff'
+            b'\x00\x00\x00!\xf9\x04\x00\x00\x00\x00\x00,\x00\x00\x00\x00'
+            b'\x01\x00\x01\x00\x00\x02\x02D\x01\x00;',
+            mimetype='image/gif', headers={'Cache-Control': 'no-cache'}
+        )
+    # 生成缓存文件路径
+    ext = os.path.splitext(path)[1].lower() or '.jpg'
+    cache_key = f'{THUMB_CACHE_VER}_{path.replace("/","_")}_{w}{ext}'
+    cache_dir = os.path.join(current_app.root_path, 'static', '.thumb_cache')
+    cache_path = os.path.join(cache_dir, cache_key)
+    os.makedirs(cache_dir, exist_ok=True)
+
+    # 清理旧版本缓存（每小时最多执行一次）
+    _cleanup_old_cache(cache_dir, THUMB_CACHE_VER)
+
+    # 缓存命中且未过时
+    if os.path.isfile(cache_path):
+        img_mtime = os.path.getmtime(img_path)
+        cache_mtime = os.path.getmtime(cache_path)
+        if cache_mtime >= img_mtime:
+            with open(cache_path, 'rb') as f:
+                return Response(f.read(),
+                    mimetype=mimetypes.guess_type(cache_key)[0] or 'image/jpeg',
+                    headers={'Cache-Control': 'public, max-age=2592000'}
+                )
+    # 生成缩略图
+    try:
+        from PIL import Image
+        img = Image.open(img_path)
+        ratio = min(w / img.width, 1.0)
+        if ratio < 1:
+            new_w = int(img.width * ratio)
+            new_h = int(img.height * ratio)
+            img = img.resize((new_w, new_h), Image.LANCZOS)
+        fmt = 'JPEG' if ext in ('.jpg', '.jpeg') else 'PNG'
+        img.save(cache_path, fmt, quality=85, optimize=True)
+        with open(cache_path, 'rb') as f:
+            return Response(f.read(),
+                mimetype=mimetypes.guess_type(cache_key)[0] or 'image/jpeg',
+                headers={'Cache-Control': 'public, max-age=2592000'}
+            )
+    except Exception as e:
+        logger.error('缩略图失败: %s w=%d error=%s', path, w, e)
+        with open(img_path, 'rb') as f:
+            return Response(f.read(),
+                mimetype=mimetypes.guess_type(path)[0] or 'image/jpeg'
+            )
+
+
+# ── 缓存清理辅助函数 ──────────────────────────
 _last_cache_cleanup = 0
 
-def cleanup_old_cache(cache_dir, current_ver):
-    """清除旧版本缩略图缓存（每小时最多执行一次）"""
+
+def _cleanup_old_cache(cache_dir, current_ver):
+    """清除旧版本的缩略图缓存。每小时最多执行一次。"""
     global _last_cache_cleanup
-    import time
     now = time.time()
     if now - _last_cache_cleanup < 3600:
         return
@@ -29,225 +266,14 @@ def cleanup_old_cache(cache_dir, current_ver):
         if fname.startswith('v1_') or fname.startswith('v0_'):
             try:
                 os.remove(os.path.join(cache_dir, fname))
-                logger.debug('清除旧缓存: %s', fname)
-            except:
+            except Exception:
                 pass
 
 
-@blog_bp.route('/')
-def index():
-    page = request.args.get('page', 1, type=int)
-    category_slug = request.args.get('category', None)
-
-    query = Post.query.options(db.joinedload(Post.author)).filter_by(is_published=True)
-    if category_slug:
-        cat = Category.query.filter_by(slug=category_slug).first_or_404()
-        query = query.filter(Post.categories.any(id=cat.id))
-
-    posts = query.order_by(Post.created_at.desc()).paginate(
-        page=page, per_page=6, error_out=False
-    )
-    categories = Category.query.order_by(Category.name).all()
-    recent_posts = Post.query.filter_by(is_published=True).order_by(
-        Post.created_at.desc()).limit(4).all()
-
-    return render_template('index.html',
-        posts=posts,
-        categories=categories,
-        recent_posts=recent_posts,
-        current_category=category_slug,
-        now=datetime.datetime.now
-    )
-
-
-@blog_bp.route('/post/<slug>')
-def single_post(slug):
-    post = Post.query.filter_by(slug=slug, is_published=True).first_or_404()
-    categories = Category.query.order_by(Category.name).all()
-    recent_posts = Post.query.filter_by(is_published=True).order_by(
-        Post.created_at.desc()).limit(4).all()
-    form = CommentForm()
-
-    if form.validate_on_submit():
-        comment = Comment(
-            post_id=post.id,
-            author_name=form.author_name.data,
-            author_email=form.author_email.data,
-            content=form.content.data,
-            is_approved=False  # Requires admin approval
-        )
-        db.session.add(comment)
-        db.session.commit()
-        return redirect(url_for('blog.single_post', slug=slug) + '#comments')
-
-    return render_template('single-post.html',
-        post=post,
-        categories=categories,
-        recent_posts=recent_posts,
-        form=form
-    )
-
-
-@blog_bp.route('/category/<slug>')
-def category(slug):
-    cat = Category.query.filter_by(slug=slug).first_or_404()
-    page = request.args.get('page', 1, type=int)
-    posts = Post.query.filter_by(
-        category_id=cat.id, is_published=True
-    ).order_by(Post.created_at.desc()).paginate(
-        page=page, per_page=6, error_out=False
-    )
-    categories = Category.query.order_by(Category.name).all()
-    recent_posts = Post.query.filter_by(is_published=True).order_by(
-        Post.created_at.desc()).limit(4).all()
-
-    return render_template('category-grid.html',
-        category=cat,
-        posts=posts,
-        categories=categories,
-        recent_posts=recent_posts
-    )
-
-
-@blog_bp.route('/about')
-def about():
-    categories = Category.query.order_by(Category.name).all()
-    recent_posts = Post.query.filter_by(is_published=True).order_by(
-        Post.created_at.desc()).limit(4).all()
-    return render_template('about.html', categories=categories, recent_posts=recent_posts)
-
-
-@blog_bp.route('/contact', methods=['GET', 'POST'])
-def contact():
-    categories = Category.query.order_by(Category.name).all()
-    recent_posts = Post.query.filter_by(is_published=True).order_by(
-        Post.created_at.desc()).limit(4).all()
-    message_sent = False
-
-    if request.method == 'POST':
-        # Basic contact form handling
-        name = request.form.get('name', '')
-        email = request.form.get('email', '')
-        message = request.form.get('message', '')
-        if name and email and message:
-            # In production: send email here
-            message_sent = True
-
-    return render_template('contact.html',
-        categories=categories,
-        recent_posts=recent_posts,
-        message_sent=message_sent
-    )
-
-
-@blog_bp.route('/search')
-def search():
-    q = request.args.get('q', '').strip()
-    page = request.args.get('page', 1, type=int)
-
-    if not q:
-        return redirect(url_for('blog.index'))
-
-    categories = Category.query.order_by(Category.name).all()
-    recent_posts = Post.query.filter_by(is_published=True).order_by(
-        Post.created_at.desc()).limit(4).all()
-
-    results = Post.query.filter(
-        Post.is_published == True,
-        db.or_(
-            Post.title.ilike(f'%{q}%'),
-            Post.summary.ilike(f'%{q}%'),
-            Post.content.ilike(f'%{q}%')
-        )
-    ).order_by(Post.created_at.desc()).paginate(
-        page=page, per_page=6, error_out=False
-    )
-
-    return render_template('index.html',
-        posts=results,
-        categories=categories,
-        recent_posts=recent_posts,
-        search_query=q,
-        current_category=None
-    )
-
-
-@blog_bp.route('/feed.xml')
-def rss_feed():
-    posts = Post.query.filter_by(is_published=True).order_by(
-        Post.created_at.desc()).limit(20).all()
-    from flask import make_response
-    response = make_response(render_template('rss.xml', posts=posts))
-    response.headers['Content-Type'] = 'application/xml; charset=utf-8'
-    return response
-
-
-@blog_bp.route('/thumb')
-def thumbnail():
-    path = request.args.get('path', '')
-    w = request.args.get('w', 400, type=int)
-    if not path:
-        abort(404)
-    from flask import current_app
-    import mimetypes
-    img_path = os.path.join(current_app.root_path, 'static', path.lstrip('/'))
-    
-    if not os.path.isfile(img_path):
-        logger.warning('缩略图文件不存在: path=%s', path)
-        return Response(b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00!\xf9\x04\x00\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;',
-                       mimetype='image/gif', headers={'Cache-Control': 'no-cache'})
-    
-    # 缩略图缓存（版本前缀，升级时自动失效）
-    ext = os.path.splitext(path)[1].lower() or '.jpg'
-    cache_key = f'{THUMB_CACHE_VER}_{path.replace("/","_")}_{w}{ext}'
-    cache_dir = os.path.join(current_app.root_path, 'static', '.thumb_cache')
-    cache_path = os.path.join(cache_dir, cache_key)
-    os.makedirs(cache_dir, exist_ok=True)
-    
-    # 清除旧版本缓存（异步，不阻塞请求）
-    cleanup_old_cache(cache_dir, THUMB_CACHE_VER)
-    
-    # 缓存命中
-    if os.path.isfile(cache_path):
-        img_mtime = os.path.getmtime(img_path)
-        cache_mtime = os.path.getmtime(cache_path)
-        if cache_mtime >= img_mtime:
-            with open(cache_path, 'rb') as f:
-                return Response(f.read(), mimetype=mimetypes.guess_type(cache_key)[0] or 'image/jpeg',
-                              headers={'Cache-Control': 'public, max-age=2592000'})
-    
-    try:
-        from PIL import Image
-        img = Image.open(img_path)
-        ratio = min(w / img.width, 1.0)
-        if ratio < 1:
-            new_w = int(img.width * ratio)
-            new_h = int(img.height * ratio)
-            img = img.resize((new_w, new_h), Image.LANCZOS)
-        # 保持原格式（不用 WebP，Windows 兼容更好）
-        fmt = 'JPEG' if ext in ('.jpg', '.jpeg') else 'PNG'
-        img.save(cache_path, fmt, quality=85, optimize=True)
-        with open(cache_path, 'rb') as f:
-            return Response(f.read(), mimetype=mimetypes.guess_type(cache_key)[0] or 'image/jpeg',
-                          headers={'Cache-Control': 'public, max-age=2592000'})
-    except Exception as e:
-        logger.error('缩略图失败: path=%s w=%d error=%s', path, w, str(e), exc_info=True)
-        # 出错时返回原始图片
-        with open(img_path, 'rb') as f:
-            return Response(f.read(), mimetype=mimetypes.guess_type(path)[0] or 'image/jpeg')
-
-
+# ── 模板全局函数 ──────────────────────────────
 @blog_bp.app_template_global()
-def format_date(dt, fmt='%B %d, %Y'):
+def format_date(dt, fmt='%Y/%m/%d'):
+    """模板中格式化日期。"""
     if dt:
         return dt.strftime(fmt)
     return ''
-
-
-@blog_bp.app_template_global()
-def truncate_text(text, length=200):
-    if not text:
-        return ''
-    if len(text) <= length:
-        return text
-    return text[:length].rsplit(' ', 1)[0] + '...'

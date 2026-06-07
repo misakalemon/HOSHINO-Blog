@@ -39,3 +39,4 @@ PyMySQL==1.2.0
 # --- Markdown 渲染（可选，用于兼容） ---
 # Markdown==3.7
 # Pygments==2.19.1
+email_validator
