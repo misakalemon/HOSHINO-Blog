@@ -1,22 +1,22 @@
 # -*- coding: utf-8 -*-
 from flask_wtf import FlaskForm
-from wtforms import StringField, TextAreaField, BooleanField, PasswordField, SelectField, FileField
+from wtforms import StringField, TextAreaField, BooleanField, PasswordField, SelectField, SelectMultipleField, FileField
 from wtforms.validators import DataRequired, Email, Length, Optional
 
 
 class LoginForm(FlaskForm):
-    username = StringField('\u7528\u6237\u540d', validators=[DataRequired()])
-    password = PasswordField('\u5bc6\u7801', validators=[DataRequired()])
+    username = StringField('用户名', validators=[DataRequired()])
+    password = PasswordField('密码', validators=[DataRequired()])
 
 
 class PostForm(FlaskForm):
-    title = StringField('\u6807\u9898', validators=[DataRequired(), Length(max=256)])
-    slug = StringField('\u94fe\u63a5\u63a5 (URL)', validators=[DataRequired(), Length(max=256)])
-    summary = TextAreaField('\u6458\u8981', validators=[Optional()])
-    content = TextAreaField('\u6b63\u6587 (Markdown)', validators=[DataRequired()])
-    category = SelectField('\u5206\u7c7b', coerce=int, validators=[Optional()])
-    cover_image = StringField('\u5c01\u9762\u56fe\u7247 URL', validators=[Optional()])
-    is_published = BooleanField('\u53d1\u5e03')
+    title = StringField('标题', validators=[DataRequired(), Length(max=256)])
+    slug = StringField('链接标识 (URL)', validators=[DataRequired(), Length(max=256)])
+    summary = TextAreaField('摘要', validators=[Optional()])
+    content = TextAreaField('正文 (Markdown)', validators=[DataRequired()])
+    categories = SelectMultipleField('分类（最多15个）', coerce=int, validators=[Optional()])
+    cover_image = StringField('封面图片 URL', validators=[Optional()])
+    is_published = BooleanField('发布')
 
 
 class CategoryForm(FlaskForm):

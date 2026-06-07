@@ -6,9 +6,9 @@
     <div class="container">
         <h1>{{ post.title }}</h1>
         <div class="post-meta" style="justify-content:center; margin-top:16px">
-            {% if post.category %}
-            <span class="category">{{ post.category.name }}</span>
-            {% endif %}
+            {% for cat in post.categories %}
+            <span class="category">{{ cat.name }}</span>
+            {% endfor %}
             <span>{{ format_date(post.created_at, '%Y/%m/%d') }}</span>
             <span>💬 {{ post.published_comments() }} 评论</span>
         </div>

@@ -68,13 +68,15 @@ def post_list():
 @login_required
 def new_post():
     form = PostForm()
-    form.category.choices = [(0, '\u65e0')] + [
-        (c.id, c.name) for c in Category.query.order_by(Category.name).all()]
+    form.categories.choices = [(c.id, c.name) for c in Category.query.order_by(Category.name).all()]
     if form.validate_on_submit():
         # 检查 slug 是否已存在
         existing = Post.query.filter_by(slug=form.slug.data).first()
         if existing:
-            flash('\u94fe\u63a5\u6807\u8bc6\u5df2\u88ab\u5176\u4ed6\u6587\u7ae0\u4f7f\u7528\uFF0C\u8bf7\u66f4\u6362\u4e00\u4e2a', 'error')
+            flash('链接标识已被其他文章使用，请更换一个', 'error')
+            return render_template('admin/post-form.html', form=form, editing=False)
+        if len(form.categories.data) > 15:
+            flash('最多选择15个分类', 'error')
             return render_template('admin/post-form.html', form=form, editing=False)
         post = Post(
             title=form.title.data,
@@ -82,14 +84,15 @@ def new_post():
             summary=form.summary.data,
             content=form.content.data,
             cover_image=form.cover_image.data or '',
-            category_id=form.category.data if form.category.data > 0 else None,
             author_id=current_user.id,
             is_published=form.is_published.data
         )
+        # 关联选中的分类
+        post.categories = Category.query.filter(Category.id.in_(form.categories.data)).all()
         db.session.add(post)
         db.session.commit()
         logger.info('创建文章: id=%d title="%s" slug=%s author=%s', post.id, post.title, post.slug, current_user.username)
-        flash('\u6587\u7ae0\u5df2\u53d1\u5e03', 'success')
+        flash('文章已发布', 'success')
         return redirect(url_for('admin.post_list'))
     return render_template('admin/post-form.html', form=form, editing=False)
 
@@ -99,21 +102,24 @@ def new_post():
 def edit_post(id):
     post = Post.query.get_or_404(id)
     form = PostForm(obj=post)
-    form.category.choices = [(0, '\u65e0')] + [
-        (c.id, c.name) for c in Category.query.order_by(Category.name).all()]
+    form.categories.choices = [(c.id, c.name) for c in Category.query.order_by(Category.name).all()]
     if form.validate_on_submit():
+        if len(form.categories.data) > 15:
+            flash('最多选择15个分类', 'error')
+            return render_template('admin/post-form.html', form=form, editing=True, post=post)
         post.title = form.title.data
         post.slug = form.slug.data
         post.summary = form.summary.data
         post.content = form.content.data
         post.cover_image = form.cover_image.data or ''
-        post.category_id = form.category.data if form.category.data > 0 else None
         post.is_published = form.is_published.data
         post.updated_at = datetime.datetime.utcnow()
+        # 更新分类关联
+        post.categories = Category.query.filter(Category.id.in_(form.categories.data)).all()
         db.session.commit()
-        flash('\u6587\u7ae0\u5df2\u66f4\u65b0', 'success')
+        flash('文章已更新', 'success')
         return redirect(url_for('admin.post_list'))
-    form.category.data = post.category_id or 0
+    form.categories.data = [c.id for c in post.categories]
     return render_template('admin/post-form.html', form=form, editing=True, post=post)
 
 

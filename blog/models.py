@@ -6,6 +6,12 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 db = SQLAlchemy()
 
+# 文章-分类 多对多关联表
+post_categories = db.Table('post_categories',
+    db.Column('post_id', db.Integer, db.ForeignKey('posts.id'), primary_key=True),
+    db.Column('category_id', db.Integer, db.ForeignKey('categories.id'), primary_key=True)
+)
+
 
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
@@ -48,7 +54,7 @@ class Category(db.Model):
     description = db.Column(db.Text, default='')
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
-    posts = db.relationship('Post', backref='category', lazy='dynamic')
+    posts = db.relationship('Post', secondary=post_categories, back_populates='categories', lazy='dynamic')
 
     def post_count(self):
         return self.posts.filter_by(is_published=True).count()
@@ -63,16 +69,22 @@ class Post(db.Model):
     summary = db.Column(db.Text, default='')
     content = db.Column(db.Text, nullable=False)
     cover_image = db.Column(db.String(256), default='')
-    category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=True)
     author_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     is_published = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
+    categories = db.relationship('Category', secondary=post_categories, back_populates='posts', lazy='select')
     comments = db.relationship('Comment', backref='post', lazy='dynamic', order_by='Comment.created_at')
 
     def published_comments(self):
         return self.comments.filter_by(is_approved=True).count()
+
+    def category_names(self):
+        return [c.name for c in self.categories]
+
+    def category_slugs(self):
+        return [c.slug for c in self.categories]
 
 
 class Comment(db.Model):

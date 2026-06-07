@@ -42,7 +42,7 @@ def index():
     query = Post.query.options(db.joinedload(Post.author)).filter_by(is_published=True)
     if category_slug:
         cat = Category.query.filter_by(slug=category_slug).first_or_404()
-        query = query.filter_by(category_id=cat.id)
+        query = query.filter(Post.categories.any(id=cat.id))
 
     posts = query.order_by(Post.created_at.desc()).paginate(
         page=page, per_page=6, error_out=False
