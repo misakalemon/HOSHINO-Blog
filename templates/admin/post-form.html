@@ -323,21 +323,15 @@ function rteImage() {
     if (!file) return;
     var formData = new FormData();
     formData.append('image', file);
-    var img = document.createElement('img');
-    img.style.opacity = '0.4';
-    img.style.maxWidth = '100%';
-    document.getElementById('rte-content').focus();
-    document.execCommand('insertHTML', false, img.outerHTML);
     fetch('{{ url_for("admin.upload_image") }}', { method:'POST', body:formData })
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data.url) {
-        img.src = data.url;
-        img.style.opacity = '1';
-        img.onload = function() { img.style.opacity = '1'; };
+        document.getElementById('rte-content').focus();
+        document.execCommand('insertHTML', false, '<img src="' + data.url + '" style="max-width:100%" alt="image">');
       }
     })
-    .catch(function() { img.remove(); alert('图片上传失败'); });
+    .catch(function() { alert('图片上传失败'); });
   };
   input.click();
 }

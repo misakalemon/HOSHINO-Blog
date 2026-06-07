@@ -21,8 +21,6 @@
 <div class="ambient-veil" id="ambientVeil"></div>
 <!-- 粒子 Canvas -->
 <canvas id="particleCanvas"></canvas>
-<!-- 自定义光标 -->
-<div class="custom-cursor" id="customCursor"></div>
 
 <script>
 (function() {
@@ -118,24 +116,28 @@
     ambientVeil.style.background = 'radial-gradient(ellipse at ' + mouseX + 'px ' + mouseY + 'px, hsla(var(--glow-hue), var(--glow-saturation), var(--glow-lightness), 0.06) 0%, transparent 70%)';
   }
 
-  // === 事件 ===
+  // === 鼠标追踪 ===
   document.addEventListener('mousemove', function(e) {
     mouseX += (e.clientX - mouseX) * 0.5;
     mouseY += (e.clientY - mouseY) * 0.5;
-    customCursor.style.left = e.clientX + 'px';
-    customCursor.style.top = e.clientY + 'px';
   });
-
-  document.querySelectorAll('button, input, select, textarea, a, .scene-chip, .mode-btn').forEach(function(el) {
-    el.addEventListener('mouseenter', function() {
-      isHoveringInteractive = true;
-      customCursor.classList.add('hovering');
+  // === 自定义光标 ===
+  if (customCursor) {
+    document.addEventListener('mousemove', function(e) {
+      customCursor.style.left = e.clientX + 'px';
+      customCursor.style.top = e.clientY + 'px';
     });
-    el.addEventListener('mouseleave', function() {
-      isHoveringInteractive = false;
-      customCursor.classList.remove('hovering');
+    document.querySelectorAll('button, input, select, textarea, a, .scene-chip, .mode-btn').forEach(function(el) {
+      el.addEventListener('mouseenter', function() {
+        isHoveringInteractive = true;
+        customCursor.classList.add('hovering');
+      });
+      el.addEventListener('mouseleave', function() {
+        isHoveringInteractive = false;
+        customCursor.classList.remove('hovering');
+      });
     });
-  });
+  }
 
   // === 边缘光效追踪 ===
   document.querySelectorAll('.post-card, .widget, .author-box, .comment-form, .comment-item').forEach(function(el) {
@@ -242,68 +244,70 @@
 <!-- 导航栏 -->
 <nav class="navbar">
     <div class="navbar-inner">
-            <a href="{{ url_for('blog.index') }}" class="navbar-logo">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" style="vertical-align:middle;margin-right:6px"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" stroke="var(--accent-cyan)" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              <span style="vertical-align:middle">HOSHINO</span>
-            </a>
-        <div class="navbar-links">
-            <a href="{{ url_for('blog.index') }}">
-              <svg width="16" height="16" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:4px"><use href="#icon-home"/></svg>
-              首页
-            </a>
-            <a href="{{ url_for('blog.index') }}">
-              <svg width="16" height="16" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:4px"><use href="#icon-blog"/></svg>
-              博客
-            </a>
-            <a href="{{ url_for('blog.about') }}">
-              <svg width="16" height="16" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:4px"><use href="#icon-about"/></svg>
-              关于
-            </a>
-            <a href="{{ url_for('blog.contact') }}">
-              <svg width="16" height="16" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:4px"><use href="#icon-contact"/></svg>
-              联系
-            </a>
-            <a href="javascript:void(0)" onclick="toggleTools()" style="position:relative">
-              <svg width="16" height="16" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:4px"><use href="#icon-write"/></svg>
-              工具
-            </a>
-            <a href="{{ url_for('admin.login') if not current_user.is_authenticated else url_for('admin.dashboard') }}" class="sidebar-login-link">
-              {% if current_user.is_authenticated %}
-              <img src="{{ url_for('blog.thumbnail', path=current_user.avatar, w=36) }}" alt="avatar" style="width:22px;height:22px;border-radius:50%;object-fit:cover;flex-shrink:0">
-              <span>{{ current_user.display_name or current_user.username }}</span>
-              {% else %}
-              <svg width="16" height="16" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:4px"><use href="#icon-user"/></svg>
-              登录
-              {% endif %}
-            </a>
-            <a href="{{ url_for('admin.new_post') }}" class="nav-write-btn">
-              <svg width="14" height="14" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:4px"><use href="#icon-write"/></svg>
-              写文章
-            </a>
-            <form class="search-form" action="{{ url_for('blog.search') }}" method="GET">
-                <input type="text" name="q" placeholder="搜索..." required>
-                <button type="submit">
-                  <svg width="16" height="16" viewBox="0 0 24 24" style="vertical-align:middle"><use href="#icon-search"/></svg>
-                </button>
-            </form>
+        <!-- 第一行：博客名称（点击展开菜单） -->
+        <div class="nav-brand-row">
+            <div class="nav-brand-left">
+                <a href="javascript:void(0)" onclick="toggleNav()" class="navbar-logo" id="navToggle">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="vertical-align:middle;margin-right:8px"><rect x="4" y="5" width="16" height="2" rx="1" fill="currentColor" opacity="0.8"/><rect x="4" y="11" width="16" height="2" rx="1" fill="currentColor" opacity="0.8"/><rect x="4" y="17" width="16" height="2" rx="1" fill="currentColor" opacity="0.8"/></svg>
+                  <span style="vertical-align:middle">HOSHINO</span>
+                </a>
+            </div>
         </div>
-        <button class="nav-toggle" id="navToggle" onclick="toggleNav()">
-          <span></span><span></span><span></span>
-        </button>
-        <a href="{{ url_for('admin.login') if not current_user.is_authenticated else url_for('admin.dashboard') }}" 
-           class="nav-login-btn"
-           title="{{ current_user.display_name or current_user.username if current_user.is_authenticated else '登录' }}">
-          {% if current_user.is_authenticated %}
-          <img src="{{ url_for('blog.thumbnail', path=current_user.avatar, w=36) }}" alt="avatar" style="width:28px;height:28px;border-radius:50%;object-fit:cover">
-          {% else %}
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><use href="#icon-user"/></svg>
-          {% endif %}
-        </a>
+        <!-- 第二行：导航链接 -->
+        <div class="nav-links-row">
+            <div class="navbar-links">
+                <!-- 滑出菜单顶部：用户头像 + 名称 -->
+                <div class="nav-slide-user">
+                  {% if current_user.is_authenticated %}
+                  <a href="{{ url_for('admin.dashboard') }}" class="nav-slide-user-link">
+                    <img src="{{ url_for('blog.thumbnail', path=current_user.avatar, w=80) }}" alt="avatar" class="nav-slide-avatar">
+                    <div class="nav-slide-info">
+                      <span class="nav-slide-name">{{ current_user.display_name or current_user.username }}</span>
+                      <span class="nav-slide-role">{{ '管理员' if current_user.is_admin else '用户' }}</span>
+                    </div>
+                  </a>
+                  {% else %}
+                  <a href="{{ url_for('admin.login') }}" class="nav-slide-user-link">
+                    <div class="nav-slide-avatar nav-slide-avatar-placeholder">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><use href="#icon-user"/></svg>
+                    </div>
+                    <div class="nav-slide-info">
+                      <span class="nav-slide-name">未登录</span>
+                      <span class="nav-slide-role">点击登录</span>
+                    </div>
+                  </a>
+                  {% endif %}
+                </div>
+                <a href="{{ url_for('blog.index') }}">
+                  <svg width="16" height="16" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:4px"><use href="#icon-home"/></svg>
+                  首页
+                </a>
+                <a href="{{ url_for('blog.index') }}">
+                  <svg width="16" height="16" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:4px"><use href="#icon-blog"/></svg>
+                  博客
+                </a>
+                <a href="{{ url_for('blog.about') }}">
+                  <svg width="16" height="16" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:4px"><use href="#icon-about"/></svg>
+                  关于
+                </a>
+                <a href="{{ url_for('blog.contact') }}">
+                  <svg width="16" height="16" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:4px"><use href="#icon-contact"/></svg>
+                  联系
+                </a>
+                <a href="javascript:void(0)" onclick="toggleTools()" style="position:relative">
+                  <svg width="16" height="16" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:4px"><use href="#icon-write"/></svg>
+                  工具
+                </a>
+                {% if current_user.is_authenticated %}
+                <a href="{{ url_for('admin.new_post') }}" class="nav-write-btn">
+                  <svg width="14" height="14" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:4px"><use href="#icon-write"/></svg>
+                  写文章
+                </a>
+                {% endif %}
+            </div>
+        </div>
     </div>
 </nav>
-
-<!-- 侧边栏遮罩 -->
-<div class="nav-overlay" id="navOverlay" onclick="toggleNav()"></div>
 
 <!-- 页面内容 -->
 {% block content %}{% endblock %}
@@ -442,10 +446,16 @@ function toggleTools() {
   if (!open) { initTimestamp(); }
 }
 function toggleNav() {
-  document.getElementById('navToggle').classList.toggle('open');
-  document.querySelector('.navbar-links').classList.toggle('open');
-  document.getElementById('navOverlay').classList.toggle('show');
+  var t = document.getElementById('navToggle');
+  if (t) t.classList.toggle('open');
+  var nl = document.querySelector('.navbar-links');
+  if (nl) nl.classList.toggle('open');
 }
+window.toggleNav = toggleNav;
+window.toggleTools = toggleTools;
+window.switchTool = switchTool;
+// 滑出菜单链接点击：直接跳转，不关菜单（页面刷新后菜单自然关闭）
+// 菜单关闭由点击 HOSHINO 或遮罩层控制
 function switchTool(name) {
   document.querySelectorAll('.tool-panel').forEach(function(p) { p.classList.remove('active'); });
   document.querySelectorAll('.tool-tab').forEach(function(t) { t.classList.remove('active'); });

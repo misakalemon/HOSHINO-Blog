@@ -14,13 +14,13 @@ def init_db(app):
         db.create_all()
         if not User.query.filter_by(username='admin').first():
             admin = User(
-                username='admin',
-                email='admin@localhost',
-                display_name='Admin',
+                username=app.config.get('ADMIN_USERNAME', 'admin'),
+                email=app.config.get('ADMIN_EMAIL', 'admin@localhost'),
+                display_name=app.config.get('ADMIN_DISPLAY_NAME', 'Admin'),
                 is_admin=True,
                 is_active=True
             )
-            admin.set_password('admin123')
+            admin.set_password(app.config.get('ADMIN_PASSWORD', 'admin123'))
             db.session.add(admin)
             db.session.commit()
 
