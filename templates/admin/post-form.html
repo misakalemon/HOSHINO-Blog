@@ -185,10 +185,10 @@
                 </div>
                 <div style="flex:1">
                     <div class="form-group">
-                        <label>分类</label>
-                        <select name="category">
-                            {% for val, label in form.category.choices %}
-                            <option value="{{ val }}" {% if form.category.data == val %}selected{% endif %}>{{ label }}</option>
+                        <label>分类（按住 Ctrl 多选）</label>
+                        <select name="categories" multiple size="5">
+                            {% for val, label in form.categories.choices %}
+                            <option value="{{ val }}" {% if form.categories.data and val in form.categories.data %}selected{% endif %}>{{ label }}</option>
                             {% endfor %}
                         </select>
                     </div>
