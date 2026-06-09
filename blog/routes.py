@@ -10,7 +10,7 @@ import datetime
 import os
 import time
 import logging
-from flask import render_template, request, redirect, url_for, abort, Response
+from flask import render_template, request, redirect, url_for, abort, Response, current_app
 from . import blog_bp
 from .models import db, Post, Category, Comment
 from .forms import CommentForm, ContactForm
@@ -36,7 +36,6 @@ def index():
         query = query.filter(Post.categories.any(id=cat.id))
 
     # 分页（按创建时间倒序）
-    from flask import current_app
     per_page = request.args.get('per_page', current_app.config['POSTS_PER_PAGE'], type=int)
     posts = query.order_by(Post.created_at.desc()).paginate(
         page=page, per_page=per_page, error_out=False
@@ -48,7 +47,8 @@ def index():
     return render_template('index.html',
         posts=posts, categories=categories,
         recent_posts=recent_posts, current_category=category_slug,
-        current_per_page=per_page
+        current_per_page=per_page,
+        per_page_options=current_app.config['PER_PAGE_OPTIONS']
     )
 
 
@@ -93,7 +93,6 @@ def category(slug):
     """按分类查看文章列表（多对多关联筛选）。"""
     cat = Category.query.filter_by(slug=slug).first_or_404()
     page = request.args.get('page', 1, type=int)
-    from flask import current_app
     per_page = request.args.get('per_page', current_app.config['POSTS_PER_PAGE'], type=int)
     posts = Post.query.filter(
         Post.categories.any(id=cat.id), Post.is_published == True
@@ -106,7 +105,8 @@ def category(slug):
     return render_template('category-grid.html',
         category=cat, posts=posts,
         categories=categories, recent_posts=recent_posts,
-        current_per_page=per_page
+        current_per_page=per_page,
+        per_page_options=current_app.config['PER_PAGE_OPTIONS']
     )
 
 
@@ -145,7 +145,6 @@ def search():
     page = request.args.get('page', 1, type=int)
     if not q:
         return redirect(url_for('blog.index'))
-    from flask import current_app
     per_page = request.args.get('per_page', current_app.config['POSTS_PER_PAGE'], type=int)
     categories = Category.query.order_by(Category.name).all()
     recent_posts = Post.query.filter_by(is_published=True).order_by(
@@ -163,7 +162,8 @@ def search():
     return render_template('index.html',
         posts=results, categories=categories,
         recent_posts=recent_posts, search_query=q,
-        current_category=None, current_per_page=per_page
+        current_category=None, current_per_page=per_page,
+        per_page_options=current_app.config['PER_PAGE_OPTIONS']
     )
 
 

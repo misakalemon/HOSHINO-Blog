@@ -57,6 +57,8 @@ class Config:
 
     # ── 分页 ──────────────────────────────────────
     POSTS_PER_PAGE = int(os.environ.get('POSTS_PER_PAGE', 6))
+    # 前端下拉可选值，自动包含 POSTS_PER_PAGE 并去重排序
+    PER_PAGE_OPTIONS = sorted(set([POSTS_PER_PAGE, 6, 12, 24, 48]))
 
     # ── 默认管理员（首次启动自动创建）─────────────
     ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin')
