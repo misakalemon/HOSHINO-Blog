@@ -58,6 +58,7 @@ body.grayscale { filter: grayscale(1); }
 .theme-light .page-jump input, .theme-light .per-page-select {
   border-color: var(--border-subtle);
 }
+.theme-light .navbar { background: rgba(245,245,247,0.85); }
 .theme-light .post-card .body h3 a { color: var(--text-primary); }
 .theme-light .post-card .body h3 a:hover { color: var(--accent-cyan); }
 .theme-light .navbar-links a { color: var(--text-secondary); }
@@ -175,7 +176,7 @@ body::before {
   position: fixed;
   top: 0; left: 0; right: 0;
   z-index: 1000;
-  background: linear-gradient(180deg, rgba(10,10,26,0.15) 0%, rgba(10,10,26,0.88) 100%);
+  background: rgba(10,10,26,0.75);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border-subtle);
