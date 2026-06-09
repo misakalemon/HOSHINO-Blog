@@ -56,11 +56,14 @@ class Config:
     MAX_CONTENT_LENGTH = int(os.environ.get('MAX_CONTENT_LENGTH', 16 * 1024 * 1024))
 
     # ── 分页 ──────────────────────────────────────
+    # 每页文章数（默认 6），可通过 .env 的 POSTS_PER_PAGE 覆盖
     POSTS_PER_PAGE = int(os.environ.get('POSTS_PER_PAGE', 6))
-    # 前端下拉可选值，自动包含 POSTS_PER_PAGE 并去重排序
+    # 前端每页下拉选择器的可选值。
+    # 自动包含 POSTS_PER_PAGE 并去重排序，例如设为 10 时选项为 [6, 10, 12, 24, 48]
     PER_PAGE_OPTIONS = sorted(set([POSTS_PER_PAGE, 6, 12, 24, 48]))
 
     # ── 默认主题（dark / light）────────────────
+    # 首次访问时的默认主题。用户手动切换后以 localStorage 为准，不再受此值影响。
     DEFAULT_THEME = os.environ.get('DEFAULT_THEME', 'dark')
 
     # ── 默认管理员（首次启动自动创建）─────────────

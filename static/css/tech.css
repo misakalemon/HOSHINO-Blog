@@ -32,10 +32,14 @@
   --glow-opacity: 0.4;
 }
 
-/* --- 灰度模式 --- */
+/* ==========================================
+   灰度模式 & 主题切换
+   ========================================== */
+/* 灰度模式：给 <body> 添加 grayscale 类后，整个页面变黑白 */
 body.grayscale { filter: grayscale(1); }
 
-/* --- 浅色主题 --- */
+/* 浅色主题：覆盖 :root 中的 CSS 变量，全局配色自动切换 */
+/* 用在 <html class="theme-light"> 上，优先级高于 :root */
 .theme-light {
   --bg-primary: #f5f5f7;
   --bg-secondary: #ffffff;
@@ -580,7 +584,9 @@ body::before {
   border-bottom: 1px solid var(--border-subtle);
 }
 
-/* 分类标签（横向排列，缩短高度） */
+/* 分类标签（横向排列，缩短高度）
+   原为纵向列表（每个分类占一整行），改为 flex-wrap 圆角 chips，
+   高度从 ~300px 压缩到 ~70px，手机端体验更好 */
 .cat-tags {
   display: flex;
   flex-wrap: wrap;
@@ -689,6 +695,8 @@ body::before {
 .page-jump input { width: 56px; padding: 6px 8px; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 6px; color: var(--text-primary); font-size: 13px; text-align: center; outline: none; }
 .page-jump input:focus { border-color: var(--accent-cyan); }
 .page-jump input::-webkit-inner-spin-button { -webkit-appearance: none; }
+/* 每页数量下拉选择器
+   放在翻页区域右侧，选中后立即触发 JS 刷新页面 */
 .per-page-select {
   padding: 4px 8px;
   background: var(--bg-glass);
@@ -1177,7 +1185,9 @@ body::before {
   .pagination li a, .pagination li span { width: 34px; height: 34px; font-size: 12px; }
   .page-jump { margin-left: 0; font-size: 14px; }
   .page-jump input { width: 56px; padding: 6px 8px; font-size: 14px; }
-  .per-page-select { font-size: 14px; padding: 6px 10px; }
+  /* 每页数量下拉选择器
+   放在翻页区域右侧，选中后立即触发 JS 刷新页面 */
+.per-page-select { font-size: 14px; padding: 6px 10px; }
   
   /* 页面内容 */
   .page-content h2 { font-size: 22px; }

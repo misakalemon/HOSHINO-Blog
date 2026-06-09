@@ -616,6 +616,8 @@ function izDownload() {
             </a>
 <script>
 // ── 深色/浅色主题切换 ──
+// 切换 .theme-light 类到 <html> 上，CSS 变量自动覆盖为浅色配色。
+// 偏好存入 localStorage，刷新后保持；首次访问取 DEFAULT_THEME（.env 可配）。
 function toggleTheme() {
   var html = document.documentElement;
   var isLight = html.classList.toggle('theme-light');
@@ -623,6 +625,7 @@ function toggleTheme() {
 }
 (function() {
   var saved = localStorage.getItem('hoshino_theme');
+  // 从 Flask 配置读取默认主题，首次访问（无 saved）时使用
   var defaultTheme = '{{ config.get("DEFAULT_THEME", "dark") }}';
   if (saved === 'light' || (!saved && defaultTheme === 'light')) {
     document.documentElement.classList.add('theme-light');
@@ -630,6 +633,8 @@ function toggleTheme() {
 })();
 
 // ── 黑白模式切换 ──
+// 给 <body> 添加 grayscale 类，CSS 中 filter: grayscale(1) 使页面变黑白。
+// 偏好同样存入 localStorage。
 function toggleGray() {
   var body = document.body;
   var isGray = body.classList.toggle('grayscale');
@@ -641,7 +646,5 @@ function toggleGray() {
   }
 })();
 </script>
-</body>
-
 </body>
 </html>

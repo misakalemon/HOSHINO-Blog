@@ -36,6 +36,7 @@ def index():
         query = query.filter(Post.categories.any(id=cat.id))
 
     # 分页（按创建时间倒序）
+    # per_page 优先级：URL 查询参数 ?per_page= → 无则取 config.POSTS_PER_PAGE（.env 可配）
     per_page = request.args.get('per_page', current_app.config['POSTS_PER_PAGE'], type=int)
     posts = query.order_by(Post.created_at.desc()).paginate(
         page=page, per_page=per_page, error_out=False
@@ -93,6 +94,7 @@ def category(slug):
     """按分类查看文章列表（多对多关联筛选）。"""
     cat = Category.query.filter_by(slug=slug).first_or_404()
     page = request.args.get('page', 1, type=int)
+    # per_page 取自 URL 参数或配置默认值，与首页一致
     per_page = request.args.get('per_page', current_app.config['POSTS_PER_PAGE'], type=int)
     posts = Post.query.filter(
         Post.categories.any(id=cat.id), Post.is_published == True
@@ -145,6 +147,7 @@ def search():
     page = request.args.get('page', 1, type=int)
     if not q:
         return redirect(url_for('blog.index'))
+    # per_page 取自 URL 参数或配置默认值，搜索结果也支持分页调整
     per_page = request.args.get('per_page', current_app.config['POSTS_PER_PAGE'], type=int)
     categories = Category.query.order_by(Category.name).all()
     recent_posts = Post.query.filter_by(is_published=True).order_by(
