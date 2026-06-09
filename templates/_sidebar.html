@@ -65,12 +65,12 @@
 
 <div class="widget">
     <h4 class="widget-title">分类</h4>
-    <ul class="cat-list">
-        <li><a href="{{ url_for('blog.index') }}">全部分类 <span>{{ recent_posts|length if recent_posts else 0 }}</span></a></li>
+    <div class="cat-tags">
+        <a href="{{ url_for('blog.index') }}" class="cat-tag">全部 <span class="cat-count">{{ recent_posts|length if recent_posts else 0 }}</span></a>
         {% for cat in categories %}
-        <li><a href="{{ url_for('blog.category', slug=cat.slug) }}">{{ cat.name }} <span>{{ cat.post_count() }}</span></a></li>
+        <a href="{{ url_for('blog.category', slug=cat.slug) }}" class="cat-tag">{{ cat.name }} <span class="cat-count">{{ cat.post_count() }}</span></a>
         {% else %}
-        <li style="color:var(--text-muted); font-size:13px">暂无分类</li>
+        <span style="color:var(--text-muted); font-size:13px">暂无分类</span>
         {% endfor %}
-    </ul>
+    </div>
 </div>

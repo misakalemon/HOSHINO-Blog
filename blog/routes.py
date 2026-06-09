@@ -36,8 +36,10 @@ def index():
         query = query.filter(Post.categories.any(id=cat.id))
 
     # 分页（按创建时间倒序）
+    from flask import current_app
+    per_page = request.args.get('per_page', current_app.config['POSTS_PER_PAGE'], type=int)
     posts = query.order_by(Post.created_at.desc()).paginate(
-        page=page, per_page=6, error_out=False
+        page=page, per_page=per_page, error_out=False
     )
     categories = Category.query.order_by(Category.name).all()
     recent_posts = Post.query.filter_by(is_published=True).order_by(
@@ -45,7 +47,8 @@ def index():
 
     return render_template('index.html',
         posts=posts, categories=categories,
-        recent_posts=recent_posts, current_category=category_slug
+        recent_posts=recent_posts, current_category=category_slug,
+        current_per_page=per_page
     )
 
 
@@ -90,17 +93,20 @@ def category(slug):
     """按分类查看文章列表（多对多关联筛选）。"""
     cat = Category.query.filter_by(slug=slug).first_or_404()
     page = request.args.get('page', 1, type=int)
+    from flask import current_app
+    per_page = request.args.get('per_page', current_app.config['POSTS_PER_PAGE'], type=int)
     posts = Post.query.filter(
         Post.categories.any(id=cat.id), Post.is_published == True
     ).order_by(Post.created_at.desc()).paginate(
-        page=page, per_page=6, error_out=False
+        page=page, per_page=per_page, error_out=False
     )
     categories = Category.query.order_by(Category.name).all()
     recent_posts = Post.query.filter_by(is_published=True).order_by(
         Post.created_at.desc()).limit(4).all()
     return render_template('category-grid.html',
         category=cat, posts=posts,
-        categories=categories, recent_posts=recent_posts
+        categories=categories, recent_posts=recent_posts,
+        current_per_page=per_page
     )
 
 
@@ -139,6 +145,8 @@ def search():
     page = request.args.get('page', 1, type=int)
     if not q:
         return redirect(url_for('blog.index'))
+    from flask import current_app
+    per_page = request.args.get('per_page', current_app.config['POSTS_PER_PAGE'], type=int)
     categories = Category.query.order_by(Category.name).all()
     recent_posts = Post.query.filter_by(is_published=True).order_by(
         Post.created_at.desc()).limit(4).all()
@@ -150,12 +158,12 @@ def search():
             Post.content.ilike(f'%{q}%')
         )
     ).order_by(Post.created_at.desc()).paginate(
-        page=page, per_page=6, error_out=False
+        page=page, per_page=per_page, error_out=False
     )
     return render_template('index.html',
         posts=results, categories=categories,
         recent_posts=recent_posts, search_query=q,
-        current_category=None
+        current_category=None, current_per_page=per_page
     )
 
 

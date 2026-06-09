@@ -56,7 +56,7 @@ class Config:
     MAX_CONTENT_LENGTH = int(os.environ.get('MAX_CONTENT_LENGTH', 16 * 1024 * 1024))
 
     # ── 分页 ──────────────────────────────────────
-    POSTS_PER_PAGE = 6
+    POSTS_PER_PAGE = int(os.environ.get('POSTS_PER_PAGE', 6))
 
     # ── 默认管理员（首次启动自动创建）─────────────
     ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin')
