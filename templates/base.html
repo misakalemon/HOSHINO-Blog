@@ -299,9 +299,11 @@
                 <a href="javascript:void(0)" onclick="toggleTools()" style="position:relative">
                   <svg width="16" height="16" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:4px"><use href="#icon-write"/></svg>
                   工具
-                </a>
-            </div>
-        </div>
+                 </a>
+                <span style="color:var(--text-muted);font-size:12px;padding:0 2px">|</span>
+                <a href="javascript:void(0)" onclick="toggleTheme()" title="切换深色/浅色" style="font-size:14px">🌓</a>
+                <a href="javascript:void(0)" onclick="toggleGray()" title="切换黑白" style="font-size:14px">🎨</a>
+             </div>
     </div>
 </nav>
 
@@ -612,8 +614,32 @@ function izDownload() {
             <a href="{{ url_for('blog.rss_feed') }}" title="RSS">
               <svg width="18" height="18" viewBox="0 0 24 24" style="vertical-align:middle"><use href="#icon-rss"/></svg>
             </a>
-        </div>
-    </footer>
+<script>
+// ── 深色/浅色主题切换 ──
+function toggleTheme() {
+  var html = document.documentElement;
+  var isLight = html.classList.toggle('theme-light');
+  localStorage.setItem('hoshino_theme', isLight ? 'light' : 'dark');
+}
+(function() {
+  if (localStorage.getItem('hoshino_theme') === 'light') {
+    document.documentElement.classList.add('theme-light');
+  }
+})();
+
+// ── 黑白模式切换 ──
+function toggleGray() {
+  var body = document.body;
+  var isGray = body.classList.toggle('grayscale');
+  localStorage.setItem('hoshino_gray', isGray ? '1' : '0');
+}
+(function() {
+  if (localStorage.getItem('hoshino_gray') === '1') {
+    document.body.classList.add('grayscale');
+  }
+})();
+</script>
+</body>
 
 </body>
 </html>
