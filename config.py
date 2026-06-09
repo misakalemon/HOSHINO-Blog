@@ -60,6 +60,9 @@ class Config:
     # 前端下拉可选值，自动包含 POSTS_PER_PAGE 并去重排序
     PER_PAGE_OPTIONS = sorted(set([POSTS_PER_PAGE, 6, 12, 24, 48]))
 
+    # ── 默认主题（dark / light）────────────────
+    DEFAULT_THEME = os.environ.get('DEFAULT_THEME', 'dark')
+
     # ── 默认管理员（首次启动自动创建）─────────────
     ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin')
     ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')

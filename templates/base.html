@@ -622,7 +622,9 @@ function toggleTheme() {
   localStorage.setItem('hoshino_theme', isLight ? 'light' : 'dark');
 }
 (function() {
-  if (localStorage.getItem('hoshino_theme') === 'light') {
+  var saved = localStorage.getItem('hoshino_theme');
+  var defaultTheme = '{{ config.get("DEFAULT_THEME", "dark") }}';
+  if (saved === 'light' || (!saved && defaultTheme === 'light')) {
     document.documentElement.classList.add('theme-light');
   }
 })();
