@@ -71,7 +71,7 @@
                     <div class="page-jump">
                         <span style="color:var(--text-muted);font-size:12px">共 {{ posts.pages }} 页</span>
                         <input type="number" min="1" max="{{ posts.pages }}" placeholder="跳转" onkeydown="if(event.key=='Enter'){var p=parseInt(this.value);if(p>=1&&p<={{ posts.pages }})window.location='{{ url_for('blog.index', category=current_category) }}?page='+p+'&per_page={{ current_per_page }}';}">
-                        <select class="per-page-select" onchange="var pp=this.value;var url=new URL(window.location);url.searchParams.set('per_page',pp);url.searchParams.set('page','1');window.location=url.toString();">
+                        <select class="per-page-select" onchange="var p=new URLSearchParams(location.search);p.set('per_page',this.value);p.set('page','1');location.search=p.toString();">
                             {% for opt in per_page_options %}
                             <option value="{{ opt }}" {% if current_per_page == opt %}selected{% endif %}>{{ opt }} 条/页</option>
                             {% endfor %}
