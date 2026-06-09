@@ -27,7 +27,7 @@ def _build_database_uri():
     if direct_url:
         return direct_url
     host = os.environ.get('DB_HOST', '127.0.0.1')
-    port = os.environ.get('DB_PORT', '3307')
+    port = os.environ.get('DB_PORT', '3306')
     user = os.environ.get('DB_USER', 'hoshino')
     passwd = os.environ.get('DB_PASS', 'hoshino_pass')
     dbname = os.environ.get('DB_NAME', 'hoshino_blog')

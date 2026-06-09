@@ -23,7 +23,7 @@ Thumbs.db
 HarmonyOS_Icons.zip
 
 # Logs
-blog/logs/*.log
+blog/logs/
 
 # Uploads (用户上传文件)
 static/uploads/*
@@ -32,5 +32,3 @@ static/uploads/*
 # Thumbnail cache (缩略图磁盘缓存)
 static/.thumb_cache/
 
-# Logs
-blog/logs/*.log

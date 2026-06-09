@@ -13,7 +13,7 @@ import logging
 from flask import render_template, request, redirect, url_for, abort, Response
 from . import blog_bp
 from .models import db, Post, Category, Comment
-from .forms import CommentForm
+from .forms import CommentForm, ContactForm
 
 logger = logging.getLogger(__name__)
 
@@ -117,20 +117,17 @@ def about():
 # ── 联系页 ─────────────────────────────────────
 @blog_bp.route('/contact', methods=['GET', 'POST'])
 def contact():
-    """联系页面：提交留言表单。"""
+    """联系页面：提交留言表单（带 CSRF 保护）。"""
     categories = Category.query.order_by(Category.name).all()
     recent_posts = Post.query.filter_by(is_published=True).order_by(
         Post.created_at.desc()).limit(4).all()
+    form = ContactForm()
     message_sent = False
-    if request.method == 'POST':
-        name = request.form.get('name', '')
-        email = request.form.get('email', '')
-        message = request.form.get('message', '')
-        if name and email and message:
-            message_sent = True  # 生产环境应改为发送邮件
+    if form.validate_on_submit():
+        message_sent = True  # 生产环境应改为发送邮件
     return render_template('contact.html',
         categories=categories, recent_posts=recent_posts,
-        message_sent=message_sent
+        message_sent=message_sent, form=form
     )
 
 
@@ -193,7 +190,11 @@ def thumbnail():
         abort(404)
     from flask import current_app
     import mimetypes
-    img_path = os.path.join(current_app.root_path, 'static', path.lstrip('/'))
+    # 路径安全检查：禁止 ../ 遍历
+    if '..' in path or path.startswith('/'):
+        logger.warning('缩略图路径非法: %s', path)
+        abort(404)
+    img_path = os.path.join(current_app.root_path, 'static', path)
     if not os.path.isfile(img_path):
         logger.warning('缩略图不存在: %s', path)
         # 返回 1×1 透明 GIF

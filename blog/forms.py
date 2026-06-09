@@ -60,3 +60,10 @@ class CommentForm(FlaskForm):
     author_name = StringField('昵称', validators=[DataRequired(), Length(max=128)])
     author_email = StringField('邮箱', validators=[Optional(), Email(), Length(max=120)])
     content = TextAreaField('评论内容', validators=[DataRequired()])
+
+
+class ContactForm(FlaskForm):
+    """联系表单。"""
+    name = StringField('姓名', validators=[DataRequired(), Length(max=128)])
+    email = StringField('邮箱', validators=[DataRequired(), Email(), Length(max=120)])
+    message = TextAreaField('留言', validators=[DataRequired()])

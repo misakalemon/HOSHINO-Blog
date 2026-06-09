@@ -12,11 +12,23 @@ import datetime
 import logging
 from flask import render_template, request, redirect, url_for, abort, flash, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
+from functools import wraps
 from . import admin_bp
 from .models import db, User, Category, Post, Comment
 from .forms import LoginForm, PostForm, CategoryForm, UserForm, ProfileForm
 
 logger = logging.getLogger(__name__)
+
+
+def admin_required(f):
+    """装饰器：仅允许管理员访问。"""
+    @wraps(f)
+    @login_required
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_admin:
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated_function
 
 
 # ═══════════════════════════════════════════════
@@ -51,7 +63,7 @@ def logout():
 # ═══════════════════════════════════════════════
 
 @admin_bp.route('/')
-@login_required
+@admin_required
 def dashboard():
     """管理后台首页：显示统计数据概览。"""
     post_count = Post.query.count()
@@ -73,7 +85,7 @@ def dashboard():
 # ═══════════════════════════════════════════════
 
 @admin_bp.route('/posts')
-@login_required
+@admin_required
 def post_list():
     """文章列表页。"""
     page = request.args.get('page', 1, type=int)
@@ -84,7 +96,7 @@ def post_list():
 
 
 @admin_bp.route('/posts/new', methods=['GET', 'POST'])
-@login_required
+@admin_required
 def new_post():
     """新建文章。支持多分类选择（最多 15 个）。"""
     form = PostForm()
@@ -123,7 +135,7 @@ def new_post():
 
 
 @admin_bp.route('/posts/<int:id>/edit', methods=['GET', 'POST'])
-@login_required
+@admin_required
 def edit_post(id):
     """编辑文章。"""
     post = Post.query.get_or_404(id)
@@ -132,6 +144,14 @@ def edit_post(id):
         (c.id, c.name) for c in Category.query.order_by(Category.name).all()
     ]
     if form.validate_on_submit():
+        # 检查 slug 唯一性（排除自身）
+        existing = Post.query.filter(
+            Post.slug == form.slug.data,
+            Post.id != id
+        ).first()
+        if existing:
+            flash('链接标识已被其他文章使用，请更换一个', 'error')
+            return render_template('admin/post-form.html', form=form, editing=True, post=post)
         if len(form.categories.data) > 15:
             flash('最多选择15个分类', 'error')
             return render_template('admin/post-form.html', form=form, editing=True, post=post)
@@ -155,10 +175,12 @@ def edit_post(id):
 
 
 @admin_bp.route('/posts/<int:id>/delete', methods=['POST'])
-@login_required
+@admin_required
 def delete_post(id):
-    """删除文章。"""
+    """删除文章（同时删除关联评论）。"""
     post = Post.query.get_or_404(id)
+    # 先删除关联评论，避免外键约束
+    Comment.query.filter_by(post_id=post.id).delete()
     db.session.delete(post)
     db.session.commit()
     flash('文章已删除', 'success')
@@ -170,7 +192,7 @@ def delete_post(id):
 # ═══════════════════════════════════════════════
 
 @admin_bp.route('/categories')
-@login_required
+@admin_required
 def category_list():
     """分类列表页。"""
     categories = Category.query.order_by(Category.name).all()
@@ -178,7 +200,7 @@ def category_list():
 
 
 @admin_bp.route('/categories/new', methods=['GET', 'POST'])
-@login_required
+@admin_required
 def new_category():
     """新建分类。"""
     form = CategoryForm()
@@ -196,7 +218,7 @@ def new_category():
 
 
 @admin_bp.route('/categories/<int:id>/edit', methods=['GET', 'POST'])
-@login_required
+@admin_required
 def edit_category(id):
     """编辑分类。"""
     cat = Category.query.get_or_404(id)
@@ -212,7 +234,7 @@ def edit_category(id):
 
 
 @admin_bp.route('/categories/<int:id>/delete', methods=['POST'])
-@login_required
+@admin_required
 def delete_category(id):
     """删除分类。同时从所有文章中移除该分类（多对多关联）。"""
     cat = Category.query.get_or_404(id)
@@ -230,7 +252,7 @@ def delete_category(id):
 # ═══════════════════════════════════════════════
 
 @admin_bp.route('/comments')
-@login_required
+@admin_required
 def comment_list():
     """评论列表页。"""
     comments = Comment.query.order_by(Comment.created_at.desc()).all()
@@ -238,7 +260,7 @@ def comment_list():
 
 
 @admin_bp.route('/comments/<int:id>/approve', methods=['POST'])
-@login_required
+@admin_required
 def approve_comment(id):
     """审核通过评论。"""
     comment = Comment.query.get_or_404(id)
@@ -249,7 +271,7 @@ def approve_comment(id):
 
 
 @admin_bp.route('/comments/<int:id>/delete', methods=['POST'])
-@login_required
+@admin_required
 def delete_comment(id):
     """删除评论。"""
     comment = Comment.query.get_or_404(id)
@@ -264,7 +286,7 @@ def delete_comment(id):
 # ═══════════════════════════════════════════════
 
 @admin_bp.route('/users')
-@login_required
+@admin_required
 def user_list():
     """用户列表页。"""
     users = User.query.order_by(User.created_at.desc()).all()
@@ -272,7 +294,7 @@ def user_list():
 
 
 @admin_bp.route('/users/new', methods=['GET', 'POST'])
-@login_required
+@admin_required
 def new_user():
     """新建用户。"""
     form = UserForm()
@@ -293,7 +315,7 @@ def new_user():
 
 
 @admin_bp.route('/users/<int:id>/edit', methods=['GET', 'POST'])
-@login_required
+@admin_required
 def edit_user(id):
     """编辑用户信息。"""
     user = User.query.get_or_404(id)
@@ -313,13 +335,17 @@ def edit_user(id):
 
 
 @admin_bp.route('/users/<int:id>/delete', methods=['POST'])
-@login_required
+@admin_required
 def delete_user(id):
-    """删除用户（不能删除自己）。"""
+    """删除用户（不能删除自己，同时删除该用户的文章和评论）。"""
     user = User.query.get_or_404(id)
     if user.id == current_user.id:
         flash('不能删除自己', 'error')
         return redirect(url_for('admin.user_list'))
+    # 删除该用户的所有文章（及关联评论）
+    for post in user.posts.all():
+        Comment.query.filter_by(post_id=post.id).delete()
+        db.session.delete(post)
     db.session.delete(user)
     db.session.commit()
     flash('用户已删除', 'success')
@@ -398,7 +424,7 @@ def upload_image():
     if not file.filename:
         return jsonify({'error': '空文件'}), 400
     ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'png'
-    if ext not in ('png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'):
+    if ext not in ('png', 'jpg', 'jpeg', 'gif', 'webp'):
         return jsonify({'error': '不支持的格式'}), 400
     from PIL import Image
     import io as _io

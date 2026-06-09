@@ -19,6 +19,7 @@
                     {% endif %}
 
                     <form method="POST">
+                        {{ form.hidden_tag() }}
                         <div class="form-group">
                             <input type="text" name="name" placeholder="您的姓名" required>
                         </div>
