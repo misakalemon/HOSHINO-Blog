@@ -256,11 +256,10 @@
         <!-- 第二行：导航链接 -->
         <div class="nav-links-row">
             <div class="navbar-links">
-                <!-- 滑出菜单顶部：用户头像 + 名称 -->
+                <!-- 滑出菜单顶部：用户名 + 角色（去掉头像节省空间） -->
                 <div class="nav-slide-user">
                   {% if current_user.is_authenticated %}
                   <a href="{{ url_for('admin.dashboard') }}" class="nav-slide-user-link">
-                    <img src="{{ url_for('blog.thumbnail', path=current_user.avatar, w=80) }}" alt="avatar" class="nav-slide-avatar">
                     <div class="nav-slide-info">
                       <span class="nav-slide-name">{{ current_user.display_name or current_user.username }}</span>
                       <span class="nav-slide-role">{{ '管理员' if current_user.is_admin else '用户' }}</span>
@@ -268,9 +267,6 @@
                   </a>
                   {% else %}
                   <a href="{{ url_for('admin.login') }}" class="nav-slide-user-link">
-                    <div class="nav-slide-avatar nav-slide-avatar-placeholder">
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><use href="#icon-user"/></svg>
-                    </div>
                     <div class="nav-slide-info">
                       <span class="nav-slide-name">未登录</span>
                       <span class="nav-slide-role">点击登录</span>
