@@ -307,6 +307,9 @@
     </div>
 </nav>
 
+<!-- 导航滑出菜单遮罩层：点击关闭菜单，防止穿透到页面内容 -->
+<div class="nav-overlay" id="navOverlay" onclick="toggleNav()"></div>
+
 <!-- 页面内容 -->
 {% block content %}{% endblock %}
 
@@ -448,6 +451,8 @@ function toggleNav() {
   if (t) t.classList.toggle('open');
   var nl = document.querySelector('.navbar-links');
   if (nl) nl.classList.toggle('open');
+  var no = document.getElementById('navOverlay');
+  if (no) no.classList.toggle('show');
 }
 window.toggleNav = toggleNav;
 window.toggleTools = toggleTools;

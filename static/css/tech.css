@@ -1087,6 +1087,18 @@ body::before {
   
   /* 汉堡菜单按钮 */
   .nav-toggle { display: flex !important; }
+  
+  /* 导航遮罩层：滑出菜单打开时覆盖页面，点击关闭菜单，防止穿透至卡片链接 */
+  .nav-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 9998;
+    background: rgba(0,0,0,0.5);
+    cursor: pointer;
+  }
+  .nav-overlay.show { display: block; }
+  
   .navbar-links { 
     display: none;
     position: fixed;
