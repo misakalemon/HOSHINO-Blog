@@ -256,7 +256,24 @@
         <!-- 第二行：导航链接 -->
         <div class="nav-links-row">
             <div class="navbar-links">
-                <!-- 手机端滑出菜单顶部：已移除用户信息，导航更紧凑 -->
+                <!-- 滑出菜单顶部：用户名 + 角色（去掉头像节省空间） -->
+                <div class="nav-slide-user">
+                  {% if current_user.is_authenticated %}
+                  <a href="{{ url_for('admin.dashboard') }}" class="nav-slide-user-link">
+                    <div class="nav-slide-info">
+                      <span class="nav-slide-name">{{ current_user.display_name or current_user.username }}</span>
+                      <span class="nav-slide-role">{{ '管理员' if current_user.is_admin else '用户' }}</span>
+                    </div>
+                  </a>
+                  {% else %}
+                  <a href="{{ url_for('admin.login') }}" class="nav-slide-user-link">
+                    <div class="nav-slide-info">
+                      <span class="nav-slide-name">未登录</span>
+                      <span class="nav-slide-role">点击登录</span>
+                    </div>
+                  </a>
+                  {% endif %}
+                </div>
                 {% if request.endpoint and request.endpoint != 'blog.index' %}
                 <a href="{{ url_for('blog.index') }}">
                   <svg width="16" height="16" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:4px"><use href="#icon-home"/></svg>
