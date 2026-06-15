@@ -2,17 +2,24 @@
 """
 HOSHINO Blog — 应用配置
 
-所有配置项通过 .env 文件管理，支持两种数据库连接方式：
-1. DATABASE_URL 直接指定完整连接串（优先级最高）
-2. 拆分 DB_HOST/DB_PORT/DB_USER/DB_PASS/DB_NAME 自动拼接
+职责：
+  集中管理所有 Flask 配置项，支持通过 .env 文件动态覆盖。
+  提供两种数据库连接方式：
+    1. DATABASE_URL 直接指定完整连接串（优先级最高）
+    2. 拆分 DB_HOST/DB_PORT/DB_USER/DB_PASS/DB_NAME 自动拼接
+
+使用方式：
+  app.config.from_object('config.ActiveConfig')
 """
 import os
 from dotenv import load_dotenv
 
-# 项目根目录
+# 项目根目录（config.py 所在目录，即项目根目录）
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 # 加载 .env 文件（如果存在）
+# 注意：app.py 中已调用 load_dotenv()，此处再调用一次是为了
+# 其他直接 import config 的模块（如迁移脚本）也能读到 .env
 load_dotenv(os.path.join(basedir, '.env'))
 
 
@@ -20,39 +27,58 @@ def _build_database_uri():
     """构造数据库连接 URI。
 
     优先级：
-    1. DATABASE_URL 环境变量（完整连接串）
-    2. 拆分变量 DB_HOST + DB_PORT + DB_USER + DB_PASS + DB_NAME 自动拼接
+    1. DATABASE_URL 环境变量（完整连接串，如 mysql+pymysql://...）
+    2. 拆分变量自动拼接（DB_HOST + DB_PORT + DB_USER + DB_PASS + DB_NAME）
+
+    Returns:
+        str: SQLAlchemy 数据库 URI
     """
     direct_url = os.environ.get('DATABASE_URL')
     if direct_url:
         return direct_url
+
+    # ── 拆分配置（DATABASE_URL 未设置时使用） ──
+    # 各字段均有默认值，适合本地开发快速启动
     host = os.environ.get('DB_HOST', '127.0.0.1')
     port = os.environ.get('DB_PORT', '3306')
     user = os.environ.get('DB_USER', 'hoshino')
     passwd = os.environ.get('DB_PASS', 'hoshino_pass')
     dbname = os.environ.get('DB_NAME', 'hoshino_blog')
+
+    # 默认使用 pymysql 驱动连接 MySQL，UTF-8 编码 + 10 秒连接超时
     return (f'mysql+pymysql://{user}:{passwd}@{host}:{port}/{dbname}'
             '?charset=utf8mb4&connect_timeout=10')
 
 
 class Config:
-    """应用配置类"""
+    """应用配置类
 
-    # Flask 密钥（用于 Session / CSRF），生产环境请设置为强随机字符串
+    所有 Flask 扩展的配置（SQLAlchemy、LoginManager、Compress 等）
+    均通过此类集中管理，通过 app.config.from_object('config.ActiveConfig') 加载。
+    """
+
+    # ── Flask 核心 ──────────────────────────────
+    # 密钥用于 Session 签名、CSRF token 加密。
+    # 生产环境一定要在 .env 中设置强随机字符串（至少 32 字符）。
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'hoshino-blog-secret-key'
 
-    # ── 数据库 ────────────────────────────────────
+    # ── 数据库 ──────────────────────────────────
+    # 关闭 SQLAlchemy 的事件追踪（减少内存开销）
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # 数据库连接 URI（由 _build_database_uri 构造）
     SQLALCHEMY_DATABASE_URI = _build_database_uri()
+    # 连接池配置（适合 MySQL 5.7 conda 版本，不宜过大）
     SQLALCHEMY_ENGINE_OPTIONS = {
-        'pool_size': 2,          # 连接池大小（MySQL 5.7 conda 版不宜过大）
-        'pool_recycle': 60,      # 回收空闲连接（秒）
+        'pool_size': 2,          # 连接池大小（并发不高时 2 个足够）
+        'pool_recycle': 60,      # 空闲连接 60 秒后回收（MySQL 默认 8h 超时）
         'pool_pre_ping': True,   # 每次借用连接前发送 ping 检测有效性
         'max_overflow': 0,       # 不允许超出 pool_size 的临时连接
     }
 
     # ── 上传 ──────────────────────────────────────
+    # 用户上传文件存放目录（相对于项目根目录）
     UPLOAD_FOLDER = os.path.join(basedir, 'static', 'uploads')
+    # 单次上传最大字节数（默认 16MB，可通过 .env 覆盖）
     MAX_CONTENT_LENGTH = int(os.environ.get('MAX_CONTENT_LENGTH', 16 * 1024 * 1024))
 
     # ── 分页 ──────────────────────────────────────
@@ -67,6 +93,8 @@ class Config:
     DEFAULT_THEME = os.environ.get('DEFAULT_THEME', 'dark')
 
     # ── 默认管理员（首次启动自动创建）─────────────
+    # 这些值只在数据库没有任何用户时生效一次。
+    # 创建管理员后，修改这些值不会影响已有用户。
     ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin')
     ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
     ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', 'admin@localhost')
@@ -74,4 +102,6 @@ class Config:
 
 
 # 导出给 app.py 使用的活动配置
+# 这是一种简化写法：Config 本身可直接作为配置源，
+# 无需实例化，app.config.from_object('config.ActiveConfig') 即可
 ActiveConfig = Config

@@ -1,14 +1,26 @@
 # -*- coding: utf-8 -*-
 """
 HOSHINO Blog 日志模块
-记录请求、数据库操作、错误详细信息到文件和终端
+
+职责：
+  1. 配置 Python logging 系统，统一管理所有模块的日志输出
+  2. 提供请求日志中间件 log_request()，记录每次 HTTP 请求
+
+日志输出渠道：
+  1. 文件日志     — blog/logs/hoshino.log，每日轮转，保留 30 天
+  2. 错误日志     — blog/logs/error.log，仅 ERROR 级别，大小轮转（10MB×5）
+  3. 终端日志     — 标准输出，INFO 级别以上，简化格式
+
+集成方式：
+  在 create_app() 中先调用 setup_logging(app) 初始化，
+  其他模块直接用 logging.getLogger(__name__) 获取 logger 即可。
 """
 import os
 import logging
 import logging.handlers
 from flask import request
 
-# 日志目录
+# 日志目录（位于 blog/logs/）
 LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
 os.makedirs(LOG_DIR, exist_ok=True)
 
@@ -17,6 +29,8 @@ LOG_FILE = os.path.join(LOG_DIR, 'hoshino.log')
 ERROR_LOG_FILE = os.path.join(LOG_DIR, 'error.log')
 
 # 日志格式
+#   DETAILED_FORMAT — 文件日志：包含时间、级别、模块名、函数名、行号
+#   CONSOLE_FORMAT  — 终端日志：仅时间、级别、消息（更简洁）
 DETAILED_FORMAT = (
     '[%(asctime)s] %(levelname)-8s '
     '[%(name)s:%(funcName)s:%(lineno)d] '
@@ -27,9 +41,23 @@ DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 
 
 def setup_logging(app):
-    """配置 Flask 应用的日志系统"""
+    """配置 Flask 应用的日志系统
+
+    执行顺序：
+    1. 获取根日志器，设置 DEBUG 级别
+    2. 清空 Flask 默认的 handler（避免重复输出）
+    3. 添加 3 个自定义 handler：文件、错误文件、终端
+    4. 覆盖 Flask / Werkzeug / SQLAlchemy 的日志配置
+
+    Args:
+        app: Flask 应用实例
+
+    Returns:
+        logging.Logger: 配置好的根日志器
+    """
 
     # ===== 1. 根日志器 =====
+    # 获取根日志器（所有模块的 logger 最终都继承自它）
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.DEBUG)
     # 清空 Flask 默认的 handler，避免重复
@@ -37,6 +65,7 @@ def setup_logging(app):
         root_logger.removeHandler(h)
 
     # ===== 2. 文件 Handler（全部日志，每日轮转，保留30天） =====
+    # 使用 TimedRotatingFileHandler 按天轮转，避免单个日志文件过大
     file_handler = logging.handlers.TimedRotatingFileHandler(
         LOG_FILE, when='midnight', interval=1, backupCount=30,
         encoding='utf-8'
@@ -45,6 +74,7 @@ def setup_logging(app):
     file_handler.setFormatter(logging.Formatter(DETAILED_FORMAT, DATE_FORMAT))
 
     # ===== 3. 错误文件 Handler（仅 ERROR 以上，单独文件） =====
+    # 使用 RotatingFileHandler 按大小轮转，专门记录错误信息
     error_handler = logging.handlers.RotatingFileHandler(
         ERROR_LOG_FILE, maxBytes=10 * 1024 * 1024, backupCount=5,
         encoding='utf-8'
@@ -52,7 +82,7 @@ def setup_logging(app):
     error_handler.setLevel(logging.ERROR)
     error_handler.setFormatter(logging.Formatter(DETAILED_FORMAT, DATE_FORMAT))
 
-    # ===== 4. 终端 Handler（INFO 以上，彩色简化格式） =====
+    # ===== 4. 终端 Handler（INFO 以上，简化格式） =====
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(logging.Formatter(CONSOLE_FORMAT, DATE_FORMAT))
@@ -63,6 +93,8 @@ def setup_logging(app):
     root_logger.addHandler(console_handler)
 
     # ===== 5. Flask 自身日志也使用我们的配置 =====
+    # 覆盖 Flask、Werkzeug 内置的日志 handler，
+    # 让其输出格式与自定义日志保持一致
     for logger_name in ('flask.app', 'flask.request', 'werkzeug'):
         log = logging.getLogger(logger_name)
         log.setLevel(logging.INFO)
@@ -70,6 +102,7 @@ def setup_logging(app):
             log.removeHandler(h)
         log.addHandler(file_handler)
         log.addHandler(console_handler)
+        # 禁止 propagate，避免日志重复（父 logger 也会输出）
         log.propagate = False
 
     # ===== 6. SQLAlchemy 日志（方便追踪数据库问题） =====
@@ -77,6 +110,7 @@ def setup_logging(app):
     sql_logger.setLevel(logging.WARNING)  # 只记录 WARNING 以上，避免 SQL 刷屏
     sql_logger.addHandler(file_handler)
 
+    # 将根日志器挂载到 app.logger
     app.logger = root_logger
     app.config['LOG_DIR'] = LOG_DIR
 
@@ -90,18 +124,33 @@ def setup_logging(app):
 
 
 def log_request(response):
-    """请求日志中间件：记录每次 HTTP 请求 + 统一编码"""
+    """请求日志中间件：记录每次 HTTP 请求 + 统一 UTF-8 编码
+
+    作为 Flask after_request 处理器执行，在每次请求完成后调用。
+    同时负责：
+      - 给 text/* 类型响应添加 charset=utf-8（统一编码）
+      - 添加 X-Content-Type-Options: nosniff（安全头）
+      - 按状态码级别记录日志（≥500 → error, ≥400 → warning, 其他 → info）
+
+    Args:
+        response: Flask Response 对象
+
+    Returns:
+        Flask Response 对象（原样返回）
+    """
     # 确保所有响应使用 UTF-8 编码
     content_type = response.content_type or ''
     if 'charset' not in content_type and 'text/' in content_type:
         response.headers['Content-Type'] = content_type + '; charset=utf-8'
-    # 安全头
+    # 安全头：禁用 MIME 类型嗅探
     response.headers['X-Content-Type-Options'] = 'nosniff'
-    
-    logger = logging.getLogger()
-    if request.path.startswith('/static/') or request.path == '/favicon.ico':
-        return response  # 静态文件不记录
 
+    logger = logging.getLogger()
+    # 静态文件和图标不记录，减少日志噪音
+    if request.path.startswith('/static/') or request.path == '/favicon.ico':
+        return response
+
+    # 收集请求信息
     extra = {
         'ip': request.remote_addr or '-',
         'method': request.method,
@@ -110,6 +159,7 @@ def log_request(response):
         'user_agent': request.user_agent.string[:80] if request.user_agent else '-',
     }
 
+    # 格式化的日志消息
     msg = (
         f"{extra['ip']:>15} "
         f"{extra['method']:<7} "
@@ -118,11 +168,12 @@ def log_request(response):
         f"{extra['user_agent']}"
     )
 
+    # 按状态码分级记录
     if response.status_code >= 500:
-        logger.error(msg)
+        logger.error(msg)    # 服务器错误
     elif response.status_code >= 400:
-        logger.warning(msg)
+        logger.warning(msg)  # 客户端错误
     else:
-        logger.info(msg)
+        logger.info(msg)     # 成功 / 重定向
 
     return response
