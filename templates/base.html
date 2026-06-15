@@ -118,9 +118,11 @@
 
   // === 鼠标追踪 ===
   document.addEventListener('mousemove', function(e) {
+    cardGlowActive = true;
     mouseX += (e.clientX - mouseX) * 0.5;
     mouseY += (e.clientY - mouseY) * 0.5;
   });
+  document.addEventListener('mouseleave', function() { cardGlowActive = false; });
   // === 自定义光标 ===
   if (customCursor) {
     document.addEventListener('mousemove', function(e) {
@@ -153,6 +155,7 @@
   // === 涟漪点击光效 ===
   const ripples = [];
   document.addEventListener('click', function(e) {
+  
     ripples.push({
       x: e.clientX, y: e.clientY,
       radius: 0, maxRadius: 120,
@@ -202,6 +205,8 @@
     }
   }
 
+
+
   // === 主循环 ===
   function animate() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -216,6 +221,8 @@
   resizeCanvas();
   initParticles();
   animate();
+
+
 })();
 </script>
 
@@ -651,5 +658,162 @@ function toggleGray() {
   }
 })();
 </script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!-- === 卡片边缘追光 === -->
+<script>
+(function() {
+    // ===== 全局状态 =====
+    var cards = [];
+    var mouseX = -9999, mouseY = -9999, hovering = false, frameId = null;
+
+    window.addEventListener('mousemove', function(e) {
+        mouseX = e.clientX; mouseY = e.clientY; hovering = true;
+        if (!frameId) frameId = requestAnimationFrame(draw);
+    });
+    window.addEventListener('mouseleave', function() {
+        hovering = false;
+        if (!frameId) frameId = requestAnimationFrame(draw);
+    });
+
+    // === 滚动时更新卡片位置，让追光跟随鼠标而非页面 ===
+    window.addEventListener('scroll', function() {
+        for (var i = 0; i < cards.length; i++) cards[i].dirty = true;
+        if (!frameId) frameId = requestAnimationFrame(draw);
+    }, { passive: true });
+
+    function draw() {
+        frameId = null;
+        for (var i = 0; i < cards.length; i++) {
+            var s = cards[i];
+            var mx = hovering ? mouseX : -9999;
+            var my = hovering ? mouseY : -9999;
+
+            // 更新几何
+            if (s.dirty) {
+                var r = s.card.getBoundingClientRect();
+                s.rect = r;
+                var br = parseFloat(getComputedStyle(s.card).borderRadius) || 20;
+                var perimeter = Math.max(0, r.width-2*br) + Math.max(0, r.height-2*br) + Math.max(0, r.width-2*br) + Math.max(0, r.height-2*br) + 2*Math.PI*br;
+                var n = Math.max(180, Math.round(perimeter * 0.52));
+                var step = perimeter / n;
+                s.pts = [];
+                for (var k = 0; k < n; k++) {
+                    var d = k * step, x, y;
+                    var ts = Math.max(0, r.width-2*br);
+                    var rs = Math.max(0, r.height-2*br);
+                    var bs = Math.max(0, r.width-2*br);
+                    var ls = Math.max(0, r.height-2*br);
+                    var qc = Math.PI/2 * br;
+                    if (d < ts) { x = br+d; y = 0; }
+                    else { d -= ts;
+                        if (d < qc) { var a = -Math.PI/2 + d/qc*Math.PI/2; x = (r.width-br)+br*Math.cos(a); y = br+br*Math.sin(a); }
+                        else { d -= qc;
+                            if (d < rs) { x = r.width; y = br+d; }
+                            else { d -= rs;
+                                if (d < qc) { var a2 = d/qc*Math.PI/2; x = (r.width-br)+br*Math.cos(a2); y = (r.height-br)+br*Math.sin(a2); }
+                                else { d -= qc;
+                                    if (d < bs) { x = (r.width-br)-d; y = r.height; }
+                                    else { d -= bs;
+                                        if (d < qc) { var a3 = Math.PI/2 + d/qc*Math.PI/2; x = br+br*Math.cos(a3); y = (r.height-br)+br*Math.sin(a3); }
+                                        else { d -= qc;
+                                            if (d < ls) { x = 0; y = (r.height-br)-d; }
+                                            else { d -= ls;
+                                                if (d <= qc) { var a4 = Math.PI + d/qc*Math.PI/2; x = br+br*Math.cos(a4); y = br+br*Math.sin(a4); }
+                                                else { x = br; y = 0; }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    s.pts.push({x:x, y:y});
+                }
+                var dpr = window.devicePixelRatio || 1;
+                s.cw = r.width + 70;
+                s.ch = r.height + 70;
+                s.canvas.width = s.cw * dpr;
+                s.canvas.height = s.ch * dpr;
+                s.canvas.style.width = s.cw + 'px';
+                s.canvas.style.height = s.ch + 'px';
+                s.ctx.setTransform(1,0,0,1,0,0);
+                s.ctx.scale(dpr, dpr);
+                s.dirty = false;
+            }
+
+            if (!s.rect || !s.pts || s.pts.length === 0) continue;
+            s.ctx.clearRect(0, 0, s.cw, s.ch);
+            if (!hovering) continue;
+
+            var ex = mx - s.rect.left;
+            var ey = my - s.rect.top;
+            for (var j = 0; j < s.pts.length; j++) {
+                var p = s.pts[j];
+                var dist = Math.hypot(p.x - ex, p.y - ey);
+                if (dist >= 140) continue;
+                var t = dist / 140;
+                var intensity = (1 - Math.pow(t, 0.5)) * (1 - 0.022) + 0.022;
+                var g = s.ctx.createRadialGradient(p.x+35, p.y+35, 0.2, p.x+35, p.y+35, 3.5);
+                g.addColorStop(0, 'rgba(145,205,248,' + intensity + ')');
+                g.addColorStop(0.35, 'rgba(145,205,248,' + (intensity*0.78) + ')');
+                g.addColorStop(1, 'rgba(145,205,248,0)');
+                s.ctx.fillStyle = g;
+                s.ctx.beginPath();
+                s.ctx.arc(p.x+35, p.y+35, 3.5, 0, Math.PI*2);
+                s.ctx.fill();
+            }
+        }
+    }
+
+    function init() {
+        var els = document.querySelectorAll('.post-card, .widget, .author-box, .comment-item, .navbar');
+        for (var i = 0; i < els.length; i++) {
+            var card = els[i];
+            if (card.querySelector('.cg-c')) continue;
+            var canvas = document.createElement('canvas');
+            canvas.className = 'cg-c';
+            canvas.style.position = 'absolute';
+            canvas.style.top = '-35px';
+            canvas.style.left = '-35px';
+            canvas.style.width = 'calc(100% + 70px)';
+            canvas.style.height = 'calc(100% + 70px)';
+            canvas.style.pointerEvents = 'none';
+            canvas.style.zIndex = '1';
+            card.insertBefore(canvas, card.firstChild);
+            cards.push({
+                card: card,
+                canvas: canvas,
+                ctx: canvas.getContext('2d'),
+                rect: null,
+                pts: [],
+                dirty: true,
+                cw: 0,
+                ch: 0
+            });
+        }
+    }
+
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+    else init();
+})();
+</script>
+
 </body>
 </html>
