@@ -23,6 +23,51 @@ logger = logging.getLogger(__name__)
 THUMB_CACHE_VER = 'v2'
 
 
+# ── 侧边栏数据缓存（Redis，降级友好） ─────────
+def _get_sidebar_data():
+    """获取侧边栏数据（分类列表 + 最新文章），带 Redis 缓存。
+
+    缓存键：
+      hblog:sidebar:categories    — TTL: CACHE_TTL_SIDEBAR
+      hblog:sidebar:recent_posts  — TTL: CACHE_TTL_SIDEBAR
+
+    当 Redis 不可用时，回退到数据库查询，不影响页面渲染。
+
+    Returns:
+        tuple: (categories, recent_posts)
+    """
+    from flask import current_app
+    from .cache import cache_get, cache_set
+
+    ttl = current_app.config.get('CACHE_TTL_SIDEBAR', 300)
+
+    # ── 分类列表 ──────────────────────────────
+    categories = cache_get('sidebar:categories')
+    if categories is None:
+        categories = Category.query.order_by(Category.name).all()
+        # 转为可序列化的字典列表
+        cache_set('sidebar:categories', [
+            {'id': c.id, 'name': c.name, 'slug': c.slug}
+            for c in categories
+        ], ttl)
+
+    # ── 最新文章 ──────────────────────────────
+    recent_posts = cache_get('sidebar:recent_posts')
+    if recent_posts is None:
+        recent_posts = Post.query.filter_by(is_published=True).order_by(
+            Post.created_at.desc()).limit(4).all()
+        cache_set('sidebar:recent_posts', [
+            {
+                'id': p.id, 'title': p.title, 'slug': p.slug,
+                'cover_image': p.cover_image,
+                'created_at': p.created_at.isoformat() if p.created_at else None
+            }
+            for p in recent_posts
+        ], ttl)
+
+    return categories, recent_posts
+
+
 # ═══════════════════════════════════════════════
 # 首页：文章瀑布流
 # ═══════════════════════════════════════════════
@@ -54,9 +99,7 @@ def index():
     posts = query.order_by(Post.created_at.desc()).paginate(
         page=page, per_page=per_page, error_out=False
     )
-    categories = Category.query.order_by(Category.name).all()
-    recent_posts = Post.query.filter_by(is_published=True).order_by(
-        Post.created_at.desc()).limit(4).all()
+    categories, recent_posts = _get_sidebar_data()
 
     return render_template('index.html',
         posts=posts, categories=categories,
@@ -83,9 +126,7 @@ def single_post(slug):
     Template: single-post.html
     """
     post = Post.query.filter_by(slug=slug, is_published=True).first_or_404()
-    categories = Category.query.order_by(Category.name).all()
-    recent_posts = Post.query.filter_by(is_published=True).order_by(
-        Post.created_at.desc()).limit(4).all()
+    categories, recent_posts = _get_sidebar_data()
     form = CommentForm()
 
     # ── 处理评论提交 ──────────────────────────
@@ -139,9 +180,7 @@ def category(slug):
     ).order_by(Post.created_at.desc()).paginate(
         page=page, per_page=per_page, error_out=False
     )
-    categories = Category.query.order_by(Category.name).all()
-    recent_posts = Post.query.filter_by(is_published=True).order_by(
-        Post.created_at.desc()).limit(4).all()
+    categories, recent_posts = _get_sidebar_data()
     return render_template('category-grid.html',
         category=cat, posts=posts,
         categories=categories, recent_posts=recent_posts,
@@ -160,9 +199,7 @@ def about():
     展示博主信息、站点介绍等静态内容。
     Template: about.html
     """
-    categories = Category.query.order_by(Category.name).all()
-    recent_posts = Post.query.filter_by(is_published=True).order_by(
-        Post.created_at.desc()).limit(4).all()
+    categories, recent_posts = _get_sidebar_data()
     return render_template('about.html', categories=categories, recent_posts=recent_posts)
 
 
@@ -178,14 +215,12 @@ def contact():
 
     Template: contact.html
     """
-    categories = Category.query.order_by(Category.name).all()
-    recent_posts = Post.query.filter_by(is_published=True).order_by(
-        Post.created_at.desc()).limit(4).all()
     form = ContactForm()
     message_sent = False
     if form.validate_on_submit():
         # 表单有效：标记为已发送（生产环境应改为发送邮件）
         message_sent = True
+    categories, recent_posts = _get_sidebar_data()
     return render_template('contact.html',
         categories=categories, recent_posts=recent_posts,
         message_sent=message_sent, form=form
@@ -213,9 +248,7 @@ def search():
         return redirect(url_for('blog.index'))
     # per_page 取自 URL 参数或配置默认值，搜索结果也支持分页调整
     per_page = request.args.get('per_page', current_app.config['POSTS_PER_PAGE'], type=int)
-    categories = Category.query.order_by(Category.name).all()
-    recent_posts = Post.query.filter_by(is_published=True).order_by(
-        Post.created_at.desc()).limit(4).all()
+    categories, recent_posts = _get_sidebar_data()
     # 使用 db.or_() 在标题、摘要、正文三个字段中同时搜索
     results = Post.query.filter(
         Post.is_published == True,
@@ -245,11 +278,23 @@ def rss_feed():
     返回最新 20 篇文章的 XML 订阅源，
     供 RSS 阅读器（如 Feedly、Inoreader）订阅。
 
+    输出缓存 10 分钟（CACHE_TTL_RSS），
+    发布新文章后自动失效。
+
     Template: rss.xml
     """
+    from .cache import cache_get, cache_set
+    ttl = current_app.config.get('CACHE_TTL_RSS', 600)
+    cached = cache_get('rss:feed')
+    if cached:
+        response = Response(cached)
+        response.headers['Content-Type'] = 'application/xml; charset=utf-8'
+        return response
     posts = Post.query.filter_by(is_published=True).order_by(
         Post.created_at.desc()).limit(20).all()
-    response = Response(render_template('rss.xml', posts=posts))
+    output = render_template('rss.xml', posts=posts)
+    cache_set('rss:feed', output, ttl)
+    response = Response(output)
     response.headers['Content-Type'] = 'application/xml; charset=utf-8'
     return response
 

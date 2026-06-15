@@ -100,6 +100,18 @@ class Config:
     ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', 'admin@localhost')
     ADMIN_DISPLAY_NAME = os.environ.get('ADMIN_DISPLAY_NAME', 'Admin')
 
+    # ── Redis 缓存 ────────────────────────────────
+    # 连接串格式: redis://[:password]@host:port/db
+    # 留空或 None 时禁用缓存（Redis 不可用时自动降级）
+    REDIS_URL = os.environ.get('REDIS_URL') or None
+    # 默认缓存过期时间（秒）
+    #   侧边栏数据          → 300s（5 分钟）
+    #   仪表盘统计数据      → 60s（1 分钟）
+    #   RSS 输出            → 600s（10 分钟）
+    CACHE_TTL_SIDEBAR = int(os.environ.get('CACHE_TTL_SIDEBAR', 300))
+    CACHE_TTL_DASHBOARD = int(os.environ.get('CACHE_TTL_DASHBOARD', 60))
+    CACHE_TTL_RSS = int(os.environ.get('CACHE_TTL_RSS', 600))
+
 
 # 导出给 app.py 使用的活动配置
 # 这是一种简化写法：Config 本身可直接作为配置源，

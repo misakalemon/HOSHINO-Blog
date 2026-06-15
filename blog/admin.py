@@ -19,7 +19,7 @@ import os
 import uuid
 import datetime
 import logging
-from flask import render_template, request, redirect, url_for, abort, flash, jsonify
+from flask import render_template, request, redirect, url_for, abort, flash, jsonify, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 from functools import wraps
 from . import admin_bp
@@ -27,6 +27,17 @@ from .models import db, User, Category, Post, Comment
 from .forms import LoginForm, PostForm, CategoryForm, UserForm, ProfileForm
 
 logger = logging.getLogger(__name__)
+
+
+# ── 缓存失效辅助函数 ─────────────────────────
+def _invalidate_sidebar_cache():
+    """使侧边栏和 RSS 缓存失效。
+
+    在文章或分类发生变更时调用，确保前台能及时看到最新内容。
+    """
+    from .cache import cache_delete_pattern
+    cache_delete_pattern('sidebar:*')
+    cache_delete_pattern('rss:*')
 
 
 # ═══════════════════════════════════════════════
@@ -102,11 +113,20 @@ def logout():
 def dashboard():
     """管理后台首页：显示统计数据概览。
 
+    统计数据缓存 60 秒（CACHE_TTL_DASHBOARD），
+    避免每次刷新页面都查询数据库。
+
     展示：文章总数、已发布数、待审核评论数、用户数、
     最近 5 篇文章、最近 5 条待审核评论。
 
     Template: admin/dashboard.html
     """
+    from .cache import cache_get, cache_set
+    ttl = current_app.config.get('CACHE_TTL_DASHBOARD', 60)
+    stats = cache_get('dashboard:stats')
+    if stats:
+        return render_template('admin/dashboard.html', **stats)
+
     post_count = Post.query.count()
     published_count = Post.query.filter_by(is_published=True).count()
     comment_count = Comment.query.filter_by(is_approved=False).count()
@@ -114,11 +134,17 @@ def dashboard():
     recent_posts = Post.query.order_by(Post.created_at.desc()).limit(5).all()
     recent_comments = Comment.query.filter_by(is_approved=False).order_by(
         Comment.created_at.desc()).limit(5).all()
-    return render_template('admin/dashboard.html',
-        post_count=post_count, published_count=published_count,
-        comment_count=comment_count, user_count=user_count,
-        recent_posts=recent_posts, recent_comments=recent_comments
-    )
+
+    stats = {
+        'post_count': post_count,
+        'published_count': published_count,
+        'comment_count': comment_count,
+        'user_count': user_count,
+        'recent_posts': recent_posts,
+        'recent_comments': recent_comments,
+    }
+    cache_set('dashboard:stats', stats, ttl)
+    return render_template('admin/dashboard.html', **stats)
 
 
 # ═══════════════════════════════════════════════
@@ -181,6 +207,7 @@ def new_post():
         ).all()
         db.session.add(post)
         db.session.commit()
+        _invalidate_sidebar_cache()
         logger.info('创建文章: id=%d title="%s"', post.id, post.title)
         flash('文章已发布', 'success')
         return redirect(url_for('admin.post_list'))
@@ -229,6 +256,7 @@ def edit_post(id):
             Category.id.in_(form.categories.data)
         ).all()
         db.session.commit()
+        _invalidate_sidebar_cache()
         flash('文章已更新', 'success')
         return redirect(url_for('admin.post_list'))
     # ── 编辑时回填已选的分类 ─────────────────
@@ -251,6 +279,9 @@ def delete_post(id):
     Comment.query.filter_by(post_id=post.id).delete()
     db.session.delete(post)
     db.session.commit()
+    _invalidate_sidebar_cache()
+    from .cache import cache_delete
+    cache_delete('dashboard:stats')
     flash('文章已删除', 'success')
     return redirect(url_for('admin.post_list'))
 
@@ -288,6 +319,7 @@ def new_category():
         )
         db.session.add(cat)
         db.session.commit()
+        _invalidate_sidebar_cache()
         flash('分类已创建', 'success')
         return redirect(url_for('admin.category_list'))
     return render_template('admin/category-form.html', form=form, editing=False)
@@ -307,6 +339,7 @@ def edit_category(id):
         cat.slug = form.slug.data
         cat.description = form.description.data
         db.session.commit()
+        _invalidate_sidebar_cache()
         flash('分类已更新', 'success')
         return redirect(url_for('admin.category_list'))
     return render_template('admin/category-form.html', form=form, editing=True, cat=cat)
@@ -326,6 +359,7 @@ def delete_category(id):
         post.categories = [c for c in post.categories if c.id != id]
     db.session.delete(cat)
     db.session.commit()
+    _invalidate_sidebar_cache()
     flash('分类已删除', 'success')
     return redirect(url_for('admin.category_list'))
 

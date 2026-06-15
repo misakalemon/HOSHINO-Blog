@@ -39,3 +39,6 @@ PyMySQL==1.2.0
 # --- Markdown 渲染 ---
 Markdown==3.7
 Pygments==2.19.1
+
+# --- Redis 缓存 ---
+redis==5.2.1

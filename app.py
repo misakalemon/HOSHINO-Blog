@@ -70,6 +70,12 @@ def create_app():
     init_db(app)
     logger.info('数据库初始化完成')
 
+    # ── Redis 缓存（数据库之后，蓝图之前） ────────
+    # 初始化 Redis 连接池。如果 REDIS_URL 未配置，
+    # 则静默降级（所有缓存操作直接返回 None，不影响业务）。
+    from blog.cache import init_redis
+    init_redis(app)
+
     # ── 登录管理 ──────────────────────────────────
     login_manager = LoginManager()
     login_manager.init_app(app)
