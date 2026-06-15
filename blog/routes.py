@@ -27,9 +27,8 @@ THUMB_CACHE_VER = 'v2'
 def _get_sidebar_data():
     """获取侧边栏数据（分类列表 + 最新文章），带 Redis 缓存。
 
-    缓存键：
-      hblog:sidebar:categories    — TTL: CACHE_TTL_SIDEBAR
-      hblog:sidebar:recent_posts  — TTL: CACHE_TTL_SIDEBAR
+    分类数据量小且极少变化，直接查数据库（无需缓存）。
+    最新文章缓存键：hblog:sidebar:recent_posts — TTL: CACHE_TTL_SIDEBAR
 
     当 Redis 不可用时，回退到数据库查询，不影响页面渲染。
 
@@ -41,21 +40,15 @@ def _get_sidebar_data():
 
     ttl = current_app.config.get('CACHE_TTL_SIDEBAR', 300)
 
-    # ── 分类列表 ──────────────────────────────
-    categories = cache_get('sidebar:categories')
-    if categories is None:
-        categories = Category.query.order_by(Category.name).all()
-        # 转为可序列化的字典列表
-        cache_set('sidebar:categories', [
-            {'id': c.id, 'name': c.name, 'slug': c.slug}
-            for c in categories
-        ], ttl)
+    # ── 分类列表（直接查数据库，缓存收益不大） ──
+    categories = Category.query.order_by(Category.name).all()
 
     # ── 最新文章 ──────────────────────────────
     recent_posts = cache_get('sidebar:recent_posts')
     if recent_posts is None:
         recent_posts = Post.query.filter_by(is_published=True).order_by(
             Post.created_at.desc()).limit(4).all()
+        # 缓存为序列化字典，created_at 用 ISO 字符串
         cache_set('sidebar:recent_posts', [
             {
                 'id': p.id, 'title': p.title, 'slug': p.slug,
@@ -424,12 +417,20 @@ def format_date(dt, fmt='%Y/%m/%d'):
       {{ format_date(post.created_at) }}  →  "2026/01/15"
 
     Args:
-        dt: datetime 对象
+        dt: datetime 对象 或 ISO 格式字符串（兼容 Redis 缓存反序列化）
         fmt: 日期格式字符串（默认 '%Y/%m/%d'）
 
     Returns:
         str: 格式化后的日期字符串
     """
-    if dt:
+    if dt is None:
+        return ''
+    if isinstance(dt, str):
+        # 兼容 Redis 缓存返回的 ISO 字符串
+        try:
+            dt = datetime.datetime.fromisoformat(dt)
+        except (ValueError, TypeError):
+            return dt[:10]  # 取前 10 个字符作为日期
+    if hasattr(dt, 'strftime'):
         return dt.strftime(fmt)
     return ''
