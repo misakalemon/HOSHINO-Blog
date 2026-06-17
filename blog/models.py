@@ -231,6 +231,7 @@ class Product(db.Model):
     brand = db.Column(db.String(128), default='')
     category = db.Column(db.String(64), default='')
     image_url = db.Column(db.String(512), default='')
+    specs = db.Column(db.JSON, default=dict)  # 关键规格参数（JSON格式）
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(
         db.DateTime, default=datetime.datetime.utcnow,

@@ -5,19 +5,48 @@
 <div class="page-header">
     <div class="container">
         <h1>📊 电子产品价格追踪</h1>
-        <p>多平台比价 · 历史走势 · 每日更新</p>
+        <p>多平台比价 · 历史走势 · 每日更新 · {{ products|length }} 款商品</p>
         <div style="margin-top:12px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap">
             <button class="btn btn-primary" onclick="document.getElementById('crawl-form').submit()">
-                🔄 手动更新价格
+                🔄 更新价格
             </button>
             <form id="crawl-form" method="POST" action="{{ url_for('price.trigger_crawl') }}" style="display:none"></form>
+            {% if current_user.is_authenticated %}
+            <button class="btn btn-ghost" onclick="document.getElementById('add-form').style.display='block'">
+                ➕ 添加新品
+            </button>
+            {% endif %}
             <span style="color:var(--text-muted); font-size:13px; display:flex; align-items:center">
                 ⏰ 每日 09:00 自动爬取
             </span>
         </div>
-    </div>
-</div>
 
+        {% if current_user.is_authenticated %}
+        <!-- 添加新产品表单 -->
+        <div id="add-form" style="display:none; margin-top:16px; max-width:600px; margin-left:auto; margin-right:auto">
+            <div style="background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:var(--radius-lg); padding:20px">
+                <h3 style="margin-bottom:12px; font-size:16px">➕ 添加新产品</h3>
+                <form method="POST" action="{{ url_for('price.add_product') }}" style="display:flex; flex-direction:column; gap:10px">
+                    <div style="display:flex; gap:10px">
+                        <input type="text" name="name" placeholder="产品名称（如 NVIDIA RTX 5070）" required
+                               style="flex:2; padding:8px 12px; background:rgba(255,255,255,0.04); border:1px solid var(--border-subtle); border-radius:6px; color:var(--text-primary); font-size:13px">
+                        <input type="text" name="brand" placeholder="品牌" style="flex:1; padding:8px 12px; background:rgba(255,255,255,0.04); border:1px solid var(--border-subtle); border-radius:6px; color:var(--text-primary); font-size:13px">
+                        <select name="category" required style="flex:1; padding:8px 12px; background:rgba(255,255,255,0.04); border:1px solid var(--border-subtle); border-radius:6px; color:var(--text-primary); font-size:13px">
+                            <option value="">品类</option>
+                            <option>CPU</option><option>显卡</option><option>内存</option>
+                            <option>固态硬盘</option><option>主板</option><option>电源</option>
+                            <option>散热器</option><option>机箱</option><option>显示器</option>
+                            <option>手机</option><option>平板</option><option>笔记本</option>
+                            <option>耳机</option><option>手表</option><option>相机</option>
+                            <option>鼠标</option><option>键盘</option><option>游戏机</option>
+                            <option>路由器</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="align-self:flex-start">添加并获取价格</button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
 <section style="padding-bottom:60px">
     <div class="container">
         {% if products %}

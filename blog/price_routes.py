@@ -157,8 +157,60 @@ def manual_price():
     )
     db.session.add(record)
     source.latest_price = price
+    flash(f'已录入 {product.name} 价格 ¥{price:.2f}', 'success')
+    return redirect(url_for('price.index'))
+
+
+# ═══════════════════════════════════════════════
+# 添加新产品
+# ═══════════════════════════════════════════════
+@price_bp.route('/add-product', methods=['POST'])
+@login_required
+def add_product():
+    """添加新产品到追踪列表。
+
+    新品发布后，管理员可通过此接口添加。
+    添加后自动触发 Baidu 搜索获取价格。
+    """
+    name = request.form.get('name', '').strip()
+    brand = request.form.get('brand', '').strip()
+    category = request.form.get('category', '').strip()
+
+    if not name or not category:
+        flash('请填写商品名称和品类', 'error')
+        return redirect(url_for('price.index'))
+
+    # 检查是否已存在
+    existing = Product.query.filter_by(name=name).first()
+    if existing:
+        flash(f'商品 "{name}" 已存在', 'error')
+        return redirect(url_for('price.index'))
+
+    product = Product(name=name, brand=brand, category=category)
+    db.session.add(product)
     db.session.commit()
 
-    logger.info('手动录入价格: %s → ¥%.2f', product.name, price)
-    flash(f'已录入 {product.name} 价格 ¥{price:.2f}', 'success')
+    # 异步尝试获取价格
+    try:
+        from .crawler import crawl_via_baidu
+        price = crawl_via_baidu(name)
+        if price is not None:
+            source = ProductSource(
+                product_id=product.id, site='baidu', url='', is_active=True,
+            )
+            db.session.add(source)
+            db.session.flush()
+            record = PriceRecord(
+                source_id=source.id, product_id=product.id, price=price,
+            )
+            db.session.add(record)
+            source.latest_price = price
+            db.session.commit()
+            flash(f'已添加 {name}，自动获取价格 ¥{price:.0f}', 'success')
+        else:
+            flash(f'已添加 {name}，自动获取价格失败，请手动录入', 'warning')
+    except Exception as e:
+        logger.error('新品价格获取失败: %s', e)
+        flash(f'已添加 {name}，价格获取异常，请手动录入', 'warning')
+
     return redirect(url_for('price.index'))
