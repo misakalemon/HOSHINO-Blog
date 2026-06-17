@@ -239,6 +239,7 @@ class Product(db.Model):
 
     price_records = db.relationship(
         'PriceRecord', backref='product', lazy='dynamic',
+        foreign_keys='PriceRecord.product_id',
         order_by='PriceRecord.recorded_at'
     )
 
@@ -279,8 +280,11 @@ class PriceRecord(db.Model):
     source_id = db.Column(
         db.Integer, db.ForeignKey('product_sources.id'), nullable=False, index=True
     )
+    product_id = db.Column(
+        db.Integer, db.ForeignKey('products.id'), nullable=False, index=True
+    )
     price = db.Column(db.Float, nullable=False)
     recorded_at = db.Column(
         db.DateTime, default=datetime.datetime.utcnow, index=True
     )
-    source = db.relationship('ProductSource', backref='records')
+    source = db.relationship('ProductSource', backref=db.backref('records', lazy='dynamic'))

@@ -165,6 +165,7 @@ def crawl_all_active_sources():
         if price is not None:
             record = PriceRecord(
                 source_id=src.id,
+                product_id=src.product_id,
                 price=price,
             )
             db.session.add(record)
