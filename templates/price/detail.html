@@ -55,32 +55,23 @@
                 <table class="price-table">
                     <thead>
                         <tr>
-                            <th>日期</th>
-                            {% for source in product.sources %}
-                            <th>{{ source.site }}</th>
-                            {% endfor %}
+                            <th>来源</th>
+                            <th>价格</th>
+                            <th>记录时间</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% set dates = [] %}
-                        {% set price_map = {} %}
-                        {% for source in product.sources %}
-                            {% for r in source.records.order_by(PriceRecord.recorded_at.desc()).filter(
-                                PriceRecord.recorded_at >= (now() - datetime.timedelta(days=days))
-                            ).all() %}
-                                {% set date_str = r.recorded_at.strftime('%Y-%m-%d %H:%M') %}
-                                {% if date_str not in dates %}
-                                    {% set _ = dates.append(date_str) %}
-                                {% endif %}
-                                {% set _ = price_map.update({(source.id, date_str): r.price}) %}
-                            {% endfor %}
-                        {% endfor %}
-                        {% for date_str in dates|sort(reverse=True) %}
+                        {% for r in records %}
                         <tr>
-                            <td>{{ date_str }}</td>
-                            {% for source in product.sources %}
-                            <td>{{ '¥%.2f' % price_map.get((source.id, date_str), '') if price_map.get((source.id, date_str)) else '-' }}</td>
-                            {% endfor %}
+                            <td>{{ r.source.site }}</td>
+                            <td>¥{{ '%.2f' % r.price }}</td>
+                            <td>{{ r.recorded_at.strftime('%Y-%m-%d %H:%M') if r.recorded_at else '-' }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="3" style="text-align:center; color:var(--text-muted); padding:20px">
+                                暂无价格记录，请点击"更新价格"或手动录入
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
