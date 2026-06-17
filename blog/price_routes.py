@@ -20,12 +20,35 @@ logger = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════
 @price_bp.route('/')
 def index():
-    """价格看板：展示所有商品的最新价格。
+    """价格看板：展示所有商品的最新价格（分页 + 侧边栏）。
+
+    URL 参数：
+      page      — 页码（默认 1）
+      per_page  — 每页条数（默认 24）
+      category  — 按品类筛选（可选）
 
     Template: price/dashboard.html
     """
-    products = Product.query.order_by(Product.category, Product.name).all()
-    return render_template('price/dashboard.html', products=products)
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 24, type=int)
+    cat_filter = request.args.get('category', '')
+
+    query = Product.query
+    if cat_filter:
+        query = query.filter_by(category=cat_filter)
+
+    products = query.order_by(Product.category, Product.name).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+    categories = db.session.query(Product.category).distinct().order_by(Product.category).all()
+    categories = [c[0] for c in categories]
+
+    return render_template('price/dashboard.html',
+        products=products, categories=categories,
+        current_category=cat_filter,
+        current_per_page=per_page,
+        per_page_options=[12, 24, 48, 96],
+    )
 
 
 # ═══════════════════════════════════════════════

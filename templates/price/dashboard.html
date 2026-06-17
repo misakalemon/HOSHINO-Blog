@@ -5,7 +5,7 @@
 <div class="page-header">
     <div class="container">
         <h1>📊 电子产品价格追踪</h1>
-        <p>多平台比价 · 历史走势 · 每日更新 · {{ products|length }} 款商品</p>
+        <p>多平台比价 · 历史走势 · 每日更新 · 共 {{ products.total }} 款商品</p>
         <div style="margin-top:12px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap">
             <button class="btn btn-primary" onclick="document.getElementById('crawl-form').submit()">
                 🔄 更新价格
@@ -16,13 +16,8 @@
                 ➕ 添加新品
             </button>
             {% endif %}
-            <span style="color:var(--text-muted); font-size:13px; display:flex; align-items:center">
-                ⏰ 每日 09:00 自动爬取
-            </span>
         </div>
-
         {% if current_user.is_authenticated %}
-        <!-- 添加新产品表单 -->
         <div id="add-form" style="display:none; margin-top:16px; max-width:600px; margin-left:auto; margin-right:auto">
             <div style="background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:var(--radius-lg); padding:20px">
                 <h3 style="margin-bottom:12px; font-size:16px">➕ 添加新产品</h3>
@@ -47,53 +42,132 @@
             </div>
         </div>
         {% endif %}
+    </div>
+</div>
+
 <section style="padding-bottom:60px">
     <div class="container">
-        {% if products %}
-        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px,1fr)); gap:20px">
-            {% for product in products %}
-            <div class="price-card">
-                <a href="{{ url_for('price.detail', id=product.id) }}" style="text-decoration:none; display:block">
-                <div class="price-card-body">
-                    <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:8px">
-                        <span class="price-category">{{ product.category }}</span>
-                        <span class="price-brand">{{ product.brand }}</span>
-                    </div>
-                    <h3 style="font-size:16px; font-weight:600; color:var(--text-primary); margin-bottom:10px; line-height:1.3">
-                        {{ product.name }}
-                    </h3>
-                    <div style="display:flex; justify-content:space-between; align-items:baseline">
-                        {% set lp = product.latest_price() %}
-                        {% if lp %}
-                        <span style="font-size:24px; font-weight:800; color:var(--accent-cyan)">
-                            ¥{{ '%.2f' % lp.price }}
-                        </span>
-                        {% else %}
-                        <span style="font-size:14px; color:var(--text-muted)">暂无价格</span>
+        <div class="row">
+            <!-- 主内容 -->
+            <div class="col-8">
+                {% if products.items %}
+                <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px,1fr)); gap:16px">
+                    {% for product in products.items %}
+                    <div class="price-card">
+                        <a href="{{ url_for('price.detail', id=product.id) }}" style="text-decoration:none; display:block">
+                        <div class="price-card-body">
+                            <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:8px">
+                                <span class="price-category">{{ product.category }}</span>
+                                <span class="price-brand">{{ product.brand }}</span>
+                            </div>
+                            <h3 style="font-size:15px; font-weight:600; color:var(--text-primary); margin-bottom:8px; line-height:1.3">
+                                {{ product.name }}
+                            </h3>
+                            <div style="display:flex; justify-content:space-between; align-items:baseline">
+                                {% set lp = product.latest_price() %}
+                                {% if lp %}
+                                <span style="font-size:22px; font-weight:800; color:var(--accent-cyan)">
+                                    ¥{{ '%.0f' % lp.price }}
+                                </span>
+                                {% else %}
+                                <span style="font-size:13px; color:var(--text-muted)">暂无价格</span>
+                                {% endif %}
+                            </div>
+                            {% if product.specs %}
+                            <div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--border-subtle); font-size:11px; color:var(--text-muted); display:flex; flex-wrap:wrap; gap:4px">
+                                {% for key, val in product.specs.items() %}
+                                {% if loop.index <= 3 %}
+                                <span class="spec-tag">{{ key }}: {{ val }}</span>
+                                {% endif %}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        </a>
+                        {% if current_user.is_authenticated %}
+                        <form method="POST" action="{{ url_for('price.manual_price') }}" style="margin-top:8px; display:flex; gap:4px; padding:0 4px 4px">
+                            <input type="hidden" name="product_id" value="{{ product.id }}">
+                            <input type="number" name="price" step="0.01" min="0" placeholder="价格"
+                                   style="flex:1; padding:4px 8px; background:rgba(255,255,255,0.04); border:1px solid var(--border-subtle); border-radius:4px; color:var(--text-primary); font-size:12px; outline:none">
+                            <button type="submit" style="padding:4px 10px; background:var(--accent-cyan); border:none; border-radius:4px; color:#000; font-size:12px; font-weight:600; cursor:pointer">录入</button>
+                        </form>
                         {% endif %}
-                        <span style="font-size:12px; color:var(--text-muted)">
-                            {{ product.sources|length }} 个来源
-                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                {% if products.pages > 1 %}
+                <div class="pagination-wrap">
+                    <ul class="pagination">
+                        {% if products.has_prev %}
+                        <li><a href="{{ url_for('price.index', page=products.prev_num, category=current_category, per_page=current_per_page) }}">‹</a></li>
+                        {% endif %}
+                        {% for page_num in products.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                            {% if page_num %}
+                            <li {% if page_num == products.page %}class="active"{% endif %}>
+                                <a href="{{ url_for('price.index', page=page_num, category=current_category, per_page=current_per_page) }}">{{ page_num }}</a>
+                            </li>
+                            {% else %}
+                            <li><span>···</span></li>
+                            {% endif %}
+                        {% endfor %}
+                        {% if products.has_next %}
+                        <li><a href="{{ url_for('price.index', page=products.next_num, category=current_category, per_page=current_per_page) }}">›</a></li>
+                        {% endif %}
+                    </ul>
+                    <div class="page-jump">
+                        <span style="color:var(--text-muted);font-size:12px">共 {{ products.pages }} 页</span>
+                        <input type="number" min="1" max="{{ products.pages }}" placeholder="跳转" onkeydown="if(event.key=='Enter'){var p=parseInt(this.value);if(p>=1&&p<={{ products.pages }})window.location='{{ url_for('price.index', category=current_category) }}?page='+p+'&per_page={{ current_per_page }}';}">
+                        <select class="per-page-select" onchange="var p=new URLSearchParams(location.search);p.set('per_page',this.value);p.set('page','1');location.search=p.toString();">
+                            {% for opt in per_page_options %}
+                            <option value="{{ opt }}" {% if current_per_page == opt %}selected{% endif %}>{{ opt }} 条/页</option>
+                            {% endfor %}
+                        </select>
                     </div>
                 </div>
-                </a>
-                {% if current_user.is_authenticated %}
-                <form method="POST" action="{{ url_for('price.manual_price') }}" style="margin-top:10px; display:flex; gap:6px">
-                    <input type="hidden" name="product_id" value="{{ product.id }}">
-                    <input type="number" name="price" step="0.01" min="0" placeholder="输入价格"
-                           style="flex:1; padding:6px 10px; background:rgba(255,255,255,0.04); border:1px solid var(--border-subtle); border-radius:6px; color:var(--text-primary); font-size:13px; outline:none">
-                    <button type="submit" class="btn btn-primary" style="padding:6px 12px; font-size:12px">录入</button>
-                </form>
+                {% endif %}
+
+                {% else %}
+                <div class="empty-state">
+                    <h2>暂无商品</h2>
+                    <p>请添加需要追踪价格的电子产品</p>
+                </div>
                 {% endif %}
             </div>
-            {% endfor %}
+
+            <!-- 侧边栏 -->
+            <div class="col-4">
+                <aside class="sidebar">
+                    <div class="widget">
+                        <h4 class="widget-title">品类筛选</h4>
+                        <div class="cat-tags">
+                            <a href="{{ url_for('price.index') }}" class="cat-tag {% if not current_category %}active{% endif %}" style="{% if not current_category %}background:rgba(0,240,255,0.12);color:var(--accent-cyan);{% endif %}">全部</a>
+                            {% for cat in categories %}
+                            <a href="{{ url_for('price.index', category=cat) }}" class="cat-tag {% if current_category == cat %}active{% endif %}" style="{% if current_category == cat %}background:rgba(0,240,255,0.12);color:var(--accent-cyan);{% endif %}">{{ cat }}</a>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="widget">
+                        <h4 class="widget-title">价格看板</h4>
+                        <div style="font-size:13px; color:var(--text-secondary); line-height:1.8">
+                            <div>📦 商品总数: <strong style="color:var(--accent-cyan)">{{ products.total }}</strong></div>
+                            <div>📊 品类数量: <strong style="color:var(--accent-cyan)">{{ categories|length }}</strong></div>
+                            <div>🔄 更新频率: <strong style="color:var(--accent-cyan)">每日 09:00</strong></div>
+                            <div>💡 数据来源: <strong style="color:var(--accent-cyan)">Baidu 搜索 + 手动录入</strong></div>
+                        </div>
+                    </div>
+
+                    <div class="widget">
+                        <h4 class="widget-title">关于</h4>
+                        <p style="font-size:13px; color:var(--text-muted); line-height:1.6">
+                            追踪主流电子产品的实时价格与历史走势。
+                            新品发布后，管理员可一键添加，系统自动获取价格。
+                        </p>
+                    </div>
+                </aside>
+            </div>
         </div>
-        {% else %}
-        <div class="empty-state">
-            <h2>暂无追踪商品</h2>
-            <p>请通过管理后台添加需要追踪价格的电子产品</p>
-        </div>
-        {% endif %}
     </div>
 </section>
 
@@ -102,9 +176,8 @@
     background: var(--bg-card);
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-lg);
-    padding: 20px;
+    padding: 14px;
     transition: all 0.3s;
-    display: block;
 }
 .price-card:hover {
     transform: translateY(-2px);
@@ -112,13 +185,17 @@
     border-color: var(--accent-cyan);
 }
 .price-category {
-    font-size:11px; font-weight:600; text-transform:uppercase;
+    font-size:10px; font-weight:600; text-transform:uppercase;
     letter-spacing:0.8px; color:var(--accent-purple);
-    padding:2px 8px; border-radius:4px; background:rgba(124,58,237,0.1);
+    padding:2px 6px; border-radius:3px; background:rgba(124,58,237,0.1);
 }
-.price-brand {
-    font-size:12px; color:var(--text-muted);
+.price-brand { font-size:11px; color:var(--text-muted); }
+.spec-tag {
+    background:rgba(255,255,255,0.04);
+    padding:1px 6px; border-radius:3px;
+    font-size:10px; color:var(--text-muted);
 }
+.cat-tag.active { background:rgba(0,240,255,0.12); color:var(--accent-cyan); }
 </style>
 
 {% endblock %}
