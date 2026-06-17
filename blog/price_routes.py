@@ -114,3 +114,51 @@ def trigger_crawl():
     count = crawl_all_active_sources()
     flash(f'价格爬取完成，成功记录 {count} 条', 'success')
     return redirect(url_for('price.index'))
+
+
+# ═══════════════════════════════════════════════
+# 手动输入价格
+# ═══════════════════════════════════════════════
+@price_bp.route('/manual-price', methods=['POST'])
+@login_required
+def manual_price():
+    """手动输入/更新商品价格。
+
+    当爬虫无法自动获取价格时，用户可通过此接口手动录入。
+    """
+    product_id = request.form.get('product_id', type=int)
+    price = request.form.get('price', type=float)
+
+    if not product_id or not price:
+        flash('请填写完整信息', 'error')
+        return redirect(url_for('price.index'))
+
+    product = Product.query.get_or_404(product_id)
+
+    # 查找或创建默认的 manual 来源
+    source = ProductSource.query.filter_by(
+        product_id=product_id, site='manual'
+    ).first()
+    if not source:
+        source = ProductSource(
+            product_id=product_id,
+            site='manual',
+            url='',
+            is_active=True,
+        )
+        db.session.add(source)
+        db.session.flush()
+
+    # 创建价格记录
+    record = PriceRecord(
+        source_id=source.id,
+        product_id=product_id,
+        price=price,
+    )
+    db.session.add(record)
+    source.latest_price = price
+    db.session.commit()
+
+    logger.info('手动录入价格: %s → ¥%.2f', product.name, price)
+    flash(f'已录入 {product.name} 价格 ¥{price:.2f}', 'success')
+    return redirect(url_for('price.index'))

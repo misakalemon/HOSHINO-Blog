@@ -23,7 +23,8 @@
         {% if products %}
         <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px,1fr)); gap:20px">
             {% for product in products %}
-            <a href="{{ url_for('price.detail', id=product.id) }}" class="price-card" style="text-decoration:none">
+            <div class="price-card">
+                <a href="{{ url_for('price.detail', id=product.id) }}" style="text-decoration:none; display:block">
                 <div class="price-card-body">
                     <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:8px">
                         <span class="price-category">{{ product.category }}</span>
@@ -46,7 +47,16 @@
                         </span>
                     </div>
                 </div>
-            </a>
+                </a>
+                {% if current_user.is_authenticated %}
+                <form method="POST" action="{{ url_for('price.manual_price') }}" style="margin-top:10px; display:flex; gap:6px">
+                    <input type="hidden" name="product_id" value="{{ product.id }}">
+                    <input type="number" name="price" step="0.01" min="0" placeholder="输入价格"
+                           style="flex:1; padding:6px 10px; background:rgba(255,255,255,0.04); border:1px solid var(--border-subtle); border-radius:6px; color:var(--text-primary); font-size:13px; outline:none">
+                    <button type="submit" class="btn btn-primary" style="padding:6px 12px; font-size:12px">录入</button>
+                </form>
+                {% endif %}
+            </div>
             {% endfor %}
         </div>
         {% else %}
