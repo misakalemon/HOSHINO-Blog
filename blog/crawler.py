@@ -9,6 +9,7 @@ HOSHINO Blog — 价格数据模块
 新品发布后，管理员可在网页上添加商品，系统自动尝试获取价格。
 """
 import re
+import random
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -36,6 +37,13 @@ def _create_driver():
     return webdriver.Remote(command_executor=_SELENIUM_URL, options=options)
 
 
+def _random_delay(min_s=2, max_s=6):
+    """随机延迟，模拟人类操作间隔，降低被反爬检测风险。"""
+    import time
+    delay = random.uniform(min_s, max_s)
+    time.sleep(delay)
+
+
 # ═══════════════════════════════════════════════
 # Baidu 搜索价格提取
 # ═══════════════════════════════════════════════
@@ -60,7 +68,7 @@ def crawl_via_baidu(product_name):
 
         # 使用 Bing 搜索（Baidu 已全面验证码拦截）
         driver.get(f'https://www.bing.com/search?q={product_name}+price+JD')
-        time.sleep(3)
+        _random_delay(3, 5)
         html = driver.page_source
 
         prices = set()
@@ -80,7 +88,7 @@ def crawl_via_baidu(product_name):
         # 如果 Bing 没找到价格，尝试搜狗搜索
         if not prices:
             driver.get(f'https://www.sogou.com/web?query={product_name}+价格')
-            time.sleep(2)
+            _random_delay(2, 4)
             html = driver.page_source
             for pat in [
                 r'[¥￥]\s*([\d,]+(?:\.\d{2})?)',
@@ -129,6 +137,8 @@ def crawl_all_active_sources():
             continue  # 已有价格，跳过
         logger.info('正在爬取: %s', product.name)
         price = crawl_via_baidu(product.name)
+        # 每次爬取之间随机延迟 3-8 秒，避免触发反爬
+        _random_delay(3, 8)
         if price is not None:
             source = ProductSource.query.filter_by(
                 product_id=product.id, site='baidu'
