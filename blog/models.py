@@ -212,3 +212,75 @@ class Comment(db.Model):
     content = db.Column(db.Text, nullable=False)              # 评论正文
     is_approved = db.Column(db.Boolean, default=False)        # 管理员审核标记
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+
+# ═══════════════════════════════════════════════
+# 价格追踪模型
+# ═══════════════════════════════════════════════
+
+class Product(db.Model):
+    """电子产品模型。
+
+    追踪的商品。
+    __tablename__ = 'products'
+    """
+    __tablename__ = 'products'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(256), nullable=False, index=True)
+    brand = db.Column(db.String(128), default='')
+    category = db.Column(db.String(64), default='')
+    image_url = db.Column(db.String(512), default='')
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow
+    )
+
+    price_records = db.relationship(
+        'PriceRecord', backref='product', lazy='dynamic',
+        order_by='PriceRecord.recorded_at'
+    )
+
+    def latest_price(self):
+        return self.price_records.order_by(PriceRecord.recorded_at.desc()).first()
+
+    def price_history(self, days=30):
+        since = datetime.datetime.utcnow() - datetime.timedelta(days=days)
+        return self.price_records.filter(
+            PriceRecord.recorded_at >= since
+        ).order_by(PriceRecord.recorded_at.asc()).all()
+
+
+class ProductSource(db.Model):
+    """商品来源网站配置。
+    __tablename__ = 'product_sources'
+    """
+    __tablename__ = 'product_sources'
+
+    id = db.Column(db.Integer, primary_key=True)
+    product_id = db.Column(
+        db.Integer, db.ForeignKey('products.id'), nullable=False, index=True
+    )
+    site = db.Column(db.String(64), nullable=False)
+    url = db.Column(db.String(1024), nullable=False)
+    latest_price = db.Column(db.Float, default=0)
+    is_active = db.Column(db.Boolean, default=True)
+    product = db.relationship('Product', backref='sources')
+
+
+class PriceRecord(db.Model):
+    """单次价格记录。
+    __tablename__ = 'price_records'
+    """
+    __tablename__ = 'price_records'
+
+    id = db.Column(db.Integer, primary_key=True)
+    source_id = db.Column(
+        db.Integer, db.ForeignKey('product_sources.id'), nullable=False, index=True
+    )
+    price = db.Column(db.Float, nullable=False)
+    recorded_at = db.Column(
+        db.DateTime, default=datetime.datetime.utcnow, index=True
+    )
+    source = db.relationship('ProductSource', backref='records')

@@ -42,3 +42,6 @@ Pygments==2.19.1
 
 # --- Redis 缓存 ---
 redis==5.2.1
+
+# --- 定时任务 ---
+APScheduler==3.11.0

@@ -21,11 +21,13 @@ from flask import Blueprint
 blog_bp = Blueprint('blog', __name__)
 # 后台 blueprint（所有后台路由自动添加 /admin 前缀）
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
+# 价格追踪 blueprint（价格看板路由在 /prices 下）
+price_bp = Blueprint('price', __name__, url_prefix='/prices')
 
 # 先导入模型，确保 admin 和 routes 中的 from .models import ... 可用
 # 这种 "先声明蓝图、再导入模型、最后导入路由" 的顺序是关键，
 # 可以避免 Flask 常见的循环导入问题。
-from .models import db, User, Post, Category, Comment
+from .models import db, User, Post, Category, Comment, Product, ProductSource, PriceRecord
 
 
 def init_db(app):
@@ -63,6 +65,10 @@ def init_db(app):
             admin.set_password(app.config.get('ADMIN_PASSWORD', 'admin123'))
             db.session.add(admin)
             db.session.commit()
+
+        # ── 添加示例价格追踪商品（首次启动） ─────
+        from .crawler import init_sample_products
+        init_sample_products()
 
 
 def _migrate_category_to_many2many(app):
@@ -116,3 +122,4 @@ def _migrate_category_to_many2many(app):
 # 延迟导入打破了这个循环。
 from . import routes
 from . import admin
+from . import price_routes

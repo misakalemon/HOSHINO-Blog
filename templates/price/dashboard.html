@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+{% block title %}价格追踪 - HOSHINO Blog{% endblock %}
+{% block content %}
+
+<div class="page-header">
+    <div class="container">
+        <h1>📊 电子产品价格追踪</h1>
+        <p>多平台比价 · 历史走势 · 每日更新</p>
+        <div style="margin-top:12px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap">
+            <button class="btn btn-primary" onclick="document.getElementById('crawl-form').submit()">
+                🔄 手动更新价格
+            </button>
+            <form id="crawl-form" method="POST" action="{{ url_for('price.trigger_crawl') }}" style="display:none"></form>
+            <span style="color:var(--text-muted); font-size:13px; display:flex; align-items:center">
+                ⏰ 每日 09:00 自动爬取
+            </span>
+        </div>
+    </div>
+</div>
+
+<section style="padding-bottom:60px">
+    <div class="container">
+        {% if products %}
+        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px,1fr)); gap:20px">
+            {% for product in products %}
+            <a href="{{ url_for('price.detail', id=product.id) }}" class="price-card" style="text-decoration:none">
+                <div class="price-card-body">
+                    <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:8px">
+                        <span class="price-category">{{ product.category }}</span>
+                        <span class="price-brand">{{ product.brand }}</span>
+                    </div>
+                    <h3 style="font-size:16px; font-weight:600; color:var(--text-primary); margin-bottom:10px; line-height:1.3">
+                        {{ product.name }}
+                    </h3>
+                    <div style="display:flex; justify-content:space-between; align-items:baseline">
+                        {% set lp = product.latest_price() %}
+                        {% if lp %}
+                        <span style="font-size:24px; font-weight:800; color:var(--accent-cyan)">
+                            ¥{{ '%.2f' % lp.price }}
+                        </span>
+                        {% else %}
+                        <span style="font-size:14px; color:var(--text-muted)">暂无价格</span>
+                        {% endif %}
+                        <span style="font-size:12px; color:var(--text-muted)">
+                            {{ product.sources|length }} 个来源
+                        </span>
+                    </div>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <h2>暂无追踪商品</h2>
+            <p>请通过管理后台添加需要追踪价格的电子产品</p>
+        </div>
+        {% endif %}
+    </div>
+</section>
+
+<style>
+.price-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    transition: all 0.3s;
+    display: block;
+}
+.price-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--glow-cyan);
+    border-color: var(--accent-cyan);
+}
+.price-category {
+    font-size:11px; font-weight:600; text-transform:uppercase;
+    letter-spacing:0.8px; color:var(--accent-purple);
+    padding:2px 8px; border-radius:4px; background:rgba(124,58,237,0.1);
+}
+.price-brand {
+    font-size:12px; color:var(--text-muted);
+}
+</style>
+
+{% endblock %}

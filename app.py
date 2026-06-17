@@ -76,6 +76,9 @@ def create_app():
     from blog.cache import init_redis
     init_redis(app)
 
+    # ── 价格爬虫定时任务（每天 09:00） ──────────
+    _init_scheduler(app)
+
     # ── 登录管理 ──────────────────────────────────
     login_manager = LoginManager()
     login_manager.init_app(app)
@@ -97,6 +100,9 @@ def create_app():
     # 后台 blueprint（所有后台路由自动添加 /admin 前缀）
     from blog import admin_bp
     app.register_blueprint(admin_bp)
+    # 价格追踪 blueprint（所有价格路由自动添加 /prices 前缀）
+    from blog import price_bp
+    app.register_blueprint(price_bp)
     logger.info('蓝图注册完成')
 
     # ── Gzip 压缩 ────────────────────────────────
@@ -108,6 +114,38 @@ def create_app():
     app.after_request(log_request)
 
     return app
+
+
+def _init_scheduler(app):
+    """初始化 APScheduler 定时任务。
+
+    每天 09:00 自动爬取所有启用的商品价格。
+    如果 APScheduler 未安装或导入失败，静默跳过。
+    """
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+        scheduler = BackgroundScheduler()
+        # 每天 09:00 执行
+        scheduler.add_job(
+            func=lambda: _run_daily_crawl(app),
+            trigger='cron',
+            hour=9,
+            minute=0,
+            id='daily_price_crawl',
+            replace_existing=True,
+        )
+        scheduler.start()
+        app.logger.info('定时任务已启动: 每天 09:00 价格爬取')
+    except Exception as e:
+        app.logger.warning('定时任务启动失败（不影响运行）: %s', e)
+
+
+def _run_daily_crawl(app):
+    """执行每日价格爬取（在应用上下文中运行）。"""
+    with app.app_context():
+        from blog.crawler import crawl_all_active_sources
+        count = crawl_all_active_sources()
+        app.logger.info('每日价格爬取完成: %d 条记录', count)
 
 
 if __name__ == '__main__':

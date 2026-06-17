@@ -434,3 +434,10 @@ def format_date(dt, fmt='%Y/%m/%d'):
     if hasattr(dt, 'strftime'):
         return dt.strftime(fmt)
     return ''
+
+
+@blog_bp.app_template_global()
+def now():
+    """模板中获取当前 UTC 时间。"""
+    import datetime
+    return datetime.datetime.utcnow()

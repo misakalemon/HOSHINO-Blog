@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>液态玻璃 · 组件化调用（含详细注释） | &lt;glass-card&gt;</title>
+    
+    <!--
+    ============================================================
+    全局样式：仅定义页面背景和卡片组布局
+    组件自身的所有视觉效果都封装在 <glass-card> 内部
+    ============================================================
+    -->
+    <style>
+        /* 页面深色渐变背景，衬托玻璃的通透感 */
+        body {
+            min-height: 100vh;
+            background:
+                radial-gradient(ellipse at 25% 15%, #1e2d48 0%, transparent 50%),
+                radial-gradient(ellipse at 70% 55%, #18243a 0%, transparent 45%),
+                radial-gradient(ellipse at 40% 75%, #152030 0%, transparent 40%),
+                radial-gradient(ellipse at 50% 50%, #111b2a 0%, #080d16 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: -apple-system, 'SF Pro Display', 'Segoe UI', 'HarmonyOS Sans', system-ui, sans-serif;
+            padding: 40px 28px;
+            margin: 0;
+            background-attachment: fixed;
+        }
+
+        /* 卡片组网格布局：默认两列，大卡片跨两列 */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 22px;
+            width: 100%;
+            max-width: 1050px;
+        }
+        /* 带有 large 属性的卡片占据整行 */
+        .cards-grid glass-card[large] {
+            grid-column: span 2;
+        }
+
+        /* 移动端改为单列 */
+        @media (max-width: 768px) {
+            .cards-grid {
+                grid-template-columns: 1fr;
+                max-width: 520px;
+            }
+            .cards-grid glass-card[large] {
+                grid-column: span 1;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!--
+    ============================================================
+    使用示例：直接在 HTML 中像普通标签一样使用 <glass-card>
+    通过属性传递标题、描述、标签、图标、光色等
+    ============================================================
+    -->
+    <div class="cards-grid">
+        <!-- 
+            大卡片示例：
+            · large 属性：获得更大的内边距和字号
+            · title / description / tags：内容数据
+            · glow-color：边缘追光的 RGB 颜色值（不带 alpha）
+        -->
+        <glass-card
+            large
+            title="🧊 液态玻璃"
+            description="鼠标移动时，边缘数百个光点独立响应距离。<br>中心高度通透，边缘呈现厚度、折射与高光。"
+            tags="iOS风格,中间通透,边缘折射,粒子追光"
+            glow-color="145, 205, 248"
+        ></glass-card>
+
+        <!-- 普通卡片示例（带图标） -->
+        <glass-card
+            title="💎 边缘折射"
+            description="玻璃截面厚度环模拟光线折射，顶部偏亮、底部偏暗。"
+            tags="厚度环,定向光"
+            icon="💎"
+        ></glass-card>
+
+        <glass-card
+            title="✨ 粒子追光"
+            description="边缘采样点均匀分布，每个点独立计算鼠标距离，越近越亮。"
+            tags="距离驱动,实时响应"
+            icon="✨"
+        ></glass-card>
+
+        <glass-card
+            title="🔮 玻璃质感"
+            description="多层阴影叠加：外折射光晕 + 内高光线 + 底部暗线。"
+            tags="多层阴影,内高光"
+        ></glass-card>
+
+        <!-- 另一个大卡片 -->
+        <glass-card
+            large
+            title="🌊 液态玻璃 · 组件化"
+            description="每个 &lt;glass-card&gt; 都是独立封装的组件，自动拥有完整追光系统。大卡片自动获得更多采样点，密度均匀。"
+            tags="独立追光,密度自适应,iOS风格"
+            glow-color="148, 208, 250"
+        ></glass-card>
+    </div>
+
+    <script>
+        /**
+         * ============================================================
+         * 液态玻璃卡片 · 组件化实现
+         * 
+         * 核心设计：
+         * 1. 全局追光管理器 (GlowManager) —— 单例模式
+         *    · 监听全局鼠标/触摸事件
+         *    · 维护所有卡片状态
+         *    · 统一调度 requestAnimationFrame 绘制
+         * 2. 自定义 HTML 元素 <glass-card>
+         *    · 封装所有 CSS 样式（液态玻璃、折射环、高光线）
+         *    · 内部创建 Canvas 并管理采样点
+         *    · 根据卡片周长自动计算采样点数量（密度自适应）
+         * ============================================================
+         */
+        (function() {
+            // -------------------- 全局可调参数 --------------------
+            const POINTS_DENSITY = 0.52;    // 每像素周长分配多少采样点
+            const MAX_DISTANCE = 140;       // 光点最大感应距离（px）
+            const GLOW_RADIUS = 3.5;        // 单个光点的绘制半径
+            const MIN_OPACITY = 0.022;      // 环境光最低亮度（鼠标远离时）
+            const EASE_POWER = 0.5;         // 缓出曲线指数（<1 使近距离更亮）
+            const MIN_POINTS = 180;         // 极小卡片的最低采样点数
+
+            // -------------------- 全局追光管理器（单例） --------------------
+            /**
+             * GlowManager 负责：
+             * · 监听全局鼠标/触摸事件
+             * · 维护所有已注册卡片的绘制状态
+             * · 通过单个 requestAnimationFrame 循环统一绘制所有卡片
+             */
+            class GlowManager {
+                constructor() {
+                    /** @type {Array<Object>} 所有已注册的卡片状态对象 */
+                    this.cards = [];
+                    this.mouseX = -9999;
+                    this.mouseY = -9999;
+                    this.isHovering = false;
+                    this.animFrameId = null;
+
+                    // 绑定方法以便移除事件监听
+                    this.boundMouseMove = this.onMouseMove.bind(this);
+                    this.boundMouseLeave = this.onMouseLeave.bind(this);
+                    this.boundTouchMove = this.onTouchMove.bind(this);
+                    this.boundTouchEnd = this.onTouchEnd.bind(this);
+                    this.boundResize = this.debounce(this.updateAllGeometries.bind(this), 150);
+                    this.boundScroll = this.debounce(this.updateAllGeometries.bind(this), 100);
+
+                    this.addListeners();
+                }
+
+                /** 注册全局事件监听 */
+                addListeners() {
+                    window.addEventListener('mousemove', this.boundMouseMove, { passive: true });
+                    window.addEventListener('mouseleave', this.boundMouseLeave);
+                    document.addEventListener('touchmove', this.boundTouchMove, { passive: true });
+                    document.addEventListener('touchend', this.boundTouchEnd);
+                    document.addEventListener('touchcancel', this.boundTouchEnd);
+                    window.addEventListener('resize', this.boundResize);
+                    window.addEventListener('scroll', this.boundScroll, { passive: true });
+                }
+
+                /** 移除全局事件监听（可在销毁时调用） */
+                removeListeners() {
+                    window.removeEventListener('mousemove', this.boundMouseMove);
+                    window.removeEventListener('mouseleave', this.boundMouseLeave);
+                    document.removeEventListener('touchmove', this.boundTouchMove);
+                    document.removeEventListener('touchend', this.boundTouchEnd);
+                    document.removeEventListener('touchcancel', this.boundTouchEnd);
+                    window.removeEventListener('resize', this.boundResize);
+                    window.removeEventListener('scroll', this.boundScroll);
+                }
+
+                /** 注册一个卡片状态 */
+                register(cardState) {
+                    if (!this.cards.includes(cardState)) {
+                        this.cards.push(cardState);
+                    }
+                    // 当第一个卡片注册时，触发首次绘制
+                    if (this.cards.length === 1) {
+                        this.requestDraw();
+                    }
+                }
+
+                /** 注销一个卡片状态 */
+                unregister(cardState) {
+                    this.cards = this.cards.filter(c => c !== cardState);
+                    if (this.cards.length === 0) {
+                        this.cancelDraw();
+                    }
+                }
+
+                /** 请求动画帧绘制 */
+                requestDraw() {
+                    if (this.animFrameId) return;
+                    this.animFrameId = requestAnimationFrame(() => {
+                        this.animFrameId = null;
+                        this.drawAll();
+                    });
+                }
+
+                /** 取消待执行的绘制 */
+                cancelDraw() {
+                    if (this.animFrameId) {
+                        cancelAnimationFrame(this.animFrameId);
+                        this.animFrameId = null;
+                    }
+                }
+
+                /** 遍历所有卡片执行绘制 */
+                drawAll() {
+                    const mx = this.isHovering ? this.mouseX : -9999;
+                    const my = this.isHovering ? this.mouseY : -9999;
+                    for (const state of this.cards) {
+                        state.draw(mx, my, this.isHovering);
+                    }
+                }
+
+                /** 标记所有卡片需要重新计算几何（resize/scroll 时调用） */
+                updateAllGeometries() {
+                    for (const state of this.cards) {
+                        state.needsGeometryUpdate = true;
+                    }
+                    this.requestDraw();
+                }
+
+                // --- 事件处理 ---
+                onMouseMove(e) {
+                    this.mouseX = e.clientX;
+                    this.mouseY = e.clientY;
+                    this.isHovering = true;
+                    this.requestDraw();
+                }
+
+                onMouseLeave() {
+                    this.isHovering = false;
+                    this.requestDraw();
+                }
+
+                onTouchMove(e) {
+                    if (e.touches.length > 0) {
+                        this.mouseX = e.touches[0].clientX;
+                        this.mouseY = e.touches[0].clientY;
+                        this.isHovering = true;
+                        this.requestDraw();
+                    }
+                }
+
+                onTouchEnd() {
+                    this.isHovering = false;
+                    this.requestDraw();
+                }
+
+                /** 简单的防抖函数 */
+                debounce(fn, delay) {
+                    let timer;
+                    return (...args) => {
+                        clearTimeout(timer);
+                        timer = setTimeout(() => fn.apply(this, args), delay);
+                    };
+                }
+            }
+
+            // 创建全局唯一实例
+            const glowManager = new GlowManager();
+
+            // -------------------- 几何计算工具函数 --------------------
+
+            /**
+             * 计算圆角矩形的周长（像素）
+             * 用于根据卡片实际尺寸动态分配采样点数量
+             */
+            function calcPerimeter(width, height, r) {
+                const top = Math.max(0, width - 2 * r);
+                const right = Math.max(0, height - 2 * r);
+                const bottom = Math.max(0, width - 2 * r);
+                const left = Math.max(0, height - 2 * r);
+                return top + right + bottom + left + 2 * Math.PI * r;
+            }
+
+            /**
+             * 生成圆角矩形边缘的均匀采样点
+             * @param {number} width - 卡片宽度
+             * @param {number} height - 卡片高度
+             * @param {number} r - 圆角半径
+             * @param {number} totalPoints - 总采样点数
+             * @returns {Array<{x:number, y:number}>} 采样点坐标（相对于卡片左上角）
+             */
+            function generateEdgePoints(width, height, r, totalPoints) {
+                const pts = [];
+                // 将边缘分为8段：4条直边 + 4个90°圆弧
+                const topStraightLen = Math.max(0, width - 2 * r);
+                const rightStraightLen = Math.max(0, height - 2 * r);
+                const bottomStraightLen = Math.max(0, width - 2 * r);
+                const leftStraightLen = Math.max(0, height - 2 * r);
+                const quarterCircleLen = (Math.PI / 2) * r;
+                const totalLen = topStraightLen + rightStraightLen + bottomStraightLen + leftStraightLen + 4 * quarterCircleLen;
+
+                if (totalLen <= 0 || totalPoints <= 0) return pts;
+                const step = totalLen / totalPoints;
+
+                /** 根据沿路径的距离返回坐标 */
+                function pointAtDistance(dist) {
+                    let d = dist;
+                    // 上直边
+                    if (d < topStraightLen) return { x: r + d, y: 0 };
+                    d -= topStraightLen;
+                    // 右上圆角弧
+                    if (d < quarterCircleLen) {
+                        const angle = -Math.PI / 2 + (d / quarterCircleLen) * (Math.PI / 2);
+                        return { x: (width - r) + r * Math.cos(angle), y: r + r * Math.sin(angle) };
+                    }
+                    d -= quarterCircleLen;
+                    // 右直边
+                    if (d < rightStraightLen) return { x: width, y: r + d };
+                    d -= rightStraightLen;
+                    // 右下圆角弧
+                    if (d < quarterCircleLen) {
+                        const angle = 0 + (d / quarterCircleLen) * (Math.PI / 2);
+                        return { x: (width - r) + r * Math.cos(angle), y: (height - r) + r * Math.sin(angle) };
+                    }
+                    d -= quarterCircleLen;
+                    // 下直边
+                    if (d < bottomStraightLen) return { x: (width - r) - d, y: height };
+                    d -= bottomStraightLen;
+                    // 左下圆角弧
+                    if (d < quarterCircleLen) {
+                        const angle = Math.PI / 2 + (d / quarterCircleLen) * (Math.PI / 2);
+                        return { x: r + r * Math.cos(angle), y: (height - r) + r * Math.sin(angle) };
+                    }
+                    d -= quarterCircleLen;
+                    // 左直边
+                    if (d < leftStraightLen) return { x: 0, y: (height - r) - d };
+                    d -= leftStraightLen;
+                    // 左上圆角弧
+                    if (d <= quarterCircleLen) {
+                        const angle = Math.PI + (d / quarterCircleLen) * (Math.PI / 2);
+                        return { x: r + r * Math.cos(angle), y: r + r * Math.sin(angle) };
+                    }
+                    return { x: r, y: 0 };
+                }
+
+                for (let i = 0; i < totalPoints; i++) {
+                    pts.push(pointAtDistance(i * step));
+                }
+                return pts;
+            }
+
+            /**
+             * 将距离映射为光点强度（0~1）
+             * 使用缓出曲线，距离越近亮度增长越快
+             */
+            function calcIntensity(distance, maxDist, minOp, easePow) {
+                if (distance >= maxDist) return minOp;
+                const normalized = distance / maxDist;
+                const eased = 1 - Math.pow(normalized, easePow);
+                return eased * (1 - minOp) + minOp;
+            }
+
+            // -------------------- 自定义元素 <glass-card> --------------------
+            /**
+             * <glass-card> 是一个自定义 HTML 元素
+             * 
+             * 使用方式：
+             *   <glass-card title="标题" description="描述" tags="标签1,标签2" icon="💎" glow-color="145,205,248" large></glass-card>
+             * 
+             * 属性说明：
+             *   - title：卡片标题
+             *   - description：描述文字（支持 <br> 换行）
+             *   - tags：逗号分隔的标签文本
+             *   - icon：标题前的 emoji 图标（可选）
+             *   - glow-color：边缘追光的 RGB 颜色值，例如 "145,205,248"
+             *   - large：添加此属性使卡片更大（适合跨列展示）
+             */
+            class GlassCard extends HTMLElement {
+                /** 指定需要监听的属性变化 */
+                static get observedAttributes() {
+                    return ['title', 'description', 'tags', 'icon', 'glow-color', 'large'];
+                }
+
+                constructor() {
+                    super();
+                    // 使用 Shadow DOM 封装样式和结构，避免外部 CSS 污染
+                    this.attachShadow({ mode: 'open' });
+                    /** @type {Object|null} 卡片状态对象，注册到 GlowManager */
+                    this.state = null;
+                }
+
+                /**
+                 * 元素被插入 DOM 时调用
+                 * 1. 渲染 Shadow DOM 内容
+                 * 2. 创建 Canvas 并初始化卡片状态
+                 */
+                connectedCallback() {
+                    this.render();
+                    this.initCanvasAndState();
+                }
+
+                /** 元素从 DOM 移除时注销 */
+                disconnectedCallback() {
+                    if (this.state) {
+                        glowManager.unregister(this.state);
+                        this.state = null;
+                    }
+                }
+
+                /** 属性变化时更新内容（不重新创建 Canvas） */
+                attributeChangedCallback(name, oldVal, newVal) {
+                    if (oldVal === newVal) return;
+                    if (this.shadowRoot && this.shadowRoot.querySelector('.card-content')) {
+                        this.updateContent();
+                    }
+                }
+
+                // 便捷 getter
+                get cardTitle() { return this.getAttribute('title') || '液态玻璃'; }
+                get cardDescription() { return this.getAttribute('description') || ''; }
+                get cardTags() { return this.getAttribute('tags') || ''; }
+                get cardIcon() { return this.getAttribute('icon') || ''; }
+                get cardGlowColor() { return this.getAttribute('glow-color') || '145, 205, 248'; }
+                get isLarge() { return this.hasAttribute('large'); }
+
+                /**
+                 * 渲染 Shadow DOM 内容
+                 * 包含：CSS 样式（玻璃效果、折射环、高光线）、Canvas 画布、内容容器
+                 */
+                render() {
+                    // 根据 large 属性调整尺寸变量
+                    const radius = this.isLarge ? '56px' : '44px';
+                    const padding = this.isLarge ? '38px 36px' : '28px 24px';
+                    const fontSize = this.isLarge ? '2rem' : '1.55rem';
+                    const descSize = this.isLarge ? '0.95rem' : '0.84rem';
+
+                    this.shadowRoot.innerHTML = `
+                        <style>
+                            /* ===== 卡片主体：径向渐变背景 + 毛玻璃 + 多层阴影 ===== */
+                            :host {
+                                --r: ${radius};
+                                display: block;
+                                position: relative;
+                                /* 
+                                   径向渐变从中心几乎完全透明（2.5%）到边缘微白（18%），
+                                   模拟真实玻璃中间通透、边缘厚实的物理特性
+                                */
+                                background: radial-gradient(ellipse at 50% 45%,
+                                    rgba(255,255,255,0.012) 28%,
+                                    rgba(255,255,255,0.025) 52%,
+                                    rgba(255,255,255,0.05) 70%,
+                                    rgba(240,245,255,0.09) 84%,
+                                    rgba(220,235,252,0.13) 92%,
+                                    rgba(200,222,248,0.18) 100%);
+                                /* 强模糊 + 高饱和 = iOS 液态玻璃核心 */
+                                backdrop-filter: blur(30px) saturate(200%);
+                                -webkit-backdrop-filter: blur(30px) saturate(200%);
+                                border-radius: var(--r);
+                                padding: ${padding};
+                                color: #eef4fc;
+                                /*
+                                   box-shadow 多层叠加模拟玻璃物理：
+                                   1. 底部投影（柔和扩散）
+                                   2. 边缘外侧折射光环（极薄的白蓝色环）
+                                   3. 顶部光源高亮（inset）
+                                   4. 内侧折射亮环
+                                */
+                                box-shadow:
+                                    0 30px 60px -16px rgba(0,0,0,0.5),
+                                    0 6px 18px -6px rgba(0,0,0,0.35),
+                                    0 0 0 1.5px rgba(190,215,245,0.13),
+                                    0 0 0 4px rgba(175,205,240,0.04),
+                                    0 0 14px 2px rgba(160,200,235,0.06),
+                                    inset 0 1px 0 rgba(255,255,255,0.18),
+                                    inset 0 2px 3px rgba(255,255,255,0.04),
+                                    inset 0 -0.5px 0 rgba(255,255,255,0.03),
+                                    inset 0 0 0 1px rgba(255,255,255,0.10),
+                                    inset 0 0 0 3px rgba(210,225,248,0.03);
+                                overflow: visible;
+                                user-select: none;
+                                transition: transform 0.35s cubic-bezier(0.25,0.1,0.25,1), box-shadow 0.35s ease;
+                                will-change: transform;
+                            }
+                            :host(:hover) {
+                                transform: translateY(-3px);
+                                box-shadow:
+                                    0 35px 65px -18px rgba(0,0,0,0.55),
+                                    0 8px 22px -8px rgba(0,0,0,0.4),
+                                    0 0 0 1.5px rgba(195,220,248,0.16),
+                                    0 0 0 4px rgba(180,210,245,0.06),
+                                    0 0 18px 3px rgba(165,205,240,0.08),
+                                    inset 0 1px 0 rgba(255,255,255,0.22),
+                                    inset 0 2px 3px rgba(255,255,255,0.06),
+                                    inset 0 -0.5px 0 rgba(255,255,255,0.04),
+                                    inset 0 0 0 1px rgba(255,255,255,0.13),
+                                    inset 0 0 0 3px rgba(215,230,250,0.04);
+                            }
+
+                            /* ===== 边缘折射厚度环（::before 伪元素） ===== */
+                            :host::before {
+                                content: '';
+                                position: absolute;
+                                inset: -3px;
+                                border-radius: calc(var(--r) + 3px);
+                                pointer-events: none;
+                                z-index: 0;
+                                border: 2px solid transparent;
+                                /*
+                                   渐变边框模拟玻璃截面折射：
+                                   顶部偏亮（光源方向），底部偏暗
+                                */
+                                background: linear-gradient(185deg,
+                                    rgba(210,230,250,0.20) 0%,
+                                    rgba(190,215,242,0.09) 30%,
+                                    rgba(175,200,235,0.03) 55%,
+                                    rgba(180,208,240,0.07) 75%,
+                                    rgba(200,222,248,0.14) 100%) border-box;
+                                -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+                                -webkit-mask-composite: xor;
+                                mask-composite: exclude;
+                                filter: blur(1.2px);
+                                opacity: 0.6;
+                                transition: opacity 0.35s ease, filter 0.35s ease;
+                            }
+                            :host(:hover)::before {
+                                opacity: 0.82;
+                                filter: blur(1.5px);
+                            }
+
+                            /* ===== 内侧高光线（::after 伪元素） ===== */
+                            :host::after {
+                                content: '';
+                                position: absolute;
+                                inset: 2px;
+                                border-radius: calc(var(--r) - 2px);
+                                pointer-events: none;
+                                z-index: 0;
+                                border: 1px solid rgba(255,255,255,0.05);
+                                /* 顶部微亮，模拟定向光源打在玻璃边缘内侧的反射 */
+                                background: linear-gradient(180deg,
+                                    rgba(255,255,255,0.04) 0%,
+                                    transparent 35%);
+                                opacity: 0.5;
+                                transition: opacity 0.35s ease;
+                            }
+                            :host(:hover)::after {
+                                opacity: 0.75;
+                            }
+
+                            /* ===== 追光 Canvas 层 ===== */
+                            .glow-canvas {
+                                position: absolute;
+                                top: -35px;
+                                left: -35px;
+                                width: calc(100% + 70px);
+                                height: calc(100% + 70px);
+                                pointer-events: none;
+                                z-index: 1;
+                            }
+
+                            /* ===== 内容区（文字、标签等） ===== */
+                            .card-content {
+                                position: relative;
+                                z-index: 3;
+                            }
+                            .card-content h2 {
+                                font-size: ${fontSize};
+                                font-weight: 580;
+                                margin: 0 0 10px;
+                                letter-spacing: -0.02em;
+                                background: linear-gradient(160deg, #ffffff 15%, #c8ddf8 55%, #a8ccf5 85%);
+                                -webkit-background-clip: text;
+                                background-clip: text;
+                                color: transparent;
+                                filter: drop-shadow(0 1px 3px rgba(160,200,235,0.2));
+                            }
+                            .desc {
+                                font-size: ${descSize};
+                                line-height: 1.55;
+                                opacity: 0.75;
+                                margin: 0 0 16px;
+                                color: #cad9f0;
+                            }
+                            .tag-list {
+                                display: flex;
+                                gap: 8px;
+                                flex-wrap: wrap;
+                            }
+                            .tag {
+                                background: rgba(255,255,255,0.06);
+                                backdrop-filter: blur(8px);
+                                -webkit-backdrop-filter: blur(8px);
+                                padding: 6px 16px;
+                                border-radius: 50px;
+                                font-size: 0.73rem;
+                                font-weight: 500;
+                                border: 0.5px solid rgba(255,255,255,0.16);
+                                color: #cfdef2;
+                            }
+                            .icon-row {
+                                display: flex;
+                                gap: 14px;
+                                align-items: center;
+                                margin-bottom: 8px;
+                            }
+                            .icon-circle {
+                                width: 40px;
+                                height: 40px;
+                                border-radius: 50%;
+                                background: rgba(255,255,255,0.08);
+                                backdrop-filter: blur(6px);
+                                -webkit-backdrop-filter: blur(6px);
+                                border: 0.5px solid rgba(255,255,255,0.15);
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                font-size: 1.1rem;
+                            }
+                        </style>
+                        <canvas class="glow-canvas"></canvas>
+                        <div class="card-content">
+                            ${this.cardIcon ? `<div class="icon-row"><div class="icon-circle">${this.cardIcon}</div><h2>${this.cardTitle}</h2></div>` : `<h2>${this.cardTitle}</h2>`}
+                            <p class="desc">${this.cardDescription}</p>
+                            ${this.cardTags ? `<div class="tag-list">${this.cardTags.split(',').map(t => `<span class="tag">${t.trim()}</span>`).join('')}</div>` : ''}
+                        </div>
+                    `;
+                }
+
+                /** 仅更新文本内容（不重绘 Canvas） */
+                updateContent() {
+                    const content = this.shadowRoot.querySelector('.card-content');
+                    if (!content) return;
+                    if (this.cardIcon) {
+                        content.innerHTML = `
+                            <div class="icon-row"><div class="icon-circle">${this.cardIcon}</div><h2>${this.cardTitle}</h2></div>
+                            <p class="desc">${this.cardDescription}</p>
+                            ${this.cardTags ? `<div class="tag-list">${this.cardTags.split(',').map(t => `<span class="tag">${t.trim()}</span>`).join('')}</div>` : ''}
+                        `;
+                    } else {
+                        content.innerHTML = `
+                            <h2>${this.cardTitle}</h2>
+                            <p class="desc">${this.cardDescription}</p>
+                            ${this.cardTags ? `<div class="tag-list">${this.cardTags.split(',').map(t => `<span class="tag">${t.trim()}</span>`).join('')}</div>` : ''}
+                        `;
+                    }
+                }
+
+                /**
+                 * 初始化 Canvas 和卡片状态对象
+                 * 状态对象包含绘制所需的所有数据，并注册到全局管理器
+                 */
+                initCanvasAndState() {
+                    const canvas = this.shadowRoot.querySelector('.glow-canvas');
+                    if (!canvas) return;
+                    const ctx = canvas.getContext('2d');
+
+                    // 卡片状态对象
+                    const state = {
+                        card: this,
+                        canvas,
+                        ctx,
+                        glowColor: this.cardGlowColor,
+                        cardRect: null,
+                        borderRad: parseFloat(this.isLarge ? 56 : 44),
+                        points: [],           // 采样点坐标
+                        totalPoints: 0,
+                        needsGeometryUpdate: true,
+                        canvasWidth: 0,
+                        canvasHeight: 0,
+
+                        /**
+                         * 绘制方法 —— 由 GlowManager 每帧调用
+                         * @param {number} globalMX - 全局鼠标 X
+                         * @param {number} globalMY - 全局鼠标 Y
+                         * @param {boolean} isActive - 鼠标是否在页面内
+                         */
+                        draw: (globalMX, globalMY, isActive) => {
+                            // 如果需要更新几何（resize/scroll 后），重新计算
+                            if (state.needsGeometryUpdate) updateCardGeometry(state);
+                            if (!state.cardRect || state.points.length === 0) return;
+
+                            const dpr = window.devicePixelRatio || 1;
+                            ctx.clearRect(0, 0, state.canvasWidth, state.canvasHeight);
+
+                            // Canvas 向外扩展了 35px，因此坐标需要偏移
+                            const canvasOffset = 35;
+                            const effX = isActive ? (globalMX - state.cardRect.left) : -9999;
+                            const effY = isActive ? (globalMY - state.cardRect.top) : -9999;
+
+                            // 遍历所有采样点，逐个绘制光斑
+                            for (const p of state.points) {
+                                const dist = Math.hypot(p.x - effX, p.y - effY);
+                                const intensity = calcIntensity(dist, MAX_DISTANCE, MIN_OPACITY, EASE_POWER);
+                                if (intensity <= 0.005) continue; // 太暗则跳过，优化性能
+
+                                const px = p.x + canvasOffset;
+                                const py = p.y + canvasOffset;
+
+                                // 径向渐变：中心亮、边缘透明
+                                const gradient = ctx.createRadialGradient(px, py, GLOW_RADIUS * 0.06, px, py, GLOW_RADIUS);
+                                gradient.addColorStop(0, `rgba(${state.glowColor}, ${intensity})`);
+                                gradient.addColorStop(0.35, `rgba(${state.glowColor}, ${intensity * 0.78})`);
+                                gradient.addColorStop(1, `rgba(${state.glowColor}, 0)`);
+
+                                ctx.fillStyle = gradient;
+                                ctx.beginPath();
+                                ctx.arc(px, py, GLOW_RADIUS, 0, Math.PI * 2);
+                                ctx.fill();
+                            }
+                        }
+                    };
+
+                    this.state = state;
+                    // 注册到全局管理器，开始接收绘制调用
+                    glowManager.register(state);
+                }
+            }
+
+            /**
+             * 更新卡片几何数据（尺寸、采样点、Canvas 分辨率）
+             * 根据周长动态计算采样点数量，保证密度均匀
+             */
+            function updateCardGeometry(state) {
+                const rect = state.card.getBoundingClientRect();
+                state.cardRect = rect;
+                const width = rect.width;
+                const height = rect.height;
+
+                // 从 CSS 变量中读取实际圆角半径
+                const rStr = getComputedStyle(state.card).getPropertyValue('--r').trim();
+                state.borderRad = parseFloat(rStr) || 44;
+
+                // 根据周长和密度计算采样点数（不小于最小值）
+                const perimeter = calcPerimeter(width, height, state.borderRad);
+                state.totalPoints = Math.max(MIN_POINTS, Math.round(perimeter * POINTS_DENSITY));
+                state.points = generateEdgePoints(width, height, state.borderRad, state.totalPoints);
+
+                // Canvas 外扩 35px，避免光斑被裁切
+                const dpr = window.devicePixelRatio || 1;
+                state.canvasWidth = width + 70;
+                state.canvasHeight = height + 70;
+                state.canvas.width = state.canvasWidth * dpr;
+                state.canvas.height = state.canvasHeight * dpr;
+                state.canvas.style.width = state.canvasWidth + 'px';
+                state.canvas.style.height = state.canvasHeight + 'px';
+                state.ctx.setTransform(1, 0, 0, 1, 0, 0);
+                state.ctx.scale(dpr, dpr);
+                state.needsGeometryUpdate = false;
+            }
+
+            // 注册自定义元素
+            customElements.define('glass-card', GlassCard);
+
+            console.log('%c🧊 <glass-card> 组件已就绪 | 所有卡片自动获得液态玻璃效果',
+                'color:#a8ccf5;font-weight:bold;');
+        })();
+    </script>
+</body>
+</html>
