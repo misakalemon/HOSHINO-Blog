@@ -180,6 +180,96 @@ ALL_PRODUCTS = [
     {'name': 'Honor 200 Pro',            'brand': 'Honor',   'category': '手机'},
     {'name': 'Nothing Phone 3',          'brand': 'Nothing', 'category': '手机'},
     {'name': 'Nothing Phone 2a',         'brand': 'Nothing', 'category': '手机'},
+    # Redmi 子品牌
+    {'name': 'Redmi K80 Pro',            'brand': 'Redmi',   'category': '手机'},
+    {'name': 'Redmi K80',                'brand': 'Redmi',   'category': '手机'},
+    {'name': 'Redmi K70 Ultra',          'brand': 'Redmi',   'category': '手机'},
+    {'name': 'Redmi K70 Pro',            'brand': 'Redmi',   'category': '手机'},
+    {'name': 'Redmi K70',                'brand': 'Redmi',   'category': '手机'},
+    {'name': 'Redmi Note 14 Pro+',       'brand': 'Redmi',   'category': '手机'},
+    {'name': 'Redmi Note 14 Pro',        'brand': 'Redmi',   'category': '手机'},
+    {'name': 'Redmi Note 13 Pro+',       'brand': 'Redmi',   'category': '手机'},
+    {'name': 'Redmi Note 13 Pro',        'brand': 'Redmi',   'category': '手机'},
+    {'name': 'Redmi Turbo 4',            'brand': 'Redmi',   'category': '手机'},
+    # Realme
+    {'name': 'Realme GT7 Pro',           'brand': 'Realme',  'category': '手机'},
+    {'name': 'Realme GT6',               'brand': 'Realme',  'category': '手机'},
+    {'name': 'Realme GT5 Pro',           'brand': 'Realme',  'category': '手机'},
+    {'name': 'Realme 14 Pro+',           'brand': 'Realme',  'category': '手机'},
+    {'name': 'Realme 13 Pro+',           'brand': 'Realme',  'category': '手机'},
+    # iQOO
+    {'name': 'iQOO 13',                  'brand': 'iQOO',    'category': '手机'},
+    {'name': 'iQOO 12',                  'brand': 'iQOO',    'category': '手机'},
+    {'name': 'iQOO Neo10 Pro',           'brand': 'iQOO',    'category': '手机'},
+    {'name': 'iQOO Neo9 Pro',            'brand': 'iQOO',    'category': '手机'},
+    {'name': 'iQOO Z9 Turbo',            'brand': 'iQOO',    'category': '手机'},
+    # ASUS ROG Phone
+    {'name': 'ASUS ROG Phone 9 Pro',     'brand': 'ASUS',    'category': '手机'},
+    {'name': 'ASUS ROG Phone 9',         'brand': 'ASUS',    'category': '手机'},
+    {'name': 'ASUS ROG Phone 8 Pro',     'brand': 'ASUS',    'category': '手机'},
+    {'name': 'ASUS Zenfone 11 Ultra',    'brand': 'ASUS',    'category': '手机'},
+    # Sony Xperia
+    {'name': 'Sony Xperia 1 VI',         'brand': 'Sony',    'category': '手机'},
+    {'name': 'Sony Xperia 5 VI',         'brand': 'Sony',    'category': '手机'},
+    {'name': 'Sony Xperia 10 VI',        'brand': 'Sony',    'category': '手机'},
+    # Motorola
+    {'name': 'Motorola Edge 50 Ultra',   'brand': 'Motorola','category': '手机'},
+    {'name': 'Motorola Edge 50 Pro',     'brand': 'Motorola','category': '手机'},
+    {'name': 'Motorola Razr 50 Ultra',   'brand': 'Motorola','category': '手机'},
+    {'name': 'Motorola Razr 2024',       'brand': 'Motorola','category': '手机'},
+    {'name': 'Motorola G85',             'brand': 'Motorola','category': '手机'},
+    # ZTE / Nubia
+    {'name': 'Nubia Z70 Ultra',          'brand': 'Nubia',   'category': '手机'},
+    {'name': 'Nubia Z60 Ultra',          'brand': 'Nubia',   'category': '手机'},
+    {'name': 'Nubia Red Magic 10 Pro',   'brand': 'Nubia',   'category': '手机'},
+    {'name': 'Nubia Red Magic 9 Pro',    'brand': 'Nubia',   'category': '手机'},
+    # Meizu
+    {'name': 'Meizu 21 Pro',             'brand': 'Meizu',   'category': '手机'},
+    {'name': 'Meizu 21 Note',            'brand': 'Meizu',   'category': '手机'},
+    # Tecno / Infinix
+    {'name': 'Tecno Camon 30 Pro',       'brand': 'Tecno',   'category': '手机'},
+    {'name': 'Tecno Phantom V Fold 2',   'brand': 'Tecno',   'category': '手机'},
+    {'name': 'Infinix GT 20 Pro',        'brand': 'Infinix', 'category': '手机'},
+    {'name': 'Infinix Zero 40',          'brand': 'Infinix', 'category': '手机'},
+    # 更多 Huawei
+    {'name': 'Huawei Mate X6',           'brand': 'Huawei',  'category': '手机'},
+    {'name': 'Huawei Mate X5',           'brand': 'Huawei',  'category': '手机'},
+    {'name': 'Huawei Nova 12 Ultra',     'brand': 'Huawei',  'category': '手机'},
+    {'name': 'Huawei Nova 12 Pro',       'brand': 'Huawei',  'category': '手机'},
+    # 更多 Honor
+    {'name': 'Honor Magic V3',           'brand': 'Honor',   'category': '手机'},
+    {'name': 'Honor Magic V2',           'brand': 'Honor',   'category': '手机'},
+    {'name': 'Honor 90 GT',              'brand': 'Honor',   'category': '手机'},
+    {'name': 'Honor X50 GT',             'brand': 'Honor',   'category': '手机'},
+    {'name': 'Honor X9b',                'brand': 'Honor',   'category': '手机'},
+    # 更多 Samsung Galaxy A/M
+    {'name': 'Samsung Galaxy A16',       'brand': 'Samsung', 'category': '手机'},
+    {'name': 'Samsung Galaxy A15',       'brand': 'Samsung', 'category': '手机'},
+    {'name': 'Samsung Galaxy A25',       'brand': 'Samsung', 'category': '手机'},
+    {'name': 'Samsung Galaxy M55',       'brand': 'Samsung', 'category': '手机'},
+    {'name': 'Samsung Galaxy M15',       'brand': 'Samsung', 'category': '手机'},
+    # 更多 Xiaomi
+    {'name': 'Xiaomi Mix Flip',          'brand': 'Xiaomi',  'category': '手机'},
+    {'name': 'Xiaomi Mix Fold 4',        'brand': 'Xiaomi',  'category': '手机'},
+    {'name': 'Xiaomi Civi 4 Pro',        'brand': 'Xiaomi',  'category': '手机'},
+    # 更多 OPPO
+    {'name': 'OPPO Find N5',             'brand': 'OPPO',    'category': '手机'},
+    {'name': 'OPPO Find N3',             'brand': 'OPPO',    'category': '手机'},
+    {'name': 'OPPO Reno 13 Pro',         'brand': 'OPPO',    'category': '手机'},
+    {'name': 'OPPO Reno 13',             'brand': 'OPPO',    'category': '手机'},
+    {'name': 'OPPO Reno 12 Pro',         'brand': 'OPPO',    'category': '手机'},
+    # 更多 vivo
+    {'name': 'vivo X Fold3 Pro',         'brand': 'vivo',    'category': '手机'},
+    {'name': 'vivo S20 Pro',             'brand': 'vivo',    'category': '手机'},
+    {'name': 'vivo S19',                 'brand': 'vivo',    'category': '手机'},
+    {'name': 'vivo iQOO Pad',            'brand': 'vivo',    'category': '手机'},
+    # 更多 Google
+    {'name': 'Google Pixel 9 Pro Fold',  'brand': 'Google',  'category': '手机'},
+    {'name': 'Google Pixel 8a',          'brand': 'Google',  'category': '手机'},
+    # 更多 OnePlus
+    {'name': 'OnePlus Ace 3 Pro',        'brand': 'OnePlus', 'category': '手机'},
+    {'name': 'OnePlus Ace 3',            'brand': 'OnePlus', 'category': '手机'},
+    {'name': 'OnePlus Nord 4',           'brand': 'OnePlus', 'category': '手机'},
 
     # ═══════════════════════════════════════════════
     # 💻 笔记本电脑 (2024-2026)
