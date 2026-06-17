@@ -41,19 +41,33 @@ def _create_driver():
 # ═══════════════════════════════════════════════
 
 def crawl_via_baidu(product_name):
-    """通过百度搜索 + Selenium 提取产品价格。"""
+    """通过搜索引擎 + Selenium 提取产品价格。
+
+    优先使用 Bing（国内可访问，目前无反爬验证码），
+    备用 Baidu（已被验证码拦截）。
+    """
     driver = None
     try:
         driver = _create_driver()
-        driver.get(f'https://www.baidu.com/s?wd={product_name}+价格')
-        import time; time.sleep(2.5)
+        # 反检测：隐藏 Selenium 特征
+        driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
+            'source': '''
+                Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+                Object.defineProperty(navigator, 'languages', {get: () => ['zh-CN','zh','en']});
+            '''
+        })
+        import time
+
+        # 使用 Bing 搜索（Baidu 已全面验证码拦截）
+        driver.get(f'https://www.bing.com/search?q={product_name}+price+JD')
+        time.sleep(3)
         html = driver.page_source
 
         prices = set()
+        # Bing 价格模式
         for pat in [
-            r'(?:价格|售价|到手价)[：:\s]*[¥￥]?\s*([\d,]+(?:\.\d{2})?)',
-            r'[¥￥]\s*([\d,]+(?:\.\d{2})?)',
-            r'([\d,]+(?:\.\d{2})?)\s*元',
+            r'[\$¥£€]\s*([\d,]+(?:\.\d{2})?)',
+            r'(?:price|Price|价格|售价)[:：\s]*[\$¥£€]?\s*([\d,]+(?:\.\d{2})?)',
         ]:
             for m in re.finditer(pat, html):
                 try:
@@ -62,16 +76,36 @@ def crawl_via_baidu(product_name):
                         prices.add(v)
                 except (ValueError, IndexError):
                     continue
+
+        # 如果 Bing 没找到价格，尝试搜狗搜索
+        if not prices:
+            driver.get(f'https://www.sogou.com/web?query={product_name}+价格')
+            time.sleep(2)
+            html = driver.page_source
+            for pat in [
+                r'[¥￥]\s*([\d,]+(?:\.\d{2})?)',
+                r'([\d,]+(?:\.\d{2})?)\s*元',
+            ]:
+                for m in re.finditer(pat, html):
+                    try:
+                        v = float(m.group(1).replace(',', ''))
+                        if 100 < v < 99999:
+                            prices.add(v)
+                    except (ValueError, IndexError):
+                        continue
+
         if not prices:
             return None
+        # 取中位数范围的平均值
         sorted_p = sorted(prices)
         n = len(sorted_p)
         if n >= 4:
             mid = sorted_p[n // 4: 3 * n // 4]
             return round(sum(mid) / len(mid), 2)
         return sorted_p[0]
+
     except Exception as e:
-        logger.error('Baidu搜索失败 %s: %s', product_name, e)
+        logger.error('搜索引擎搜索失败 %s: %s', product_name, e)
         return None
     finally:
         if driver:
