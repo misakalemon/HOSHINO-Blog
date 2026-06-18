@@ -2,166 +2,49 @@
 """
 HOSHINO Blog — 价格数据模块
 
-数据来源：
-  - Selenium + Docker Chrome → Baidu 搜索 → 价格提取
-  - 手动录入（管理员网页输入）
+⚠️ 重要说明 ⚠️
+当前所有搜索引擎（百度/必应/搜狗）的价格搜索路线已失效：
+- Baidu: 全面滑块验证码，Selenium 无法绕过
+- Bing: 搜索结果不包含结构化价格数据
+- Sogou: 同上
 
-新品发布后，管理员可在网页上添加商品，系统自动尝试获取价格。
+价格获取方式：
+  1. ✅ 手动录入（管理员网页输入）— 主要方式
+  2. ✅ 品类参考价 — 无价格时的兜底显示
+  3. 🔜 爬虫占位 — 后续接入可靠数据源后启用
+
+新品发布后，管理员可在网页上添加商品，系统会自动显示该品类的参考价格。
 """
 import re
-import random
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
-
 from .models import db, ProductSource, PriceRecord, Product
 
 logger = logging.getLogger(__name__)
 
-_MAX_WORKERS = 3
-_SELENIUM_URL = 'http://localhost:4444/wd/hub'
-_BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
-
-
-# ═══════════════════════════════════════════════
-# Selenium 工具
-# ═══════════════════════════════════════════════
-
-def _create_driver():
-    from selenium import webdriver
-    from selenium.webdriver.chrome.options import Options
-    options = Options()
-    options.add_argument('--headless')
-    options.add_argument('--no-sandbox')
-    options.add_argument('--disable-dev-shm-usage')
-    options.add_argument('user-agent=' + _BROWSER_UA)
-    return webdriver.Remote(command_executor=_SELENIUM_URL, options=options)
-
-
-def _random_delay(min_s=2, max_s=6):
-    """随机延迟，模拟人类操作间隔，降低被反爬检测风险。"""
-    import time
-    delay = random.uniform(min_s, max_s)
-    time.sleep(delay)
-
-
-# ═══════════════════════════════════════════════
-# Baidu 搜索价格提取
-# ═══════════════════════════════════════════════
-
-def crawl_via_baidu(product_name):
-    """通过搜索引擎 + Selenium 提取产品价格。
-
-    优先使用 Bing（国内可访问，目前无反爬验证码），
-    备用 Baidu（已被验证码拦截）。
-    """
-    driver = None
-    try:
-        driver = _create_driver()
-        # 反检测：隐藏 Selenium 特征
-        driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
-            'source': '''
-                Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-                Object.defineProperty(navigator, 'languages', {get: () => ['zh-CN','zh','en']});
-            '''
-        })
-        import time
-
-        # 使用 Bing 搜索（Baidu 已全面验证码拦截）
-        driver.get(f'https://www.bing.com/search?q={product_name}+price+JD')
-        _random_delay(3, 5)
-        html = driver.page_source
-
-        prices = set()
-        # Bing 价格模式
-        for pat in [
-            r'[\$¥£€]\s*([\d,]+(?:\.\d{2})?)',
-            r'(?:price|Price|价格|售价)[:：\s]*[\$¥£€]?\s*([\d,]+(?:\.\d{2})?)',
-        ]:
-            for m in re.finditer(pat, html):
-                try:
-                    v = float(m.group(1).replace(',', ''))
-                    if 100 < v < 99999:
-                        prices.add(v)
-                except (ValueError, IndexError):
-                    continue
-
-        # 如果 Bing 没找到价格，尝试搜狗搜索
-        if not prices:
-            driver.get(f'https://www.sogou.com/web?query={product_name}+价格')
-            _random_delay(2, 4)
-            html = driver.page_source
-            for pat in [
-                r'[¥￥]\s*([\d,]+(?:\.\d{2})?)',
-                r'([\d,]+(?:\.\d{2})?)\s*元',
-            ]:
-                for m in re.finditer(pat, html):
-                    try:
-                        v = float(m.group(1).replace(',', ''))
-                        if 100 < v < 99999:
-                            prices.add(v)
-                    except (ValueError, IndexError):
-                        continue
-
-        if not prices:
-            return None
-        # 取中位数范围的平均值
-        sorted_p = sorted(prices)
-        n = len(sorted_p)
-        if n >= 4:
-            mid = sorted_p[n // 4: 3 * n // 4]
-            return round(sum(mid) / len(mid), 2)
-        return sorted_p[0]
-
-    except Exception as e:
-        logger.error('搜索引擎搜索失败 %s: %s', product_name, e)
-        return None
-    finally:
-        if driver:
-            try:
-                driver.quit()
-            except Exception:
-                pass
-
 
 def crawl_price(site, url):
-    """爬取价格入口（兼容旧接口）。"""
-    return crawl_via_baidu(url) if site == 'baidu' else None
+    """爬取价格（占位）。"""
+    return None
 
 
 def crawl_all_active_sources():
-    """爬取所有无价格记录的商品。"""
-    products = Product.query.all()
-    count = 0
-    for product in products:
-        if product.latest_price():
-            continue  # 已有价格，跳过
-        logger.info('正在爬取: %s', product.name)
-        price = crawl_via_baidu(product.name)
-        # 每次爬取之间随机延迟 3-8 秒，避免触发反爬
-        _random_delay(3, 8)
-        if price is not None:
-            source = ProductSource.query.filter_by(
-                product_id=product.id, site='baidu'
-            ).first()
-            if not source:
-                source = ProductSource(
-                    product_id=product.id, site='baidu', url='', is_active=True,
-                )
-                db.session.add(source)
-                db.session.flush()
-            record = PriceRecord(
-                source_id=source.id, product_id=product.id, price=price,
-            )
-            db.session.add(record)
-            source.latest_price = price
-            count += 1
-            logger.info('✅ %s → ¥%.0f', product.name, price)
-        else:
-            logger.warning('❌ %s: 未获取到价格', product.name)
-    if count > 0:
+    """爬取所有商品（占位）。
+
+    当前所有搜索引擎均已无法提取结构化价格数据。
+    请使用网页上的手动录入功能输入价格。
+    """
+    # 为每个无来源的商品创建 manual 占位来源
+    created = 0
+    for product in Product.query.all():
+        if not product.sources:
+            src = ProductSource(product_id=product.id, site='manual', url='', is_active=True)
+            db.session.add(src)
+            created += 1
+    if created:
         db.session.commit()
-    logger.info('爬取完成: %d/%d 成功', count, len(products))
-    return count
+        logger.info('已为 %d 个商品创建 manual 占位来源', created)
+    logger.info('自动爬虫未启用，请使用手动录入功能输入价格')
+    return 0
 
 
 # ═══════════════════════════════════════════════
