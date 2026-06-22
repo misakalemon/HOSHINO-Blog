@@ -23,28 +23,66 @@ logger = logging.getLogger(__name__)
 
 
 def crawl_price(site, url):
-    """爬取价格（占位）。"""
+    """爬取价格入口。"""
     return None
 
 
 def crawl_all_active_sources():
-    """爬取所有商品（占位）。
+    """爬取所有商品价格（Apify → 参考价兜底）。
 
-    当前所有搜索引擎均已无法提取结构化价格数据。
-    请使用网页上的手动录入功能输入价格。
+    当 APIFY_TOKEN 已配置时，通过 Apify Amazon Price Scraper
+    获取商品价格。未配置时仅创建 manual 占位来源。
     """
-    # 为每个无来源的商品创建 manual 占位来源
+    from .apify_client import client
+
     created = 0
+    fetched = 0
+
     for product in Product.query.all():
+        # 已有价格的跳过
+        if product.latest_price():
+            continue
+
+        # 尝试 Apify 获取价格
+        price = None
+        if client._ready:
+            try:
+                price = client.fetch_amazon_price(product.name)
+                if price:
+                    source = ProductSource.query.filter_by(
+                        product_id=product.id, site='amazon'
+                    ).first()
+                    if not source:
+                        source = ProductSource(
+                            product_id=product.id, site='amazon',
+                            url='', is_active=True,
+                        )
+                        db.session.add(source)
+                        db.session.flush()
+                    record = PriceRecord(
+                        source_id=source.id, product_id=product.id, price=price,
+                    )
+                    db.session.add(record)
+                    source.latest_price = price
+                    fetched += 1
+                    logger.info('✅ %s → ¥%.0f (Amazon)', product.name, price)
+                    db.session.commit()
+                    continue
+            except Exception as e:
+                logger.warning('Apify 获取 %s 失败: %s', product.name, e)
+
+        # Apify 不可用或失败，创建 manual 占位
         if not product.sources:
-            src = ProductSource(product_id=product.id, site='manual', url='', is_active=True)
+            src = ProductSource(
+                product_id=product.id, site='manual', url='', is_active=True,
+            )
             db.session.add(src)
             created += 1
-    if created:
+
+    if created or fetched:
         db.session.commit()
-        logger.info('已为 %d 个商品创建 manual 占位来源', created)
-    logger.info('自动爬虫未启用，请使用手动录入功能输入价格')
-    return 0
+    logger.info('价格爬取完成: %d 条 Apify, %d 个占位来源', fetched, created)
+    return fetched
 
 
 # ═══════════════════════════════════════════════

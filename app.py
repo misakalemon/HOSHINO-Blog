@@ -76,6 +76,10 @@ def create_app():
     from blog.cache import init_redis
     init_redis(app)
 
+    # ── Apify 价格爬虫（在 Redis 之后初始化） ─────
+    from blog.apify_client import init_apify
+    init_apify(app)
+
     # ── 价格爬虫定时任务（每天 09:00） ──────────
     _init_scheduler(app)
 
