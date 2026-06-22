@@ -245,7 +245,9 @@ class Product(db.Model):
     )
 
     def latest_price(self):
-        return self.price_records.order_by(PriceRecord.recorded_at.desc()).first()
+        """返回最新价格数值，无记录时返回 None。"""
+        record = self.price_records.order_by(PriceRecord.recorded_at.desc()).first()
+        return record.price if record else None
 
     def price_history(self, days=30):
         since = datetime.datetime.utcnow() - datetime.timedelta(days=days)
@@ -272,9 +274,7 @@ class ProductSource(db.Model):
 
 
 class PriceRecord(db.Model):
-    """单次价格记录。
-    __tablename__ = 'price_records'
-    """
+    """单次价格记录。"""
     __tablename__ = 'price_records'
 
     id = db.Column(db.Integer, primary_key=True)

@@ -67,7 +67,7 @@
                                 {% set lp = product.latest_price() %}
                                 {% if lp %}
                                 <span style="font-size:22px; font-weight:800; color:var(--accent-cyan)">
-                                    ¥{{ '%.0f' % lp.price }}
+                                    ¥{{ '%.0f' % lp }}
                                 </span>
                                 {% else %}
                                 <span style="font-size:13px; color:var(--text-muted)">暂无价格</span>

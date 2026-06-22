@@ -164,3 +164,36 @@ def cache_delete_pattern(pattern):
                 break
     except Exception as e:
         logger.debug('缓存批量删除失败 pattern=%s: %s', pattern, e)
+
+
+def cache_scan(pattern):
+    """按模式扫描并返回所有 (key, value) 对。
+
+    Redis 不可用时返回空列表。
+    例如 cache_scan('crawl:result:*') 返回所有爬取结果。
+
+    Args:
+        pattern: 键名匹配模式（不含前缀）
+
+    Returns:
+        list[tuple[str, any]]: (业务键名, 反序列化后的值) 列表
+    """
+    if _redis_client is None:
+        return []
+    try:
+        full_pattern = _make_key(pattern)
+        results = []
+        cursor = 0
+        while True:
+            cursor, keys = _redis_client.scan(cursor, match=full_pattern, count=100)
+            for key in keys:
+                raw = _redis_client.get(key)
+                if raw is not None:
+                    biz_key = key[len(_KEY_PREFIX) + 1:]
+                    results.append((biz_key, json.loads(raw)))
+            if cursor == 0:
+                break
+        return results
+    except Exception as e:
+        logger.debug('缓存扫描失败 pattern=%s: %s', pattern, e)
+        return []

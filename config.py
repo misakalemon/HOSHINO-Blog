@@ -112,11 +112,34 @@ class Config:
     CACHE_TTL_DASHBOARD = int(os.environ.get('CACHE_TTL_DASHBOARD', 60))
     CACHE_TTL_RSS = int(os.environ.get('CACHE_TTL_RSS', 600))
 
-    # ── Apify 价格爬虫 ────────────────────────────
+    # ── 京东联盟 API（优先数据源）─────────────────
+    # 从 https://union.jd.com 注册获取 App Key 和 Secret
+    JD_APP_KEY = os.environ.get('JD_APP_KEY') or ''
+    JD_APP_SECRET = os.environ.get('JD_APP_SECRET') or ''
+
+    # ── Best Buy API（免费，美国消费电子价格）─────────
+    # 从 https://developer.bestbuy.com 注册获取 API Key
+    # 5 万次/天免费，覆盖手机/笔记本/显卡/CPU 等
+    BESTBUY_API_KEY = os.environ.get('BESTBUY_API_KEY') or ''
+
+    # ── Keepa API（Amazon 价格，免费层 100 token/分钟）───
+    # 从 https://keepa.com/#!api 注册获取 API Key
+    # 每次搜索约 1-2 token，100 token ≈ 50-100 次查询/分钟
+    KEEPA_API_KEY = os.environ.get('KEEPA_API_KEY') or ''
+
+    # ── Amazon 直爬代理（可选）─────────────────────
+    # curl_cffi 直爬 Amazon 时使用的 HTTP 代理。
+    # 服务器在国内时必须设置海外代理才能访问 Amazon。
+    # 格式: http://user:pass@host:port
+    SCRAPING_PROXY = os.environ.get('SCRAPING_PROXY') or ''
+
+    # ── Apify 价格爬虫（京东不可用时的后备）────────
     # 从 https://console.apify.com 获取 API Token
     APIFY_TOKEN = os.environ.get('APIFY_TOKEN') or None
-    # 使用的 Actor（默认 Amazon Price Scraper）
-    APIFY_ACTOR = os.environ.get('APIFY_ACTOR') or 'apify~amazon-price-scraper'
+    # 使用的 Actor（需在 Apify Store 选择可用 Actor）。
+    # 旧默认值 'apify~amazon-price-scraper' 已下架，不再预设。
+    # 获取方式：访问 https://console.apify.com/store 搜索 amazon-price。
+    APIFY_ACTOR = os.environ.get('APIFY_ACTOR') or ''
 
 
 # 导出给 app.py 使用的活动配置

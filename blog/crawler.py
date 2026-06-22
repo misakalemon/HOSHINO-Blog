@@ -17,68 +17,125 @@ HOSHINO Blog — 价格数据模块
 """
 import re
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from .models import db, ProductSource, PriceRecord, Product
 
 logger = logging.getLogger(__name__)
 
 
-def crawl_all_active_sources():
-    """爬取所有商品价格（Apify → 参考价兜底）。
+def _fetch_price(product):
+    from .bestbuy_client import client as bestbuy_client
+    from .keepa_client import client as keepa_client
+    from .apify_client import scraper, apify_api
+    from .cache import cache_set
 
-    当 APIFY_TOKEN 已配置时，通过 Apify Amazon Price Scraper
-    获取商品价格。未配置时仅创建 manual 占位来源。
+    result = None
+
+    try:
+        price = scraper.fetch_amazon_price(product.name)
+        if price:
+            result = (product.id, price, 'amazon')
+    except Exception as e:
+        logger.warning('Amazon 直爬获取 %s 失败: %s', product.name, e)
+
+    if result is None and bestbuy_client._ready:
+        try:
+            price = bestbuy_client.fetch_price(product.name)
+            if price:
+                result = (product.id, price, 'bestbuy')
+        except Exception as e:
+            logger.warning('Best Buy 获取 %s 失败: %s', product.name, e)
+
+    if result is None and keepa_client._ready:
+        try:
+            price = keepa_client.fetch_price(product.name)
+            if price:
+                result = (product.id, price, 'keepa')
+        except Exception as e:
+            logger.warning('Keepa 获取 %s 失败: %s', product.name, e)
+
+    if result is None and apify_api._ready:
+        try:
+            price = apify_api.fetch_amazon_price(product.name)
+            if price:
+                result = (product.id, price, 'apify')
+        except Exception as e:
+            logger.warning('Apify API 获取 %s 失败: %s', product.name, e)
+
+    if result:
+        pid, price, site = result
+        cache_set(f'crawl:result:{pid}', {'price': price, 'site': site}, ttl=3600)
+        logger.info('✅ %s → ¥%.0f (%s)', product.name, price, site)
+        return True
+    return False
+
+
+def crawl_all_active_sources():
+    """爬取所有商品价格（线程池并发，Redis 缓冲，主线程批量写 DB）。
+
+    流程：
+      1. 并发 HTTP 获取价格（京东 > Apify），结果写入 Redis
+      2. 主线程统一从 Redis 读出，批量写入数据库
+      3. 无价格的商品创建 manual 占位来源
     """
-    from .apify_client import client
+    from .bestbuy_client import client as bestbuy_client
+    from .keepa_client import client as keepa_client
+    from .apify_client import client as apify_client
+    from .cache import cache_scan, cache_delete_pattern
 
     created = 0
     fetched = 0
+    pending_records = []
+    fetched_ids = set()
 
-    pending_records = []  # 收集待提交的记录
+    cache_delete_pattern('crawl:result:*')
 
-    for product in Product.query.all():
-        if product.latest_price():
-            continue
+    products = Product.query.all()
+    to_fetch = [p for p in products if not p.latest_price()
+                and (bestbuy_client._ready or keepa_client._ready
+                     or apify_client._ready)]
 
-        price = None
-        source = None
-        if client._ready:
-            try:
-                price = client.fetch_amazon_price(product.name)
-                if price:
-                    source = ProductSource.query.filter_by(
-                        product_id=product.id, site='amazon'
-                    ).first()
-                    if not source:
-                        source = ProductSource(
-                            product_id=product.id, site='amazon',
-                            url='', is_active=True,
-                        )
-                        db.session.add(source)
-                        db.session.flush()
-                    source.latest_price = price
-                    pending_records.append(
-                        PriceRecord(source_id=source.id, product_id=product.id, price=price)
-                    )
-                    fetched += 1
-                    logger.info('✅ %s → ¥%.0f (Amazon)', product.name, price)
-                    continue
-            except Exception as e:
-                logger.warning('Apify 获取 %s 失败: %s', product.name, e)
-                db.session.rollback()  # 回滚部分脏 session
+    if to_fetch:
+        max_workers = min(len(to_fetch), 16)
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            pool.map(_fetch_price, to_fetch)
 
-        if not product.sources:
-            src = ProductSource(
-                product_id=product.id, site='manual', url='', is_active=True,
+        for key, data in cache_scan('crawl:result:*'):
+            pid = int(key.split(':')[-1])
+            fetched_ids.add(pid)
+            price, site = data['price'], data['site']
+            source = ProductSource.query.filter_by(
+                product_id=pid, site=site
+            ).first()
+            if not source:
+                source = ProductSource(
+                    product_id=pid, site=site,
+                    url='', is_active=True,
+                )
+                db.session.add(source)
+                db.session.flush()
+            source.latest_price = price
+            pending_records.append(
+                PriceRecord(source_id=source.id, product_id=pid, price=price)
             )
-            db.session.add(src)
+            fetched += 1
+
+        cache_delete_pattern('crawl:result:*')
+
+    for product in products:
+        if product.id in fetched_ids or product.latest_price():
+            continue
+        if not product.sources:
+            db.session.add(ProductSource(
+                product_id=product.id, site='manual', url='', is_active=True,
+            ))
             created += 1
 
-    # 统一提交
     if pending_records:
         db.session.add_all(pending_records)
     if created or fetched:
         db.session.commit()
-    logger.info('价格爬取完成: %d 条 Apify, %d 个占位来源', fetched, created)
+    logger.info('价格爬取完成: %d 条, %d 个占位来源', fetched, created)
     return fetched
 
 

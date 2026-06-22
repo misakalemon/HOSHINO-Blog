@@ -10,7 +10,7 @@ from flask import render_template, request, redirect, url_for, abort, flash, jso
 from flask_login import login_required
 from . import price_bp
 from .models import db, Product, ProductSource, PriceRecord
-from .crawler import crawl_price, crawl_all_active_sources, init_sample_products
+from .crawler import crawl_all_active_sources, init_sample_products
 
 logger = logging.getLogger(__name__)
 
@@ -213,29 +213,50 @@ def add_product():
     db.session.add(product)
     db.session.commit()
 
-    # 尝试获取价格（Apify → 参考价兜底）
-    try:
-        from .apify_client import client
-        price = None
-        if client._ready:
-            price = client.fetch_amazon_price(name)
-        if price:
-            source = ProductSource(
-                product_id=product.id, site='amazon', url='', is_active=True,
-            )
-            db.session.add(source)
-            db.session.flush()
-            record = PriceRecord(
-                source_id=source.id, product_id=product.id, price=price,
-            )
-            db.session.add(record)
-            source.latest_price = price
-            db.session.commit()
-            flash(f'已添加 {name}，Amazon 价格 ¥{price:.0f}', 'success')
-        else:
-            flash(f'已添加 {name}，自动获取价格失败，请手动录入', 'warning')
-    except Exception as e:
-        logger.error('新品价格获取失败: %s', e)
-        flash(f'已添加 {name}，价格获取异常，请手动录入', 'warning')
+    # 尝试获取价格（Best Buy → Keepa → Amazon → 参考价兜底）
+    price = None
+    site = ''
+    if not price:
+        try:
+            from .bestbuy_client import client as bestbuy_client
+            if bestbuy_client._ready:
+                price = bestbuy_client.fetch_price(name)
+                site = 'bestbuy'
+        except Exception as e:
+            logger.error('Best Buy 查询失败: %s', e)
+
+    if not price:
+        try:
+            from .keepa_client import client as keepa_client
+            if keepa_client._ready:
+                price = keepa_client.fetch_price(name)
+                site = 'keepa'
+        except Exception as e:
+            logger.error('Keepa 查询失败: %s', e)
+
+    if not price:
+        try:
+            from .apify_client import client as apify_client
+            if apify_client._ready:
+                price = apify_client.fetch_amazon_price(name)
+                site = 'amazon'
+        except Exception as e:
+            logger.error('Amazon 查询失败: %s', e)
+
+    if price and site:
+        source = ProductSource(
+            product_id=product.id, site=site, url='', is_active=True,
+        )
+        db.session.add(source)
+        db.session.flush()
+        record = PriceRecord(
+            source_id=source.id, product_id=product.id, price=price,
+        )
+        db.session.add(record)
+        source.latest_price = price
+        db.session.commit()
+        flash(f'已添加 {name}，{site} 价格 ¥{price:.0f}', 'success')
+    else:
+        flash(f'已添加 {name}，自动获取价格失败，请手动录入', 'warning')
 
     return redirect(url_for('price.index'))

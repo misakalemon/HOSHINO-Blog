@@ -76,7 +76,15 @@ def create_app():
     from blog.cache import init_redis
     init_redis(app)
 
-    # ── Apify 价格爬虫（在 Redis 之后初始化） ─────
+    # ── Best Buy API（免费，美国消费电子价格） ──
+    from blog.bestbuy_client import init_bestbuy
+    init_bestbuy(app)
+
+    # ── Keepa API（Amazon 价格历史，免费层可用） ──
+    from blog.keepa_client import init_keepa
+    init_keepa(app)
+
+    # ── Apify 价格爬虫（京东的后备数据源） ──────
     from blog.apify_client import init_apify
     init_apify(app)
 

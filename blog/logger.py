@@ -82,9 +82,9 @@ def setup_logging(app):
     error_handler.setLevel(logging.ERROR)
     error_handler.setFormatter(logging.Formatter(DETAILED_FORMAT, DATE_FORMAT))
 
-    # ===== 4. 终端 Handler（INFO 以上，简化格式） =====
+    # ===== 4. 终端 Handler（DEBUG 级别，记录所有日志） =====
     console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
+    console_handler.setLevel(logging.DEBUG)
     console_handler.setFormatter(logging.Formatter(CONSOLE_FORMAT, DATE_FORMAT))
 
     # 添加到根日志器
@@ -93,21 +93,26 @@ def setup_logging(app):
     root_logger.addHandler(console_handler)
 
     # ===== 5. Flask 自身日志也使用我们的配置 =====
-    # 覆盖 Flask、Werkzeug 内置的日志 handler，
-    # 让其输出格式与自定义日志保持一致
+    # 覆盖 Flask、Werkzeug 内置的日志 handler。
+    # Werkzeug HTTP 请求日志仅在文件记录（DEBUG），
+    # 终端由自定义 log_request() 统一输出，避免重复。
     for logger_name in ('flask.app', 'flask.request', 'werkzeug'):
         log = logging.getLogger(logger_name)
-        log.setLevel(logging.INFO)
+        log.setLevel(logging.DEBUG)
         for h in log.handlers[:]:
             log.removeHandler(h)
+        # 终端 handler：仅 WARNING+（抑制 werkzeug HTTP 访问日志）
+        console_h = logging.StreamHandler()
+        console_h.setLevel(logging.WARNING)
+        console_h.setFormatter(logging.Formatter(CONSOLE_FORMAT, DATE_FORMAT))
         log.addHandler(file_handler)
-        log.addHandler(console_handler)
+        log.addHandler(console_h)
         # 禁止 propagate，避免日志重复（父 logger 也会输出）
         log.propagate = False
 
     # ===== 6. SQLAlchemy 日志（方便追踪数据库问题） =====
     sql_logger = logging.getLogger('sqlalchemy.engine')
-    sql_logger.setLevel(logging.WARNING)  # 只记录 WARNING 以上，避免 SQL 刷屏
+    sql_logger.setLevel(logging.DEBUG)  # DEBUG 级别，记录所有 SQL
     sql_logger.addHandler(file_handler)
 
     # 将根日志器挂载到 app.logger
