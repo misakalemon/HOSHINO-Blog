@@ -213,13 +213,15 @@ def add_product():
     db.session.add(product)
     db.session.commit()
 
-    # 异步尝试获取价格
+    # 尝试获取价格（Apify → 参考价兜底）
     try:
-        from .crawler import crawl_via_baidu
-        price = crawl_via_baidu(name)
-        if price is not None:
+        from .apify_client import client
+        price = None
+        if client._ready:
+            price = client.fetch_amazon_price(name)
+        if price:
             source = ProductSource(
-                product_id=product.id, site='baidu', url='', is_active=True,
+                product_id=product.id, site='amazon', url='', is_active=True,
             )
             db.session.add(source)
             db.session.flush()
@@ -229,7 +231,7 @@ def add_product():
             db.session.add(record)
             source.latest_price = price
             db.session.commit()
-            flash(f'已添加 {name}，自动获取价格 ¥{price:.0f}', 'success')
+            flash(f'已添加 {name}，Amazon 价格 ¥{price:.0f}', 'success')
         else:
             flash(f'已添加 {name}，自动获取价格失败，请手动录入', 'warning')
     except Exception as e:

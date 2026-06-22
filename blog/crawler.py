@@ -22,11 +22,6 @@ from .models import db, ProductSource, PriceRecord, Product
 logger = logging.getLogger(__name__)
 
 
-def crawl_price(site, url):
-    """爬取价格入口。"""
-    return None
-
-
 def crawl_all_active_sources():
     """爬取所有商品价格（Apify → 参考价兜底）。
 
@@ -38,13 +33,14 @@ def crawl_all_active_sources():
     created = 0
     fetched = 0
 
+    pending_records = []  # 收集待提交的记录
+
     for product in Product.query.all():
-        # 已有价格的跳过
         if product.latest_price():
             continue
 
-        # 尝试 Apify 获取价格
         price = None
+        source = None
         if client._ready:
             try:
                 price = client.fetch_amazon_price(product.name)
@@ -59,19 +55,17 @@ def crawl_all_active_sources():
                         )
                         db.session.add(source)
                         db.session.flush()
-                    record = PriceRecord(
-                        source_id=source.id, product_id=product.id, price=price,
-                    )
-                    db.session.add(record)
                     source.latest_price = price
+                    pending_records.append(
+                        PriceRecord(source_id=source.id, product_id=product.id, price=price)
+                    )
                     fetched += 1
                     logger.info('✅ %s → ¥%.0f (Amazon)', product.name, price)
-                    db.session.commit()
                     continue
             except Exception as e:
                 logger.warning('Apify 获取 %s 失败: %s', product.name, e)
+                db.session.rollback()  # 回滚部分脏 session
 
-        # Apify 不可用或失败，创建 manual 占位
         if not product.sources:
             src = ProductSource(
                 product_id=product.id, site='manual', url='', is_active=True,
@@ -79,6 +73,9 @@ def crawl_all_active_sources():
             db.session.add(src)
             created += 1
 
+    # 统一提交
+    if pending_records:
+        db.session.add_all(pending_records)
     if created or fetched:
         db.session.commit()
     logger.info('价格爬取完成: %d 条 Apify, %d 个占位来源', fetched, created)
