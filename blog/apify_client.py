@@ -17,8 +17,8 @@ import requests
 logger = logging.getLogger(__name__)
 
 _APIFY_API = 'https://api.apify.com/v2'
-_AMAZON_ACTOR = 'apify~amazon-price-scraper'
-_GS_ACTOR = ' ~google-shopping-scraper'
+_AMAZON_ACTOR = 'apify/amazon-price-scraper'
+_GS_ACTOR = 'apify/google-shopping-scraper'
 _TIMEOUT = 30
 
 
