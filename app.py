@@ -14,7 +14,8 @@ HOSHINO Blog — Flask 应用入口
 
 使用方式：
   python app.py              # 直接开发运行
-  gunicorn app:create_app()  # 生产部署（需读取 .env）
+   gunicorn app:create_app()  # Linux 生产部署（需读取 .env）
+   waitress-serve --port=5000 app:create_app  # Windows 生产部署
 """
 import os
 from flask import Flask
@@ -162,7 +163,7 @@ def _run_daily_crawl(app):
 
 if __name__ == '__main__':
     # ── 开发服务器启动 ──────────────────────────
-    # 生产环境请使用 gunicorn / uwsgi 等 WSGI 服务器
+    # 生产环境请使用 gunicorn (Linux) 或 waitress (Windows) 等 WSGI 服务器
     app = create_app()
     # 端口号优先从环境变量 PORT 读取，默认 5000
     port = int(os.environ.get('PORT', 5000))

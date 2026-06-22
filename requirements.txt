@@ -50,3 +50,6 @@ APScheduler==3.11.0
 curl_cffi==0.15.0
 beautifulsoup4==4.12.2
 lxml==4.9.3
+
+# --- 生产服务器 ---
+waitress==3.0.2
