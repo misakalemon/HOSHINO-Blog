@@ -17,8 +17,13 @@ import requests
 logger = logging.getLogger(__name__)
 
 _APIFY_API = 'https://api.apify.com/v2'
-_AMAZON_ACTOR = 'apify/amazon-price-scraper'
-_GS_ACTOR = 'apify/google-shopping-scraper'
+# Amazon 价格爬虫 Actor - 尝试多个已知名
+_AMAZON_ACTORS = [
+    'apify~amazon-price-scraper',     # 官方（可能不存在）
+    'junglee~amazon-price-scraper',   # 社区版
+    'vaclavrut~amazon-scraper',       # 备用
+    'drobnikj~crawler-amazon-prices', # 备用
+]
 _TIMEOUT = 30
 
 
@@ -83,23 +88,28 @@ class ApifyClient:
             return None
 
     def fetch_amazon_price(self, product_name):
-        """从 Amazon 搜索并获取产品价格。"""
-        result = self._run_actor(_AMAZON_ACTOR, {
-            'searchTerms': [product_name],
-            'maxResults': 3,
-            'country': 'US',
-        })
-        if not result:
-            return None
-        prices = []
-        for item in (result if isinstance(result, list) else []):
-            price = item.get('price') or item.get('priceValue')
-            if price:
-                try:
-                    prices.append(float(price))
-                except (ValueError, TypeError):
-                    continue
-        return min(prices) if prices else None
+        """从 Amazon 搜索并获取产品价格（尝试多个爬虫 Actor）。"""
+        for actor in _AMAZON_ACTORS:
+            result = self._run_actor(actor, {
+                'searchTerms': [product_name],
+                'maxResults': 3,
+                'country': 'US',
+            })
+            if result:
+                prices = []
+                for item in (result if isinstance(result, list) else []):
+                    price = item.get('price') or item.get('priceValue')
+                    if price:
+                        try:
+                            prices.append(float(price))
+                        except (ValueError, TypeError):
+                            continue
+                if prices:
+                    return min(prices)
+            # 尝试下一个 actor
+            import time
+            time.sleep(1)
+        return None
 
 
 # 全局实例（由 app.py 初始化时注入 token）
