@@ -112,6 +112,12 @@ class Config:
     CACHE_TTL_DASHBOARD = int(os.environ.get('CACHE_TTL_DASHBOARD', 60))
     CACHE_TTL_RSS = int(os.environ.get('CACHE_TTL_RSS', 600))
 
+    # ── Apify 价格爬虫 ────────────────────────────
+    # 从 https://console.apify.com 获取 API Token
+    APIFY_TOKEN = os.environ.get('APIFY_TOKEN') or None
+    # 使用的 Actor（默认 Amazon Price Scraper）
+    APIFY_ACTOR = os.environ.get('APIFY_ACTOR') or 'apify~amazon-price-scraper'
+
 
 # 导出给 app.py 使用的活动配置
 # 这是一种简化写法：Config 本身可直接作为配置源，
