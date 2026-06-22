@@ -80,7 +80,7 @@ def crawl_all_active_sources():
     """
     from .bestbuy_client import client as bestbuy_client
     from .keepa_client import client as keepa_client
-    from .apify_client import client as apify_client
+    from .apify_client import apify_api as apify_client
     from .cache import cache_scan, cache_delete_pattern
 
     created = 0
