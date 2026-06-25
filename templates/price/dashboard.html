@@ -19,7 +19,7 @@
         </div>
         {% if current_user.is_authenticated %}
         <div id="add-form" style="display:none; margin-top:16px; max-width:600px; margin-left:auto; margin-right:auto">
-            <div style="background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:var(--radius-lg); padding:20px">
+            <div data-glow style="background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:var(--radius-lg); padding:20px">
                 <h3 style="margin-bottom:12px; font-size:16px">➕ 添加新产品</h3>
                 <form method="POST" action="{{ url_for('price.add_product') }}" style="display:flex; flex-direction:column; gap:10px">
                     <div style="display:flex; gap:10px">
@@ -66,8 +66,8 @@
                             <div style="display:flex; justify-content:space-between; align-items:baseline">
                                 {% set lp = product.latest_price() %}
                                 {% if lp %}
-                                <span style="font-size:22px; font-weight:800; color:var(--accent-cyan)">
-                                    ¥{{ '%.0f' % lp }}
+                                    <span style="font-size:22px; font-weight:800; color:var(--accent)">
+                                        ¥{{ '%.0f' % lp }}
                                 </span>
                                 {% else %}
                                 <span style="font-size:13px; color:var(--text-muted)">暂无价格</span>
@@ -89,7 +89,7 @@
                             <input type="hidden" name="product_id" value="{{ product.id }}">
                             <input type="number" name="price" step="0.01" min="0" placeholder="价格"
                                    style="flex:1; padding:4px 8px; background:rgba(255,255,255,0.04); border:1px solid var(--border-subtle); border-radius:4px; color:var(--text-primary); font-size:12px; outline:none">
-                            <button type="submit" style="padding:4px 10px; background:var(--accent-cyan); border:none; border-radius:4px; color:#000; font-size:12px; font-weight:600; cursor:pointer">录入</button>
+                            <button type="submit" style="padding:4px 10px; background:var(--accent); border:none; border-radius:4px; color:#fff; font-size:12px; font-weight:600; cursor:pointer">录入</button>
                         </form>
                         {% endif %}
                     </div>
@@ -141,9 +141,9 @@
                     <div class="widget">
                         <h4 class="widget-title">品类筛选</h4>
                         <div class="cat-tags">
-                            <a href="{{ url_for('price.index') }}" class="cat-tag {% if not current_category %}active{% endif %}" style="{% if not current_category %}background:rgba(0,240,255,0.12);color:var(--accent-cyan);{% endif %}">全部</a>
+                            <a href="{{ url_for('price.index') }}" class="cat-tag {% if not current_category %}active{% endif %}">全部</a>
                             {% for cat in categories %}
-                            <a href="{{ url_for('price.index', category=cat) }}" class="cat-tag {% if current_category == cat %}active{% endif %}" style="{% if current_category == cat %}background:rgba(0,240,255,0.12);color:var(--accent-cyan);{% endif %}">{{ cat }}</a>
+                            <a href="{{ url_for('price.index', category=cat) }}" class="cat-tag {% if current_category == cat %}active{% endif %}">{{ cat }}</a>
                             {% endfor %}
                         </div>
                     </div>
@@ -151,10 +151,10 @@
                     <div class="widget">
                         <h4 class="widget-title">价格看板</h4>
                         <div style="font-size:13px; color:var(--text-secondary); line-height:1.8">
-                            <div>📦 商品总数: <strong style="color:var(--accent-cyan)">{{ products.total }}</strong></div>
-                            <div>📊 品类数量: <strong style="color:var(--accent-cyan)">{{ categories|length }}</strong></div>
-                            <div>🔄 更新频率: <strong style="color:var(--accent-cyan)">每日 09:00</strong></div>
-                            <div>💡 数据来源: <strong style="color:var(--accent-cyan)">Baidu 搜索 + 手动录入</strong></div>
+                            <div>📦 商品总数: <strong style="color:var(--accent)">{{ products.total }}</strong></div>
+                            <div>📊 品类数量: <strong style="color:var(--accent)">{{ categories|length }}</strong></div>
+                            <div>🔄 更新频率: <strong style="color:var(--accent)">每日 09:00</strong></div>
+                            <div>💡 数据来源: <strong style="color:var(--accent)">多数据源爬取 + 手动录入</strong></div>
                         </div>
                     </div>
 
@@ -179,23 +179,6 @@
     padding: 14px;
     transition: all 0.3s;
 }
-.price-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--glow-cyan);
-    border-color: var(--accent-cyan);
-}
-.price-category {
-    font-size:10px; font-weight:600; text-transform:uppercase;
-    letter-spacing:0.8px; color:var(--accent-purple);
-    padding:2px 6px; border-radius:3px; background:rgba(124,58,237,0.1);
-}
-.price-brand { font-size:11px; color:var(--text-muted); }
-.spec-tag {
-    background:rgba(255,255,255,0.04);
-    padding:1px 6px; border-radius:3px;
-    font-size:10px; color:var(--text-muted);
-}
-.cat-tag.active { background:rgba(0,240,255,0.12); color:var(--accent-cyan); }
 </style>
 
 {% endblock %}

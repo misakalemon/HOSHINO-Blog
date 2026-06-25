@@ -82,9 +82,9 @@ def setup_logging(app):
     error_handler.setLevel(logging.ERROR)
     error_handler.setFormatter(logging.Formatter(DETAILED_FORMAT, DATE_FORMAT))
 
-    # ===== 4. 终端 Handler（DEBUG 级别，记录所有日志） =====
+    # ===== 4. 终端 Handler（INFO 级别，不显示 DEBUG 噪音） =====
     console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.DEBUG)
+    console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(logging.Formatter(CONSOLE_FORMAT, DATE_FORMAT))
 
     # 添加到根日志器
@@ -110,9 +110,24 @@ def setup_logging(app):
         # 禁止 propagate，避免日志重复（父 logger 也会输出）
         log.propagate = False
 
-    # ===== 6. SQLAlchemy 日志（方便追踪数据库问题） =====
+    # ===== 6. 第三方库日志级别压制 =====
+    # Selenium WebDriver 远程调用日志（每条 HTTP 请求/响应都打 DEBUG，太吵）
+    for logger_name in ('selenium.webdriver.remote.remote_connection',
+                        'selenium.webdriver.remote',
+                        'selenium'):
+        log = logging.getLogger(logger_name)
+        log.setLevel(logging.WARNING)
+        log.handlers.clear()
+        log.propagate = False
+
+    # urllib3 / requests 的连接池日志
+    for logger_name in ('urllib3', 'urllib3.connectionpool', 'requests'):
+        log = logging.getLogger(logger_name)
+        log.setLevel(logging.WARNING)
+
+    # ===== 7. SQLAlchemy 日志（仅记录 WARNING 以上） =====
     sql_logger = logging.getLogger('sqlalchemy.engine')
-    sql_logger.setLevel(logging.DEBUG)  # DEBUG 级别，记录所有 SQL
+    sql_logger.setLevel(logging.WARNING)  # WARNING 以上，减少日志噪音
     sql_logger.addHandler(file_handler)
 
     # 将根日志器挂载到 app.logger

@@ -3,21 +3,30 @@
 HOSHINO Blog — Flask 应用入口
 
 职责：
-  创建并组装 Flask 应用实例，串联以下子系统：
-  - 配置加载     （从 config.py + .env 合并）
-  - 日志系统     （文件 + 终端，每日轮转）
-  - 数据库       （SQLAlchemy + 自动建表 / 迁移）
-  - 登录管理     （Flask-Login session 恢复）
-  - 蓝图注册     （前台 blog_bp + 后台 admin_bp）
-  - Gzip 压缩   （静态资源 & API 响应）
-  - 请求日志     （每次 HTTP 请求的统一记录）
+   创建并组装 Flask 应用实例，串联以下子系统：
+   - 配置加载     （从 config.py + .env 合并）
+   - 日志系统     （文件 + 终端，每日轮转）
+   - 数据库       （SQLAlchemy + 自动建表 / 迁移）
+   - 登录管理     （Flask-Login session 恢复）
+   - 蓝图注册     （前台 blog_bp + 后台 admin_bp）
+   - Gzip 压缩   （静态资源 & API 响应）
+   - 请求日志     （每次 HTTP 请求的统一记录）
+
+启动流程：
+   1. 配置 / 日志 / 数据库 / Redis        — 同步（~200ms）
+   2. API 客户端初始化（BestBuy/Keepa/Apify）— 同步（~10ms）
+   3. Docker 浏览器池初始化               — 后台线程（~4s，不阻塞启动）
+   4. 定时器 / 蓝图 / Gzip / 登录管理     — 同步（~10ms）
+   → 应用在 1 秒内开始接受请求，后台初始化完成后自动就绪
 
 使用方式：
-  python app.py              # 直接开发运行
-   gunicorn app:create_app()  # Linux 生产部署（需读取 .env）
-   waitress-serve --port=5000 app:create_app  # Windows 生产部署
+   python app.py              # 直接开发运行
+    gunicorn app:create_app()  # Linux 生产部署（需读取 .env）
+    waitress-serve --port=5000 app:create_app  # Windows 生产部署
 """
 import os
+import time
+import threading
 from flask import Flask
 from flask_login import LoginManager
 from flask_compress import Compress
@@ -30,6 +39,9 @@ load_dotenv()
 
 # Gzip 压缩实例（让静态资源和 API 响应更小）
 compress = Compress()
+
+
+_startup_time = time.time()
 
 
 def create_app():
@@ -77,17 +89,19 @@ def create_app():
     from blog.cache import init_redis
     init_redis(app)
 
-    # ── Best Buy API（免费，美国消费电子价格） ──
-    from blog.bestbuy_client import init_bestbuy
-    init_bestbuy(app)
+    # ── Amazon 直爬（curl_cffi 模拟浏览器） ────
+    from blog.apify_client import scraper
+    scraper._proxy = app.config.get('SCRAPING_PROXY') or None
+    logger.info('Amazon 爬虫已就绪%s',
+                '，代理: ' + scraper._proxy if scraper._proxy else '（无代理）')
 
-    # ── Keepa API（Amazon 价格历史，免费层可用） ──
-    from blog.keepa_client import init_keepa
-    init_keepa(app)
-
-    # ── Apify 价格爬虫（京东的后备数据源） ──────
-    from blog.apify_client import init_apify
-    init_apify(app)
+    # ── Exa API（海外价格搜索引擎，绕过 GFW） ──
+    from blog.exa_client import ExaClient
+    app.exa_client = ExaClient(app.config.get('EXA_API_KEY', ''))
+    if app.exa_client._ready:
+        logger.info('Exa 客户端已就绪')
+    else:
+        logger.info('Exa 未配置（EXA_API_KEY 为空），跳过')
 
     # ── 价格爬虫定时任务（每天 09:00） ──────────
     _init_scheduler(app)
@@ -126,6 +140,8 @@ def create_app():
     # 每次 HTTP 响应返回到客户端之前执行 log_request()
     app.after_request(log_request)
 
+    elapsed = time.time() - _startup_time
+    logger.info('应用就绪 (%.2fs)', elapsed)
     return app
 
 

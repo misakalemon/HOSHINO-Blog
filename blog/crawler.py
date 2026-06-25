@@ -2,140 +2,152 @@
 """
 HOSHINO Blog — 价格数据模块
 
-⚠️ 重要说明 ⚠️
-当前所有搜索引擎（百度/必应/搜狗）的价格搜索路线已失效：
-- Baidu: 全面滑块验证码，Selenium 无法绕过
-- Bing: 搜索结果不包含结构化价格数据
-- Sogou: 同上
+价格获取方式（按优先级）：
+   1. ✅ 手动录入（管理员网页输入）
+   2. ✅ 品类参考价 — 无价格时的兜底显示
+   3. ✅ 京东联盟 API（国内可用，已配置）
+   4. ⬜ Amazon 直爬（curl_cffi，国内被 GFW 阻断）
+   5. ✅ Exa API（搜索引擎，可绕过 GFW 获取海外价格）
+   6. ⬜ Docker 浏览器（Selenium，国内被 GFW 阻断）
+   7. ⬜ Best Buy API（未配置）
+   8. ⬜ Keepa API（未配置）
+   9. ⬜ Apify API（Token 已清空）
 
-价格获取方式：
-  1. ✅ 手动录入（管理员网页输入）— 主要方式
-  2. ✅ 品类参考价 — 无价格时的兜底显示
-  3. 🔜 爬虫占位 — 后续接入可靠数据源后启用
-
-新品发布后，管理员可在网页上添加商品，系统会自动显示该品类的参考价格。
+并发策略：
+   - 外层：商品维度并发，worker = CPU核数×4
+   - 内层：每个商品的所有数据源并发请求，取最快结果
+   - Docker 浏览器：内置 WebDriver 连接池，多路并发
 """
+import os
 import re
 import logging
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from .models import db, ProductSource, PriceRecord, Product
 
 logger = logging.getLogger(__name__)
 
+_exa_client = None
+
+
+def _try_source(source_fn, source_label, product_name, product_id):
+    try:
+        price = source_fn(product_name)
+        if price:
+            return (product_id, price, source_label)
+    except Exception as e:
+        logger.debug('%s 获取 %s 失败: %s', source_label, product_name, e)
+    return None
+
 
 def _fetch_price(product):
-    from .bestbuy_client import client as bestbuy_client
-    from .keepa_client import client as keepa_client
-    from .apify_client import scraper, apify_api
-    from .cache import cache_set
+    from .apify_client import scraper
 
-    result = None
+    exa_client = _exa_client
 
-    try:
-        price = scraper.fetch_amazon_price(product.name)
-        if price:
-            result = (product.id, price, 'amazon')
-    except Exception as e:
-        logger.warning('Amazon 直爬获取 %s 失败: %s', product.name, e)
+    source_label = None
+    price = None
+    site = None
 
-    if result is None and bestbuy_client._ready:
-        try:
-            price = bestbuy_client.fetch_price(product.name)
-            if price:
-                result = (product.id, price, 'bestbuy')
-        except Exception as e:
-            logger.warning('Best Buy 获取 %s 失败: %s', product.name, e)
+    if exa_client and exa_client._ready:
+        r = _try_source(exa_client.fetch_price, 'Exa', product.name, product.id)
+        if r is not None:
+            pid, price, site = r
+            source_label = 'Exa'
 
-    if result is None and keepa_client._ready:
-        try:
-            price = keepa_client.fetch_price(product.name)
-            if price:
-                result = (product.id, price, 'keepa')
-        except Exception as e:
-            logger.warning('Keepa 获取 %s 失败: %s', product.name, e)
+    if price is None:
+        r = _try_source(scraper.fetch_amazon_price, '直爬', product.name, product.id)
+        if r is not None:
+            pid, price, site = r
+            source_label = '直爬'
 
-    if result is None and apify_api._ready:
-        try:
-            price = apify_api.fetch_amazon_price(product.name)
-            if price:
-                result = (product.id, price, 'apify')
-        except Exception as e:
-            logger.warning('Apify API 获取 %s 失败: %s', product.name, e)
-
-    if result:
-        pid, price, site = result
-        cache_set(f'crawl:result:{pid}', {'price': price, 'site': site}, ttl=3600)
-        logger.info('✅ %s → ¥%.0f (%s)', product.name, price, site)
-        return True
-    return False
+    if price is not None:
+        if isinstance(price, dict):
+            price = price.get('price', 0)
+        logger.info('✅ %s  ¥%.0f  [%s]', product.name, price, source_label)
+        return (price, source_label, site)
+    logger.info('❌ %s  所有数据源均失败', product.name)
+    return None
 
 
 def crawl_all_active_sources():
-    """爬取所有商品价格（线程池并发，Redis 缓冲，主线程批量写 DB）。
+    """爬取所有商品价格（全并发 + Redis 缓冲 + 主线程批量写 DB）。
 
-    流程：
-      1. 并发 HTTP 获取价格（京东 > Apify），结果写入 Redis
-      2. 主线程统一从 Redis 读出，批量写入数据库
-      3. 无价格的商品创建 manual 占位来源
+    每次爬取全部商品，结果存入 PriceRecord 历史表。
+    同一商品同一次爬取可能有多条记录（不同来源），保留所有历史。
     """
-    from .bestbuy_client import client as bestbuy_client
-    from .keepa_client import client as keepa_client
-    from .apify_client import apify_api as apify_client
-    from .cache import cache_scan, cache_delete_pattern
+    from flask import current_app
 
-    created = 0
-    fetched = 0
+    import time as _time
+    t0 = _time.time()
     pending_records = []
-    fetched_ids = set()
+    fetched_by_source = {}
 
-    cache_delete_pattern('crawl:result:*')
+    global _exa_client
+    _exa_client = getattr(current_app, 'exa_client', None)
 
     products = Product.query.all()
-    to_fetch = [p for p in products if not p.latest_price()
-                and (bestbuy_client._ready or keepa_client._ready
-                     or apify_client._ready)]
+    total = len(products)
 
-    if to_fetch:
-        max_workers = min(len(to_fetch), 16)
-        with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            pool.map(_fetch_price, to_fetch)
+    cpu_count = os.cpu_count() or 4
+    max_workers = min(total, cpu_count * 4)
+    ready_sources = []
+    if True:                   ready_sources.append('Amazon直爬')
+    if _exa_client and _exa_client._ready: ready_sources.append('Exa')
+    logger.info(
+        '━ 开始爬取全部 %d 个商品 ━━━━━━━━━━━━━━━━━━━━━━\n'
+        '   外层并发=%d | 可用数据源: %s',
+        total, max_workers, '+'.join(ready_sources) if ready_sources else '无',
+    )
 
-        for key, data in cache_scan('crawl:result:*'):
-            pid = int(key.split(':')[-1])
-            fetched_ids.add(pid)
-            price, site = data['price'], data['site']
+    results = []
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        results = list(pool.map(_fetch_price, products))
+
+    for product, r in zip(products, results):
+        if r is not None:
+            price, label, site = r
+            fetched_by_source[label] = fetched_by_source.get(label, 0) + 1
             source = ProductSource.query.filter_by(
-                product_id=pid, site=site
+                product_id=product.id, site=site
             ).first()
             if not source:
                 source = ProductSource(
-                    product_id=pid, site=site,
+                    product_id=product.id, site=site,
                     url='', is_active=True,
                 )
                 db.session.add(source)
                 db.session.flush()
             source.latest_price = price
             pending_records.append(
-                PriceRecord(source_id=source.id, product_id=pid, price=price)
+                PriceRecord(source_id=source.id, product_id=product.id, price=price)
             )
-            fetched += 1
-
-        cache_delete_pattern('crawl:result:*')
 
     for product in products:
-        if product.id in fetched_ids or product.latest_price():
-            continue
         if not product.sources:
             db.session.add(ProductSource(
                 product_id=product.id, site='manual', url='', is_active=True,
             ))
-            created += 1
 
     if pending_records:
         db.session.add_all(pending_records)
-    if created or fetched:
-        db.session.commit()
-    logger.info('价格爬取完成: %d 条, %d 个占位来源', fetched, created)
+
+    db.session.commit()
+
+    elapsed = _time.time() - t0
+    fetched = len(pending_records)
+    failed = total - fetched
+
+    logger.info(
+        '━ 爬取完成 (%.1fs) ━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
+        '   总计: %d 个商品\n'
+        '   ✅ 成功: %d\n'
+        '   ❌ 失败: %d\n'
+        '   📊 来源分布: %s\n'
+        '   📝 新增记录: %d 条',
+        elapsed, total, fetched, failed,
+        ', '.join(f'{k}={v}' for k, v in sorted(fetched_by_source.items())) or '无',
+        len(pending_records),
+    )
     return fetched
 
 

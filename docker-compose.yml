@@ -1,0 +1,19 @@
+services:
+  chrome:
+    image: selenium/standalone-chrome:4.28.1
+    container_name: hoshino-chrome
+    restart: unless-stopped
+    ports:
+      - "4444:4444"
+    shm_size: 2g
+    environment:
+      - SE_VNC_PASSWORD=
+      - SE_NODE_MAX_SESSIONS=8
+      - SE_SESSION_REQUEST_TIMEOUT=300
+      - SE_NODE_SESSION_TIMEOUT=600
+    networks:
+      - hoshino_net
+
+networks:
+  hoshino_net:
+    name: hoshino_net

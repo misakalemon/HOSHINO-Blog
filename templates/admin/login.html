@@ -11,9 +11,9 @@
 
 <section style="padding-bottom:60px">
     <div class="container">
-        <div class="login-wrapper">
-            <div class="login-box">
-                <h2>// 登录</h2>
+        <div class="login-wrapper" style="display:flex; justify-content:center">
+            <div class="login-box" data-glow style="background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:var(--radius-lg); padding:40px; width:100%; max-width:400px">
+                <h2 style="font-size:24px; font-weight:800; margin-bottom:4px">// 登录</h2>
                 <p class="subtitle">请输入管理员账号</p>
 
                 {% with messages = get_flashed_messages(with_categories=true) %}

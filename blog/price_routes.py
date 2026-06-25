@@ -213,35 +213,16 @@ def add_product():
     db.session.add(product)
     db.session.commit()
 
-    # 尝试获取价格（Best Buy → Keepa → Amazon → 参考价兜底）
     price = None
     site = ''
-    if not price:
-        try:
-            from .bestbuy_client import client as bestbuy_client
-            if bestbuy_client._ready:
-                price = bestbuy_client.fetch_price(name)
-                site = 'bestbuy'
-        except Exception as e:
-            logger.error('Best Buy 查询失败: %s', e)
 
-    if not price:
-        try:
-            from .keepa_client import client as keepa_client
-            if keepa_client._ready:
-                price = keepa_client.fetch_price(name)
-                site = 'keepa'
-        except Exception as e:
-            logger.error('Keepa 查询失败: %s', e)
-
-    if not price:
-        try:
-            from .apify_client import client as apify_client
-            if apify_client._ready:
-                price = apify_client.fetch_amazon_price(name)
-                site = 'amazon'
-        except Exception as e:
-            logger.error('Amazon 查询失败: %s', e)
+    # Amazon 直爬（curl_cffi）
+    try:
+        from .apify_client import scraper
+        price = scraper.fetch_amazon_price(name)
+        site = 'amazon'
+    except Exception as e:
+        logger.error('Amazon 直爬查询失败: %s', e)
 
     if price and site:
         source = ProductSource(

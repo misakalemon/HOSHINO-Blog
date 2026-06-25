@@ -34,7 +34,7 @@
             {% for source in product.sources %}
             <div class="price-card" style="background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:var(--radius); padding:16px">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px">
-                    <span style="font-weight:600; font-size:13px; color:var(--accent-cyan)">{{ source.site }}</span>
+                    <span style="font-weight:600; font-size:13px; color:var(--accent)">{{ source.site }}</span>
                     <span style="font-size:18px; font-weight:700; color:var(--text-primary)">
                         ¥{{ '%.2f' % source.latest_price if source.latest_price else '--' }}
                     </span>
@@ -47,7 +47,7 @@
         </div>
 
         <!-- 价格历史表格 -->
-        <div style="margin-top:32px; background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:var(--radius-lg); overflow:hidden">
+        <div data-glow style="margin-top:32px; background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:var(--radius-lg); overflow:hidden">
             <div style="padding:16px 20px; border-bottom:1px solid var(--border-subtle); font-weight:600; font-size:14px">
                 📋 价格历史记录（最近 {{ days }} 天）
             </div>
@@ -146,7 +146,7 @@ function loadChart(type) {
                     splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } },
                 },
                 series: series,
-                color: ['#00f0ff', '#7c3aed', '#00ff88', '#ff2d78'],
+                color: ['#6c42d1', '#845ef7', '#3dd68c', '#f0a030'],
             });
         });
 }
@@ -170,7 +170,7 @@ window.addEventListener('resize', function(){ myChart.resize(); });
 .price-table td { color:var(--text-primary); }
 .price-table tbody tr:hover { background:rgba(0,240,255,0.03); }
 .price-card { transition:all 0.3s; }
-.price-card:hover { border-color:var(--accent-cyan); }
+.price-card:hover { border-color:var(--accent); }
 </style>
 
 {% endblock %}
