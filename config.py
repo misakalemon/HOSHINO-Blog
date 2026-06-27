@@ -122,8 +122,9 @@ class Config:
     # ── Session 安全 ────────────────────────────────
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
-    # 生产环境强制 HTTPS（开发环境 FLASK_ENV=development 时自动关闭）
-    SESSION_COOKIE_SECURE = os.environ.get('FLASK_ENV') != 'development'
+    # 生产环境默认强制 HTTPS，可通过 .env 中 SESSION_COOKIE_SECURE=false 关闭
+    _default_secure = os.environ.get('FLASK_ENV') != 'development'
+    SESSION_COOKIE_SECURE = os.environ.get('SESSION_COOKIE_SECURE', str(_default_secure)).lower() in ('true', '1')
 
     # ── 数据库 ──────────────────────────────────
     # 关闭 SQLAlchemy 的事件追踪（减少内存开销）
