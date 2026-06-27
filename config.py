@@ -59,10 +59,10 @@ def _ensure_initial_key():
 def rotate_secret_key(app):
     """生成新密钥轮换当前 SECRET_KEY，旧密钥移入 SECRET_KEY_FALLBACKS。
 
-    调用后：
-      - app.config['SECRET_KEY'] 更新为新密钥（用于签发新 session）
-      - app.config['SECRET_KEY_FALLBACKS'] 包含之前的所有密钥（用于验证已有 session）
+    如果 .env 中显式设置了 SECRET_KEY，则不执行轮换。
     """
+    if os.environ.get('SECRET_KEY'):
+        return
     new_key = secrets.token_hex(32)
     keys = _load_secret_keys()
     keys.insert(0, new_key)
