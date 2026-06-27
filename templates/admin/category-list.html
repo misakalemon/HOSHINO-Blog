@@ -17,6 +17,7 @@
             <td data-label="操作" style="white-space:nowrap">
                 <a href="{{ url_for('admin.edit_category', id=cat.id) }}" class="btn btn-primary btn-sm">编辑</a>
                 <form method="POST" action="{{ url_for('admin.delete_category', id=cat.id) }}" style="display:inline" onsubmit="return confirm('确定删除 {{ cat.name }}？相关文章将变为未分类。')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button class="btn btn-danger btn-sm">删除</button>
                 </form>
             </td>

@@ -162,8 +162,19 @@ def log_request(response):
     content_type = response.content_type or ''
     if 'charset' not in content_type and 'text/' in content_type:
         response.headers['Content-Type'] = content_type + '; charset=utf-8'
-    # 安全头：禁用 MIME 类型嗅探
+    # ── 安全响应头 ──────────────────────────────
     response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self';"
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval';"
+        "style-src 'self' 'unsafe-inline';"
+        "img-src 'self' data: https:;"
+        "font-src 'self';"
+        "connect-src 'self';"
+        "frame-ancestors 'none'"
+    )
 
     logger = logging.getLogger()
     # 静态文件和图标不记录，减少日志噪音

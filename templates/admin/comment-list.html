@@ -16,9 +16,11 @@
             <td data-label="日期">{{ format_date(c.created_at, '%Y-%m-%d') }}</td>
             <td data-label="操作">
                 <form method="POST" action="{{ url_for('admin.approve_comment', id=c.id) }}" style="display:inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button class="btn btn-primary btn-sm">通过</button>
                 </form>
                 <form method="POST" action="{{ url_for('admin.delete_comment', id=c.id) }}" style="display:inline" onsubmit="return confirm('确定删除？')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button class="btn btn-danger btn-sm">删除</button>
                 </form>
             </td>
@@ -43,6 +45,7 @@
             <td data-label="日期">{{ format_date(c.created_at, '%Y-%m-%d') }}</td>
             <td data-label="操作">
                 <form method="POST" action="{{ url_for('admin.delete_comment', id=c.id) }}" style="display:inline" onsubmit="return confirm('确定删除？')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button class="btn btn-danger btn-sm">删除</button>
                 </form>
             </td>

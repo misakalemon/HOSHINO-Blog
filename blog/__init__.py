@@ -53,6 +53,14 @@ def init_db(app):
         # ── 创建默认管理员 ────────────────────────
         # 仅当 users 表中没有任何用户名为 "admin" 的记录时执行
         if not User.query.filter_by(username='admin').first():
+            import secrets
+            admin_password = app.config.get('ADMIN_PASSWORD', 'CHANGE_ME')
+            if admin_password == 'CHANGE_ME':
+                admin_password = secrets.token_urlsafe(24)
+                app.logger.warning('=' * 60)
+                app.logger.warning('默认管理员密码未设置，已自动生成: %s', admin_password)
+                app.logger.warning('请在 .env 中设置 ADMIN_PASSWORD，或登录后立即修改！')
+                app.logger.warning('=' * 60)
             admin = User(
                 username=app.config.get('ADMIN_USERNAME', 'admin'),
                 email=app.config.get('ADMIN_EMAIL', 'admin@localhost'),
@@ -62,7 +70,7 @@ def init_db(app):
             )
             # set_password() 内部使用 werkzeug 的加密哈希，
             # 不会明文存储密码
-            admin.set_password(app.config.get('ADMIN_PASSWORD', 'admin123'))
+            admin.set_password(admin_password)
             db.session.add(admin)
             db.session.commit()
 

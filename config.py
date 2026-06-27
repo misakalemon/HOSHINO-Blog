@@ -3,15 +3,17 @@
 HOSHINO Blog — 应用配置
 
 职责：
-  集中管理所有 Flask 配置项，支持通过 .env 文件动态覆盖。
-  提供两种数据库连接方式：
-    1. DATABASE_URL 直接指定完整连接串（优先级最高）
-    2. 拆分 DB_HOST/DB_PORT/DB_USER/DB_PASS/DB_NAME 自动拼接
+   集中管理所有 Flask 配置项，支持通过 .env 文件动态覆盖。
+   提供两种数据库连接方式：
+     1. DATABASE_URL 直接指定完整连接串（优先级最高）
+     2. 拆分 DB_HOST/DB_PORT/DB_USER/DB_PASS/DB_NAME 自动拼接
 
 使用方式：
-  app.config.from_object('config.ActiveConfig')
+   app.config.from_object('config.ActiveConfig')
 """
 import os
+import json
+import secrets
 from dotenv import load_dotenv
 
 # 项目根目录（config.py 所在目录，即项目根目录）
@@ -21,6 +23,55 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 # 注意：app.py 中已调用 load_dotenv()，此处再调用一次是为了
 # 其他直接 import config 的模块（如迁移脚本）也能读到 .env
 load_dotenv(os.path.join(basedir, '.env'))
+
+# ── SECRET_KEY 轮换 ──────────────────────────────
+# .secret_keys 文件存储多个历史密钥（JSON 数组，最新在前），
+# 用于支持运行时定期轮换 SECRET_KEY，同时保留旧密钥让已签发 session 不失效。
+SECRET_KEYS_FILE = os.path.join(basedir, '.secret_keys')
+SECRET_KEY_MAX_HISTORY = 10  # 最多保留 10 个历史密钥
+
+
+def _load_secret_keys():
+    """从文件加载所有历史密钥，返回列表（最新在前）。"""
+    if os.path.exists(SECRET_KEYS_FILE):
+        with open(SECRET_KEYS_FILE) as f:
+            keys = json.load(f)
+            if isinstance(keys, list) and all(isinstance(k, str) for k in keys):
+                return keys
+    return []
+
+
+def _save_secret_keys(keys):
+    """将密钥列表持久化到文件。"""
+    with open(SECRET_KEYS_FILE, 'w') as f:
+        json.dump(keys, f)
+
+
+def _ensure_initial_key():
+    """确保至少有一个密钥存在，没有则自动生成。"""
+    keys = _load_secret_keys()
+    if not keys:
+        keys = [secrets.token_hex(32)]
+        _save_secret_keys(keys)
+    return keys
+
+
+def rotate_secret_key(app):
+    """生成新密钥轮换当前 SECRET_KEY，旧密钥移入 SECRET_KEY_FALLBACKS。
+
+    调用后：
+      - app.config['SECRET_KEY'] 更新为新密钥（用于签发新 session）
+      - app.config['SECRET_KEY_FALLBACKS'] 包含之前的所有密钥（用于验证已有 session）
+    """
+    new_key = secrets.token_hex(32)
+    keys = _load_secret_keys()
+    keys.insert(0, new_key)
+    keys = keys[:SECRET_KEY_MAX_HISTORY]
+    _save_secret_keys(keys)
+
+    app.config['SECRET_KEY'] = new_key
+    app.config['SECRET_KEY_FALLBACKS'] = keys[1:]
+    app.logger.info('SECRET_KEY 已轮换（共 %d 个历史密钥）', len(keys))
 
 
 def _build_database_uri():
@@ -59,8 +110,20 @@ class Config:
 
     # ── Flask 核心 ──────────────────────────────
     # 密钥用于 Session 签名、CSRF token 加密。
-    # 生产环境一定要在 .env 中设置强随机字符串（至少 32 字符）。
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'hoshino-blog-secret-key'
+    # 优先级：.env 中的 SECRET_KEY > .secret_keys 文件（自动轮换）
+    SECRET_KEY = os.environ.get('SECRET_KEY')
+    if SECRET_KEY:
+        SECRET_KEY_FALLBACKS = []
+    else:
+        keys = _ensure_initial_key()
+        SECRET_KEY = keys[0]
+        SECRET_KEY_FALLBACKS = keys[1:]
+
+    # ── Session 安全 ────────────────────────────────
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    # 生产环境强制 HTTPS（开发环境 FLASK_ENV=development 时自动关闭）
+    SESSION_COOKIE_SECURE = os.environ.get('FLASK_ENV') != 'development'
 
     # ── 数据库 ──────────────────────────────────
     # 关闭 SQLAlchemy 的事件追踪（减少内存开销）
@@ -96,7 +159,7 @@ class Config:
     # 这些值只在数据库没有任何用户时生效一次。
     # 创建管理员后，修改这些值不会影响已有用户。
     ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin')
-    ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
+    ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'CHANGE_ME')
     ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', 'admin@localhost')
     ADMIN_DISPLAY_NAME = os.environ.get('ADMIN_DISPLAY_NAME', 'Admin')
 

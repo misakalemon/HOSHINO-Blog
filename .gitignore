@@ -22,6 +22,9 @@ Thumbs.db
 # Source zip
 HarmonyOS_Icons.zip
 
+# Secret keys (自动轮换)
+.secret_keys
+
 # Logs
 blog/logs/
 

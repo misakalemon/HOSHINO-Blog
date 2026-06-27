@@ -18,7 +18,9 @@ HOSHINO Blog — 管理后台路由
 import os
 import uuid
 import datetime
+import time
 import logging
+from collections import defaultdict
 from flask import render_template, request, redirect, url_for, abort, flash, jsonify, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 from functools import wraps
@@ -68,6 +70,11 @@ def admin_required(f):
 # 认证
 # ═══════════════════════════════════════════════
 
+# 登录频率限制（简易内存实现：每 IP 每分钟最多 10 次）
+_login_attempts = defaultdict(list)
+LOGIN_RATE_LIMIT = 10
+LOGIN_RATE_WINDOW = 60
+
 @admin_bp.route('/login', methods=['GET', 'POST'])
 def login():
     """管理员登录页面。
@@ -83,12 +90,22 @@ def login():
     """
     if current_user.is_authenticated:
         return redirect(url_for('admin.dashboard'))
+
+    ip = request.remote_addr or 'unknown'
+    now = time.time()
+    _login_attempts[ip] = [t for t in _login_attempts[ip] if now - t < LOGIN_RATE_WINDOW]
+    if len(_login_attempts[ip]) >= LOGIN_RATE_LIMIT:
+        flash('登录尝试过于频繁，请稍后再试', 'error')
+        return render_template('admin/login.html', form=LoginForm())
+
     form = LoginForm()
     if form.validate_on_submit():
         user = User.query.filter_by(username=form.username.data).first()
         if user and user.check_password(form.password.data):
+            _login_attempts[ip] = []
             login_user(user)
             return redirect(url_for('admin.dashboard'))
+        _login_attempts[ip].append(now)
         flash('用户名或密码错误', 'error')
     return render_template('admin/login.html', form=form)
 
@@ -192,6 +209,27 @@ def new_post():
         if len(form.categories.data) > 15:
             flash('最多选择15个分类', 'error')
             return render_template('admin/post-form.html', form=form, editing=False)
+        # ── XSS 过滤：净化富文本编辑器内容 ─────
+        import bleach
+        ALLOWED_TAGS = [
+            'p', 'br', 'strong', 'em', 'a', 'code', 'pre', 'span', 'div',
+            'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li',
+            'blockquote', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+            'img', 'hr', 'sup', 'sub', 'del', 'ins', 'kbd', 'samp', 'var',
+            'abbr', 'dfn', 'u', 's',
+        ]
+        ALLOWED_ATTRS = {
+            'a': ['href', 'title', 'rel'],
+            'img': ['src', 'alt', 'title', 'style'],
+            'th': ['align'],
+            'td': ['align'],
+            'code': ['class'],
+            'span': ['class', 'style'],
+            'div': ['class'],
+            'pre': ['class'],
+            'abbr': ['title'],
+        }
+        form.content.data = bleach.clean(form.content.data or '', tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS)
         post = Post(
             title=form.title.data,
             slug=form.slug.data,
@@ -243,6 +281,27 @@ def edit_post(id):
         if len(form.categories.data) > 15:
             flash('最多选择15个分类', 'error')
             return render_template('admin/post-form.html', form=form, editing=True, post=post)
+        # ── XSS 过滤：净化富文本编辑器内容 ─────
+        import bleach
+        ALLOWED_TAGS = [
+            'p', 'br', 'strong', 'em', 'a', 'code', 'pre', 'span', 'div',
+            'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li',
+            'blockquote', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+            'img', 'hr', 'sup', 'sub', 'del', 'ins', 'kbd', 'samp', 'var',
+            'abbr', 'dfn', 'u', 's',
+        ]
+        ALLOWED_ATTRS = {
+            'a': ['href', 'title', 'rel'],
+            'img': ['src', 'alt', 'title', 'style'],
+            'th': ['align'],
+            'td': ['align'],
+            'code': ['class'],
+            'span': ['class', 'style'],
+            'div': ['class'],
+            'pre': ['class'],
+            'abbr': ['title'],
+        }
+        form.content.data = bleach.clean(form.content.data or '', tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS)
         # ── 更新字段 ────────────────────────
         post.title = form.title.data
         post.slug = form.slug.data

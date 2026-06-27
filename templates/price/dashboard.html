@@ -10,7 +10,9 @@
             <button class="btn btn-primary" onclick="document.getElementById('crawl-form').submit()">
                 🔄 更新价格
             </button>
-            <form id="crawl-form" method="POST" action="{{ url_for('price.trigger_crawl') }}" style="display:none"></form>
+            <form id="crawl-form" method="POST" action="{{ url_for('price.trigger_crawl') }}" style="display:none">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            </form>
             {% if current_user.is_authenticated %}
             <button class="btn btn-ghost" onclick="document.getElementById('add-form').style.display='block'">
                 ➕ 添加新品
@@ -22,6 +24,7 @@
             <div data-glow style="background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:var(--radius-lg); padding:20px">
                 <h3 style="margin-bottom:12px; font-size:16px">➕ 添加新产品</h3>
                 <form method="POST" action="{{ url_for('price.add_product') }}" style="display:flex; flex-direction:column; gap:10px">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div style="display:flex; gap:10px">
                         <input type="text" name="name" placeholder="产品名称（如 NVIDIA RTX 5070）" required
                                style="flex:2; padding:8px 12px; background:rgba(255,255,255,0.04); border:1px solid var(--border-subtle); border-radius:6px; color:var(--text-primary); font-size:13px">
@@ -86,6 +89,7 @@
                         </a>
                         {% if current_user.is_authenticated %}
                         <form method="POST" action="{{ url_for('price.manual_price') }}" style="margin-top:8px; display:flex; gap:4px; padding:0 4px 4px">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <input type="hidden" name="product_id" value="{{ product.id }}">
                             <input type="number" name="price" step="0.01" min="0" placeholder="价格"
                                    style="flex:1; padding:4px 8px; background:rgba(255,255,255,0.04); border:1px solid var(--border-subtle); border-radius:4px; color:var(--text-primary); font-size:12px; outline:none">

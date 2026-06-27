@@ -12,6 +12,7 @@ import datetime
 import os
 import time
 import logging
+import bleach
 from flask import render_template, request, redirect, url_for, abort, Response, current_app
 from . import blog_bp
 from .models import db, Post, Category, Comment
@@ -139,10 +140,31 @@ def single_post(slug):
     # ── Markdown → HTML ────────────────────────
     # 使用 Python-Markdown 库将正文渲染为 HTML
     # 支持代码块（fenced_code）、代码高亮（codehilite）、表格（tables）
+    # 输出经 bleach 过滤，防止 XSS
+    ALLOWED_TAGS = [
+        'p', 'br', 'strong', 'em', 'a', 'code', 'pre', 'span', 'div',
+        'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li',
+        'blockquote', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+        'img', 'hr', 'sup', 'sub', 'del', 'ins', 'kbd', 'samp', 'var',
+        'abbr', 'dfn',
+    ]
+    ALLOWED_ATTRS = {
+        'a': ['href', 'title', 'rel'],
+        'img': ['src', 'alt', 'title'],
+        'th': ['align'],
+        'td': ['align'],
+        'code': ['class'],
+        'span': ['class'],
+        'div': ['class'],
+        'pre': ['class'],
+        'abbr': ['title'],
+    }
     from markdown import markdown
-    post.content = markdown(post.content, extensions=[
-        'fenced_code', 'codehilite', 'tables'
-    ])
+    post.content = bleach.clean(
+        markdown(post.content, extensions=['fenced_code', 'codehilite', 'tables']),
+        tags=ALLOWED_TAGS,
+        attributes=ALLOWED_ATTRS,
+    )
 
     return render_template('single-post.html',
         post=post, categories=categories,
@@ -317,11 +339,13 @@ def thumbnail():
         abort(404)
     from flask import current_app
     import mimetypes
-    # 路径安全检查：禁止 ../ 遍历和绝对路径
-    if '..' in path or path.startswith('/'):
+    # 路径安全检查：禁止目录遍历（规范化后验证前缀）
+    safe_path = os.path.normpath(os.path.join(current_app.root_path, 'static', path))
+    static_dir = os.path.normpath(os.path.join(current_app.root_path, 'static'))
+    if not safe_path.startswith(static_dir):
         logger.warning('缩略图路径非法: %s', path)
         abort(404)
-    img_path = os.path.join(current_app.root_path, 'static', path)
+    img_path = safe_path
     if not os.path.isfile(img_path):
         logger.warning('缩略图不存在: %s', path)
         # 返回 1×1 透明 GIF（避免页面布局塌陷）

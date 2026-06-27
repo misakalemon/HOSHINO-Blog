@@ -30,6 +30,7 @@ import threading
 from flask import Flask
 from flask_login import LoginManager
 from flask_compress import Compress
+from flask_wtf.csrf import CSRFProtect
 from dotenv import load_dotenv
 
 # ── 环境变量加载 ──────────────────────────────
@@ -55,6 +56,9 @@ def create_app():
     app.config['JSON_AS_ASCII'] = False
     # 最大上传 16MB
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
+
+    # ── CSRF 保护（全局，影响所有 POST/PUT/DELETE）──
+    csrf = CSRFProtect(app)
     # Gzip 压缩哪些 MIME 类型
     app.config['COMPRESS_MIMETYPES'] = [
         'text/html', 'text/css', 'text/javascript',
@@ -103,7 +107,7 @@ def create_app():
     else:
         logger.info('Exa 未配置（EXA_API_KEY 为空），跳过')
 
-    # ── 价格爬虫定时任务（每天 09:00） ──────────
+    # ── 定时任务（价格爬虫 + SECRET_KEY 轮换） ──
     _init_scheduler(app)
 
     # ── 登录管理 ──────────────────────────────────
@@ -148,11 +152,13 @@ def create_app():
 def _init_scheduler(app):
     """初始化 APScheduler 定时任务。
 
-    每天 09:00 自动爬取所有启用的商品价格。
+    - 每天 09:00 自动爬取所有启用的商品价格
+    - 每天 03:00 自动轮换 SECRET_KEY
     如果 APScheduler 未安装或导入失败，静默跳过。
     """
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
+        from config import rotate_secret_key
         scheduler = BackgroundScheduler()
         # 每天 09:00 执行
         scheduler.add_job(
@@ -163,8 +169,17 @@ def _init_scheduler(app):
             id='daily_price_crawl',
             replace_existing=True,
         )
+        # 每天 03:00 自动轮换 SECRET_KEY
+        scheduler.add_job(
+            func=lambda: rotate_secret_key(app),
+            trigger='cron',
+            hour=3,
+            minute=0,
+            id='rotate_secret_key',
+            replace_existing=True,
+        )
         scheduler.start()
-        app.logger.info('定时任务已启动: 每天 09:00 价格爬取')
+        app.logger.info('定时任务已启动: 每天 09:00 价格爬取 / 每天 03:00 SECRET_KEY 轮换')
     except Exception as e:
         app.logger.warning('定时任务启动失败（不影响运行）: %s', e)
 
@@ -185,8 +200,9 @@ if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     # FLASK_ENV=development 时开启 debug 模式（热重载 + 详细错误页）
     debug = os.environ.get('FLASK_ENV') == 'development'
+    host = '127.0.0.1' if debug else '0.0.0.0'
     logger = app.logger
     logger.info('=' * 50)
-    logger.info('服务启动: http://0.0.0.0:%d  debug=%s', port, debug)
+    logger.info('服务启动: http://%s:%d  debug=%s', host, port, debug)
     logger.info('=' * 50)
     app.run(host='0.0.0.0', port=port, debug=debug)
