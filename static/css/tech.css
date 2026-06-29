@@ -544,8 +544,8 @@ ul { list-style: none; }
 .admin-table th { padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); border-bottom: 1px solid var(--border-subtle); }
 .admin-table td { padding: 10px 12px; font-size: 14px; color: var(--text-secondary); border-bottom: 1px solid var(--border-subtle); }
 .admin-table tr:hover td { background: rgba(255,255,255,0.02); }
-.admin-table td a { color: var(--accent); font-weight: 500; }
-.admin-table td a:hover { color: var(--accent-hover); }
+.admin-table td a:not(.btn) { color: var(--accent); font-weight: 500; }
+.admin-table td a:not(.btn):hover { color: var(--accent-hover); }
 
 .badge { display: inline-block; padding: 3px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
 .badge-published, .badge-approved, .badge-admin { background: rgba(61,214,140,0.12); color: var(--accent-green); border: 1px solid rgba(61,214,140,0.2); }

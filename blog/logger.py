@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 HOSHINO Blog 日志模块
 
@@ -15,9 +14,10 @@ HOSHINO Blog 日志模块
   在 create_app() 中先调用 setup_logging(app) 初始化，
   其他模块直接用 logging.getLogger(__name__) 获取 logger 即可。
 """
-import os
 import logging
 import logging.handlers
+import os
+
 from flask import request
 
 # 日志目录（位于 blog/logs/）
@@ -169,9 +169,9 @@ def log_request(response):
     response.headers['Content-Security-Policy'] = (
         "default-src 'self';"
         "script-src 'self' 'unsafe-inline' 'unsafe-eval';"
-        "style-src 'self' 'unsafe-inline';"
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;"
         "img-src 'self' data: https:;"
-        "font-src 'self';"
+        "font-src 'self' https://fonts.gstatic.com;"
         "connect-src 'self';"
         "frame-ancestors 'none'"
     )
