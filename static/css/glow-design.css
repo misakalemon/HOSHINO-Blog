@@ -401,9 +401,9 @@ ul { list-style: none; }
 .profile-role { font-size: 0.65rem; color: rgba(255,255,255,0.3); }
 .profile-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 /* search widget */
-.sidebar-search { display: flex; gap: 0; }
+.sidebar-search { display: flex; gap: 0; width: 100%; }
 .sidebar-search input {
-  flex: 1; padding: 10px 14px;
+  flex: 1; min-width: 0; padding: 10px 14px;
   background: rgba(255,255,255,0.03);
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 12px 0 0 12px;
@@ -412,16 +412,16 @@ ul { list-style: none; }
 .sidebar-search input:focus { border-color: rgba(255,255,255,0.2); }
 .sidebar-search input::placeholder { color: rgba(255,255,255,0.2); }
 .sidebar-search button {
-  padding: 10px 14px;
-  background: rgba(0, 102, 255, 0.15);
-  border: 1px solid rgba(0, 102, 255, 0.25);
+  flex-shrink: 0; padding: 10px 14px;
+  background: rgba(255,107,157,0.15);
+  border: 1px solid rgba(255,107,157,0.25);
   border-radius: 0 12px 12px 0;
-  color: #7abfff; font-size: 0.75rem; font-weight: 500; cursor: pointer;
+  color: #ff8aae; font-size: 0.75rem; font-weight: 500; cursor: pointer;
   display: flex; align-items: center; gap: 4px;
   transition: all 0.3s;
 }
 .sidebar-search button:hover {
-  background: rgba(0, 102, 255, 0.25);
+  background: rgba(255,107,157,0.25);
 }
 /* recent posts */
 .recent-list li { margin-bottom: 12px; }
