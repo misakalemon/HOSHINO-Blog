@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 HOSHINO Blog — 管理后台路由
 
@@ -15,18 +14,20 @@ HOSHINO Blog — 管理后台路由
   - 个人资料   ─ 当前用户编辑头像 / 邮箱 / 密码
   - 图片上传   ─ 富文本编辑器图片上传 API
 """
-import os
-import uuid
 import datetime
-import time
 import logging
+import os
+import time
+import uuid
 from collections import defaultdict
-from flask import render_template, request, redirect, url_for, abort, flash, jsonify, current_app
-from flask_login import login_user, logout_user, login_required, current_user
 from functools import wraps
+
+from flask import abort, current_app, flash, jsonify, redirect, render_template, request, url_for
+from flask_login import current_user, login_required, login_user, logout_user
+
 from . import admin_bp
-from .models import db, User, Category, Post, Comment
-from .forms import LoginForm, PostForm, CategoryForm, UserForm, ProfileForm
+from .forms import CategoryForm, LoginForm, PostForm, ProfileForm, UserForm
+from .models import Category, Comment, Post, User, db
 
 logger = logging.getLogger(__name__)
 
@@ -588,14 +589,15 @@ def profile():
                 # 判断文件扩展名
                 ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'png'
                 if ext in ('png', 'jpg', 'jpeg', 'gif', 'webp'):
-                    from PIL import Image
                     import io as _io
+
+                    from PIL import Image
                     img = Image.open(file)
                     # 缩放到 200px 宽（保持宽高比）
                     ratio = min(200 / img.width, 1.0)
                     if ratio < 1:
                         h = int(img.height * ratio)
-                        img = img.resize((int(200), h), Image.LANCZOS)
+                        img = img.resize((200, h), Image.LANCZOS)
                     buf = _io.BytesIO()
                     fmt = 'JPEG' if ext in ('jpg', 'jpeg') else 'PNG'
                     img.save(buf, fmt, quality=85, optimize=True)
@@ -662,8 +664,9 @@ def upload_image():
     if ext not in ('png', 'jpg', 'jpeg', 'gif', 'webp'):
         return jsonify({'error': '不支持的格式'}), 400
     # 使用 PIL 重新编码图片（统一质量控制）
-    from PIL import Image
     import io as _io
+
+    from PIL import Image
     img = Image.open(file)
     buf = _io.BytesIO()
     img.save(buf, 'JPEG' if ext in ('jpg', 'jpeg') else 'PNG', quality=85, optimize=True)

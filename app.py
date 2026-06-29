@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 HOSHINO Blog — Flask 应用入口
 
@@ -26,12 +25,12 @@ HOSHINO Blog — Flask 应用入口
 """
 import os
 import time
-import threading
-from flask import Flask
-from flask_login import LoginManager
-from flask_compress import Compress
-from flask_wtf.csrf import CSRFProtect
+
 from dotenv import load_dotenv
+from flask import Flask
+from flask_compress import Compress
+from flask_login import LoginManager
+from flask_wtf.csrf import CSRFProtect
 
 # ── 环境变量加载 ──────────────────────────────
 # load_dotenv() 必须在 Flask 应用创建之前执行，
@@ -69,7 +68,7 @@ def create_app():
 
     # ── 日志系统（必须在其他初始化之前） ────────────
     # 先初始化日志，后续所有模块的 logger 直接可用
-    from blog.logger import setup_logging, log_request
+    from blog.logger import log_request, setup_logging
     logger = setup_logging(app)
     logger.info('应用启动中...')
 
@@ -83,7 +82,7 @@ def create_app():
     #   2. db.create_all()       —— 建表（不存在时）
     #   3. 自动迁移 v1→v2       —— 兼容旧版单分类数据
     #   4. 创建默认管理员        —— 首次启动时
-    from blog import init_db, db
+    from blog import db, init_db
     init_db(app)
     logger.info('数据库初始化完成')
 
@@ -158,6 +157,7 @@ def _init_scheduler(app):
     """
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
+
         from config import rotate_secret_key
         scheduler = BackgroundScheduler()
         # 每天 09:00 执行

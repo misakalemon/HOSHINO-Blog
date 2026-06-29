@@ -1,8 +1,9 @@
-import re
 import logging
+import re
 from urllib.parse import quote
-from curl_cffi import requests as curl_requests
+
 from bs4 import BeautifulSoup
+from curl_cffi import requests as curl_requests
 
 logger = logging.getLogger(__name__)
 

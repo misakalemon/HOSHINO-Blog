@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 HOSHINO Blog — 前台路由
 
@@ -9,14 +8,16 @@ HOSHINO Blog — 前台路由
 所有路由挂在 blog_bp（Blueprint）上，URL 前缀为空。
 """
 import datetime
+import logging
 import os
 import time
-import logging
+
 import bleach
-from flask import render_template, request, redirect, url_for, abort, Response, current_app
+from flask import Response, abort, current_app, redirect, render_template, request, url_for
+
 from . import blog_bp
-from .models import db, Post, Category, Comment
 from .forms import CommentForm, ContactForm
+from .models import Category, Comment, Post, db
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ def _get_sidebar_data():
         tuple: (categories, recent_posts)
     """
     from flask import current_app
+
     from .cache import cache_get, cache_set
 
     ttl = current_app.config.get('CACHE_TTL_SIDEBAR', 300)
@@ -337,8 +339,9 @@ def thumbnail():
     w = request.args.get('w', 400, type=int)
     if not path:
         abort(404)
-    from flask import current_app
     import mimetypes
+
+    from flask import current_app
     # 路径安全检查：禁止目录遍历（规范化后验证前缀）
     safe_path = os.path.normpath(os.path.join(current_app.root_path, 'static', path))
     static_dir = os.path.normpath(os.path.join(current_app.root_path, 'static'))

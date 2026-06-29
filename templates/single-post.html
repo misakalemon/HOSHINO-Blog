@@ -10,7 +10,7 @@
             <span class="post-meta-category">{{ cat.name }}</span>
             {% endfor %}
             <span>{{ format_date(post.created_at, '%Y/%m/%d') }}</span>
-            <span>💬 {{ post.published_comments() }} 评论</span>
+            <span><i class="hm hm-comments"></i> {{ post.published_comments() }} 评论</span>
         </div>
     </div>
 </div>

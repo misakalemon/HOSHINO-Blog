@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tech.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/harmonyos.css') }}">
     {% block extra_head %}{% endblock %}
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -29,14 +30,14 @@
 <div class="admin-overlay" id="adminOverlay" onclick="toggleAdminSidebar()"></div>
 <div class="admin-sidebar" id="adminSidebar">
     <a href="{{ url_for('admin.dashboard') }}" class="logo">// HOSHINO</a>
-    <a href="{{ url_for('admin.dashboard') }}" {% if request.endpoint == 'admin.dashboard' %}class="active"{% endif %}>📊 仪表盘</a>
-    <a href="{{ url_for('admin.post_list') }}" {% if request.endpoint and 'post' in request.endpoint %}class="active"{% endif %}>📝 文章</a>
-    <a href="{{ url_for('admin.category_list') }}" {% if request.endpoint and 'category' in request.endpoint %}class="active"{% endif %}>🏷️ 分类</a>
-    <a href="{{ url_for('admin.comment_list') }}" {% if request.endpoint and 'comment' in request.endpoint %}class="active"{% endif %}>💬 评论</a>
-    <a href="{{ url_for('admin.user_list') }}" {% if request.endpoint and 'user' in request.endpoint %}class="active"{% endif %}>👥 用户</a>
-    <a href="{{ url_for('admin.profile') }}" {% if request.endpoint == 'admin.profile' %}class="active"{% endif %}>👤 个人资料</a>
-    <a href="{{ url_for('blog.index') }}" style="color:var(--text-muted);margin-top:20px">🌐 查看网站</a>
-    <a href="{{ url_for('admin.logout') }}" class="logout-link">✕ 退出登录</a>
+    <a href="{{ url_for('admin.dashboard') }}" {% if request.endpoint == 'admin.dashboard' %}class="active"{% endif %}><i class="hm hm-view-grid"></i> 仪表盘</a>
+    <a href="{{ url_for('admin.post_list') }}" {% if request.endpoint and 'post' in request.endpoint %}class="active"{% endif %}><i class="hm hm-detail"></i> 文章</a>
+    <a href="{{ url_for('admin.category_list') }}" {% if request.endpoint and 'category' in request.endpoint %}class="active"{% endif %}><i class="hm hm-folder"></i> 分类</a>
+    <a href="{{ url_for('admin.comment_list') }}" {% if request.endpoint and 'comment' in request.endpoint %}class="active"{% endif %}><i class="hm hm-comments"></i> 评论</a>
+    <a href="{{ url_for('admin.user_list') }}" {% if request.endpoint and 'user' in request.endpoint %}class="active"{% endif %}><i class="hm hm-contacts"></i> 用户</a>
+    <a href="{{ url_for('admin.profile') }}" {% if request.endpoint == 'admin.profile' %}class="active"{% endif %}><i class="hm hm-portrait"></i> 个人资料</a>
+    <a href="{{ url_for('blog.index') }}" style="color:var(--text-muted);margin-top:20px"><i class="hm hm-public"></i> 查看网站</a>
+    <a href="{{ url_for('admin.logout') }}" class="logout-link"><i class="hm hm-close"></i> 退出登录</a>
 </div>
 
 <!-- 主内容 -->

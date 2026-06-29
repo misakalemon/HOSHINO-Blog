@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 HOSHINO Blog — 价格数据模块
 
@@ -18,11 +17,11 @@ HOSHINO Blog — 价格数据模块
    - 内层：每个商品的所有数据源并发请求，取最快结果
    - Docker 浏览器：内置 WebDriver 连接池，多路并发
 """
-import os
-import re
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from .models import db, ProductSource, PriceRecord, Product
+import os
+from concurrent.futures import ThreadPoolExecutor
+
+from .models import PriceRecord, Product, ProductSource, db
 
 logger = logging.getLogger(__name__)
 
@@ -75,9 +74,9 @@ def crawl_all_active_sources():
     每次爬取全部商品，结果存入 PriceRecord 历史表。
     同一商品同一次爬取可能有多条记录（不同来源），保留所有历史。
     """
-    from flask import current_app
-
     import time as _time
+
+    from flask import current_app
     t0 = _time.time()
     pending_records = []
     fetched_by_source = {}
@@ -740,7 +739,7 @@ def init_sample_products():
     首次启动时自动导入 ALL_PRODUCTS。
     之后新品发布时，管理员可通过网页添加商品，系统自动获取价格。
     """
-    from blog.models import db, Product
+    from blog.models import Product, db
 
     if Product.query.first() is not None:
         return

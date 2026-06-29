@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 HOSHINO Blog — 数据模型
 
@@ -19,9 +18,10 @@ HOSHINO Blog — 数据模型
   Werkzeug 的 security 模块 — 密码哈希（PBKDF2-SHA256）
 """
 import datetime
-from flask_sqlalchemy import SQLAlchemy
+
 from flask_login import UserMixin
-from werkzeug.security import generate_password_hash, check_password_hash
+from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import check_password_hash, generate_password_hash
 
 # SQLAlchemy 实例，所有模型共享
 # 采用延迟初始化模式：先创建 db 实例，然后在 create_app() 中 db.init_app(app)

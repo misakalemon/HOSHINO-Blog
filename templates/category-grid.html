@@ -40,7 +40,7 @@
                 <div class="pagination-wrap">
                     <ul class="pagination">
                         {% if posts.has_prev %}
-                        <li><a href="{{ url_for('blog.category', slug=category.slug, page=posts.prev_num, per_page=current_per_page) }}">‹</a></li>
+                        <li><a href="{{ url_for('blog.category', slug=category.slug, page=posts.prev_num, per_page=current_per_page) }}"><i class="hm hm-arrow-left"></i></a></li>
                         {% endif %}
                         {% for pn in posts.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                             {% if pn %}
@@ -52,7 +52,7 @@
                             {% endif %}
                         {% endfor %}
                         {% if posts.has_next %}
-                        <li><a href="{{ url_for('blog.category', slug=category.slug, page=posts.next_num, per_page=current_per_page) }}">›</a></li>
+                        <li><a href="{{ url_for('blog.category', slug=category.slug, page=posts.next_num, per_page=current_per_page) }}"><i class="hm hm-arrow-right"></i></a></li>
                         {% endif %}
                     </ul>
                     <div class="page-jump">

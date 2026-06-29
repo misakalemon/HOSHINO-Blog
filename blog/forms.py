@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 HOSHINO Blog — WTForms 表单定义
 
@@ -16,8 +15,11 @@ HOSHINO Blog — WTForms 表单定义
 """
 from flask_wtf import FlaskForm
 from wtforms import (
-    StringField, TextAreaField, BooleanField,
-    PasswordField, SelectField, SelectMultipleField
+    BooleanField,
+    PasswordField,
+    SelectMultipleField,
+    StringField,
+    TextAreaField,
 )
 from wtforms.validators import DataRequired, Email, Length, Optional
 

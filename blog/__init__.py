@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 HOSHINO Blog — 蓝图注册与数据库初始化
 
@@ -27,7 +26,7 @@ price_bp = Blueprint('price', __name__, url_prefix='/prices')
 # 先导入模型，确保 admin 和 routes 中的 from .models import ... 可用
 # 这种 "先声明蓝图、再导入模型、最后导入路由" 的顺序是关键，
 # 可以避免 Flask 常见的循环导入问题。
-from .models import db, User, Post, Category, Comment, Product, ProductSource, PriceRecord
+from .models import Category, Comment, Post, PriceRecord, Product, ProductSource, User, db
 
 
 def init_db(app):
@@ -128,6 +127,4 @@ def _migrate_category_to_many2many(app):
 # 此处的 import 必须放在模型和 init_db 之后，否则会导致循环依赖：
 #   __init__.py → routes.py → __init__.py
 # 延迟导入打破了这个循环。
-from . import routes
-from . import admin
-from . import price_routes
+from . import admin, price_routes, routes

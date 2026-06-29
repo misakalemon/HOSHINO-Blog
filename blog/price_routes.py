@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 HOSHINO Blog — 价格追踪路由
 
@@ -6,11 +5,13 @@ HOSHINO Blog — 价格追踪路由
 """
 import datetime
 import logging
-from flask import render_template, request, redirect, url_for, abort, flash, jsonify, current_app
+
+from flask import flash, jsonify, redirect, render_template, request, url_for
 from flask_login import login_required
+
 from . import price_bp
-from .models import db, Product, ProductSource, PriceRecord
-from .crawler import crawl_all_active_sources, init_sample_products
+from .crawler import crawl_all_active_sources
+from .models import PriceRecord, Product, ProductSource, db
 
 logger = logging.getLogger(__name__)
 

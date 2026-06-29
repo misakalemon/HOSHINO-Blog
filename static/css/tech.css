@@ -375,6 +375,9 @@ ul { list-style: none; }
   background: #fff; border-color: #d1d5db;
 }
 
+/* ═══ HarmonyOS Icons ═══ */
+.hm { vertical-align: -2px; margin-right: 4px; }
+
 /* ═══ Buttons ═══ */
 .btn {
   display: inline-flex; align-items: center; gap: 6px;

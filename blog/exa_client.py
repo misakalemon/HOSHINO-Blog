@@ -1,8 +1,8 @@
-import re
-import json
-import time
 import logging
+import re
 import threading
+import time
+
 import requests
 
 logger = logging.getLogger(__name__)

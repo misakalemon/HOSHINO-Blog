@@ -10,13 +10,13 @@
             </div>
         </a>
         <div class="profile-actions">
-            <a href="{{ url_for('admin.new_post') }}" class="btn btn-sm btn-primary">✍ 写文章</a>
-            <a href="{{ url_for('admin.dashboard') }}" class="btn btn-sm btn-ghost">📊 后台</a>
+            <a href="{{ url_for('admin.new_post') }}" class="btn btn-sm btn-primary"><i class="hm hm-edit"></i> 写文章</a>
+            <a href="{{ url_for('admin.dashboard') }}" class="btn btn-sm btn-ghost"><i class="hm hm-view-grid"></i> 后台</a>
         </div>
         {% else %}
         <a href="{{ url_for('admin.login') }}" class="profile-link">
             <div class="profile-avatar profile-avatar-placeholder">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><use href="#icon-user"/></svg>
+                <i class="hm hm-portrait"></i>
             </div>
             <div class="profile-info">
                 <span class="profile-name">未登录</span>
@@ -32,7 +32,7 @@
     <form class="sidebar-search" action="{{ url_for('blog.search') }}" method="GET">
         <input type="text" name="q" placeholder="搜索文章..." required>
         <button type="submit">
-          <svg width="16" height="16" viewBox="0 0 24 24" style="vertical-align:middle"><use href="#icon-search"/></svg>
+          <i class="hm hm-search"></i>
           搜索
         </button>
     </form>
@@ -48,7 +48,7 @@
                     {% if rp.cover_image %}
                     <img src="{{ url_for('blog.thumbnail', path=rp.cover_image, w=120) }}" alt="{{ rp.title }}" loading="lazy">
                     {% else %}
-                    <svg viewBox="0 0 24 24" fill="none" width="24" height="24"><use href="#icon-blog"/></svg>
+                    <i class="hm hm-detail"></i>
                     {% endif %}
                 </a>
             </div>

@@ -4,25 +4,25 @@
 
 <div class="page-header">
     <div class="container">
-        <h1>📊 电子产品价格追踪</h1>
+        <h1><i class="hm hm-view-grid"></i> 电子产品价格追踪</h1>
         <p>多平台比价 · 历史走势 · 每日更新 · 共 {{ products.total }} 款商品</p>
         <div style="margin-top:12px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap">
             <button class="btn btn-primary" onclick="document.getElementById('crawl-form').submit()">
-                🔄 更新价格
+                <i class="hm hm-refresh"></i> 更新价格
             </button>
             <form id="crawl-form" method="POST" action="{{ url_for('price.trigger_crawl') }}" style="display:none">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             </form>
             {% if current_user.is_authenticated %}
             <button class="btn btn-ghost" onclick="document.getElementById('add-form').style.display='block'">
-                ➕ 添加新品
+                <i class="hm hm-add"></i> 添加新品
             </button>
             {% endif %}
         </div>
         {% if current_user.is_authenticated %}
         <div id="add-form" style="display:none; margin-top:16px; max-width:600px; margin-left:auto; margin-right:auto">
             <div data-glow style="background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:var(--radius-lg); padding:20px">
-                <h3 style="margin-bottom:12px; font-size:16px">➕ 添加新产品</h3>
+                <h3 style="margin-bottom:12px; font-size:16px"><i class="hm hm-add"></i> 添加新产品</h3>
                 <form method="POST" action="{{ url_for('price.add_product') }}" style="display:flex; flex-direction:column; gap:10px">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div style="display:flex; gap:10px">
@@ -104,7 +104,7 @@
                 <div class="pagination-wrap">
                     <ul class="pagination">
                         {% if products.has_prev %}
-                        <li><a href="{{ url_for('price.index', page=products.prev_num, category=current_category, per_page=current_per_page) }}">‹</a></li>
+                        <li><a href="{{ url_for('price.index', page=products.prev_num, category=current_category, per_page=current_per_page) }}"><i class="hm hm-arrow-left"></i></a></li>
                         {% endif %}
                         {% for page_num in products.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                             {% if page_num %}
@@ -116,7 +116,7 @@
                             {% endif %}
                         {% endfor %}
                         {% if products.has_next %}
-                        <li><a href="{{ url_for('price.index', page=products.next_num, category=current_category, per_page=current_per_page) }}">›</a></li>
+                        <li><a href="{{ url_for('price.index', page=products.next_num, category=current_category, per_page=current_per_page) }}"><i class="hm hm-arrow-right"></i></a></li>
                         {% endif %}
                     </ul>
                     <div class="page-jump">
@@ -155,10 +155,10 @@
                     <div class="widget">
                         <h4 class="widget-title">价格看板</h4>
                         <div style="font-size:13px; color:var(--text-secondary); line-height:1.8">
-                            <div>📦 商品总数: <strong style="color:var(--accent)">{{ products.total }}</strong></div>
-                            <div>📊 品类数量: <strong style="color:var(--accent)">{{ categories|length }}</strong></div>
-                            <div>🔄 更新频率: <strong style="color:var(--accent)">每日 09:00</strong></div>
-                            <div>💡 数据来源: <strong style="color:var(--accent)">多数据源爬取 + 手动录入</strong></div>
+                            <div><i class="hm hm-business"></i> 商品总数: <strong style="color:var(--accent)">{{ products.total }}</strong></div>
+                            <div><i class="hm hm-view-grid"></i> 品类数量: <strong style="color:var(--accent)">{{ categories|length }}</strong></div>
+                            <div><i class="hm hm-refresh"></i> 更新频率: <strong style="color:var(--accent)">每日 09:00</strong></div>
+                            <div><i class="hm hm-help"></i> 数据来源: <strong style="color:var(--accent)">多数据源爬取 + 手动录入</strong></div>
                         </div>
                     </div>
 

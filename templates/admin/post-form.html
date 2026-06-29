@@ -58,7 +58,7 @@
 {% block admin_content %}
 <div class="admin-header">
     <h3>{{ '编辑' if editing else '新建' }}文章</h3>
-    <a href="{{ url_for('admin.post_list') }}" class="btn btn-ghost">← 返回</a>
+    <a href="{{ url_for('admin.post_list') }}" class="btn btn-ghost"><i class="hm hm-arrow-left"></i> 返回</a>
 </div>
 
 <form method="POST" id="post-form" enctype="multipart/form-data">
@@ -89,7 +89,7 @@
                 <textarea name="summary" rows="3" placeholder="文章摘要，显示在文章列表">{{ form.summary.data or '' }}</textarea>
             </div>
             <div style="text-align:right;margin-top:16px">
-                <button type="button" class="btn btn-primary" onclick="goStep(2)">下一步 →</button>
+                <button type="button" class="btn btn-primary" onclick="goStep(2)">下一步 <i class="hm hm-arrow-right"></i></button>
             </div>
         </div>
     </div>
@@ -101,8 +101,8 @@
                 <label>正文</label>
                 <!-- 全量工具栏 -->
                 <div id="rte-toolbar">
-                    <button type="button" onclick="rte('undo')" title="撤销">↩</button>
-                    <button type="button" onclick="rte('redo')" title="重做">↪</button>
+                    <button type="button" onclick="rte('undo')" title="撤销"><i class="hm hm-undo"></i></button>
+                    <button type="button" onclick="rte('redo')" title="重做"><i class="hm hm-redo"></i></button>
                     <span class="sep"></span>
                     <select onchange="rte('formatBlock',this.value);this.selectedIndex=0">
                         <option value="">段落</option>
@@ -134,32 +134,32 @@
                     <input type="color" onchange="rte('foreColor',this.value)" title="文字颜色" style="width:28px;height:28px;padding:2px;border:1px solid var(--border-subtle);border-radius:6px;background:transparent;cursor:pointer">
                     <input type="color" onchange="rte('hiliteColor',this.value)" title="背景高亮" style="width:28px;height:28px;padding:2px;border:1px solid var(--border-subtle);border-radius:6px;background:transparent;cursor:pointer">
                     <span class="sep"></span>
-                    <button type="button" onclick="rte('justifyLeft')" title="左对齐">◀</button>
-                    <button type="button" onclick="rte('justifyCenter')" title="居中">♦</button>
-                    <button type="button" onclick="rte('justifyRight')" title="右对齐">▶</button>
+                    <button type="button" onclick="rte('justifyLeft')" title="左对齐"><i class="hm hm-align-left"></i></button>
+                    <button type="button" onclick="rte('justifyCenter')" title="居中"><i class="hm hm-align-center"></i></button>
+                    <button type="button" onclick="rte('justifyRight')" title="右对齐"><i class="hm hm-align-right"></i></button>
                     <span class="sep"></span>
                     <button type="button" onclick="rte('insertUnorderedList')" title="无序列表">UL</button>
                     <button type="button" onclick="rte('insertOrderedList')" title="有序列表">OL</button>
                     <span class="sep"></span>
-                    <button type="button" onclick="rteIndent(-1)" title="减少缩进">←</button>
-                    <button type="button" onclick="rteIndent(1)" title="增加缩进">→</button>
+                    <button type="button" onclick="rteIndent(-1)" title="减少缩进"><i class="hm hm-arrow-left"></i></button>
+                    <button type="button" onclick="rteIndent(1)" title="增加缩进"><i class="hm hm-arrow-right"></i></button>
                     <span class="sep"></span>
-                    <button type="button" onclick="rte('insertHorizontalRule')" title="分割线">—</button>
-                    <button type="button" onclick="rteInsertTable()" title="插入表格">⊞</button>
+                    <button type="button" onclick="rte('insertHorizontalRule')" title="分割线"><i class="hm hm-minus"></i></button>
+                    <button type="button" onclick="rteInsertTable()" title="插入表格"><i class="hm hm-grid"></i></button>
                     <button type="button" onclick="rteCode()" title="行内代码">&lt;/&gt;</button>
-                    <button type="button" onclick="rteLink()" title="插入链接">🔗</button>
-                    <button type="button" onclick="rteImage()" title="插入图片">🖼</button>
-                    <button type="button" onclick="rteMarkdown()" title="导入 Markdown">📄</button>
+                    <button type="button" onclick="rteLink()" title="插入链接"><i class="hm hm-link"></i></button>
+                    <button type="button" onclick="rteImage()" title="插入图片"><i class="hm hm-gallery"></i></button>
+                    <button type="button" onclick="rteMarkdown()" title="导入 Markdown"><i class="hm hm-files-document"></i></button>
                     <span class="sep"></span>
-                    <button type="button" onclick="rte('removeFormat')" title="清除格式">✕</button>
+                    <button type="button" onclick="rte('removeFormat')" title="清除格式"><i class="hm hm-close"></i></button>
                 </div>
                 <div id="rte-content" contenteditable="true">{{ form.content.data|safe if form.content.data else '' }}</div>
                 <textarea name="content" id="content-hidden" style="display:none">{{ form.content.data or '' }}</textarea>
                 {% if form.content.errors %}<div class="field-error">{{ form.content.errors[0] }}</div>{% endif %}
             </div>
             <div style="display:flex;justify-content:space-between;margin-top:16px">
-                <button type="button" class="btn btn-ghost" onclick="goStep(1)">← 上一步</button>
-                <button type="button" class="btn btn-primary" onclick="goStep(3)">下一步 →</button>
+                <button type="button" class="btn btn-ghost" onclick="goStep(1)"><i class="hm hm-arrow-left"></i> 上一步</button>
+                <button type="button" class="btn btn-primary" onclick="goStep(3)">下一步 <i class="hm hm-arrow-right"></i></button>
             </div>
         </div>
     </div>
@@ -180,7 +180,7 @@
                                 <div style="font-size:12px;margin-top:4px;color:var(--text-muted)">支持 JPG / PNG / WebP</div>
                             </div>
                             <div id="coverPreview" style="display:none"></div>
-                            <button type="button" class="cover-remove" id="coverRemove" onclick="removeCover(event)">✕ 移除</button>
+                            <button type="button" class="cover-remove" id="coverRemove" onclick="removeCover(event)"><i class="hm hm-close"></i> 移除</button>
                         </div>
                     </div>
                 </div>
@@ -199,7 +199,7 @@
                 </div>
             </div>
             <div style="display:flex;justify-content:space-between;margin-top:20px">
-                <button type="button" class="btn btn-ghost" onclick="goStep(2)">← 上一步</button>
+                <button type="button" class="btn btn-ghost" onclick="goStep(2)"><i class="hm hm-arrow-left"></i> 上一步</button>
                 <button type="submit" class="btn btn-primary">{{ '更新' if editing else '创建文章' }}</button>
             </div>
         </div>
