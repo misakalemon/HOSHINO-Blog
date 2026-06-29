@@ -26,7 +26,7 @@ price_bp = Blueprint('price', __name__, url_prefix='/prices')
 # 先导入模型，确保 admin 和 routes 中的 from .models import ... 可用
 # 这种 "先声明蓝图、再导入模型、最后导入路由" 的顺序是关键，
 # 可以避免 Flask 常见的循环导入问题。
-from .models import Category, Comment, Post, PriceRecord, Product, ProductSource, User, db
+from .models import Category, Comment, ExchangeRate, FeaturedCard, Post, PriceRecord, Product, ProductSource, User, db
 
 
 def init_db(app):
@@ -72,6 +72,9 @@ def init_db(app):
             admin.set_password(admin_password)
             db.session.add(admin)
             db.session.commit()
+
+        # ── 迁移 FeaturedCard.icon 字段长度 ────
+        _migrate_featured_icon(app)
 
         # ── 添加示例价格追踪商品（首次启动） ─────
         from .crawler import init_sample_products
@@ -121,6 +124,20 @@ def _migrate_category_to_many2many(app):
             rowcount
         )
     db.session.commit()
+
+
+def _migrate_featured_icon(app):
+    """迁移 FeaturedCard.icon 从 VARCHAR(16) 到 VARCHAR(256)。"""
+    engine = db.get_engine()
+    dialect = engine.dialect.name
+    if dialect == 'mysql':
+        try:
+            db.session.execute(db.text(
+                'ALTER TABLE featured_cards MODIFY icon VARCHAR(256) DEFAULT \'✦\''
+            ))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
 
 
 # ── 后导入路由（延迟导入） ─────────────────────

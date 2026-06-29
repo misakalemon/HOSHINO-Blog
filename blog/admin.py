@@ -26,8 +26,8 @@ from flask import abort, current_app, flash, jsonify, redirect, render_template,
 from flask_login import current_user, login_required, login_user, logout_user
 
 from . import admin_bp
-from .forms import CategoryForm, LoginForm, PostForm, ProfileForm, UserForm
-from .models import Category, Comment, Post, User, db
+from .forms import CategoryForm, FeaturedCardForm, LoginForm, PostForm, ProfileForm, UserForm
+from .models import Category, Comment, FeaturedCard, Post, User, db
 
 logger = logging.getLogger(__name__)
 
@@ -682,3 +682,92 @@ def upload_image():
                 file.filename, filename, img.width, img.height, buf.tell() // 1024)
     url = url_for('static', filename='uploads/' + filename)
     return jsonify({'url': url})
+
+
+# ═══════════════════════════════════════════════
+# 特色卡片管理
+# ═══════════════════════════════════════════════
+
+@admin_bp.route('/featured-cards')
+@admin_required
+def featured_card_list():
+    """特色卡片列表页。"""
+    cards = FeaturedCard.query.order_by(FeaturedCard.sort_order).all()
+    categories = Category.query.all()
+    cat_lookup = {c.slug: c.name for c in categories}
+    return render_template('admin/featured-card-list.html', cards=cards, cat_lookup=cat_lookup)
+
+
+@admin_bp.route('/featured-cards/new', methods=['GET', 'POST'])
+@admin_required
+def new_featured_card():
+    """新建特色卡片。"""
+    categories = Category.query.order_by(Category.name).all()
+    if not categories:
+        flash('请先创建分类，再添加特色卡片', 'error')
+        return redirect(url_for('admin.category_list'))
+    form = FeaturedCardForm()
+    form.tag.choices = [(c.slug, c.name) for c in categories]
+    if form.validate_on_submit():
+        card = FeaturedCard(
+            title=form.title.data,
+            description=form.description.data or '',
+            icon=form.icon.data or '✦',
+            tag=form.tag.data,
+            link=form.link.data or '',
+            image_url=form.image_url.data or '',
+            sort_order=form.sort_order.data or 0,
+            is_active=form.is_active.data
+        )
+        db.session.add(card)
+        db.session.commit()
+        flash('特色卡片已创建', 'success')
+        return redirect(url_for('admin.featured_card_list'))
+    for field, errors in form.errors.items():
+        label = field
+        f = getattr(form, field, None)
+        if f and hasattr(f, 'label') and f.label:
+            label = f.label.text
+        for err in errors:
+            flash(f'{label}: {err}', 'error')
+    return render_template('admin/featured-card-form.html', form=form, editing=False)
+
+
+@admin_bp.route('/featured-cards/<int:id>/edit', methods=['GET', 'POST'])
+@admin_required
+def edit_featured_card(id):
+    """编辑特色卡片。"""
+    card = FeaturedCard.query.get_or_404(id)
+    form = FeaturedCardForm(obj=card)
+    form.tag.choices = [(c.slug, c.name) for c in Category.query.order_by(Category.name).all()]
+    if form.validate_on_submit():
+        card.title = form.title.data
+        card.description = form.description.data or ''
+        card.icon = form.icon.data or '✦'
+        card.tag = form.tag.data
+        card.link = form.link.data or ''
+        card.image_url = form.image_url.data or ''
+        card.sort_order = form.sort_order.data or 0
+        card.is_active = form.is_active.data
+        db.session.commit()
+        flash('特色卡片已更新', 'success')
+        return redirect(url_for('admin.featured_card_list'))
+    for field, errors in form.errors.items():
+        label = field
+        f = getattr(form, field, None)
+        if f and hasattr(f, 'label') and f.label:
+            label = f.label.text
+        for err in errors:
+            flash(f'{label}: {err}', 'error')
+    return render_template('admin/featured-card-form.html', form=form, editing=True, card=card)
+
+
+@admin_bp.route('/featured-cards/<int:id>/delete', methods=['POST'])
+@admin_required
+def delete_featured_card(id):
+    """删除特色卡片。"""
+    card = FeaturedCard.query.get_or_404(id)
+    db.session.delete(card)
+    db.session.commit()
+    flash('特色卡片已删除', 'success')
+    return redirect(url_for('admin.featured_card_list'))

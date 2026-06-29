@@ -1,0 +1,114 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}{{ '编辑' if editing else '新建' }}卡片{% endblock %}
+{% block extra_head %}
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<style>
+.icon-upload { border:2px dashed var(--border-subtle); border-radius:16px; padding:24px; text-align:center; cursor:pointer; transition:all 0.3s; position:relative; min-height:100px; display:flex; align-items:center; justify-content:center; }
+.icon-upload:hover { border-color:var(--accent); background:rgba(108,66,209,0.03); }
+.icon-upload.has-image { padding:0; border-style:solid; }
+.icon-upload img { max-width:100%; max-height:120px; border-radius:12px; display:block; }
+.icon-upload input { display:none; }
+.icon-upload .placeholder { color:var(--text-muted); font-size:13px; }
+.icon-remove { position:absolute; top:6px; right:6px; background:rgba(255,45,120,0.8); color:#fff; border:none; border-radius:6px; padding:2px 10px; font-size:11px; cursor:pointer; display:none; }
+.icon-upload.has-image .icon-remove { display:block; }
+</style>
+{% endblock %}
+{% block admin_content %}
+<div class="admin-header">
+    <h3>{{ '编辑' if editing else '新建' }}特色卡片</h3>
+    <a href="{{ url_for('admin.featured_card_list') }}" class="btn btn-ghost">← 返回</a>
+</div>
+<div class="admin-card" data-glow>
+    <form method="POST">
+        {{ form.hidden_tag() }}
+        <div class="form-group"><label>标题</label><input type="text" name="title" value="{{ form.title.data or '' }}" required></div>
+        <div class="form-group"><label>描述</label><input type="text" name="description" value="{{ form.description.data or '' }}" placeholder="卡片简介"></div>
+        <div class="admin-row">
+            <div class="form-group">
+                <label>卡片图片</label>
+                <div class="icon-upload" id="iconUpload" onclick="document.getElementById('iconInput').click()">
+                    <input type="file" id="iconInput" accept="image/*">
+                    <input type="hidden" name="icon" id="iconHidden" value="{{ form.icon.data or '' }}">
+                    <div class="placeholder" id="iconPlaceholder">
+                        <div style="font-size:28px;margin-bottom:6px;opacity:0.4">🖼️</div>
+                        点击上传图片<br><span style="font-size:11px;color:var(--text-muted)">支持 JPG / PNG / WebP</span>
+                    </div>
+                    <div id="iconPreview" style="display:none"></div>
+                    <button type="button" class="icon-remove" id="iconRemove" onclick="removeIcon(event)">✕ 移除</button>
+                </div>
+            </div>
+            <div class="form-group"><label>标签</label>
+                <div class="glow-select-wrap">
+                    <div class="glow-select-trigger"><span>{{ form.tag.data or '选择分类' }}</span><span class="glow-select-arrow">▼</span></div>
+                    {{ form.tag() }}
+                    <div class="glow-select-menu">
+                        {% for val, label in form.tag.choices %}
+                        <div class="glow-select-option{% if form.tag.data == val %} is-selected{% endif %}" data-value="{{ val }}">{{ label }}</div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="admin-row">
+            <div class="form-group"><label>链接</label><input type="text" name="link" value="{{ form.link.data or '' }}" placeholder="可选"></div>
+            <div class="form-group"><label>图片 URL (备选)</label><input type="text" name="image_url" value="{{ form.image_url.data or '' }}" placeholder="可选"></div>
+        </div>
+        <div class="form-group"><label>排序（数字越小越靠前）</label><input type="number" name="sort_order" value="{{ form.sort_order.data or 0 }}"></div>
+        <div class="form-group">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                <input type="checkbox" name="is_active" {% if form.is_active.data %}checked{% endif %} style="width:16px;height:16px;accent-color:#ff6b9d;cursor:pointer">
+                <span>启用</span>
+            </label>
+        </div>
+        <button type="submit" class="btn btn-primary">{{ '更新' if editing else '创建' }}</button>
+    </form>
+</div>
+
+<script>
+(function() {
+  var existingIcon = '{{ form.icon.data or "" }}';
+  if (existingIcon && (existingIcon.startsWith('uploads/') || existingIcon.startsWith('/static/'))) {
+    var url = existingIcon.startsWith('/static/') ? existingIcon : '/static/' + existingIcon;
+    document.getElementById('iconPreview').innerHTML = '<img src="' + url + '" alt="icon">';
+    document.getElementById('iconPreview').style.display = 'block';
+    document.getElementById('iconPlaceholder').style.display = 'none';
+    document.getElementById('iconUpload').classList.add('has-image');
+  }
+})();
+
+document.getElementById('iconInput').addEventListener('change', function() {
+  var file = this.files[0];
+  if (!file) return;
+  var formData = new FormData();
+  formData.append('file', file);
+  fetch('{{ url_for("admin.upload_image") }}', {
+    method:'POST',
+    headers: { 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content') },
+    body:formData
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.url) {
+      var path = data.url.replace('/static/', '');
+      document.getElementById('iconHidden').value = path;
+      var preview = document.getElementById('iconPreview');
+      preview.innerHTML = '<img src="' + data.url + '" alt="icon">';
+      preview.style.display = 'block';
+      document.getElementById('iconPlaceholder').style.display = 'none';
+      document.getElementById('iconUpload').classList.add('has-image');
+    }
+  })
+  .catch(function() { alert('图片上传失败'); });
+});
+
+function removeIcon(e) {
+  e.stopPropagation();
+  document.getElementById('iconHidden').value = '';
+  document.getElementById('iconPreview').innerHTML = '';
+  document.getElementById('iconPreview').style.display = 'none';
+  document.getElementById('iconPlaceholder').style.display = 'block';
+  document.getElementById('iconUpload').classList.remove('has-image');
+  document.getElementById('iconInput').value = '';
+}
+</script>
+{% endblock %}

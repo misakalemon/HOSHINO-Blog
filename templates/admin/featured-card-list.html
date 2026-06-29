@@ -1,0 +1,37 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}特色卡片{% endblock %}
+{% block admin_content %}
+<div class="admin-header">
+    <h3>特色卡片</h3>
+    <a href="{{ url_for('admin.new_featured_card') }}" class="btn btn-primary">+ 新建卡片</a>
+</div>
+<div class="admin-card" data-glow>
+    <div class="admin-table-wrapper">
+    <table class="admin-table">
+        <tr><th>排序</th><th>图标</th><th>标题</th><th>标签</th><th>状态</th><th>操作</th></tr>
+        {% for c in cards %}
+        <tr>
+            <td data-label="排序">{{ c.sort_order }}</td>
+            <td data-label="图标" style="{% if c.icon and (c.icon.startswith('uploads/') or c.icon.startswith('/static/')) %}padding:4px{% else %}font-size:1.3rem{% endif %}">{% if c.icon and (c.icon.startswith('uploads/') or c.icon.startswith('/static/')) %}<img src="{{ url_for('static', filename=c.icon.replace('/static/', '')) }}" alt="{{ c.title }}" style="width:40px;height:40px;border-radius:8px;object-fit:cover;display:block">{% else %}{{ c.icon or '✦' }}{% endif %}</td>
+            <td data-label="标题"><strong>{{ c.title }}</strong></td>
+            <td data-label="标签">
+                <span class="featured-card-tag">{{ cat_lookup.get(c.tag, c.tag) }}</span>
+            </td>
+            <td data-label="状态">
+                <span class="badge {{ 'badge-published' if c.is_active else 'badge-draft' }}">{{ '启用' if c.is_active else '停用' }}</span>
+            </td>
+            <td data-label="操作" style="white-space:nowrap">
+                <a href="{{ url_for('admin.edit_featured_card', id=c.id) }}" class="btn btn-primary btn-sm">编辑</a>
+                <form method="POST" action="{{ url_for('admin.delete_featured_card', id=c.id) }}" style="display:inline" onsubmit="return confirm('确定删除「{{ c.title }}」？')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger btn-sm">删除</button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" style="color:rgba(255,255,255,0.3)">暂无特色卡片 · <a href="{{ url_for('admin.new_featured_card') }}">新建一张</a></td></tr>
+        {% endfor %}
+    </table>
+    </div>
+</div>
+{% endblock %}

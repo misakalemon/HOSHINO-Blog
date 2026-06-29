@@ -289,3 +289,38 @@ class PriceRecord(db.Model):
         db.DateTime, default=datetime.datetime.utcnow, index=True
     )
     source = db.relationship('ProductSource', backref=db.backref('records', lazy='dynamic'))
+
+
+class FeaturedCard(db.Model):
+    """首页特色卡片（可后台管理）。
+
+    __tablename__ = 'featured_cards'
+    """
+    __tablename__ = 'featured_cards'
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(128), nullable=False)
+    description = db.Column(db.String(256), default='')
+    icon = db.Column(db.String(256), default='✦')
+    tag = db.Column(db.String(16), default='anime')
+    link = db.Column(db.String(256), default='')
+    image_url = db.Column(db.String(256), default='')
+    sort_order = db.Column(db.Integer, default=0)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+
+class ExchangeRate(db.Model):
+    """汇率记录（外币对人民币）。
+
+    每次 Exa 爬取时自动记录各币种实时汇率，
+    用于汇率走势分析和历史回溯。
+    __tablename__ = 'exchange_rates'
+    """
+    __tablename__ = 'exchange_rates'
+
+    id = db.Column(db.Integer, primary_key=True)
+    currency = db.Column(db.String(10), nullable=False, index=True)  # USD / EUR / GBP
+    rate = db.Column(db.Float, nullable=False)                       # → CNY
+    recorded_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, index=True)

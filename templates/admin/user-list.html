@@ -5,14 +5,14 @@
     <h3>用户管理</h3>
     <a href="{{ url_for('admin.new_user') }}" class="btn btn-primary">+ 新建用户</a>
 </div>
-<div class="admin-card">
+<div class="admin-card" data-glow>
     <div class="admin-table-wrapper">
     <table class="admin-table">
         <tr><th>ID</th><th>用户名</th><th>邮箱</th><th>显示名</th><th>角色</th><th>文章数</th><th>创建时间</th></tr>
         {% for u in users %}
         <tr>
             <td data-label="ID">{{ u.id }}</td>
-            <td data-label="用户名"><strong style="color:#fff">{{ u.username }}</strong></td>
+            <td data-label="用户名"><strong>{{ u.username }}</strong></td>
             <td data-label="邮箱">{{ u.email }}</td>
             <td data-label="显示名">{{ u.display_name or '-' }}</td>
             <td data-label="角色"><span class="badge {{ 'badge-admin' if u.is_admin else 'badge-user' }}">{{ '管理员' if u.is_admin else '用户' }}</span></td>
@@ -20,7 +20,7 @@
             <td data-label="创建时间">{{ format_date(u.created_at, '%Y-%m-%d') }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="7" style="color:var(--text-muted)">暂无用户</td></tr>
+        <tr><td colspan="7">暂无用户</td></tr>
         {% endfor %}
     </table>
     </div>

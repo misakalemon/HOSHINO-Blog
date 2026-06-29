@@ -11,7 +11,7 @@ from flask_login import login_required
 
 from . import price_bp
 from .crawler import crawl_all_active_sources
-from .models import PriceRecord, Product, ProductSource, db
+from .models import ExchangeRate, PriceRecord, Product, ProductSource, db
 
 logger = logging.getLogger(__name__)
 
@@ -242,3 +242,49 @@ def add_product():
         flash(f'已添加 {name}，自动获取价格失败，请手动录入', 'warning')
 
     return redirect(url_for('price.index'))
+
+
+# ═══════════════════════════════════════════════
+# 汇率走势
+# ═══════════════════════════════════════════════
+@price_bp.route('/rates')
+def rates_page():
+    """汇率走势页面。"""
+    days = request.args.get('days', 90, type=int)
+    return render_template('price/rates.html', days=days)
+
+
+@price_bp.route('/api/rates')
+def api_rates():
+    """返回汇率历史 JSON 数据。
+
+    参数：
+      days — 最近 N 天（默认 90）
+    返回格式：
+    {
+      "rates": [
+        { "currency": "USD", "history": [{"date": "...", "rate": 7.2}, ...] },
+        ...
+      ]
+    }
+    """
+    days = request.args.get('days', 90, type=int)
+    since = datetime.datetime.utcnow() - datetime.timedelta(days=days)
+
+    records = ExchangeRate.query.filter(
+        ExchangeRate.recorded_at >= since
+    ).order_by(ExchangeRate.recorded_at.asc()).all()
+
+    grouped = {}
+    for r in records:
+        grouped.setdefault(r.currency, []).append({
+            'date': r.recorded_at.strftime('%m-%d'),
+            'rate': r.rate,
+        })
+
+    rates_data = [
+        {'currency': c, 'history': h}
+        for c, h in sorted(grouped.items())
+    ]
+
+    return jsonify({'rates': rates_data})

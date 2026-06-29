@@ -1,35 +1,31 @@
 {% extends 'base.html' %}
-{% block title %}价格追踪 - HOSHINO Blog{% endblock %}
+{% block title %}价格追踪 - Hoshino{% endblock %}
 {% block content %}
 
 <div class="page-header">
     <div class="container">
-        <h1><i class="hm hm-view-grid"></i> 电子产品价格追踪</h1>
+        <h1>电子产品价格追踪</h1>
         <p>多平台比价 · 历史走势 · 每日更新 · 共 {{ products.total }} 款商品</p>
-        <div style="margin-top:12px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap">
-            <button class="btn btn-primary" onclick="document.getElementById('crawl-form').submit()">
-                <i class="hm hm-refresh"></i> 更新价格
-            </button>
+        <div class="page-header-actions">
+            <a href="{{ url_for('price.rates_page') }}" class="btn btn-ghost">汇率走势</a>
+            <button class="btn btn-primary" onclick="document.getElementById('crawl-form').submit()">更新价格</button>
             <form id="crawl-form" method="POST" action="{{ url_for('price.trigger_crawl') }}" style="display:none">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             </form>
             {% if current_user.is_authenticated %}
-            <button class="btn btn-ghost" onclick="document.getElementById('add-form').style.display='block'">
-                <i class="hm hm-add"></i> 添加新品
-            </button>
+            <button class="btn btn-ghost" onclick="toggleAddForm()">添加新品</button>
             {% endif %}
         </div>
         {% if current_user.is_authenticated %}
-        <div id="add-form" style="display:none; margin-top:16px; max-width:600px; margin-left:auto; margin-right:auto">
-            <div data-glow style="background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:var(--radius-lg); padding:20px">
-                <h3 style="margin-bottom:12px; font-size:16px"><i class="hm hm-add"></i> 添加新产品</h3>
-                <form method="POST" action="{{ url_for('price.add_product') }}" style="display:flex; flex-direction:column; gap:10px">
+        <div id="add-form" class="add-product-form" style="display:none">
+            <div class="price-card add-card">
+                <h3>添加新产品</h3>
+                <form method="POST" action="{{ url_for('price.add_product') }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <div style="display:flex; gap:10px">
-                        <input type="text" name="name" placeholder="产品名称（如 NVIDIA RTX 5070）" required
-                               style="flex:2; padding:8px 12px; background:rgba(255,255,255,0.04); border:1px solid var(--border-subtle); border-radius:6px; color:var(--text-primary); font-size:13px">
-                        <input type="text" name="brand" placeholder="品牌" style="flex:1; padding:8px 12px; background:rgba(255,255,255,0.04); border:1px solid var(--border-subtle); border-radius:6px; color:var(--text-primary); font-size:13px">
-                        <select name="category" required style="flex:1; padding:8px 12px; background:rgba(255,255,255,0.04); border:1px solid var(--border-subtle); border-radius:6px; color:var(--text-primary); font-size:13px">
+                    <div class="add-form-row">
+                        <input type="text" name="name" placeholder="产品名称（如 NVIDIA RTX 5070）" required class="form-control">
+                        <input type="text" name="brand" placeholder="品牌" class="form-control">
+                        <select name="category" required class="form-control">
                             <option value="">品类</option>
                             <option>CPU</option><option>显卡</option><option>内存</option>
                             <option>固态硬盘</option><option>主板</option><option>电源</option>
@@ -40,7 +36,7 @@
                             <option>路由器</option>
                         </select>
                     </div>
-                    <button type="submit" class="btn btn-primary" style="align-self:flex-start">添加并获取价格</button>
+                    <button type="submit" class="btn btn-primary">添加并获取价格</button>
                 </form>
             </div>
         </div>
@@ -48,36 +44,31 @@
     </div>
 </div>
 
-<section style="padding-bottom:60px">
+<section class="price-section">
     <div class="container">
         <div class="row">
-            <!-- 主内容 -->
             <div class="col-8">
                 {% if products.items %}
-                <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px,1fr)); gap:16px">
+                <div class="product-grid">
                     {% for product in products.items %}
                     <div class="price-card">
-                        <a href="{{ url_for('price.detail', id=product.id) }}" style="text-decoration:none; display:block">
+                        <a href="{{ url_for('price.detail', id=product.id) }}" class="price-card-link">
                         <div class="price-card-body">
-                            <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:8px">
+                            <div class="price-card-meta">
                                 <span class="price-category">{{ product.category }}</span>
                                 <span class="price-brand">{{ product.brand }}</span>
                             </div>
-                            <h3 style="font-size:15px; font-weight:600; color:var(--text-primary); margin-bottom:8px; line-height:1.3">
-                                {{ product.name }}
-                            </h3>
-                            <div style="display:flex; justify-content:space-between; align-items:baseline">
+                            <h3>{{ product.name }}</h3>
+                            <div class="price-card-footer">
                                 {% set lp = product.latest_price() %}
                                 {% if lp %}
-                                    <span style="font-size:22px; font-weight:800; color:var(--accent)">
-                                        ¥{{ '%.0f' % lp }}
-                                </span>
+                                    <span class="price-amount">¥{{ '%.0f' % lp }}</span>
                                 {% else %}
-                                <span style="font-size:13px; color:var(--text-muted)">暂无价格</span>
+                                    <span class="price-na">暂无价格</span>
                                 {% endif %}
                             </div>
                             {% if product.specs %}
-                            <div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--border-subtle); font-size:11px; color:var(--text-muted); display:flex; flex-wrap:wrap; gap:4px">
+                            <div class="specs-row">
                                 {% for key, val in product.specs.items() %}
                                 {% if loop.index <= 3 %}
                                 <span class="spec-tag">{{ key }}: {{ val }}</span>
@@ -88,12 +79,11 @@
                         </div>
                         </a>
                         {% if current_user.is_authenticated %}
-                        <form method="POST" action="{{ url_for('price.manual_price') }}" style="margin-top:8px; display:flex; gap:4px; padding:0 4px 4px">
+                        <form method="POST" action="{{ url_for('price.manual_price') }}" class="manual-price-form">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <input type="hidden" name="product_id" value="{{ product.id }}">
-                            <input type="number" name="price" step="0.01" min="0" placeholder="价格"
-                                   style="flex:1; padding:4px 8px; background:rgba(255,255,255,0.04); border:1px solid var(--border-subtle); border-radius:4px; color:var(--text-primary); font-size:12px; outline:none">
-                            <button type="submit" style="padding:4px 10px; background:var(--accent); border:none; border-radius:4px; color:#fff; font-size:12px; font-weight:600; cursor:pointer">录入</button>
+                            <input type="number" name="price" step="0.01" min="0" placeholder="录入价格" class="price-input">
+                            <button type="submit" class="price-submit">录入</button>
                         </form>
                         {% endif %}
                     </div>
@@ -104,7 +94,7 @@
                 <div class="pagination-wrap">
                     <ul class="pagination">
                         {% if products.has_prev %}
-                        <li><a href="{{ url_for('price.index', page=products.prev_num, category=current_category, per_page=current_per_page) }}"><i class="hm hm-arrow-left"></i></a></li>
+                        <li><a href="{{ url_for('price.index', page=products.prev_num, category=current_category, per_page=current_per_page) }}">←</a></li>
                         {% endif %}
                         {% for page_num in products.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                             {% if page_num %}
@@ -116,12 +106,12 @@
                             {% endif %}
                         {% endfor %}
                         {% if products.has_next %}
-                        <li><a href="{{ url_for('price.index', page=products.next_num, category=current_category, per_page=current_per_page) }}"><i class="hm hm-arrow-right"></i></a></li>
+                        <li><a href="{{ url_for('price.index', page=products.next_num, category=current_category, per_page=current_per_page) }}">→</a></li>
                         {% endif %}
                     </ul>
                     <div class="page-jump">
-                        <span style="color:var(--text-muted);font-size:12px">共 {{ products.pages }} 页</span>
-                        <input type="number" min="1" max="{{ products.pages }}" placeholder="跳转" onkeydown="if(event.key=='Enter'){var p=parseInt(this.value);if(p>=1&&p<={{ products.pages }})window.location='{{ url_for('price.index', category=current_category) }}?page='+p+'&per_page={{ current_per_page }}';}">
+                        <span class="page-info">共 {{ products.pages }} 页</span>
+                        <input type="number" min="1" max="{{ products.pages }}" placeholder="跳转" class="page-input" onkeydown="if(event.key=='Enter'){var p=parseInt(this.value);if(p>=1&&p<={{ products.pages }})window.location='{{ url_for('price.index', category=current_category) }}?page='+p+'&per_page={{ current_per_page }}';}">
                         <select class="per-page-select" onchange="var p=new URLSearchParams(location.search);p.set('per_page',this.value);p.set('page','1');location.search=p.toString();">
                             {% for opt in per_page_options %}
                             <option value="{{ opt }}" {% if current_per_page == opt %}selected{% endif %}>{{ opt }} 条/页</option>
@@ -139,7 +129,6 @@
                 {% endif %}
             </div>
 
-            <!-- 侧边栏 -->
             <div class="col-4">
                 <aside class="sidebar">
                     <div class="widget">
@@ -151,23 +140,18 @@
                             {% endfor %}
                         </div>
                     </div>
-
                     <div class="widget">
                         <h4 class="widget-title">价格看板</h4>
-                        <div style="font-size:13px; color:var(--text-secondary); line-height:1.8">
-                            <div><i class="hm hm-business"></i> 商品总数: <strong style="color:var(--accent)">{{ products.total }}</strong></div>
-                            <div><i class="hm hm-view-grid"></i> 品类数量: <strong style="color:var(--accent)">{{ categories|length }}</strong></div>
-                            <div><i class="hm hm-refresh"></i> 更新频率: <strong style="color:var(--accent)">每日 09:00</strong></div>
-                            <div><i class="hm hm-help"></i> 数据来源: <strong style="color:var(--accent)">多数据源爬取 + 手动录入</strong></div>
+                        <div class="widget-stats">
+                            <div>商品总数: <strong>{{ products.total }}</strong></div>
+                            <div>品类数量: <strong>{{ categories|length }}</strong></div>
+                            <div>更新频率: <strong>每日 09:00</strong></div>
+                            <div>数据来源: <strong>多数据源爬取 + 手动录入</strong></div>
                         </div>
                     </div>
-
                     <div class="widget">
                         <h4 class="widget-title">关于</h4>
-                        <p style="font-size:13px; color:var(--text-muted); line-height:1.6">
-                            追踪主流电子产品的实时价格与历史走势。
-                            新品发布后，管理员可一键添加，系统自动获取价格。
-                        </p>
+                        <p class="widget-desc">追踪主流电子产品的实时价格与历史走势。新品发布后，管理员可一键添加，系统自动获取价格。</p>
                     </div>
                 </aside>
             </div>
@@ -175,14 +159,11 @@
     </div>
 </section>
 
-<style>
-.price-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-lg);
-    padding: 14px;
-    transition: all 0.3s;
+<script>
+function toggleAddForm() {
+    var el = document.getElementById('add-form');
+    el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
-</style>
+</script>
 
 {% endblock %}

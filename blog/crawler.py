@@ -17,11 +17,12 @@ HOSHINO Blog — 价格数据模块
    - 内层：每个商品的所有数据源并发请求，取最快结果
    - Docker 浏览器：内置 WebDriver 连接池，多路并发
 """
+import datetime
 import logging
 import os
 from concurrent.futures import ThreadPoolExecutor
 
-from .models import PriceRecord, Product, ProductSource, db
+from .models import ExchangeRate, PriceRecord, Product, ProductSource, db
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +132,20 @@ def crawl_all_active_sources():
         db.session.add_all(pending_records)
 
     db.session.commit()
+
+    # ── 保存当前汇率到历史表 ──────────────────
+    if _exa_client and _exa_client._ready:
+        now = _time.time()
+        for currency, rate in _exa_client._rates.items():
+            existing = ExchangeRate.query.filter_by(
+                currency=currency
+            ).order_by(ExchangeRate.recorded_at.desc()).first()
+            if not existing or abs(existing.rate - rate) / rate > 0.001:
+                db.session.add(ExchangeRate(
+                    currency=currency, rate=rate,
+                    recorded_at=datetime.datetime.utcnow(),
+                ))
+        db.session.commit()
 
     elapsed = _time.time() - t0
     fetched = len(pending_records)

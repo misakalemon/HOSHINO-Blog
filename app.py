@@ -103,6 +103,18 @@ def create_app():
     app.exa_client = ExaClient(app.config.get('EXA_API_KEY', ''))
     if app.exa_client._ready:
         logger.info('Exa 客户端已就绪')
+        # 将启动时获取的汇率写入数据库
+        from blog.models import ExchangeRate
+        with app.app_context():
+            for currency, rate in app.exa_client._rates.items():
+                existing = ExchangeRate.query.filter_by(
+                    currency=currency
+                ).order_by(ExchangeRate.recorded_at.desc()).first()
+                if not existing or abs(existing.rate - rate) / rate > 0.001:
+                    db.session.add(ExchangeRate(
+                        currency=currency, rate=rate
+                    ))
+            db.session.commit()
     else:
         logger.info('Exa 未配置（EXA_API_KEY 为空），跳过')
 

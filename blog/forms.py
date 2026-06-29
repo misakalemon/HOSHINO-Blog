@@ -16,7 +16,9 @@ HOSHINO Blog — WTForms 表单定义
 from flask_wtf import FlaskForm
 from wtforms import (
     BooleanField,
+    IntegerField,
     PasswordField,
+    SelectField,
     SelectMultipleField,
     StringField,
     TextAreaField,
@@ -104,3 +106,15 @@ class ContactForm(FlaskForm):
     name = StringField('姓名', validators=[DataRequired(), Length(max=128)])
     email = StringField('邮箱', validators=[DataRequired(), Email(), Length(max=120)])
     message = TextAreaField('留言', validators=[DataRequired()])
+
+
+class FeaturedCardForm(FlaskForm):
+    """首页特色卡片编辑表单。"""
+    title = StringField('标题', validators=[DataRequired(), Length(max=128)])
+    description = StringField('描述', validators=[Optional(), Length(max=256)])
+    icon = StringField('图标', validators=[Optional(), Length(max=256)])
+    tag = SelectField('标签', coerce=str, default='')
+    link = StringField('链接 (可选)', validators=[Optional(), Length(max=256)])
+    image_url = StringField('图片 URL (可选)', validators=[Optional(), Length(max=256)])
+    sort_order = IntegerField('排序', default=0)
+    is_active = BooleanField('启用')

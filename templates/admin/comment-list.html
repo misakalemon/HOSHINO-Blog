@@ -3,7 +3,7 @@
 {% block admin_content %}
 <div class="admin-header"><h3>评论管理</h3></div>
 
-<div class="admin-card">
+<div class="admin-card" data-glow>
     <h5>待审核（{{ pending|length }}）</h5>
     <div class="admin-table-wrapper">
     <table class="admin-table">
@@ -26,13 +26,13 @@
             </td>
         </tr>
         {% else %}
-        <tr><td colspan="5" style="color:var(--text-muted)">暂无待审核评论</td></tr>
+        <tr><td colspan="5">暂无待审核评论</td></tr>
         {% endfor %}
     </table>
     </div>
 </div>
 
-<div class="admin-card">
+<div class="admin-card" data-glow>
     <h5>已通过（{{ approved|length }}）</h5>
     <div class="admin-table-wrapper">
     <table class="admin-table">
@@ -51,7 +51,7 @@
             </td>
         </tr>
         {% else %}
-        <tr><td colspan="5" style="color:var(--text-muted)">暂无已通过评论</td></tr>
+        <tr><td colspan="5">暂无已通过评论</td></tr>
         {% endfor %}
     </table>
     </div>

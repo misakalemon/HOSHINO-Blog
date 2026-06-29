@@ -1,0 +1,160 @@
+{% extends 'base.html' %}
+{% block title %}工具 - Hoshino{% endblock %}
+{% block content %}
+
+<section class="hero">
+    <h1><span class="highlight">工具</span></h1>
+    <p>在线小工具 · 纯浏览器端处理</p>
+</section>
+
+<div class="content">
+    <div class="tools-nav" id="toolsNav">
+        <button class="tools-nav-btn active" data-tool="base64" onclick="switchTool('base64')">
+            <span class="tools-nav-icon">B64</span>
+            <span class="tools-nav-label">Base64</span>
+        </button>
+        <button class="tools-nav-btn" data-tool="wordcount" onclick="switchTool('wordcount')">
+            <span class="tools-nav-icon">W</span>
+            <span class="tools-nav-label">字数</span>
+        </button>
+        <button class="tools-nav-btn" data-tool="color" onclick="switchTool('color')">
+            <span class="tools-nav-icon">🎨</span>
+            <span class="tools-nav-label">颜色</span>
+        </button>
+        <button class="tools-nav-btn" data-tool="json" onclick="switchTool('json')">
+            <span class="tools-nav-icon">{}</span>
+            <span class="tools-nav-label">JSON</span>
+        </button>
+        <button class="tools-nav-btn" data-tool="timestamp" onclick="switchTool('timestamp')">
+            <span class="tools-nav-icon">⏱</span>
+            <span class="tools-nav-label">时间戳</span>
+        </button>
+        <button class="tools-nav-btn" data-tool="hash" onclick="switchTool('hash')">
+            <span class="tools-nav-icon">#</span>
+            <span class="tools-nav-label">哈希</span>
+        </button>
+        <button class="tools-nav-btn" data-tool="imagezip" onclick="switchTool('imagezip')">
+            <span class="tools-nav-icon">🖼</span>
+            <span class="tools-nav-label">图片</span>
+        </button>
+    </div>
+
+    <div class="tools-card">
+        <!-- Base64 -->
+        <div class="tool-pane active" id="tool-base64">
+            <div class="tool-heading">Base64 编解码</div>
+            <textarea class="tool-input" id="b64-input" placeholder="输入文本或 Base64..." rows="5"></textarea>
+            <div class="tool-actions">
+                <button class="btn btn-primary btn-sm" onclick="b64Encode()">编码 →</button>
+                <button class="btn btn-ghost btn-sm" onclick="b64Decode()">← 解码</button>
+                <button class="btn btn-ghost btn-sm" onclick="clearTool('b64')">清空</button>
+            </div>
+            <textarea class="tool-input" id="b64-output" placeholder="结果..." rows="5" readonly></textarea>
+        </div>
+
+        <!-- 字数 -->
+        <div class="tool-pane" id="tool-wordcount">
+            <div class="tool-heading">字数统计</div>
+            <textarea class="tool-input" id="wc-input" placeholder="输入文本..." rows="8" oninput="wordCount()"></textarea>
+            <div class="wc-stats" id="wc-stats">
+                <div class="wc-stat"><span class="wc-stat-num" id="wc-chars">0</span><span class="wc-stat-lbl">字数</span></div>
+                <div class="wc-stat"><span class="wc-stat-num" id="wc-chars-sp">0</span><span class="wc-stat-lbl">含空格</span></div>
+                <div class="wc-stat"><span class="wc-stat-num" id="wc-lines">0</span><span class="wc-stat-lbl">行数</span></div>
+            </div>
+        </div>
+
+        <!-- 颜色 -->
+        <div class="tool-pane" id="tool-color">
+            <div class="tool-heading">颜色转换</div>
+            <div class="color-layout">
+                <input type="color" id="color-picker" value="#6c42d1" onchange="colorFromPicker()">
+                <div class="color-fields">
+                    <div class="tool-field"><label>HEX</label><input id="color-hex" value="#6c42d1" oninput="colorFromHex(this.value)"></div>
+                    <div class="tool-field"><label>RGB</label><input id="color-rgb" value="rgb(108,66,209)" oninput="colorFromRGB(this.value)"></div>
+                    <div class="tool-field"><label>HSL</label><input id="color-hsl" value="hsl(258,62%,54%)" readonly></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- JSON -->
+        <div class="tool-pane" id="tool-json">
+            <div class="tool-heading">JSON 格式化</div>
+            <textarea class="tool-input tool-input-code" id="json-input" placeholder="粘贴 JSON..." rows="6"></textarea>
+            <div class="tool-actions">
+                <button class="btn btn-primary btn-sm" onclick="jsonFormat()">格式化</button>
+                <button class="btn btn-ghost btn-sm" onclick="jsonCompact()">压缩</button>
+                <button class="btn btn-ghost btn-sm" onclick="clearTool('json')">清空</button>
+            </div>
+            <textarea class="tool-input tool-input-code" id="json-output" placeholder="结果..." rows="6" readonly></textarea>
+        </div>
+
+        <!-- 时间戳 -->
+        <div class="tool-pane" id="tool-timestamp">
+            <div class="tool-heading">时间戳转换</div>
+            <div class="tool-field"><label>Unix 时间戳（秒）</label><input id="ts-unix" value="" oninput="tsFromUnix(this.value)"></div>
+            <div class="tool-actions"><button class="btn btn-ghost btn-sm" onclick="tsNow()">插入当前时间戳</button></div>
+            <div class="tool-field"><label>日期时间</label><input id="ts-datetime" value="" oninput="tsFromDatetime(this.value)"></div>
+            <div class="ts-result" id="ts-result"></div>
+        </div>
+
+        <!-- 哈希 -->
+        <div class="tool-pane" id="tool-hash">
+            <div class="tool-heading">哈希计算</div>
+            <textarea class="tool-input" id="hash-input" placeholder="输入文本..." rows="5" oninput="calcHash()"></textarea>
+            <div class="tool-field"><label>MD5</label><input class="tool-input-hash" id="hash-md5" readonly></div>
+            <div class="tool-field"><label>SHA-1</label><input class="tool-input-hash" id="hash-sha1" readonly></div>
+            <div class="tool-field"><label>SHA-256</label><input class="tool-input-hash" id="hash-sha256" readonly></div>
+        </div>
+
+        <!-- 图片压缩 -->
+        <div class="tool-pane" id="tool-imagezip">
+            <div class="tool-heading">图片压缩</div>
+            <div class="iz-controls">
+                <div class="tool-field"><label>质量 <span id="iz-q-val">80%</span></label>
+                    <input type="range" id="iz-quality" min="1" max="100" value="80" oninput="izUpdate()">
+                </div>
+                <div class="tool-field"><label>最大宽度</label>
+                    <select id="iz-maxw" onchange="izUpdate()">
+                        <option value="0">原图尺寸</option>
+                        <option value="3840">3840 (4K)</option>
+                        <option value="2560">2560 (2K)</option>
+                        <option value="1920" selected>1920 (全高清)</option>
+                        <option value="1280">1280 (HD)</option>
+                        <option value="800">800</option>
+                        <option value="400">400</option>
+                    </select>
+                </div>
+                <div class="tool-field"><label>输出格式</label>
+                    <select id="iz-fmt" onchange="izUpdate()">
+                        <option value="image/jpeg">JPEG</option>
+                        <option value="image/webp">WebP</option>
+                        <option value="image/png">PNG</option>
+                    </select>
+                </div>
+            </div>
+            <div class="tool-actions">
+                <button class="btn btn-primary btn-sm" onclick="izSelect()">📁 选择图片</button>
+                <button class="btn btn-ghost btn-sm" onclick="izDownload()" id="iz-dlbtn" disabled>⬇ 下载</button>
+            </div>
+            <input type="file" id="iz-input" accept="image/*" style="display:none" onchange="izLoad()">
+            <div class="iz-previews">
+                <div class="iz-preview-box">
+                    <div class="iz-preview-label">原图</div>
+                    <div id="iz-original" class="iz-preview">请选择图片</div>
+                    <div id="iz-originfo" class="iz-preview-info"></div>
+                </div>
+                <div class="iz-preview-box">
+                    <div class="iz-preview-label">压缩后</div>
+                    <div id="iz-result" class="iz-preview">等待压缩...</div>
+                    <div id="iz-resinfo" class="iz-preview-info"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() { initTimestamp(); });
+</script>
+
+{% endblock %}

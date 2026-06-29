@@ -5,13 +5,13 @@
     <h3>分类管理</h3>
     <a href="{{ url_for('admin.new_category') }}" class="btn btn-primary">+ 新建分类</a>
 </div>
-<div class="admin-card">
+<div class="admin-card" data-glow>
     <div class="admin-table-wrapper">
     <table class="admin-table">
         <tr><th>名称</th><th>Slug</th><th>文章数</th><th>操作</th></tr>
         {% for cat in categories %}
         <tr>
-            <td data-label="名称"><strong style="color:#fff">{{ cat.name }}</strong></td>
+            <td data-label="名称"><strong>{{ cat.name }}</strong></td>
             <td data-label="Slug">{{ cat.slug }}</td>
             <td data-label="文章数">{{ cat.post_count() }}</td>
             <td data-label="操作" style="white-space:nowrap">
@@ -23,7 +23,7 @@
             </td>
         </tr>
         {% else %}
-        <tr><td colspan="4" style="color:var(--text-muted)">暂无分类</td></tr>
+        <tr><td colspan="4">暂无分类</td></tr>
         {% endfor %}
     </table>
     </div>

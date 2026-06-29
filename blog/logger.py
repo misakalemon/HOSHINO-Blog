@@ -168,8 +168,8 @@ def log_request(response):
     response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
     response.headers['Content-Security-Policy'] = (
         "default-src 'self';"
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval';"
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;"
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net;"
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net;"
         "img-src 'self' data: https:;"
         "font-src 'self' https://fonts.gstatic.com;"
         "connect-src 'self';"

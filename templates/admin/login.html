@@ -1,25 +1,18 @@
 {% extends 'base.html' %}
-{% block title %}登录 - HOSHINO Blog{% endblock %}
+{% block title %}登录 - Hoshino{% endblock %}
 {% block content %}
 
-<div class="page-header">
-    <div class="container">
-        <h1>登录</h1>
-        <p>管理员入口</p>
-    </div>
-</div>
-
-<section style="padding-bottom:60px">
-    <div class="container">
-        <div class="login-wrapper" style="display:flex; justify-content:center">
-            <div class="login-box" data-glow style="background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:var(--radius-lg); padding:40px; width:100%; max-width:400px">
-                <h2 style="font-size:24px; font-weight:800; margin-bottom:4px">// 登录</h2>
-                <p class="subtitle">请输入管理员账号</p>
+<div class="content" style="padding-top:80px">
+    <div style="max-width:400px;margin:0 auto">
+        <div class="glass-card" data-glow style="padding:32px">
+            <div class="card-content" style="text-align:center">
+                <h2 style="font-size:1.5rem;font-weight:250;margin-bottom:4px">✦ 登录</h2>
+                <p style="color:rgba(255,255,255,0.35);font-size:0.85rem;margin-bottom:24px">管理员入口</p>
 
                 {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
                 {% for category, message in messages %}
-                <div class="alert alert-{{ 'error' if category == 'error' else 'success' }}">{{ message }}</div>
+                <div class="flash {{ category }}">{{ message }}</div>
                 {% endfor %}
                 {% endif %}
                 {% endwith %}
@@ -32,11 +25,11 @@
                     <div class="form-group">
                         <input type="password" name="password" placeholder="密码" required>
                     </div>
-                    <button type="submit" class="btn btn-primary" style="width:100%; justify-content:center">登录</button>
+                    <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">登录</button>
                 </form>
             </div>
         </div>
     </div>
-</section>
+</div>
 
 {% endblock %}

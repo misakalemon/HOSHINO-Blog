@@ -17,7 +17,7 @@ from flask import Response, abort, current_app, redirect, render_template, reque
 
 from . import blog_bp
 from .forms import CommentForm, ContactForm
-from .models import Category, Comment, Post, db
+from .models import Category, Comment, FeaturedCard, Post, db
 
 logger = logging.getLogger(__name__)
 
@@ -96,12 +96,16 @@ def index():
         page=page, per_page=per_page, error_out=False
     )
     categories, recent_posts = _get_sidebar_data()
+    featured_cards = FeaturedCard.query.filter_by(is_active=True).order_by(FeaturedCard.sort_order).all()
+    cat_lookup = {c.slug: c.name for c in categories}
 
     return render_template('index.html',
         posts=posts, categories=categories,
         recent_posts=recent_posts, current_category=category_slug,
         current_per_page=per_page,
-        per_page_options=current_app.config['PER_PAGE_OPTIONS']
+        per_page_options=current_app.config['PER_PAGE_OPTIONS'],
+        featured_cards=featured_cards,
+        cat_lookup=cat_lookup
     )
 
 
@@ -242,6 +246,15 @@ def contact():
         categories=categories, recent_posts=recent_posts,
         message_sent=message_sent, form=form
     )
+
+
+# ═══════════════════════════════════════════════
+# 工具页
+# ═══════════════════════════════════════════════
+@blog_bp.route('/tools')
+def tools():
+    """工具页面：Base64 / 字数 / 颜色 / JSON / 时间戳 / 哈希 / 图片压缩。"""
+    return render_template('tools.html')
 
 
 # ═══════════════════════════════════════════════

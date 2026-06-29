@@ -3,504 +3,59 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}{{ site_name|default('HOSHINO Blog') }}{% endblock %}</title>
-    <meta name="description" content="{% block description %}个人博客{% endblock %}">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/tech.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/harmonyos.css') }}">
+    <title>{% block title %}{{ site_name|default('Hoshino') }}{% endblock %}</title>
+    <meta name="description" content="{% block description %}Hoshino Blog{% endblock %}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/glow-design.css') }}">
     <link rel="shortcut icon" href="{{ url_for('static', filename='images/logo/favicon.svg') }}">
     {% block extra_head %}{% endblock %}
 </head>
 <body>
 
-
+<!-- 背景光晕 -->
+<div class="glow-bg">
+    <div class="glow-orb"></div>
+    <div class="glow-orb"></div>
+    <div class="glow-orb"></div>
+</div>
 
 <!-- 导航栏 -->
 <nav class="navbar">
-    <div class="navbar-inner">
-        <div class="nav-brand-left">
-            <a href="{{ url_for('blog.index') }}" class="navbar-logo">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="vertical-align:middle"><rect x="4" y="5" width="16" height="2" rx="1" fill="currentColor" opacity="0.8"/><rect x="4" y="11" width="16" height="2" rx="1" fill="currentColor" opacity="0.8"/><rect x="4" y="17" width="16" height="2" rx="1" fill="currentColor" opacity="0.8"/></svg>
-                HOSHINO
-            </a>
-        </div>
-
-        <button class="nav-toggle" id="navToggle" onclick="toggleNav()">
-            <span></span><span></span><span></span>
+    <div style="display:flex;align-items:center;gap:16px">
+        <button class="nav-toggle" id="navToggle" onclick="toggleNav()" style="display:none;flex-direction:column;gap:4px;cursor:pointer;background:none;border:none;padding:4px" aria-label="菜单">
+            <span style="display:block;width:20px;height:2px;background:rgba(255,255,255,0.4);border-radius:2px;transition:all 0.3s"></span>
+            <span style="display:block;width:20px;height:2px;background:rgba(255,255,255,0.4);border-radius:2px;transition:all 0.3s"></span>
+            <span style="display:block;width:20px;height:2px;background:rgba(255,255,255,0.4);border-radius:2px;transition:all 0.3s"></span>
         </button>
-
-        <div class="navbar-links" id="navLinks">
-            <a href="{{ url_for('blog.index') }}" {% if request.endpoint == 'blog.index' or request.endpoint == 'blog.category' %}class="nav-link-active"{% endif %}>博客</a>
-            <a href="{{ url_for('blog.about') }}" {% if request.endpoint == 'blog.about' %}class="nav-link-active"{% endif %}>关于</a>
-            <a href="{{ url_for('blog.contact') }}" {% if request.endpoint == 'blog.contact' %}class="nav-link-active"{% endif %}>联系</a>
-            <a href="{{ url_for('price.index') }}" {% if request.endpoint and 'price' in request.endpoint %}class="nav-link-active"{% endif %}>价格</a>
-            <a href="javascript:void(0)" onclick="toggleTools()">工具</a>
-            <a href="javascript:void(0)" onclick="toggleTheme()" title="切换深色/浅色"><i class="hm hm-public-highlight"></i></a>
-            <a href="javascript:void(0)" onclick="toggleGray()" title="切换灰度"><i class="hm hm-eye"></i></a>
-            {% if current_user.is_authenticated %}
-            <a href="{{ url_for('admin.new_post') }}" class="nav-write-btn"><i class="hm hm-edit"></i> 写文章</a>
-            {% endif %}
-        </div>
+        <a href="{{ url_for('blog.index') }}" class="nav-logo">✦ Hoshino <span style="font-size:0.65rem;font-weight:400;background:linear-gradient(135deg,#ff8aae,#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:0.08em">—— 星野、参上！——</span></a>
+    </div>
+    <div class="nav-links" id="navLinks">
+        <a href="{{ url_for('blog.index') }}" {% if request.endpoint == 'blog.index' or request.endpoint == 'blog.category' %}class="nav-link-active"{% endif %}>博客</a>
+        <a href="{{ url_for('blog.about') }}" {% if request.endpoint == 'blog.about' %}class="nav-link-active"{% endif %}>关于</a>
+        <a href="{{ url_for('blog.contact') }}" {% if request.endpoint == 'blog.contact' %}class="nav-link-active"{% endif %}>联系</a>
+        <a href="{{ url_for('price.index') }}" {% if request.endpoint and 'price' in request.endpoint %}class="nav-link-active"{% endif %}>价格</a>
+        <a href="{{ url_for('blog.tools') }}" {% if request.endpoint == 'blog.tools' %}class="nav-link-active"{% endif %}>工具</a>
+        {% if current_user.is_authenticated %}
+        <a href="{{ url_for('admin.new_post') }}" class="nav-write-btn">写文章</a>
+        {% endif %}
     </div>
 </nav>
 
-<!-- 导航遮罩（手机端） -->
-<div class="nav-overlay" id="navOverlay" onclick="toggleNav()"></div>
+<!-- 移动端导航遮罩 -->
+<div class="nav-overlay" id="navOverlay" onclick="toggleNav()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999"></div>
 
 <!-- 页面内容 -->
 {% block content %}{% endblock %}
 
-<!-- 工具面板 -->
-<div class="tools-overlay" id="toolsOverlay" onclick="toggleTools()"></div>
-<div class="tools-panel" id="toolsPanel">
-  <div class="tools-header">
-    <h3><i class="hm hm-set"></i> 工具</h3>
-    <button class="tools-close" onclick="toggleTools()"><i class="hm hm-close"></i></button>
-  </div>
-  <div class="tools-body">
-    <div class="tools-tabs">
-      <button class="tool-tab active" data-tool="base64" onclick="switchTool('base64')">Base64</button>
-      <button class="tool-tab" data-tool="wordcount" onclick="switchTool('wordcount')">字数</button>
-      <button class="tool-tab" data-tool="color" onclick="switchTool('color')">颜色</button>
-      <button class="tool-tab" data-tool="json" onclick="switchTool('json')">JSON</button>
-      <button class="tool-tab" data-tool="timestamp" onclick="switchTool('timestamp')">时间戳</button>
-      <button class="tool-tab" data-tool="hash" onclick="switchTool('hash')">哈希</button>
-      <button class="tool-tab" data-tool="imagezip" onclick="switchTool('imagezip')">图片压缩</button>
-    </div>
-    <div class="tool-panel active" id="tool-base64">
-      <textarea id="b64-input" placeholder="输入文本或 Base64..." rows="4"></textarea>
-      <div class="tool-actions">
-        <button class="btn btn-primary btn-sm" onclick="b64Encode()">编码 <i class="hm hm-arrow-right"></i></button>
-        <button class="btn btn-ghost btn-sm" onclick="b64Decode()"><i class="hm hm-arrow-left"></i> 解码</button>
-        <button class="btn btn-ghost btn-sm" onclick="clearTool('b64')">清空</button>
-      </div>
-      <textarea id="b64-output" placeholder="结果..." rows="4" readonly></textarea>
-    </div>
-    <div class="tool-panel" id="tool-wordcount">
-      <textarea id="wc-input" placeholder="输入文本..." rows="6" oninput="wordCount()"></textarea>
-      <div class="tool-stats" id="wc-stats">
-        <span>字数: <strong id="wc-chars">0</strong></span>
-        <span>字符(含空格): <strong id="wc-chars-sp">0</strong></span>
-        <span>行数: <strong id="wc-lines">0</strong></span>
-      </div>
-    </div>
-    <div class="tool-panel" id="tool-color">
-      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-        <input type="color" id="color-picker" value="#6c42d1" onchange="colorFromPicker()" style="width:60px;height:60px;border:none;border-radius:12px;cursor:pointer">
-        <div style="flex:1;min-width:150px">
-          <div class="tool-field"><label>HEX</label><input id="color-hex" value="#6c42d1" oninput="colorFromHex(this.value)"></div>
-          <div class="tool-field"><label>RGB</label><input id="color-rgb" value="rgb(108,66,209)" oninput="colorFromRGB(this.value)"></div>
-          <div class="tool-field"><label>HSL</label><input id="color-hsl" value="hsl(258,62%,54%)" readonly></div>
-        </div>
-      </div>
-    </div>
-    <div class="tool-panel" id="tool-json">
-      <textarea id="json-input" placeholder="粘贴 JSON..." rows="5"></textarea>
-      <div class="tool-actions">
-        <button class="btn btn-primary btn-sm" onclick="jsonFormat()">格式化</button>
-        <button class="btn btn-ghost btn-sm" onclick="jsonCompact()">压缩</button>
-        <button class="btn btn-ghost btn-sm" onclick="clearTool('json')">清空</button>
-      </div>
-      <textarea id="json-output" placeholder="结果..." rows="5" readonly></textarea>
-    </div>
-    <div class="tool-panel" id="tool-timestamp">
-      <div class="tool-field"><label>Unix 时间戳（秒）</label><input id="ts-unix" value="" oninput="tsFromUnix(this.value)"></div>
-      <div class="tool-actions"><button class="btn btn-ghost btn-sm" onclick="tsNow()">当前时间戳</button></div>
-      <div class="tool-field"><label>日期时间</label><input id="ts-datetime" value="" oninput="tsFromDatetime(this.value)"></div>
-      <div id="ts-result" style="margin-top:8px;padding:10px;background:rgba(255,255,255,0.03);border-radius:8px;font-size:13px;color:var(--text-secondary)"></div>
-    </div>
-    <div class="tool-panel" id="tool-hash">
-      <textarea id="hash-input" placeholder="输入文本..." rows="4" oninput="calcHash()"></textarea>
-      <div class="tool-field"><label>MD5</label><input id="hash-md5" readonly></div>
-      <div class="tool-field"><label>SHA-1</label><input id="hash-sha1" readonly></div>
-      <div class="tool-field"><label>SHA-256</label><input id="hash-sha256" readonly></div>
-    </div>
-    <div class="tool-panel" id="tool-imagezip">
-      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
-        <div style="flex:1;min-width:120px">
-          <div class="tool-field"><label>质量 <span id="iz-q-val">80%</span></label>
-            <input type="range" id="iz-quality" min="1" max="100" value="80" oninput="izUpdate()" style="width:100%">
-          </div>
-        </div>
-        <div style="flex:1;min-width:120px">
-          <div class="tool-field"><label>最大宽度</label>
-            <select id="iz-maxw" onchange="izUpdate()" style="width:100%;padding:8px;background:rgba(255,255,255,0.04);border:1px solid var(--border-subtle);border-radius:8px;color:var(--text-primary);font-size:13px;outline:none">
-              <option value="0">原图尺寸</option>
-              <option value="3840">3840 (4K)</option>
-              <option value="2560">2560 (2K)</option>
-              <option value="1920" selected>1920 (全高清)</option>
-              <option value="1280">1280 (HD)</option>
-              <option value="800">800</option>
-              <option value="400">400</option>
-            </select>
-          </div>
-        </div>
-        <div style="flex:1;min-width:100px">
-          <div class="tool-field"><label>输出格式</label>
-            <select id="iz-fmt" onchange="izUpdate()" style="width:100%;padding:8px;background:rgba(255,255,255,0.04);border:1px solid var(--border-subtle);border-radius:8px;color:var(--text-primary);font-size:13px;outline:none">
-              <option value="image/jpeg">JPEG</option>
-              <option value="image/webp">WebP</option>
-              <option value="image/png">PNG</option>
-            </select>
-          </div>
-        </div>
-      </div>
-      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-        <button class="btn btn-primary btn-sm" onclick="izSelect()"><i class="hm hm-folder"></i> 选择图片</button>
-        <button class="btn btn-ghost btn-sm" onclick="izDownload()" id="iz-dlbtn" disabled><i class="hm hm-download"></i> 下载</button>
-      </div>
-      <input type="file" id="iz-input" accept="image/*" style="display:none" onchange="izLoad()">
-      <div style="display:flex;gap:12px;flex-wrap:wrap">
-        <div style="flex:1;min-width:180px">
-          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">原图</div>
-          <div id="iz-original" style="background:rgba(255,255,255,0.02);border-radius:8px;padding:8px;text-align:center;min-height:100px;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--text-muted);overflow:hidden">请选择图片</div>
-          <div id="iz-originfo" style="font-size:11px;color:var(--text-muted);margin-top:4px"></div>
-        </div>
-        <div style="flex:1;min-width:180px">
-          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">压缩后</div>
-          <div id="iz-result" style="background:rgba(255,255,255,0.02);border-radius:8px;padding:8px;text-align:center;min-height:100px;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--text-muted);overflow:hidden">等待压缩...</div>
-          <div id="iz-resinfo" style="font-size:11px;color:var(--text-muted);margin-top:4px;word-break:break-all"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
 <!-- 页脚 -->
 <footer class="footer">
-    <div class="container">
-        <p>&copy; {{ now().year if now else '2026' }} HOSHINO Blog</p>
-        <div class="social-links">
-            <a href="#" title="Twitter"><i class="hm hm-public"></i></a>
-            <a href="#" title="GitHub"><i class="hm hm-public-code"></i></a>
-            <a href="{{ url_for('blog.rss_feed') }}" title="RSS"><i class="hm hm-refresh"></i></a>
-        </div>
-    </div>
+    <span>&copy; {{ now().year if now else '2026' }} Hoshino</span>
+    <span>
+        <a href="#" title="Twitter">Twitter</a>
+        <a href="#" title="GitHub">GitHub</a>
+        <a href="{{ url_for('blog.rss_feed') }}" title="RSS">RSS</a>
+    </span>
 </footer>
 
-<script>
-function toggleNav() {
-  document.getElementById('navToggle').classList.toggle('open');
-  document.getElementById('navLinks').classList.toggle('open');
-  document.getElementById('navOverlay').classList.toggle('show');
-}
-function toggleTools() {
-  document.getElementById('toolsPanel').classList.toggle('open');
-  document.getElementById('toolsOverlay').classList.toggle('show');
-  if (document.getElementById('toolsPanel').classList.contains('open')) initTimestamp();
-}
-function switchTool(name) {
-  document.querySelectorAll('.tool-panel').forEach(function(p) { p.classList.remove('active'); });
-  document.querySelectorAll('.tool-tab').forEach(function(t) { t.classList.remove('active'); });
-  document.getElementById('tool-' + name).classList.add('active');
-  document.querySelector('.tool-tab[data-tool="' + name + '"]').classList.add('active');
-}
-function b64Encode() { document.getElementById('b64-output').value = btoa(unescape(encodeURIComponent(document.getElementById('b64-input').value))); }
-function b64Decode() { try { document.getElementById('b64-output').value = decodeURIComponent(escape(atob(document.getElementById('b64-input').value))); } catch(e) { document.getElementById('b64-output').value = '解码失败: 无效的 Base64'; } }
-function wordCount() {
-  var t = document.getElementById('wc-input').value;
-  document.getElementById('wc-chars').textContent = t.replace(/\s/g,'').length;
-  document.getElementById('wc-chars-sp').textContent = t.length;
-  document.getElementById('wc-lines').textContent = t ? t.split('\n').length : 0;
-}
-function colorFromPicker() {
-  var c = document.getElementById('color-picker').value;
-  var r = parseInt(c.slice(1,3),16), g = parseInt(c.slice(3,5),16), b = parseInt(c.slice(5,7),16);
-  document.getElementById('color-hex').value = c;
-  document.getElementById('color-rgb').value = 'rgb('+r+','+g+','+b+')';
-  document.getElementById('color-hsl').value = rgbToHsl(r,g,b);
-}
-function colorFromHex(h) {
-  if (!/^#[0-9a-f]{6}$/i.test(h)) return;
-  var r = parseInt(h.slice(1,3),16), g = parseInt(h.slice(3,5),16), b = parseInt(h.slice(5,7),16);
-  document.getElementById('color-picker').value = h;
-  document.getElementById('color-rgb').value = 'rgb('+r+','+g+','+b+')';
-  document.getElementById('color-hsl').value = rgbToHsl(r,g,b);
-}
-function colorFromRGB(rgb) {
-  var m = rgb.match(/\d+/g); if (!m || m.length<3) return;
-  var r=+m[0],g=+m[1],b=+m[2];
-  var h = '#' + [r,g,b].map(function(x){return ('0'+x.toString(16)).slice(-2)}).join('');
-  document.getElementById('color-picker').value = h;
-  document.getElementById('color-hex').value = h;
-  document.getElementById('color-rgb').value = 'rgb('+r+','+g+','+b+')';
-  document.getElementById('color-hsl').value = rgbToHsl(r,g,b);
-}
-function rgbToHsl(r,g,b) {
-  r/=255;g/=255;b/=255;
-  var max=Math.max(r,g,b),min=Math.min(r,g,b),h,s,l=(max+min)/2;
-  if(max===min) h=s=0; else {
-    var d=max-min; s=l>0.5?d/(2-max-min):d/(max+min);
-    if(max===r) h=((g-b)/d+(g<b?6:0))/6; else if(max===g) h=((b-r)/d+2)/6; else h=((r-g)/d+4)/6;
-    h*=60;
-  }
-  return 'hsl('+Math.round(h)+','+Math.round(s*100)+'%,'+Math.round(l*100)+'%)';
-}
-function jsonFormat() {
-  try { var o = JSON.parse(document.getElementById('json-input').value); document.getElementById('json-output').value = JSON.stringify(o,null,2); }
-  catch(e) { document.getElementById('json-output').value = 'JSON 格式错误: ' + e.message; }
-}
-function jsonCompact() {
-  try { var o = JSON.parse(document.getElementById('json-input').value); document.getElementById('json-output').value = JSON.stringify(o); }
-  catch(e) { document.getElementById('json-output').value = 'JSON 格式错误: ' + e.message; }
-}
-function initTimestamp() {
-  document.getElementById('ts-unix').value = Math.floor(Date.now()/1000);
-  document.getElementById('ts-datetime').value = new Date().toISOString().slice(0,19).replace('T',' ');
-  tsFromUnix(document.getElementById('ts-unix').value);
-}
-function tsFromUnix(ts) {
-  var n = parseInt(ts); if(!isNaN(n)){ var d=new Date(n*1000); document.getElementById('ts-datetime').value=d.toISOString().slice(0,19).replace('T',' '); showTsResult(n); }
-}
-function tsFromDatetime(dt) {
-  var d = new Date(dt); if(!isNaN(d.getTime())){ var u=Math.floor(d.getTime()/1000); document.getElementById('ts-unix').value=u; showTsResult(u); }
-}
-function tsNow() { initTimestamp(); }
-function showTsResult(ts) {
-  var d = new Date(ts*1000);
-  document.getElementById('ts-result').innerHTML = 'Unix 秒: <strong>'+ts+'</strong><br>Unix 毫秒: <strong>'+(ts*1000)+'</strong><br>UTC: <strong>'+d.toUTCString()+'</strong><br>本地: <strong>'+d.toLocaleString()+'</strong>';
-}
-function calcHash() {
-  var t = document.getElementById('hash-input').value;
-  if (!t) { document.getElementById('hash-md5').value='';document.getElementById('hash-sha1').value='';document.getElementById('hash-sha256').value=''; return; }
-  var enc = new TextEncoder().encode(t);
-  crypto.subtle.digest('MD5', enc).then(function(b){ document.getElementById('hash-md5').value = buf2hex(b); });
-  crypto.subtle.digest('SHA-1', enc).then(function(b){ document.getElementById('hash-sha1').value = buf2hex(b); });
-  crypto.subtle.digest('SHA-256', enc).then(function(b){ document.getElementById('hash-sha256').value = buf2hex(b); });
-}
-function buf2hex(b) { return Array.from(new Uint8Array(b)).map(function(x){return ('0'+x.toString(16)).slice(-2)}).join(''); }
-function clearTool(name) {
-  document.querySelectorAll('#tool-' + name + ' textarea').forEach(function(t){ t.value=''; });
-}
-var izSrcImg = null, izBlobUrl = null;
-function izSelect() { document.getElementById('iz-input').click(); }
-function izLoad() {
-  var f = document.getElementById('iz-input').files[0];
-  if (!f) return;
-  var reader = new FileReader();
-  reader.onload = function(e) {
-    var img = new Image();
-    img.onload = function() {
-      izSrcImg = img;
-      document.getElementById('iz-original').innerHTML = '<img src="'+e.target.result+'" style="max-width:100%;max-height:140px;border-radius:6px">';
-      var kb = (f.size / 1024).toFixed(1);
-      document.getElementById('iz-originfo').textContent = img.width+'×'+img.height+' · '+kb+'KB · '+f.type;
-      izUpdate();
-    };
-    img.src = e.target.result;
-  };
-  reader.readAsDataURL(f);
-}
-function izUpdate() {
-  if (!izSrcImg) return;
-  var q = parseInt(document.getElementById('iz-quality').value);
-  document.getElementById('iz-q-val').textContent = q + '%';
-  var maxw = parseInt(document.getElementById('iz-maxw').value);
-  var fmt = document.getElementById('iz-fmt').value;
-  var w = izSrcImg.width, h = izSrcImg.height;
-  if (maxw > 0 && w > maxw) { h = Math.round(h * maxw / w); w = maxw; }
-  var c = document.createElement('canvas');
-  c.width = w; c.height = h;
-  var ctx = c.getContext('2d');
-  ctx.drawImage(izSrcImg, 0, 0, w, h);
-  c.toBlob(function(blob) {
-    if (izBlobUrl) URL.revokeObjectURL(izBlobUrl);
-    izBlobUrl = URL.createObjectURL(blob);
-    document.getElementById('iz-result').innerHTML = '<img src="'+izBlobUrl+'" style="max-width:100%;max-height:140px;border-radius:6px">';
-    var kb = (blob.size / 1024).toFixed(1);
-    document.getElementById('iz-resinfo').textContent = w+'×'+h+' · '+kb+'KB';
-    document.getElementById('iz-dlbtn').disabled = false;
-  }, fmt, q/100);
-}
-function izDownload() {
-  if (!izBlobUrl) return;
-  var a = document.createElement('a');
-  a.href = izBlobUrl;
-  var ext = { 'image/jpeg':'.jpg','image/webp':'.webp','image/png':'.png' };
-  a.download = 'compressed' + (ext[document.getElementById('iz-fmt').value] || '.jpg');
-  a.click();
-}
-
-// 主题切换
-function toggleTheme() {
-  var html = document.documentElement;
-  var isLight = html.classList.toggle('theme-light');
-  localStorage.setItem('hoshino_theme', isLight ? 'light' : 'dark');
-}
-(function() {
-  var saved = localStorage.getItem('hoshino_theme');
-  var defaultTheme = '{{ config.get("DEFAULT_THEME", "dark") }}';
-  if (saved === 'light' || (!saved && defaultTheme === 'light')) {
-    document.documentElement.classList.add('theme-light');
-  }
-})();
-function toggleGray() {
-  var body = document.body;
-  var isGray = body.classList.toggle('grayscale');
-  localStorage.setItem('hoshino_gray', isGray ? '1' : '0');
-}
-(function() {
-  if (localStorage.getItem('hoshino_gray') === '1') {
-    document.body.classList.add('grayscale');
-  }
-})();
-
-/* ═══ Card Edge Glow (Canvas 追光) ═══ */
-(function(){
-  var C = {
-    density: 0.5, maxDist: 120, glowR: 2.8, minOp: 0.022,
-    easePow: 0.5, minPts: 100, color: '108,66,209', offset: 35
-  };
-  var mx=-9999, my=-9999, hover=false, aid=null, states=[];
-  var SEL = [
-    '.post-card', '.widget', '.price-card', '.admin-card',
-    '.comment-item', '.author-box', '.comment-form', '.login-box',
-    '#priceChart', '[data-glow]'
-  ].join(',');
-
-  function perim(w,h,r){
-    return 2*(Math.max(0,w-2*r)+Math.max(0,h-2*r)) + 2*Math.PI*r;
-  }
-  function edgePts(w,h,r,n){
-    var pts=[], ts=Math.max(0,w-2*r), rs=Math.max(0,h-2*r), qc=Math.PI/2*r;
-    var tl=2*ts+2*rs+4*qc; if(tl<=0||n<=0)return pts;
-    var step=tl/n;
-    function at(d){
-      if(d<ts)return{x:r+d,y:0}; d-=ts;
-      if(d<qc){var a=-Math.PI/2+d/qc*Math.PI/2;return{x:(w-r)+r*Math.cos(a),y:r+r*Math.sin(a)}} d-=qc;
-      if(d<rs)return{x:w,y:r+d}; d-=rs;
-      if(d<qc){var a=d/qc*Math.PI/2;return{x:(w-r)+r*Math.cos(a),y:(h-r)+r*Math.sin(a)}} d-=qc;
-      if(d<ts)return{x:(w-r)-d,y:h}; d-=ts;
-      if(d<qc){var a=Math.PI/2+d/qc*Math.PI/2;return{x:r+r*Math.cos(a),y:(h-r)+r*Math.sin(a)}} d-=qc;
-      if(d<rs)return{x:0,y:(h-r)-d}; d-=rs;
-      if(d<=qc){var a=Math.PI+d/qc*Math.PI/2;return{x:r+r*Math.cos(a),y:r+r*Math.sin(a)}}
-      return{x:r,y:0};
-    }
-    for(var i=0;i<n;i++)pts.push(at(i*step));
-    return pts;
-  }
-  function intens(dist,mx,mo,ep){
-    if(dist>=mx)return mo;
-    var n=dist/mx; return (1-Math.pow(n,ep))*(1-mo)+mo;
-  }
-
-  function parseRad(el,fallback){
-    var cs=getComputedStyle(el);
-    var br=cs.borderRadius;
-    if(br && br!=='0px'){
-      var m=br.match(/^(\d+(?:\.\d+)?)px/);
-      if(m)return parseFloat(m[1]);
-    }
-    return fallback;
-  }
-
-  function hasOverflowHidden(el){
-    return getComputedStyle(el).overflow==='hidden';
-  }
-
-  function initCard(el){
-    if(el._glow)return; el._glow=true;
-    // ensure position context
-    if(getComputedStyle(el).position==='static') el.style.position='relative';
-
-    var ov=hasOverflowHidden(el), off=C.offset;
-    var cv=document.createElement('canvas');
-    if(ov){
-      cv.style.cssText='position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:-1;';
-    } else {
-      cv.style.cssText='position:absolute;top:-'+off+'px;left:-'+off+'px;width:calc(100% + '+(2*off)+'px);height:calc(100% + '+(2*off)+'px);pointer-events:none;z-index:-1;';
-    }
-    el.appendChild(cv); var cx=cv.getContext('2d');
-    var st={
-      el:el,cv:cv,cx:cx,color:C.color,rad:16,ov:ov,off:off,
-      pts:[],dirty:true,cw:0,ch:0,rect:null,
-      draw:function(gx,gy,act){
-        if(st.dirty)upd(st); if(!st.pts||!st.pts.length)return;
-        if(document.hidden)return; // skip when tab hidden
-        var dpr=window.devicePixelRatio||1;
-        cx.clearRect(0,0,st.cw,st.ch);
-        var ox=act?(gx-st.rect.left):-9999, oy=act?(gy-st.rect.top):-9999;
-        var cso=st.off; // canvas shift offset
-        for(var p of st.pts){
-          var d=Math.hypot(p.x-ox,p.y-oy), in_=intens(d,C.maxDist,C.minOp,C.easePow);
-          if(in_<=0.005)continue;
-          var px=p.x+cso,py=p.y+cso;
-          var g=cx.createRadialGradient(px,py,C.glowR*0.06,px,py,C.glowR);
-          g.addColorStop(0,'rgba('+st.color+','+in_+')');
-          g.addColorStop(0.35,'rgba('+st.color+','+(in_*0.78)+')');
-          g.addColorStop(1,'rgba('+st.color+',0)');
-          cx.fillStyle=g; cx.beginPath(); cx.arc(px,py,C.glowR,0,Math.PI*2); cx.fill();
-        }
-      }
-    };
-    states.push(st);
-  }
-
-  function upd(st){
-    var r=st.el.getBoundingClientRect(); st.rect=r;
-    var w=r.width,h=r.height;
-    st.rad=parseRad(st.el,16);
-    var n=Math.max(C.minPts,Math.round(perim(w,h,st.rad)*C.density));
-    st.pts=edgePts(w,h,st.rad,n);
-    var dpr=window.devicePixelRatio||1;
-    var pad=st.ov?0:st.off;
-    st.cw=w+2*pad; st.ch=h+2*pad;
-    st.cv.width=st.cw*dpr; st.cv.height=st.ch*dpr;
-    st.cv.style.width=st.cw+'px'; st.cv.style.height=st.ch+'px';
-    st.cx.setTransform(dpr,0,0,dpr,0,0); st.dirty=false;
-  }
-
-  function cleanup(){
-    states=states.filter(function(s){
-      if(!document.contains(s.el)){
-        s.cv.remove();
-        s.el._glow=false;
-        return false;
-      }
-      return true;
-    });
-  }
-
-  function drawAll(){
-    cleanup();
-    for(var i=0;i<states.length;i++) states[i].draw(mx,my,hover);
-  }
-
-  var debounceTimer=null;
-  function debouncedUpdate(){
-    clearTimeout(debounceTimer);
-    debounceTimer=setTimeout(function(){
-      for(var i=0;i<states.length;i++) states[i].dirty=true;
-      reqDraw();
-    }, 80);
-  }
-
-  function reqDraw(){
-    if(document.hidden)return;
-    if(aid)return; aid=requestAnimationFrame(function(){aid=null;drawAll();});
-  }
-
-  window.addEventListener('mousemove',function(e){mx=e.clientX;my=e.clientY;hover=true;reqDraw();},{passive:true});
-  window.addEventListener('mouseleave',function(){hover=false;reqDraw();});
-  document.addEventListener('touchmove',function(e){if(e.touches.length){mx=e.touches[0].clientX;my=e.touches[0].clientY;hover=true;reqDraw();}},{passive:true});
-  document.addEventListener('touchend',function(){hover=false;reqDraw();});
-  window.addEventListener('resize',debouncedUpdate,{passive:true});
-  window.addEventListener('scroll',debouncedUpdate,{passive:true});
-  document.addEventListener('visibilitychange',function(){if(!document.hidden)reqDraw();});
-
-  function init(){
-    document.querySelectorAll(SEL).forEach(initCard);
-    new MutationObserver(function(){
-      document.querySelectorAll(SEL).forEach(function(el){
-        if(!el._glow)initCard(el);
-      });
-    }).observe(document.body,{childList:true,subtree:true});
-  }
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
-})();
-</script>
-
+<script src="{{ url_for('static', filename='js/glow-controller.js') }}"></script>
 </body>
 </html>

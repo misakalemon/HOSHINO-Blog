@@ -3,25 +3,17 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}管理后台{% endblock %} · HOSHINO Blog</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/tech.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/harmonyos.css') }}">
+    <title>{% block title %}管理后台{% endblock %} · Hoshino</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/glow-design.css') }}">
     {% block extra_head %}{% endblock %}
-    <style>
-      * { box-sizing: border-box; margin: 0; padding: 0; }
-      body {
-        background: var(--bg-primary);
-        color: var(--text-primary);
-        font-family: var(--font-sans);
-        display: flex;
-        min-height: 100vh;
-      }
-    </style>
 </head>
 <body>
+
+<div class="glow-bg">
+    <div class="glow-orb"></div>
+    <div class="glow-orb"></div>
+    <div class="glow-orb"></div>
+</div>
 
 <!-- 侧边栏 -->
 <button class="admin-toggle" id="adminToggle" onclick="toggleAdminSidebar()">
@@ -29,15 +21,16 @@
 </button>
 <div class="admin-overlay" id="adminOverlay" onclick="toggleAdminSidebar()"></div>
 <div class="admin-sidebar" id="adminSidebar">
-    <a href="{{ url_for('admin.dashboard') }}" class="logo">// HOSHINO</a>
-    <a href="{{ url_for('admin.dashboard') }}" {% if request.endpoint == 'admin.dashboard' %}class="active"{% endif %}><i class="hm hm-view-grid"></i> 仪表盘</a>
-    <a href="{{ url_for('admin.post_list') }}" {% if request.endpoint and 'post' in request.endpoint %}class="active"{% endif %}><i class="hm hm-detail"></i> 文章</a>
-    <a href="{{ url_for('admin.category_list') }}" {% if request.endpoint and 'category' in request.endpoint %}class="active"{% endif %}><i class="hm hm-folder"></i> 分类</a>
-    <a href="{{ url_for('admin.comment_list') }}" {% if request.endpoint and 'comment' in request.endpoint %}class="active"{% endif %}><i class="hm hm-comments"></i> 评论</a>
-    <a href="{{ url_for('admin.user_list') }}" {% if request.endpoint and 'user' in request.endpoint %}class="active"{% endif %}><i class="hm hm-contacts"></i> 用户</a>
-    <a href="{{ url_for('admin.profile') }}" {% if request.endpoint == 'admin.profile' %}class="active"{% endif %}><i class="hm hm-portrait"></i> 个人资料</a>
-    <a href="{{ url_for('blog.index') }}" style="color:var(--text-muted);margin-top:20px"><i class="hm hm-public"></i> 查看网站</a>
-    <a href="{{ url_for('admin.logout') }}" class="logout-link"><i class="hm hm-close"></i> 退出登录</a>
+    <a href="{{ url_for('admin.dashboard') }}" class="logo">✦ Hoshino</a>
+    <a href="{{ url_for('admin.dashboard') }}" {% if request.endpoint == 'admin.dashboard' %}class="active"{% endif %}>仪表盘</a>
+    <a href="{{ url_for('admin.post_list') }}" {% if request.endpoint and 'post' in request.endpoint %}class="active"{% endif %}>文章</a>
+    <a href="{{ url_for('admin.category_list') }}" {% if request.endpoint and 'category' in request.endpoint %}class="active"{% endif %}>分类</a>
+    <a href="{{ url_for('admin.featured_card_list') }}" {% if request.endpoint and 'featured_card' in request.endpoint %}class="active"{% endif %}>特色卡片</a>
+    <a href="{{ url_for('admin.comment_list') }}" {% if request.endpoint and 'comment' in request.endpoint %}class="active"{% endif %}>评论</a>
+    <a href="{{ url_for('admin.user_list') }}" {% if request.endpoint and 'user' in request.endpoint %}class="active"{% endif %}>用户</a>
+    <a href="{{ url_for('admin.profile') }}" {% if request.endpoint == 'admin.profile' %}class="active"{% endif %}>个人资料</a>
+    <a href="{{ url_for('blog.index') }}" style="color:rgba(255,255,255,0.25);margin-top:20px;font-size:0.75rem">← 查看网站</a>
+    <a href="{{ url_for('admin.logout') }}" class="logout-link">退出登录</a>
 </div>
 
 <!-- 主内容 -->
@@ -55,13 +48,6 @@
     </div>
 </div>
 
-<script>
-function toggleAdminSidebar() {
-  document.getElementById('adminToggle').classList.toggle('open');
-  document.getElementById('adminSidebar').classList.toggle('open');
-  document.getElementById('adminOverlay').classList.toggle('show');
-}
-</script>
-
+<script src="{{ url_for('static', filename='js/glow-controller.js') }}"></script>
 </body>
 </html>

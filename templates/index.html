@@ -1,101 +1,121 @@
 {% extends 'base.html' %}
-{% block title %}HOSHINO Blog{% endblock %}
+{% block title %}{{ site_name|default('Hoshino') }}{% endblock %}
 {% block content %}
 
 {% if search_query %}
-<div class="page-header">
-    <div class="container">
-        <h1 class="gradient-text">搜索：{{ search_query }}</h1>
-        <p>找到 {{ posts.total if posts.total is defined else 0 }} 篇相关文章</p>
-    </div>
-</div>
+<section class="hero">
+    <h1>搜索：<span class="highlight">{{ search_query }}</span></h1>
+    <p>找到 {{ posts.total if posts.total is defined else 0 }} 篇相关文章</p>
+</section>
 {% else %}
-<div class="page-header">
-    <div class="container">
-        <h1 class="gradient-text">文章列表</h1>
-        <p>探索科技与创新的边界</p>
-    </div>
-</div>
+<section class="hero">
+    <h1>最喜欢<br><span class="highlight">小鸟游星野</span></h1>
+    <p>碧蓝档案 · 手办 · 键盘 · 耳机 · 桌面 · 圣地巡礼 · 虎式坦克 · 迷彩历史</p>
+</section>
 {% endif %}
 
-<section style="padding-bottom:60px">
-    <div class="container">
-        <div class="row">
-            <!-- 主内容 -->
-            <div class="col-8">
-                {% if posts.items %}
-                <div class="post-grid">
-                    {% for post in posts.items %}
-                    <article class="post-card">
-                        <a href="{{ url_for('blog.single_post', slug=post.slug) }}" class="cover">
-                            {% if post.cover_image %}
-                            <img src="{{ url_for('blog.thumbnail', path=post.cover_image, w=400) }}" alt="{{ post.title }}" loading="lazy" onerror="this.style.display='none'">
-                            {% endif %}
-                        </a>
-                        <div class="body">
-                            <div class="post-categories">
-                            {% for cat in post.categories %}
-                            <span class="post-category">{{ cat.name }}</span>
-                            {% endfor %}
-                            </div>
-                            <h3><a href="{{ url_for('blog.single_post', slug=post.slug) }}">{{ post.title }}</a></h3>
-                            <div class="meta-line">
-                                <span class="meta-author">{{ post.author.display_name or post.author.username }}</span>
-                                <span class="meta-date">{{ format_date(post.created_at, '%Y/%m/%d') }}</span>
-                                <span class="meta-comments"><i class="hm hm-comments"></i>{{ post.published_comments() }}</span>
-                            </div>
-                        </div>
-                    </article>
-                    {% endfor %}
-                </div>
-
-                {% if posts.pages > 1 %}
-                <div class="pagination-wrap">
-                    <ul class="pagination">
-                        {% if posts.has_prev %}
-                        <li><a href="{{ url_for('blog.index', page=posts.prev_num, category=current_category, per_page=current_per_page) }}"><i class="hm hm-arrow-left"></i></a></li>
-                        {% endif %}
-                        {% for page_num in posts.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
-                            {% if page_num %}
-                            <li {% if page_num == posts.page %}class="active"{% endif %}>
-                                <a href="{{ url_for('blog.index', page=page_num, category=current_category, per_page=current_per_page) }}">{{ page_num }}</a>
-                            </li>
-                            {% else %}
-                            <li><span>···</span></li>
-                            {% endif %}
-                        {% endfor %}
-                        {% if posts.has_next %}
-                        <li><a href="{{ url_for('blog.index', page=posts.next_num, category=current_category, per_page=current_per_page) }}"><i class="hm hm-arrow-right"></i></a></li>
-                        {% endif %}
-                    </ul>
-                    <div class="page-jump">
-                        <span style="color:var(--text-muted);font-size:12px">共 {{ posts.pages }} 页</span>
-                        <input type="number" min="1" max="{{ posts.pages }}" placeholder="跳转" onkeydown="if(event.key=='Enter'){var p=parseInt(this.value);if(p>=1&&p<={{ posts.pages }})window.location='{{ url_for('blog.index', category=current_category) }}?page='+p+'&per_page={{ current_per_page }}';}">
-                        <select class="per-page-select" onchange="var p=new URLSearchParams(location.search);p.set('per_page',this.value);p.set('page','1');location.search=p.toString();">
-                            {% for opt in per_page_options %}
-                            <option value="{{ opt }}" {% if current_per_page == opt %}selected{% endif %}>{{ opt }} 条/页</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-                {% endif %}
-
-                {% else %}
-                <div class="empty-state">
-                    <h2>暂无文章</h2>
-                    <p>发布后文章将在此显示。</p>
-                </div>
-                {% endif %}
-            </div>
-
-            <!-- 侧边栏 -->
-            <div class="col-4">
-                <aside class="sidebar">
-                    {% include '_sidebar.html' %}
-                </aside>
-            </div>
+<div class="featured-grid">
+    {% for card in featured_cards %}
+    {% if card.link %}<a href="{{ card.link }}">{% endif %}
+    <div class="featured-card" data-glow>
+        <div class="featured-card-img" style="background:linear-gradient(145deg,#1a1030,#2a1a40);display:flex;align-items:center;justify-content:center;{% if card.icon and (card.icon.startswith('uploads/') or card.icon.startswith('/static/')) %}overflow:hidden{% else %}font-size:3rem{% endif %}">{% if card.icon and (card.icon.startswith('uploads/') or card.icon.startswith('/static/')) %}<img src="{{ url_for('static', filename=card.icon.replace('/static/', '')) }}" alt="{{ card.title }}" style="width:100%;height:100%;object-fit:cover">{% else %}{{ card.icon or '✦' }}{% endif %}</div>
+        <div class="featured-card-body">
+            <h3>{{ card.title }}</h3>
+            {% if card.description %}<p>{{ card.description }}</p>{% endif %}
+            <span class="featured-card-tag tag-{{ card.tag }}">{{ cat_lookup.get(card.tag, card.tag) }}</span>
         </div>
     </div>
-</section>
+    {% if card.link %}</a>{% endif %}
+    {% else %}
+    <div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:rgba(255,255,255,0.3)">
+        <p style="font-size:0.9rem">暂无特色卡片 — 去<a href="{{ url_for('admin.featured_card_list') }}" style="color:#7abfff">后台添加</a></p>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="content">
+    <div class="row">
+        <div class="col-8">
+            <div class="section-title">精选 <span>文章</span></div>
+
+            {% if posts.items %}
+            <div class="masonry" id="masonryContainer">
+                {% for post in posts.items %}
+                <div class="masonry-item">
+                    <div class="glass-card" data-glow>
+                        <div class="card-content">
+                            {% if post.cover_image %}
+                            <a href="{{ url_for('blog.single_post', slug=post.slug) }}">
+                                <div class="img-glow" style="margin-bottom:1rem;height:200px">
+                                    <img src="{{ url_for('blog.thumbnail', path=post.cover_image, w=400) }}" alt="{{ post.title }}" loading="lazy" style="width:100%;height:100%;object-fit:cover;border-radius:14px" onerror="this.style.display='none'">
+                                </div>
+                            </a>
+                            {% endif %}
+                            <h2 class="text-lg font-light tracking-tight" style="font-size:1.1rem;font-weight:300;letter-spacing:-0.01em;color:rgba(255,255,255,0.9);line-height:1.3">
+                                <a href="{{ url_for('blog.single_post', slug=post.slug) }}" style="transition:color 0.3s">{{ post.title }}</a>
+                            </h2>
+                            {% if post.content %}
+                            <p style="color:rgba(255,255,255,0.35);font-size:0.75rem;line-height:1.6;margin-top:8px;font-weight:300">
+                                {{ post.content|striptags|truncate(120) }}
+                            </p>
+                            {% endif %}
+                            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
+                                {% for cat in post.categories %}
+                                <span class="pill-light">{{ cat.name }}</span>
+                                {% endfor %}
+                            </div>
+                            <time style="display:block;color:rgba(255,255,255,0.15);font-size:0.6rem;margin-top:10px;font-family:'SF Mono','Fira Code',monospace">{{ format_date(post.created_at, '%Y.%m.%d') }}</time>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            {% if posts.pages > 1 %}
+            <div class="pagination-wrap">
+                <ul class="pagination">
+                    {% if posts.has_prev %}
+                    <li><a href="{{ url_for('blog.index', page=posts.prev_num, per_page=current_per_page) }}">←</a></li>
+                    {% endif %}
+                    {% for page_num in posts.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                        {% if page_num %}
+                        <li {% if page_num == posts.page %}class="active"{% endif %}>
+                            <a href="{{ url_for('blog.index', page=page_num, per_page=current_per_page) }}">{{ page_num }}</a>
+                        </li>
+                        {% else %}
+                        <li><span>···</span></li>
+                        {% endif %}
+                    {% endfor %}
+                    {% if posts.has_next %}
+                    <li><a href="{{ url_for('blog.index', page=posts.next_num, per_page=current_per_page) }}">→</a></li>
+                    {% endif %}
+                </ul>
+                <div class="page-jump">
+                    <span style="color:rgba(255,255,255,0.25);font-size:0.7rem">共 {{ posts.pages }} 页</span>
+                    <input type="number" min="1" max="{{ posts.pages }}" placeholder="跳转" onkeydown="if(event.key=='Enter'){var p=parseInt(this.value);if(p>=1&&p<={{ posts.pages }})window.location='{{ url_for('blog.index') }}?page='+p+'&per_page={{ current_per_page }}';}">
+                    <select class="per-page-select" onchange="var p=new URLSearchParams(location.search);p.set('per_page',this.value);p.set('page','1');location.search=p.toString();">
+                        {% for opt in per_page_options %}
+                        <option value="{{ opt }}" {% if current_per_page == opt %}selected{% endif %}>{{ opt }} 条/页</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            {% endif %}
+
+            {% else %}
+            <div class="empty-state">
+                <h2>暂无文章</h2>
+                <p>发布后文章将在此显示。</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="col-4">
+            <aside class="sidebar">
+                {% include '_sidebar.html' %}
+            </aside>
+        </div>
+    </div>
+</div>
 
 {% endblock %}
