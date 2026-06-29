@@ -105,7 +105,8 @@ def index():
         current_per_page=per_page,
         per_page_options=current_app.config['PER_PAGE_OPTIONS'],
         featured_cards=featured_cards,
-        cat_lookup=cat_lookup
+        cat_lookup=cat_lookup,
+        blog_subtitle=current_app.config['BLOG_SUBTITLE']
     )
 
 

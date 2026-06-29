@@ -152,6 +152,10 @@ class Config:
     # 自动包含 POSTS_PER_PAGE 并去重排序，例如设为 10 时选项为 [6, 10, 12, 24, 48]
     PER_PAGE_OPTIONS = sorted(set([POSTS_PER_PAGE, 6, 12, 24, 48]))
 
+    # ── 博客副标题（首页英雄区显示）─────────────
+    BLOG_SUBTITLE = os.environ.get('BLOG_SUBTITLE',
+        '碧蓝档案 · 手办 · 键盘 · 耳机 · 桌面 · 圣地巡礼 · 虎式坦克 · 迷彩历史')
+
     # ── 默认主题（dark / light）────────────────
     # 首次访问时的默认主题。用户手动切换后以 localStorage 为准，不再受此值影响。
     DEFAULT_THEME = os.environ.get('DEFAULT_THEME', 'dark')
