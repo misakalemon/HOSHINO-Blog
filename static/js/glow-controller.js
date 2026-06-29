@@ -88,10 +88,9 @@
 })();
 
 /* ── 2. 导航控制 ────────────────────────────── */
-function toggleNav() {
-  document.getElementById('navToggle').classList.toggle('open');
-  document.getElementById('navLinks').classList.toggle('open');
-  document.getElementById('navOverlay').classList.toggle('show');
+function toggleDrawer() {
+  document.getElementById('mobileDrawer').classList.toggle('open');
+  document.getElementById('drawerOverlay').classList.toggle('show');
 }
 
 function toggleAdminSidebar() {
@@ -335,3 +334,21 @@ function initGlowSelects() {
 }
 
 initGlowSelects();
+
+/* ── 5. 图片灯箱 ────────────────────────────── */
+function openLightbox(src) {
+  var lb = document.getElementById('lightbox');
+  var img = document.getElementById('lightboxImg');
+  img.src = src;
+  lb.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+function closeLightbox() {
+  document.getElementById('lightbox').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+/* ── 6. 移动端：点击标题打开侧栏 ──────────── */
+document.getElementById('navLogo') && document.getElementById('navLogo').addEventListener('click', function(e) {
+  if (window.innerWidth < 640) { e.preventDefault(); toggleDrawer(); }
+});

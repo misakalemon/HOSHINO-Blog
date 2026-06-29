@@ -131,14 +131,14 @@ ul { list-style: none; }
 /* ── 4b. 特色卡片区 ──────────────────────────── */
 .featured-grid {
   position: relative; z-index: 10;
-  max-width: 1200px; margin: 0 auto; padding: 0 28px 60px;
+  max-width: 1320px; margin: 0 auto; padding: 0 28px 60px;
   display: grid; grid-template-columns: repeat(auto-fill, minmax(260px,1fr)); gap: 16px;
 }
 .featured-card {
   position: relative;
   background: rgba(255,255,255,0.02);
-  backdrop-filter: blur(16px) saturate(1.6);
-  -webkit-backdrop-filter: blur(16px) saturate(1.6);
+  backdrop-filter: blur(10px) saturate(1.4);
+  -webkit-backdrop-filter: blur(10px) saturate(1.4);
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 20px; overflow: hidden;
   transition: transform 0.4s cubic-bezier(0.16,1,0.3,1), border-color 0.4s;
@@ -167,7 +167,7 @@ ul { list-style: none; }
 /* ── 5. 内容区 ──────────────────────────────── */
 .content {
   position: relative; z-index: 10;
-  max-width: 1200px; margin: 0 auto; padding: 0 28px 60px;
+  max-width: 1320px; margin: 0 auto; padding: 0 28px 60px;
 }
 .section-title {
   font-size: 1.8rem; font-weight: 250; letter-spacing: 0.02em;
@@ -185,8 +185,8 @@ ul { list-style: none; }
 .glass-card {
   position: relative;
   background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(24px) saturate(1.6);
-  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  backdrop-filter: blur(10px) saturate(1.4);
+  -webkit-backdrop-filter: blur(10px) saturate(1.4);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 20px;
   transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
@@ -370,7 +370,8 @@ ul { list-style: none; }
   background: rgba(255,255,255,0.02);
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 20px; padding: 20px; margin-bottom: 20px;
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(10px) saturate(1.4);
+  -webkit-backdrop-filter: blur(10px) saturate(1.4);
 }
 .widget-title {
   font-size: 0.65rem; font-weight: 600; text-transform: uppercase;
@@ -527,6 +528,8 @@ ul { list-style: none; }
 .author-box {
   display: flex; gap: 16px; align-items: center;
   background: rgba(255,255,255,0.02);
+  backdrop-filter: blur(10px) saturate(1.4);
+  -webkit-backdrop-filter: blur(10px) saturate(1.4);
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 20px; padding: 20px; margin-top: 32px;
 }
@@ -542,6 +545,8 @@ ul { list-style: none; }
 .comments-section h4 { font-size: 1.1rem; font-weight: 500; margin-bottom: 16px; color: rgba(255,255,255,0.7); }
 .comment-item {
   background: rgba(255,255,255,0.02);
+  backdrop-filter: blur(10px) saturate(1.4);
+  -webkit-backdrop-filter: blur(10px) saturate(1.4);
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 16px; padding: 16px; margin-bottom: 12px;
 }
@@ -551,6 +556,8 @@ ul { list-style: none; }
 .no-comments { color: rgba(255,255,255,0.3); font-size: 0.85rem; padding: 16px 0; }
 .comment-form {
   background: rgba(255,255,255,0.02);
+  backdrop-filter: blur(10px) saturate(1.4);
+  -webkit-backdrop-filter: blur(10px) saturate(1.4);
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 20px; padding: 20px; margin-top: 20px;
 }
@@ -642,8 +649,8 @@ ul { list-style: none; }
 .admin-card {
   position: relative;
   background: rgba(255,255,255,0.02);
-  backdrop-filter: blur(16px) saturate(1.6);
-  -webkit-backdrop-filter: blur(16px) saturate(1.6);
+  backdrop-filter: blur(10px) saturate(1.4);
+  -webkit-backdrop-filter: blur(10px) saturate(1.4);
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 20px; padding: 24px; margin-bottom: 20px;
   transition: transform 0.3s, border-color 0.3s, box-shadow 0.3s;
@@ -782,6 +789,8 @@ ul { list-style: none; }
 .price-card {
   position: relative;
   background: rgba(255,255,255,0.02);
+  backdrop-filter: blur(10px) saturate(1.4);
+  -webkit-backdrop-filter: blur(10px) saturate(1.4);
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 20px; padding: 16px;
   transition: transform 0.3s, border-color 0.3s;
@@ -820,6 +829,8 @@ ul { list-style: none; }
 .price-stats { display: grid; grid-template-columns: repeat(5,1fr); gap: 10px; }
 .chart-wrap {
   background: rgba(255,255,255,0.02);
+  backdrop-filter: blur(10px) saturate(1.4);
+  -webkit-backdrop-filter: blur(10px) saturate(1.4);
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 20px; padding: 20px; margin-top: 16px;
 }
@@ -850,6 +861,8 @@ ul { list-style: none; }
 
 .tools-card {
   background: rgba(255,255,255,0.02);
+  backdrop-filter: blur(10px) saturate(1.4);
+  -webkit-backdrop-filter: blur(10px) saturate(1.4);
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 20px; padding: 28px;
 }
@@ -956,8 +969,8 @@ ul { list-style: none; }
 .row { display: flex; gap: clamp(20px, 3vw, 32px); flex-wrap: wrap; }
 .row .col-8 { flex: 1; min-width: 0; }
 .row .col-4 { width: 100%; }
-@media (min-width: 768px) { .row .col-4 { width: 280px; flex-shrink: 0; } }
-@media (min-width: 1024px) { .row .col-4 { width: 320px; } }
+@media (min-width: 768px) { .row .col-4 { width: 240px; flex-shrink: 0; } }
+@media (min-width: 1024px) { .row .col-4 { width: 260px; } }
 
 /* ── 26. 页脚 ──────────────────────────────── */
 .footer {
@@ -988,6 +1001,8 @@ ul { list-style: none; }
 /* ── 28. 价格统计卡片 ────────────────────────── */
 .price-stat-card {
   background: rgba(255,255,255,0.02);
+  backdrop-filter: blur(10px) saturate(1.4);
+  -webkit-backdrop-filter: blur(10px) saturate(1.4);
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 16px; padding: 20px 12px; text-align: center;
 }
@@ -1006,6 +1021,8 @@ ul { list-style: none; }
 /* ── 29. 价格详情来源卡片 ────────────────────── */
 .source-card {
   background: rgba(255,255,255,0.02);
+  backdrop-filter: blur(10px) saturate(1.4);
+  -webkit-backdrop-filter: blur(10px) saturate(1.4);
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 16px; padding: 16px; transition: border-color 0.3s;
 }
@@ -1036,6 +1053,8 @@ ul { list-style: none; }
 .history-card {
   margin-top: 32px;
   background: rgba(255,255,255,0.02);
+  backdrop-filter: blur(10px) saturate(1.4);
+  -webkit-backdrop-filter: blur(10px) saturate(1.4);
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 20px; overflow: hidden;
 }
@@ -1115,7 +1134,37 @@ ul { list-style: none; }
 .page-input:focus { border-color: rgba(255,255,255,0.2); }
 
 /* ── 31. 响应式微调 ────────────────────────── */
+/* ── 31b. 移动端抽屉 ────────────────────────── */
+.mobile-drawer {
+  display: none;
+}
+.drawer-overlay {
+  display: none;
+}
 @media (max-width: 640px) {
+  .mobile-drawer {
+    display: flex; flex-direction: column; gap: 2px;
+    position: fixed; top: 0; left: -280px; width: 260px; height: 100vh;
+    z-index: 100000; padding: 80px 16px 20px;
+    background: rgba(8,10,15,0.96);
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border-right: 1px solid rgba(255,255,255,0.06);
+    transition: left 0.3s cubic-bezier(0.16,1,0.3,1);
+  }
+  .mobile-drawer.open { left: 0; }
+  .mobile-drawer a {
+    display: block; padding: 14px 16px; font-size: 0.95rem;
+    color: rgba(255,255,255,0.4); border-radius: 12px;
+    transition: all 0.2s; text-decoration: none;
+  }
+  .mobile-drawer a:hover { background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.7); }
+  .mobile-drawer a.nav-link-active { color: rgba(255,255,255,0.9); background: rgba(255,255,255,0.04); }
+  .mobile-drawer a.nav-write-btn { color: #ff8aae; font-weight: 500; }
+  .drawer-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5); z-index: 99999;
+  }
+  .drawer-overlay.show { display: block !important; }
   .hero h1 { font-size: 2.8rem; }
   .nav-links { display: none; }
   .footer { flex-direction: column; align-items: center; gap: 8px; }
