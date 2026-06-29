@@ -1,10 +1,29 @@
+<!-- ============================================================
+     首页模板 (index.html)
+     用途：博客首页，展示搜索/默认英雄区、特色卡片、文章瀑布流
+     继承：base.html
+     定义块：
+       - title   : 页面标题
+       - content : 页面主体内容
+     模板变量：
+       - search_query      : 搜索关键词（有值时显示搜索结果模式）
+       - posts             : Flask-SQLAlchemy 分页对象（文章列表）
+       - featured_cards    : 特色卡片列表
+       - cat_lookup        : 分类 ID 到名称的映射字典
+       - blog_subtitle     : 博客副标题
+       - current_per_page  : 当前每页条数
+       - per_page_options  : 每页条数可选值列表
+       - format_date       : 日期格式化函数
+     ============================================================ -->
 {% extends 'base.html' %}
 {% block title %}{{ site_name|default('Hoshino') }}{% endblock %}
 {% block content %}
 
+<!-- 英雄区域：如果存在搜索关键词则显示搜索结果标题，否则显示默认欢迎语 -->
 {% if search_query %}
 <section class="hero">
     <h1>搜索：<span class="highlight">{{ search_query }}</span></h1>
+    <!-- posts.total 为搜索结果总数，若未定义则显示 0 -->
     <p>找到 {{ posts.total if posts.total is defined else 0 }} 篇相关文章</p>
 </section>
 {% else %}
@@ -14,18 +33,24 @@
 </section>
 {% endif %}
 
+<!-- 特色卡片网格：遍历所有特色卡片 -->
 <div class="featured-grid">
     {% for card in featured_cards %}
+    <!-- 如果卡片配置了链接，则将其包裹为可点击区域 -->
     {% if card.link %}<a href="{{ card.link }}">{% endif %}
     <div class="featured-card" data-glow>
+        <!-- 卡片图标区域：支持 emoji 图标或图片 URL（以 uploads/ 或 /static/ 开头视为图片） -->
         <div class="featured-card-img {% if card.icon and (card.icon.startswith('uploads/') or card.icon.startswith('/static/')) %}has-img{% endif %}" style="background:linear-gradient(145deg,#1a1030,#2a1a40);display:flex;align-items:center;justify-content:center;{% if card.icon and (card.icon.startswith('uploads/') or card.icon.startswith('/static/')) %}overflow:hidden;cursor:zoom-in{% else %}font-size:3rem{% endif %}">{% if card.icon and (card.icon.startswith('uploads/') or card.icon.startswith('/static/')) %}<img src="{{ url_for('static', filename=card.icon.replace('/static/', '')) }}" alt="{{ card.title }}" style="width:100%;height:100%;object-fit:cover" onclick="event.stopPropagation();event.preventDefault();openLightbox(this.src)">{% else %}{{ card.icon or '✦' }}{% endif %}</div>
         <div class="featured-card-body">
             <h3>{{ card.title }}</h3>
+            <!-- 卡片描述为可选字段 -->
             {% if card.description %}<p>{{ card.description }}</p>{% endif %}
+            <!-- 通过 cat_lookup 将 tag ID 转为中文分类名 -->
             <span class="featured-card-tag tag-{{ card.tag }}">{{ cat_lookup.get(card.tag, card.tag) }}</span>
         </div>
     </div>
     {% if card.link %}</a>{% endif %}
+    <!-- 如果没有特色卡片，显示引导提示 -->
     {% else %}
     <div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:rgba(255,255,255,0.3)">
         <p style="font-size:0.9rem">暂无特色卡片 — 去<a href="{{ url_for('admin.featured_card_list') }}" style="color:#7abfff">后台添加</a></p>
@@ -38,15 +63,19 @@
         <div class="col-8">
             <div class="section-title">精选 <span>文章</span></div>
 
+            <!-- 如果存在文章数据 -->
             {% if posts.items %}
             <div class="masonry" id="masonryContainer">
+                <!-- 遍历文章列表 -->
                 {% for post in posts.items %}
                 <div class="masonry-item">
                     <div class="glass-card" data-glow>
                         <div class="card-content">
+                            <!-- 文章封面图（可选） -->
                             {% if post.cover_image %}
                             <a href="{{ url_for('blog.single_post', slug=post.slug) }}">
                                 <div class="img-glow" style="margin-bottom:1rem">
+                                    <!-- thumbnail 路由生成缩略图，onerror 隐藏加载失败的图片 -->
                                     <img src="{{ url_for('blog.thumbnail', path=post.cover_image, w=400) }}" alt="{{ post.title }}" loading="lazy" style="width:100%;display:block;border-radius:14px" onerror="this.style.display='none'">
                                 </div>
                             </a>
@@ -54,16 +83,19 @@
                             <h2 class="text-lg font-light tracking-tight" style="font-size:1.1rem;font-weight:300;letter-spacing:-0.01em;color:rgba(255,255,255,0.9);line-height:1.3">
                                 <a href="{{ url_for('blog.single_post', slug=post.slug) }}" style="transition:color 0.3s">{{ post.title }}</a>
                             </h2>
+                            <!-- 文章内容摘要（截断至 120 字符） -->
                             {% if post.content %}
                             <p style="color:rgba(255,255,255,0.35);font-size:0.75rem;line-height:1.6;margin-top:8px;font-weight:300">
                                 {{ post.content|striptags|truncate(120) }}
                             </p>
                             {% endif %}
+                            <!-- 文章分类标签列表 -->
                             <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
                                 {% for cat in post.categories %}
                                 <span class="pill-light">{{ cat.name }}</span>
                                 {% endfor %}
                             </div>
+                            <!-- 发布日期 -->
                             <time style="display:block;color:rgba(255,255,255,0.15);font-size:0.6rem;margin-top:10px;font-family:'SF Mono','Fira Code',monospace">{{ format_date(post.created_at, '%Y.%m.%d') }}</time>
                         </div>
                     </div>
@@ -71,28 +103,36 @@
                 {% endfor %}
             </div>
 
+            <!-- 分页导航（仅当总页数 > 1 时显示） -->
             {% if posts.pages > 1 %}
             <div class="pagination-wrap">
                 <ul class="pagination">
+                    <!-- 上一页按钮 -->
                     {% if posts.has_prev %}
                     <li><a href="{{ url_for('blog.index', page=posts.prev_num, per_page=current_per_page) }}">←</a></li>
                     {% endif %}
+                    <!-- 迭代页码，left_edge/right_edge 控制两端页码，left_current/right_current 控制当前页两侧 -->
                     {% for page_num in posts.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                         {% if page_num %}
+                        <!-- 当前页高亮 -->
                         <li {% if page_num == posts.page %}class="active"{% endif %}>
                             <a href="{{ url_for('blog.index', page=page_num, per_page=current_per_page) }}">{{ page_num }}</a>
                         </li>
                         {% else %}
+                        <!-- 页码不连续时显示省略号 -->
                         <li><span>···</span></li>
                         {% endif %}
                     {% endfor %}
+                    <!-- 下一页按钮 -->
                     {% if posts.has_next %}
                     <li><a href="{{ url_for('blog.index', page=posts.next_num, per_page=current_per_page) }}">→</a></li>
                     {% endif %}
                 </ul>
                 <div class="page-jump">
                     <span style="color:rgba(255,255,255,0.25);font-size:0.7rem">共 {{ posts.pages }} 页</span>
+                    <!-- 跳转输入框：Enter 触发跳转 -->
                     <input type="number" min="1" max="{{ posts.pages }}" placeholder="跳转" onkeydown="if(event.key=='Enter'){var p=parseInt(this.value);if(p>=1&&p<={{ posts.pages }})window.location='{{ url_for('blog.index') }}?page='+p+'&per_page={{ current_per_page }}';}">
+                    <!-- 每页条数选择器 -->
                     <select class="per-page-select" onchange="var p=new URLSearchParams(location.search);p.set('per_page',this.value);p.set('page','1');location.search=p.toString();">
                         {% for opt in per_page_options %}
                         <option value="{{ opt }}" {% if current_per_page == opt %}selected{% endif %}>{{ opt }} 条/页</option>
@@ -102,6 +142,7 @@
             </div>
             {% endif %}
 
+            <!-- 无文章时的空状态 -->
             {% else %}
             <div class="empty-state">
                 <h2>暂无文章</h2>
@@ -110,6 +151,7 @@
             {% endif %}
         </div>
 
+        <!-- 侧边栏 -->
         <div class="col-4">
             <aside class="sidebar">
                 {% include '_sidebar.html' %}

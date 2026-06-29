@@ -1,3 +1,14 @@
+<!-- ============================================================
+     管理员登录页 (admin/login.html)
+     用途：管理员登录表单
+     继承：base.html（使用前台布局，非后台布局）
+     定义块：
+       - title   : 页面标题
+       - content : 页面主体内容
+     模板变量：
+       - form     : Flask-WTF 登录表单对象
+       - messages : Flask Flash 消息（通过 get_flashed_messages 获取）
+     ============================================================ -->
 {% extends 'base.html' %}
 {% block title %}登录 - Hoshino{% endblock %}
 {% block content %}
@@ -9,6 +20,7 @@
                 <h2 style="font-size:1.5rem;font-weight:250;margin-bottom:4px">✦ 登录</h2>
                 <p style="color:rgba(255,255,255,0.35);font-size:0.85rem;margin-bottom:24px">管理员入口</p>
 
+                <!-- Flash 消息：如登录失败提示 -->
                 {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
                 {% for category, message in messages %}
@@ -17,6 +29,7 @@
                 {% endif %}
                 {% endwith %}
 
+                <!-- 登录表单 -->
                 <form method="POST">
                     {{ form.hidden_tag() }}
                     <div class="form-group">

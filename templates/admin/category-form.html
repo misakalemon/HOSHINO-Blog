@@ -1,3 +1,14 @@
+<!-- ============================================================
+     分类编辑/新建表单 (admin/category-form.html)
+     用途：创建或编辑分类（名称、Slug、描述）
+     继承：admin/base_admin.html
+     定义块：
+       - title         : 页面标题（"编辑分类" 或 "新建分类"）
+       - admin_content : 后台主体内容
+     模板变量：
+       - editing  : 布尔值，是否为编辑模式
+       - form     : Flask-WTF 分类表单对象
+     ============================================================ -->
 {% extends 'admin/base_admin.html' %}
 {% block title %}{{ '编辑' if editing else '新建' }}分类{% endblock %}
 {% block admin_content %}

@@ -1,3 +1,14 @@
+<!-- ============================================================
+     分类列表管理 (admin/category-list.html)
+     用途：后台分类管理表格，可编辑和删除分类
+     继承：admin/base_admin.html
+     定义块：
+       - title         : 页面标题
+       - admin_content : 后台主体内容
+     模板变量：
+       - categories  : 全部分类列表
+       - csrf_token() : CSRF 令牌函数
+     ============================================================ -->
 {% extends 'admin/base_admin.html' %}
 {% block title %}分类管理{% endblock %}
 {% block admin_content %}
@@ -9,13 +20,16 @@
     <div class="admin-table-wrapper">
     <table class="admin-table">
         <tr><th>名称</th><th>Slug</th><th>文章数</th><th>操作</th></tr>
+        <!-- 遍历分类列表 -->
         {% for cat in categories %}
         <tr>
             <td data-label="名称"><strong>{{ cat.name }}</strong></td>
             <td data-label="Slug">{{ cat.slug }}</td>
+            <!-- 调用 post_count() 获取该分类下文章数 -->
             <td data-label="文章数">{{ cat.post_count() }}</td>
             <td data-label="操作" style="white-space:nowrap">
                 <a href="{{ url_for('admin.edit_category', id=cat.id) }}" class="btn btn-primary btn-sm">编辑</a>
+                <!-- 删除确认：提示相关文章将变为未分类 -->
                 <form method="POST" action="{{ url_for('admin.delete_category', id=cat.id) }}" style="display:inline" onsubmit="return confirm('确定删除 {{ cat.name }}？相关文章将变为未分类。')">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button class="btn btn-danger btn-sm">删除</button>

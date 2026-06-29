@@ -1,3 +1,15 @@
+<!-- ============================================================
+     价格详情页 (price/detail.html)
+     用途：单个商品的价格走势详情，含 ECharts 图表、统计、来源和记录
+     继承：base.html
+     定义块：
+       - title   : 页面标题（商品名 + " - 价格走势 - Hoshino"）
+       - content : 页面主体内容
+     模板变量：
+       - product : 商品对象（含 sources 关联）
+       - days    : 当前选中的天数筛选
+       - records : 价格记录列表
+     ============================================================ -->
 {% extends 'base.html' %}
 {% block title %}{{ product.name }} - 价格走势 - Hoshino{% endblock %}
 {% block content %}
@@ -14,6 +26,7 @@
 
 <section class="price-section">
     <div class="container">
+        <!-- 天数切换标签页 -->
         <div class="detail-tabs">
             {% for d in [7, 14, 30, 90] %}
             <a href="{{ url_for('price.detail', id=product.id, days=d) }}"
@@ -21,6 +34,7 @@
             {% endfor %}
         </div>
 
+        <!-- 价格统计卡片（由前端 JS 填充数据） -->
         <div class="price-stats" id="statsRow">
             <div class="price-stat-card"><span class="price-stat-label">最高</span><span class="price-stat-value" id="stat-max">--</span></div>
             <div class="price-stat-card"><span class="price-stat-label">最低</span><span class="price-stat-value" id="stat-min">--</span></div>
@@ -29,10 +43,12 @@
             <div class="price-stat-card"><span class="price-stat-label">涨跌</span><span class="price-stat-value" id="stat-change">--</span></div>
         </div>
 
+        <!-- ECharts 图表容器 -->
         <div class="chart-wrap">
             <div id="chartMain"></div>
         </div>
 
+        <!-- 各来源最新价格 -->
         <div class="source-grid">
             {% for source in product.sources %}
             <div class="source-card">
@@ -45,6 +61,7 @@
             {% endfor %}
         </div>
 
+        <!-- 历史价格记录表 -->
         <div class="history-card">
             <div class="history-header">价格历史记录（最近 {{ days }} 天）</div>
             <div class="history-table-wrap">
@@ -57,6 +74,7 @@
                         </tr>
                     </thead>
                     <tbody>
+                        <!-- 遍历 records -->
                         {% for r in records %}
                         <tr>
                             <td>{{ r.source.site }}</td>

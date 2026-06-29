@@ -1,3 +1,13 @@
+<!-- ============================================================
+     工具页面 (tools.html)
+     用途：纯浏览器端在线小工具集合（Base64、字数统计、颜色转换、
+           JSON 格式化、时间戳、哈希计算、图片压缩）
+     继承：base.html
+     定义块：
+       - title   : 页面标题
+       - content : 页面主体内容
+     模板变量：无（所有功能由前端 JavaScript 实现）
+     ============================================================ -->
 {% extends 'base.html' %}
 {% block title %}工具 - Hoshino{% endblock %}
 {% block content %}
@@ -8,6 +18,7 @@
 </section>
 
 <div class="content">
+    <!-- 工具导航栏 -->
     <div class="tools-nav" id="toolsNav">
         <button class="tools-nav-btn active" data-tool="base64" onclick="switchTool('base64')">
             <span class="tools-nav-icon">B64</span>
@@ -40,7 +51,7 @@
     </div>
 
     <div class="tools-card">
-        <!-- Base64 -->
+        <!-- Base64 编解码 -->
         <div class="tool-pane active" id="tool-base64">
             <div class="tool-heading">Base64 编解码</div>
             <textarea class="tool-input" id="b64-input" placeholder="输入文本或 Base64..." rows="5"></textarea>
@@ -52,7 +63,7 @@
             <textarea class="tool-input" id="b64-output" placeholder="结果..." rows="5" readonly></textarea>
         </div>
 
-        <!-- 字数 -->
+        <!-- 字数统计 -->
         <div class="tool-pane" id="tool-wordcount">
             <div class="tool-heading">字数统计</div>
             <textarea class="tool-input" id="wc-input" placeholder="输入文本..." rows="8" oninput="wordCount()"></textarea>
@@ -63,7 +74,7 @@
             </div>
         </div>
 
-        <!-- 颜色 -->
+        <!-- 颜色转换 -->
         <div class="tool-pane" id="tool-color">
             <div class="tool-heading">颜色转换</div>
             <div class="color-layout">
@@ -76,7 +87,7 @@
             </div>
         </div>
 
-        <!-- JSON -->
+        <!-- JSON 格式化 -->
         <div class="tool-pane" id="tool-json">
             <div class="tool-heading">JSON 格式化</div>
             <textarea class="tool-input tool-input-code" id="json-input" placeholder="粘贴 JSON..." rows="6"></textarea>
@@ -88,7 +99,7 @@
             <textarea class="tool-input tool-input-code" id="json-output" placeholder="结果..." rows="6" readonly></textarea>
         </div>
 
-        <!-- 时间戳 -->
+        <!-- 时间戳转换 -->
         <div class="tool-pane" id="tool-timestamp">
             <div class="tool-heading">时间戳转换</div>
             <div class="tool-field"><label>Unix 时间戳（秒）</label><input id="ts-unix" value="" oninput="tsFromUnix(this.value)"></div>
@@ -97,7 +108,7 @@
             <div class="ts-result" id="ts-result"></div>
         </div>
 
-        <!-- 哈希 -->
+        <!-- 哈希计算 -->
         <div class="tool-pane" id="tool-hash">
             <div class="tool-heading">哈希计算</div>
             <textarea class="tool-input" id="hash-input" placeholder="输入文本..." rows="5" oninput="calcHash()"></textarea>
@@ -153,6 +164,7 @@
     </div>
 </div>
 
+<!-- DOMContentLoaded 时初始化时间戳工具 -->
 <script>
 document.addEventListener('DOMContentLoaded', function() { initTimestamp(); });
 </script>

@@ -1,3 +1,16 @@
+<!-- ============================================================
+     文章编辑/新建表单 (admin/post-form.html)
+     用途：多步骤创建或编辑文章（基本信息 → 正文编辑 → 封面与发布）
+     继承：admin/base_admin.html
+     定义块：
+       - title         : 页面标题（"编辑文章" 或 "新建文章"）
+       - extra_head    : 注入 CSRF meta 标签和编辑器样式
+       - admin_content : 表单主体
+     模板变量：
+       - editing  : 布尔值，是否为编辑模式
+       - form     : Flask-WTF 文章表单对象
+       - csrf_token() : CSRF 令牌函数
+     ============================================================ -->
 {% extends 'admin/base_admin.html' %}
 {% block title %}{{ '编辑' if editing else '新建' }}文章{% endblock %}
 {% block extra_head %}
@@ -57,6 +70,7 @@
 {% endblock %}
 {% block admin_content %}
 <div class="admin-header">
+    <!-- 根据 editing 显示不同标题 -->
     <h3>{{ '编辑' if editing else '新建' }}文章</h3>
     <a href="{{ url_for('admin.post_list') }}" class="btn btn-ghost"> 返回</a>
 </div>
@@ -99,7 +113,7 @@
         <div class="admin-card" data-glow>
             <div class="form-group">
                 <label>正文</label>
-                <!-- 全量工具栏 -->
+                <!-- 全量富文本工具栏 -->
                 <div id="rte-toolbar">
                     <button type="button" onclick="rte('undo')" title="撤销"></button>
                     <button type="button" onclick="rte('redo')" title="重做"></button>
@@ -153,7 +167,9 @@
                     <span class="sep"></span>
                     <button type="button" onclick="rte('removeFormat')" title="清除格式"></button>
                 </div>
+                <!-- 可编辑区域：显示已有内容（编辑模式） -->
                 <div id="rte-content" contenteditable="true">{{ form.content.data|safe if form.content.data else '' }}</div>
+                <!-- 隐藏文本域：提交时同步 contenteditable 的内容 -->
                 <textarea name="content" id="content-hidden" style="display:none">{{ form.content.data or '' }}</textarea>
                 {% if form.content.errors %}<div class="field-error">{{ form.content.errors[0] }}</div>{% endif %}
             </div>
@@ -188,18 +204,21 @@
                     <div class="form-group">
                         <label>分类（按住 Ctrl 多选）</label>
                         <select name="categories" multiple size="5">
+                            <!-- 遍历所有分类选项，如果已在 form.categories.data 中则标记 selected -->
                             {% for val, label in form.categories.choices %}
                             <option value="{{ val }}" {% if form.categories.data and val in form.categories.data %}selected{% endif %}>{{ label }}</option>
                             {% endfor %}
                         </select>
                     </div>
                     <div class="form-group" style="margin-top:16px">
+                        <!-- 发布状态复选框 -->
                         <label><input type="checkbox" name="is_published" {% if form.is_published.data %}checked{% endif %}> 立即发布</label>
                     </div>
                 </div>
             </div>
             <div class="admin-step-nav">
                 <button type="button" class="btn btn-ghost" onclick="goStep(2)"> 上一步</button>
+                <!-- 提交按钮文字随编辑/新建模式变化 -->
                 <button type="submit" class="btn btn-primary">{{ '更新' if editing else '创建文章' }}</button>
             </div>
         </div>

@@ -1,3 +1,15 @@
+<!-- ============================================================
+     特色卡片列表管理 (admin/featured-card-list.html)
+     用途：后台特色卡片管理表格，支持编辑和删除
+     继承：admin/base_admin.html
+     定义块：
+       - title         : 页面标题
+       - admin_content : 后台主体内容
+     模板变量：
+       - cards        : 所有特色卡片列表
+       - cat_lookup   : 分类 ID 到名称的映射字典
+       - csrf_token() : CSRF 令牌函数
+     ============================================================ -->
 {% extends 'admin/base_admin.html' %}
 {% block title %}特色卡片{% endblock %}
 {% block admin_content %}
@@ -9,12 +21,15 @@
     <div class="admin-table-wrapper">
     <table class="admin-table">
         <tr><th>排序</th><th>图标</th><th>标题</th><th>标签</th><th>状态</th><th>操作</th></tr>
+        <!-- 遍历卡片列表 -->
         {% for c in cards %}
         <tr>
             <td data-label="排序">{{ c.sort_order }}</td>
+            <!-- 图标列：图片或 emoji -->
             <td data-label="图标" style="{% if c.icon and (c.icon.startswith('uploads/') or c.icon.startswith('/static/')) %}padding:4px{% else %}font-size:1.3rem{% endif %}">{% if c.icon and (c.icon.startswith('uploads/') or c.icon.startswith('/static/')) %}<img src="{{ url_for('static', filename=c.icon.replace('/static/', '')) }}" alt="{{ c.title }}" style="width:40px;height:40px;border-radius:8px;object-fit:cover;display:block">{% else %}{{ c.icon or '✦' }}{% endif %}</td>
             <td data-label="标题"><strong>{{ c.title }}</strong></td>
             <td data-label="标签">
+                <!-- 通过 cat_lookup 映射标签 ID 到中文名 -->
                 <span class="featured-card-tag">{{ cat_lookup.get(c.tag, c.tag) }}</span>
             </td>
             <td data-label="状态">
@@ -22,6 +37,7 @@
             </td>
             <td data-label="操作" style="white-space:nowrap">
                 <a href="{{ url_for('admin.edit_featured_card', id=c.id) }}" class="btn btn-primary btn-sm">编辑</a>
+                <!-- 删除确认 -->
                 <form method="POST" action="{{ url_for('admin.delete_featured_card', id=c.id) }}" style="display:inline" onsubmit="return confirm('确定删除「{{ c.title }}」？')">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-danger btn-sm">删除</button>

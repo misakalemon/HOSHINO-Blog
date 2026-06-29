@@ -28,8 +28,8 @@ from wtforms.validators import DataRequired, Email, Length, Optional
 
 class LoginForm(FlaskForm):
     """管理员登录表单。"""
-    username = StringField('用户名', validators=[DataRequired()])
-    password = PasswordField('密码', validators=[DataRequired()])
+    username = StringField('用户名', validators=[DataRequired()])      # 登录名，必填
+    password = PasswordField('密码', validators=[DataRequired()])      # 登录密码，必填
 
 
 class PostForm(FlaskForm):
@@ -44,21 +44,21 @@ class PostForm(FlaskForm):
       cover_image   — 封面图片 URL，选填
       is_published  — 是否发布，勾选后在前台可见
     """
-    title = StringField('标题', validators=[DataRequired(), Length(max=256)])
-    slug = StringField('链接标识 (URL)', validators=[DataRequired(), Length(max=256)])
-    summary = TextAreaField('摘要', validators=[Optional()])
-    content = TextAreaField('正文 (Markdown)', validators=[DataRequired()])
+    title = StringField('标题', validators=[DataRequired(), Length(max=256)])          # 文章标题，必填
+    slug = StringField('链接标识 (URL)', validators=[DataRequired(), Length(max=256)]) # URL 友好标识，必填
+    summary = TextAreaField('摘要', validators=[Optional()])                           # 文章摘要，选填
+    content = TextAreaField('正文 (Markdown)', validators=[DataRequired()])            # Markdown 格式正文，必填
     # 多选分类（最多 15 个，choices 在视图函数中动态填充）
     categories = SelectMultipleField('分类（最多15个）', coerce=int, validators=[Optional()])
-    cover_image = StringField('封面图片 URL', validators=[Optional()])
-    is_published = BooleanField('发布')
+    cover_image = StringField('封面图片 URL', validators=[Optional()])                 # 封面图链接，选填
+    is_published = BooleanField('发布')                                                # 是否公开可见
 
 
 class CategoryForm(FlaskForm):
     """分类编辑表单。"""
-    name = StringField('分类名称', validators=[DataRequired(), Length(max=64)])
-    slug = StringField('链接标识 (URL)', validators=[DataRequired(), Length(max=64)])
-    description = TextAreaField('描述', validators=[Optional()])
+    name = StringField('分类名称', validators=[DataRequired(), Length(max=64)])        # 分类名，必填，唯一
+    slug = StringField('链接标识 (URL)', validators=[DataRequired(), Length(max=64)])  # URL 标识，必填
+    description = TextAreaField('描述', validators=[Optional()])                       # 分类描述，选填
 
 
 class UserForm(FlaskForm):
@@ -66,12 +66,12 @@ class UserForm(FlaskForm):
 
     注意：password 字段允许为空（留空则不修改密码）。
     """
-    username = StringField('用户名', validators=[DataRequired(), Length(max=64)])
-    email = StringField('邮箱', validators=[DataRequired(), Email(), Length(max=120)])
-    password = PasswordField('密码', validators=[Optional(), Length(min=6)])
-    display_name = StringField('显示名', validators=[Optional(), Length(max=128)])
-    bio = TextAreaField('个人简介', validators=[Optional()])
-    is_admin = BooleanField('管理员')
+    username = StringField('用户名', validators=[DataRequired(), Length(max=64)])      # 登录名，必填
+    email = StringField('邮箱', validators=[DataRequired(), Email(), Length(max=120)]) # 邮箱，必填，格式校验
+    password = PasswordField('密码', validators=[Optional(), Length(min=6)])           # 密码，选填（留空不修改）
+    display_name = StringField('显示名', validators=[Optional(), Length(max=128)])     # 显示昵称，选填
+    bio = TextAreaField('个人简介', validators=[Optional()])                            # 个人简介，选填
+    is_admin = BooleanField('管理员')                                                   # 是否授予管理员权限
 
 
 class ProfileForm(FlaskForm):
@@ -81,10 +81,10 @@ class ProfileForm(FlaskForm):
       - username 不可修改（保持唯一性）
       - 字段更少，仅显示名/简介/邮箱/密码
     """
-    display_name = StringField('显示名', validators=[Optional(), Length(max=128)])
-    bio = TextAreaField('个人简介', validators=[Optional()])
-    email = StringField('邮箱', validators=[Optional(), Email(), Length(max=120)])
-    password = PasswordField('新密码（留空则不修改）', validators=[Optional(), Length(min=6)])
+    display_name = StringField('显示名', validators=[Optional(), Length(max=128)])     # 显示昵称，选填
+    bio = TextAreaField('个人简介', validators=[Optional()])                            # 个人简介，选填
+    email = StringField('邮箱', validators=[Optional(), Email(), Length(max=120)])     # 邮箱，选填
+    password = PasswordField('新密码（留空则不修改）', validators=[Optional(), Length(min=6)])  # 新密码，选填
 
 
 class CommentForm(FlaskForm):
@@ -92,9 +92,9 @@ class CommentForm(FlaskForm):
 
     评论不需登录即可提交，但需要管理员审核后方可显示。
     """
-    author_name = StringField('昵称', validators=[DataRequired(), Length(max=128)])
-    author_email = StringField('邮箱', validators=[Optional(), Email(), Length(max=120)])
-    content = TextAreaField('评论内容', validators=[DataRequired()])
+    author_name = StringField('昵称', validators=[DataRequired(), Length(max=128)])    # 评论者昵称，必填
+    author_email = StringField('邮箱', validators=[Optional(), Email(), Length(max=120)])  # 评论者邮箱，选填
+    content = TextAreaField('评论内容', validators=[DataRequired()])                    # 评论正文，必填
 
 
 class ContactForm(FlaskForm):
@@ -103,18 +103,18 @@ class ContactForm(FlaskForm):
     访客可通过此表单给博主留言。
     （当前仅做展示与 CSRF 保护，未接入邮件发送）
     """
-    name = StringField('姓名', validators=[DataRequired(), Length(max=128)])
-    email = StringField('邮箱', validators=[DataRequired(), Email(), Length(max=120)])
-    message = TextAreaField('留言', validators=[DataRequired()])
+    name = StringField('姓名', validators=[DataRequired(), Length(max=128)])           # 联系人姓名，必填
+    email = StringField('邮箱', validators=[DataRequired(), Email(), Length(max=120)]) # 联系人邮箱，必填
+    message = TextAreaField('留言', validators=[DataRequired()])                       # 留言内容，必填
 
 
 class FeaturedCardForm(FlaskForm):
     """首页特色卡片编辑表单。"""
-    title = StringField('标题', validators=[DataRequired(), Length(max=128)])
-    description = StringField('描述', validators=[Optional(), Length(max=256)])
-    icon = StringField('图标', validators=[Optional(), Length(max=256)])
-    tag = SelectField('标签', coerce=str, default='')
-    link = StringField('链接 (可选)', validators=[Optional(), Length(max=256)])
-    image_url = StringField('图片 URL (可选)', validators=[Optional(), Length(max=256)])
-    sort_order = IntegerField('排序', default=0)
-    is_active = BooleanField('启用')
+    title = StringField('标题', validators=[DataRequired(), Length(max=128)])          # 卡片标题，必填
+    description = StringField('描述', validators=[Optional(), Length(max=256)])        # 卡片描述，选填
+    icon = StringField('图标', validators=[Optional(), Length(max=256)])               # 图标符号/类名，选填
+    tag = SelectField('标签', coerce=str, default='')                                  # 卡片标签，下拉选择
+    link = StringField('链接 (可选)', validators=[Optional(), Length(max=256)])        # 点击跳转链接，选填
+    image_url = StringField('图片 URL (可选)', validators=[Optional(), Length(max=256)])  # 背景图片链接，选填
+    sort_order = IntegerField('排序', default=0)                                       # 排序权重（越小越靠前）
+    is_active = BooleanField('启用')                                                    # 是否在前台显示

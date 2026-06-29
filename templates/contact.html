@@ -1,3 +1,14 @@
+<!-- ============================================================
+     联系页面 (contact.html)
+     用途：展示联系表单，用户提交留言
+     继承：base.html
+     定义块：
+       - title   : 页面标题
+       - content : 页面主体内容
+     模板变量：
+       - message_sent  : 布尔值，消息是否已成功发送
+       - form          : Flask-WTF 表单对象
+     ============================================================ -->
 {% extends 'base.html' %}
 {% block title %}联系 - Hoshino{% endblock %}
 {% block content %}
@@ -13,11 +24,14 @@
             <div class="page-content">
                 <div class="glass-card" data-glow style="padding:24px">
                     <div class="card-content">
+                        <!-- 如果消息发送成功，显示成功提示 -->
                         {% if message_sent %}
                         <div class="alert-success">消息已发送，感谢您的留言！</div>
                         {% endif %}
 
+                        <!-- 联系表单 -->
                         <form method="POST">
+                            <!-- CSRF 令牌 -->
                             {{ form.hidden_tag() }}
                             <div class="form-group">
                                 <input type="text" name="name" placeholder="您的姓名" required>
@@ -34,6 +48,7 @@
                 </div>
             </div>
         </div>
+        <!-- 侧边栏 -->
         <div class="col-4">
             <aside class="sidebar">
                 {% include '_sidebar.html' %}

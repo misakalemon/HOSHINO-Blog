@@ -1,7 +1,26 @@
 """
 HOSHINO Blog — 价格追踪路由
 
-提供前台价格看板和图表。
+提供前台价格看板和图表，包括：
+  - 价格看板首页（分页商品列表 + 分类筛选）
+  - 商品价格历史详情页面（带 ECharts 图表）
+  - 价格历史 JSON API（供前端图表异步加载）
+  - 手动触发爬取（管理员）
+  - 手动录入价格
+  - 添加新产品到追踪列表
+  - 汇率走势页面 + JSON API
+
+所有路由挂在 price_bp（Blueprint）上，URL 前缀为 /price。
+
+函数列表：
+  index()             — 价格看板首页
+  detail(id)          — 商品价格历史详情
+  api_history(id)     — 价格历史 JSON API
+  trigger_crawl()     — 手动触发价格爬取
+  manual_price()      — 手动录入价格
+  add_product()       — 添加新产品
+  rates_page()        — 汇率走势页面
+  api_rates()         — 汇率历史 JSON API
 """
 import datetime
 import logging
@@ -59,6 +78,12 @@ def index():
 def detail(id):
     """商品价格历史详情。
 
+    展示商品的基本信息、各来源最新价格、以及历史价格走势图表。
+    图表数据通过 ajax 异步加载 api_history。
+
+    Args:
+        id: 商品 ID
+
     URL 参数：
       days — 显示最近 N 天的数据（默认 30）
 
@@ -79,15 +104,24 @@ def detail(id):
 def api_history(id):
     """返回商品价格历史 JSON 数据。
 
-    按来源分组返回，格式：
+    按来源分组返回，供前端 ECharts 折线图使用。
+
+    Args:
+        id: 商品 ID
+
+    URL 参数：
+      days — 最近 N 天（默认 30）
+
+    返回格式：
     {
       "name": "商品名",
       "sources": [
         {
           "site": "jd",
           "url": "...",
+          "latest_price": 1999.00,
           "prices": [
-            {"date": "2026-01-15", "price": 1999.00},
+            {"date": "2026-01-15 12:00", "price": 1999.00},
             ...
           ]
         }
@@ -133,7 +167,10 @@ def api_history(id):
 def trigger_crawl():
     """手动触发一次价格爬取。
 
-    供管理员通过按钮调用。
+    供管理员通过按钮调用，调用 crawl_all_active_sources()
+    遍历所有商品的所有数据源获取最新价格。
+
+    爬取完成后刷新价格看板页面并显示统计结果。
     """
     count = crawl_all_active_sources()
     flash(f'价格爬取完成，成功记录 {count} 条', 'success')
@@ -149,6 +186,11 @@ def manual_price():
     """手动输入/更新商品价格。
 
     当爬虫无法自动获取价格时，用户可通过此接口手动录入。
+    录入的价格会被保存到 manual 来源的历史记录中。
+
+    表单字段：
+      product_id — 商品 ID
+      price      — 价格（浮点数）
     """
     product_id = request.form.get('product_id', type=int)
     price = request.form.get('price', type=float)
@@ -194,7 +236,13 @@ def add_product():
     """添加新产品到追踪列表。
 
     新品发布后，管理员可通过此接口添加。
-    添加后自动触发 Baidu 搜索获取价格。
+    添加后自动尝试 Amazon 直爬获取价格。
+    若自动获取失败，可稍后手动录入。
+
+    表单字段：
+      name     — 商品名称（必填）
+      brand    — 品牌（可选）
+      category — 品类（必填）
     """
     name = request.form.get('name', '').strip()
     brand = request.form.get('brand', '').strip()
@@ -249,7 +297,16 @@ def add_product():
 # ═══════════════════════════════════════════════
 @price_bp.route('/rates')
 def rates_page():
-    """汇率走势页面。"""
+    """汇率走势页面。
+
+    展示 USD/CNY、EUR/CNY、GBP/CNY 的历史汇率走势图表。
+    图表数据通过 ajax 异步加载 api_rates。
+
+    URL 参数：
+      days — 显示最近 N 天（默认 90）
+
+    Template: price/rates.html
+    """
     days = request.args.get('days', 90, type=int)
     return render_template('price/rates.html', days=days)
 
@@ -258,12 +315,15 @@ def rates_page():
 def api_rates():
     """返回汇率历史 JSON 数据。
 
-    参数：
+    按币种分组返回，供前端 ECharts 折线图使用。
+
+    URL 参数：
       days — 最近 N 天（默认 90）
+
     返回格式：
     {
       "rates": [
-        { "currency": "USD", "history": [{"date": "...", "rate": 7.2}, ...] },
+        { "currency": "USD", "history": [{"date": "01-15", "rate": 7.2}, ...] },
         ...
       ]
     }

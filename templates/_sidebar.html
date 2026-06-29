@@ -1,6 +1,18 @@
+<!-- ============================================================
+     侧边栏组件 (_sidebar.html)
+     用途：博客页面右侧边栏，包含用户卡片、搜索、最新文章、分类
+     模板变量：
+       - current_user  : Flask-Login 当前用户对象
+       - recent_posts  : 最近文章列表
+       - categories    : 全部分类列表
+       - format_date   : 日期格式化函数
+     ============================================================ -->
+
+<!-- 用户卡片 -->
 <div class="widget">
     <h4 class="widget-title">用户</h4>
     <div class="profile-card">
+        <!-- 已登录：显示用户头像、姓名、角色及操作按钮 -->
         {% if current_user.is_authenticated %}
         <a href="{{ url_for('admin.dashboard') }}" class="profile-link">
             <img src="{{ url_for('blog.thumbnail', path=current_user.avatar, w=80) }}" alt="avatar" class="profile-avatar">
@@ -13,6 +25,7 @@
             <a href="{{ url_for('admin.new_post') }}" class="btn btn-sm btn-primary">写文章</a>
             <a href="{{ url_for('admin.dashboard') }}" class="btn btn-sm btn-ghost">后台</a>
         </div>
+        <!-- 未登录：显示占位头像及登录入口 -->
         {% else %}
         <a href="{{ url_for('admin.login') }}" class="profile-link">
             <div class="profile-avatar profile-avatar-placeholder">✦</div>
@@ -25,6 +38,7 @@
     </div>
 </div>
 
+<!-- 搜索框 -->
 <div class="widget">
     <h4 class="widget-title">搜索</h4>
     <form class="sidebar-search" action="{{ url_for('blog.search') }}" method="GET">
@@ -33,13 +47,16 @@
     </form>
 </div>
 
+<!-- 最新文章 -->
 <div class="widget">
     <h4 class="widget-title">最新文章</h4>
     <ul class="recent-list">
+        <!-- 遍历 recent_posts 列表 -->
         {% for rp in recent_posts %}
         <li class="recent-item">
             <div class="thumb{% if not rp.cover_image %} no-image{% endif %}">
                 <a href="{{ url_for('blog.single_post', slug=rp.slug) }}">
+                    <!-- 有封面图则显示缩略图，否则显示默认图标 -->
                     {% if rp.cover_image %}
                     <img src="{{ url_for('blog.thumbnail', path=rp.cover_image, w=120) }}" alt="{{ rp.title }}" loading="lazy">
                     {% else %}
@@ -52,18 +69,23 @@
                 <h5><a href="{{ url_for('blog.single_post', slug=rp.slug) }}">{{ rp.title }}</a></h5>
             </div>
         </li>
+        <!-- 无文章时显示提示 -->
         {% else %}
         <li style="color:rgba(255,255,255,0.3); font-size:0.8rem">暂无文章</li>
         {% endfor %}
     </ul>
 </div>
 
+<!-- 分类列表 -->
 <div class="widget">
     <h4 class="widget-title">分类</h4>
     <div class="cat-tags">
+        <!-- "全部"链接，文章数取 recent_posts 长度 -->
         <a href="{{ url_for('blog.index') }}" class="cat-tag">全部 <span class="cat-count">{{ recent_posts|length if recent_posts else 0 }}</span></a>
+        <!-- 遍历全部分类，调用 post_count() 获取该分类文章数 -->
         {% for cat in categories %}
         <a href="{{ url_for('blog.category', slug=cat.slug) }}" class="cat-tag">{{ cat.name }} <span class="cat-count">{{ cat.post_count() }}</span></a>
+        <!-- 无分类时提示 -->
         {% else %}
         <span style="color:rgba(255,255,255,0.3); font-size:0.8rem">暂无分类</span>
         {% endfor %}

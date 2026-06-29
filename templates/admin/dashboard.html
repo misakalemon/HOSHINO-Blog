@@ -1,8 +1,25 @@
+<!-- ============================================================
+     管理后台仪表盘 (admin/dashboard.html)
+     用途：展示后台统计概览（文章/评论/用户总数）及最近动态
+     继承：admin/base_admin.html
+     定义块：
+       - title         : 页面标题
+       - admin_content : 后台主体内容
+     模板变量：
+       - post_count       : 文章总数
+       - published_count  : 已发布文章数
+       - comment_count    : 待审核评论数
+       - user_count       : 用户总数
+       - recent_posts     : 最近文章列表
+       - recent_comments  : 最近评论列表
+       - format_date      : 日期格式化函数
+     ============================================================ -->
 {% extends 'admin/base_admin.html' %}
 {% block title %}仪表盘{% endblock %}
 {% block admin_content %}
 <div class="admin-header"><h3>仪表盘</h3></div>
 
+<!-- 统计卡片 -->
 <div class="card-grid">
     <div class="admin-card stat-card" data-glow><div class="num">{{ post_count }}</div><div class="label">文章总数</div></div>
     <div class="admin-card stat-card" data-glow><div class="num">{{ published_count }}</div><div class="label">已发布</div></div>
@@ -11,14 +28,17 @@
 </div>
 
 <div class="admin-row">
+    <!-- 最近文章列表 -->
     <div class="admin-fill">
         <div class="admin-card" data-glow>
             <h5>最近文章</h5>
             <table class="admin-table">
                 <tr><th>标题</th><th>状态</th><th>日期</th></tr>
+                <!-- 遍历 recent_posts，限制标题显示长度 -->
                 {% for p in recent_posts %}
                 <tr>
                     <td data-label="标题">{{ p.title[:40] }}{% if p.title|length > 40 %}…{% endif %}</td>
+                    <!-- 根据 is_published 显示不同状态徽章 -->
                     <td data-label="状态"><span class="badge {{ 'badge-published' if p.is_published else 'badge-draft' }}">{{ '已发布' if p.is_published else '草稿' }}</span></td>
                     <td data-label="日期">{{ format_date(p.created_at, '%Y-%m-%d') }}</td>
                 </tr>
@@ -28,6 +48,7 @@
             </table>
         </div>
     </div>
+    <!-- 待审核评论列表 -->
     <div class="admin-fill">
         <div class="admin-card" data-glow>
             <h5>待审核评论</h5>

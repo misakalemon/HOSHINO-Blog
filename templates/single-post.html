@@ -1,3 +1,15 @@
+<!-- ============================================================
+     文章详情页 (single-post.html)
+     用途：显示单篇文章的完整内容、作者信息、评论区
+     继承：base.html
+     定义块：
+       - title   : 页面标题（文章标题 + " - Hoshino"）
+       - content : 页面主体内容
+     模板变量：
+       - post     : 文章对象（含 categories, author, comments 等关联）
+       - form     : Flask-WTF 评论表单对象（可能为 None）
+       - format_date : 日期格式化函数
+     ============================================================ -->
 {% extends 'base.html' %}
 {% block title %}{{ post.title }} - Hoshino{% endblock %}
 {% block content %}
@@ -7,6 +19,7 @@
         <div class="col-8">
             <div class="post-detail">
                 <div style="text-align:center;margin-bottom:24px">
+                    <!-- 文章分类标签 -->
                     <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:12px">
                         {% for cat in post.categories %}
                         <span class="pill-light">{{ cat.name }}</span>
@@ -15,21 +28,24 @@
                     <h1 style="font-size:2.2rem;font-weight:250;letter-spacing:-0.02em;line-height:1.2;color:rgba(255,255,255,0.9)">{{ post.title }}</h1>
                     <div style="color:rgba(255,255,255,0.25);font-size:0.8rem;margin-top:12px">
                         <span>{{ format_date(post.created_at, '%Y/%m/%d') }}</span>
+                        <!-- published_comments() 返回审核通过的评论数 -->
                         <span style="margin-left:12px">{{ post.published_comments() }} 评论</span>
                     </div>
                 </div>
 
+                <!-- 文章封面图（可选） -->
                 {% if post.cover_image %}
                 <div class="featured-image">
                     <img src="{{ url_for('blog.thumbnail', path=post.cover_image, w=800) }}" alt="{{ post.title }}">
                 </div>
                 {% endif %}
 
+                <!-- 文章正文（富文本 HTML） -->
                 <div class="post-content">
                     {{ post.content|safe }}
                 </div>
 
-                <!-- 作者 -->
+                <!-- 作者信息 -->
                 <div class="author-box">
                     <img src="{{ url_for('blog.thumbnail', path=post.author.avatar, w=120) }}" alt="{{ post.author.display_name or post.author.username }}">
                     <div class="info">
@@ -38,10 +54,12 @@
                     </div>
                 </div>
 
-                <!-- 评论 -->
+                <!-- 评论区 -->
                 <div class="comments-section" id="comments">
                     <h4>评论 · {{ post.published_comments() }}</h4>
+                    <!-- 仅显示审核通过的评论 -->
                     {% set approved_comments = post.comments.filter_by(is_approved=True).all() %}
+                    <!-- 遍历审核通过的评论 -->
                     {% for comment in approved_comments %}
                     <div class="comment-item">
                         <div>
@@ -50,13 +68,16 @@
                         </div>
                         <p class="comment-text">{{ comment.content }}</p>
                     </div>
+                    <!-- 暂无评论时的提示 -->
                     {% else %}
                     <p class="no-comments">暂无评论，快来抢沙发！</p>
                     {% endfor %}
 
+                    <!-- 评论提交表单 -->
                     <div class="comment-form">
                         <h5>发表评论</h5>
                         <form method="POST" action="{{ url_for('blog.single_post', slug=post.slug) }}#comments">
+                            <!-- 如果 form 可用则渲染 CSRF 令牌 -->
                             {{ form.hidden_tag() if form else '' }}
                             <div class="form-group">
                                 <input type="text" name="author_name" placeholder="您的姓名" required>
@@ -74,6 +95,7 @@
             </div>
         </div>
 
+        <!-- 侧边栏 -->
         <div class="col-4">
             <aside class="sidebar">
                 {% include '_sidebar.html' %}

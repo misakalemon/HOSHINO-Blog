@@ -1,9 +1,24 @@
+<!-- ============================================================
+     分类文章列表页 (category-grid.html)
+     用途：展示指定分类下的文章列表，支持分页
+     继承：base.html
+     定义块：
+       - title   : 页面标题（分类名称 + " - Hoshino"）
+       - content : 页面主体内容
+     模板变量：
+       - category          : 分类对象
+       - posts             : Flask-SQLAlchemy 分页对象
+       - current_per_page  : 当前每页条数
+       - per_page_options  : 每页条数可选值列表
+       - format_date       : 日期格式化函数
+     ============================================================ -->
 {% extends 'base.html' %}
 {% block title %}{{ category.name }} - Hoshino{% endblock %}
 {% block content %}
 
 <section class="hero">
     <h1><span class="highlight">{{ category.name }}</span></h1>
+    <!-- 分类描述（可选字段） -->
     {% if category.description %}
     <p>{{ category.description }}</p>
     {% endif %}
@@ -14,12 +29,15 @@
         <div class="col-8">
             <div class="section-title">分类 · <span>{{ category.name }}</span></div>
 
+            <!-- 如果该分类有文章 -->
             {% if posts.items %}
             <div class="masonry">
+                <!-- 遍历文章列表 -->
                 {% for post in posts.items %}
                 <div class="masonry-item">
                     <div class="glass-card" data-glow>
                         <div class="card-content">
+                            <!-- 封面图 -->
                             {% if post.cover_image %}
                             <div class="img-glow" style="margin-bottom:1rem;height:200px">
                                 <img src="{{ url_for('blog.thumbnail', path=post.cover_image, w=400) }}" alt="{{ post.title }}" loading="lazy" style="width:100%;height:100%;object-fit:cover;border-radius:14px" onerror="this.style.display='none'">
@@ -38,6 +56,7 @@
                 {% endfor %}
             </div>
 
+            <!-- 分页（总页数 > 1 时显示） -->
             {% if posts.pages > 1 %}
             <div class="pagination-wrap">
                 <ul class="pagination">
@@ -57,7 +76,9 @@
                 </ul>
                 <div class="page-jump">
                     <span style="color:rgba(255,255,255,0.25);font-size:0.7rem">共 {{ posts.pages }} 页</span>
+                    <!-- 页码跳转输入框 -->
                     <input type="number" min="1" max="{{ posts.pages }}" placeholder="跳转" onkeydown="if(event.key=='Enter'){var p=parseInt(this.value);if(p>=1&&p<={{ posts.pages }})window.location='{{ url_for('blog.category', slug=category.slug) }}?page='+p+'&per_page={{ current_per_page }}';}">
+                    <!-- 每页条数选择器 -->
                     <select class="per-page-select" onchange="var p=new URLSearchParams(location.search);p.set('per_page',this.value);p.set('page','1');location.search=p.toString();">
                         {% for opt in per_page_options %}
                         <option value="{{ opt }}" {% if current_per_page == opt %}selected{% endif %}>{{ opt }} 条/页</option>
@@ -67,6 +88,7 @@
             </div>
             {% endif %}
 
+            <!-- 空状态 -->
             {% else %}
             <div class="empty-state">
                 <h2>该分类暂无文章</h2>
@@ -74,6 +96,7 @@
             {% endif %}
         </div>
 
+        <!-- 侧边栏 -->
         <div class="col-4">
             <aside class="sidebar">
                 {% include '_sidebar.html' %}

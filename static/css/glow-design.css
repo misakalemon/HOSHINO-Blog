@@ -4,26 +4,34 @@
    ═══════════════════════════════════════════════ */
 
 /* ── 0. CSS 变量 ──────────────────────────────── */
+/* 全局设计令牌：深色主题色板、玻璃拟态色彩、强调色 */
 :root {
+  /* 背景色阶：从最深的基底到抬升的卡片背景 */
   --bg-primary: #0b0e17;
   --bg-secondary: #131822;
   --bg-card: #1a2235;
   --bg-elevated: #212a3e;
+  /* 边框：微妙和悬停高亮 */
   --border-subtle: rgba(255,255,255,0.06);
   --border-hover: rgba(108,66,209,0.3);
+  /* 文字层级：主要/次要/静默 */
   --text-primary: #e8edf5;
   --text-secondary: #8892a6;
   --text-muted: #555f7d;
+  /* 品牌色：主要紫色强调、悬停变亮 */
   --accent: #6c42d1;
   --accent-hover: #845ef7;
+  /* 语义色：成功绿、危险红、警告橙 */
   --accent-green: #3dd68c;
   --accent-red: #f25a5a;
   --accent-orange: #f0a030;
 }
 
 /* ── 1. 全局基础 ──────────────────────────────── */
+/* 统一盒模型、清除默认边距 */
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 body {
+  /* 字体栈：优先系统字体，回退到中日韩友好字体 */
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
   background: #080a0f;
   color: #e8edf5;
@@ -36,16 +44,19 @@ img { max-width: 100%; height: auto; display: block; }
 ul { list-style: none; }
 
 /* ── 2. 背景光晕 ──────────────────────────────── */
+/* 固定定位的渐变背景层，位于所有内容下方 (z-index: 0) */
 .glow-bg {
   position: fixed; inset: 0; z-index: 0;
   background: radial-gradient(ellipse at 30% 40%, #0b1a2e 0%, #06070a 70%);
   overflow: hidden; pointer-events: none;
 }
+/* 浮动光球：大尺寸模糊圆形，配合 floatOrb 动画缓慢漂移 */
 .glow-orb {
   position: absolute; border-radius: 50%; filter: blur(80px);
   opacity: 0.4; will-change: transform;
   animation: floatOrb 18s infinite alternate ease-in-out;
 }
+/* 三个光球分别定位在不同的角落，各自动画时长/延迟不同，形成错落感 */
 .glow-orb:nth-child(1) {
   width: 500px; height: 500px; background: #ff6b9d;
   top: -10%; left: -10%; animation-duration: 22s; opacity: 0.25;
@@ -61,6 +72,7 @@ ul { list-style: none; }
   animation-delay: -10s; opacity: 0.15;
 }
 @keyframes floatOrb {
+  /* 平移 + 缩放 + 旋转的复合动画，模拟光球在空间中缓慢漂浮 */
   0% { transform: translate(0, 0) scale(1) rotate(0deg); }
   33% { transform: translate(60px, -80px) scale(1.2) rotate(10deg); }
   66% { transform: translate(-40px, 60px) scale(0.9) rotate(-5deg); }
@@ -68,6 +80,7 @@ ul { list-style: none; }
 }
 
 /* ── 3. 导航栏 ──────────────────────────────── */
+/* 固定顶部 + 毛玻璃效果 + 半透明白色底边 */
 .navbar {
   position: fixed; top: 0; left: 0; right: 0; height: 64px; z-index: 100;
   background: rgba(8, 10, 15, 0.5);
@@ -78,12 +91,14 @@ ul { list-style: none; }
   justify-content: space-between;
   padding: 0 28px;
 }
+/* logo 使用渐变文字，纤细字重突出设计感 */
 .nav-logo {
   font-size: 1.2rem; font-weight: 300; letter-spacing: 0.04em;
   background: linear-gradient(135deg, #ff8aae 0%, #c084fc 80%);
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   background-clip: text;
 }
+/* 导航链接组：低对比度默认、悬停变亮、激活最亮 */
 .nav-links { display: flex; gap: 28px; font-size: 0.85rem; color: rgba(255,255,255,0.4); }
 .nav-links a { transition: color 0.3s; text-decoration: none; color: inherit; }
 .nav-links a:hover { color: rgba(255,255,255,0.8); }
@@ -94,6 +109,7 @@ ul { list-style: none; }
 }
 
 /* ── 4. 英雄区 ──────────────────────────────── */
+/* 首页顶部大标题区域，超大字号 + 渐变色强调词 */
 .hero {
   position: relative; z-index: 10;
   padding: 120px 28px 60px;
@@ -103,6 +119,7 @@ ul { list-style: none; }
   font-size: 4rem; font-weight: 250; letter-spacing: -0.02em;
   line-height: 1.1; margin-bottom: 16px;
 }
+/* 高亮文字使用与 logo 同风格的渐变 */
 .hero h1 .highlight {
   background: linear-gradient(135deg, #ff8aae, #ff6b9d);
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
@@ -113,6 +130,7 @@ ul { list-style: none; }
   max-width: 500px; margin: 0 auto 32px;
   font-weight: 300; line-height: 1.6;
 }
+/* 药丸按钮：低透明度玻璃底、悬停上移 + 发光阴影 */
 .hero .btn, .btn-pill {
   display: inline-block; padding: 12px 36px; border-radius: 40px;
   background: rgba(255,255,255,0.04);
@@ -129,6 +147,7 @@ ul { list-style: none; }
 }
 
 /* ── 4b. 特色卡片区 ──────────────────────────── */
+/* 自适应列数的网格布局，每列最小 260px */
 .featured-grid {
   position: relative; z-index: 10;
   max-width: 1320px; margin: 0 auto; padding: 0 28px 60px;
@@ -141,6 +160,7 @@ ul { list-style: none; }
   -webkit-backdrop-filter: blur(10px) saturate(1.4);
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 20px; overflow: hidden;
+  /* 平滑缓动曲线：先快后慢，自然弹性感 */
   transition: transform 0.4s cubic-bezier(0.16,1,0.3,1), border-color 0.4s;
   cursor: pointer;
 }
@@ -155,6 +175,7 @@ ul { list-style: none; }
 .featured-card-body { padding: 14px 16px 16px; }
 .featured-card-body h3 { font-size: 0.9rem; font-weight: 600; color: rgba(255,255,255,0.85); }
 .featured-card-body p { font-size: 0.72rem; color: rgba(255,255,255,0.35); margin-top: 4px; line-height: 1.5; }
+/* 特色卡片标签：不同类别不同颜色，带半透明背景和细边框 */
 .featured-card-tag {
   display: inline-block; margin-top: 8px;
   font-size: 0.6rem; font-weight: 600; text-transform: uppercase;
@@ -176,12 +197,15 @@ ul { list-style: none; }
 .section-title span { color: #fff; }
 
 /* ── 6. 瀑布流 ──────────────────────────────── */
+/* 使用 CSS column 实现瀑布流自适应列数，无需 JS */
 .masonry { column-count: 1; column-gap: 1.5rem; }
 @media (min-width: 640px) { .masonry { column-count: 2; } }
 @media (min-width: 1024px) { .masonry { column-count: 3; } }
+/* break-inside: avoid 防止卡片在列中被截断 */
 .masonry-item { break-inside: avoid; margin-bottom: 1.5rem; }
 
 /* ── 7. 玻璃卡片 ──────────────────────────────── */
+/* 核心 UI 组件：毛玻璃背景 + 悬停上移 + 鼠标追踪光晕伪元素 */
 .glass-card {
   position: relative;
   background: rgba(255, 255, 255, 0.03);
@@ -200,6 +224,7 @@ ul { list-style: none; }
   box-shadow: 0 24px 64px -20px rgba(0, 120, 255, 0.25),
               0 0 0 1px rgba(255, 255, 255, 0.03) inset;
 }
+/* ::before 伪元素实现鼠标追踪光晕，通过 JS 写入的 CSS 变量驱动 */
 .glass-card::before {
   content: ''; position: absolute; inset: -1px; border-radius: 22px;
   background: radial-gradient(
@@ -208,14 +233,17 @@ ul { list-style: none; }
     rgba(160, 80, 255, calc(var(--glow-intensity, 0) * 0.5)) 30%,
     transparent 45%
   );
+  /* clip-path: inset(2px) 裁剪掉伪元素超出圆角的边缘，模拟内发光 */
   clip-path: inset(2px); pointer-events: none; z-index: 0;
   opacity: var(--glow-opacity, 0);
   transition: opacity 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   will-change: opacity;
 }
+/* 确保卡片内容在 z-index 上层，不被光晕遮挡 */
 .glass-card > * { position: relative; z-index: 1; }
 .card-content { border-radius: 20px; overflow: hidden; padding: 1.25rem; }
 
+/* 图片占位骨架屏：加载前显示渐变背景 + 从左到右扫光动画 */
 .img-glow {
   width: 100%; border-radius: 14px;
   background: linear-gradient(145deg, #141a24, #1f2633);
@@ -227,11 +255,13 @@ ul { list-style: none; }
   background-size: 200% 100%; animation: shimmer 6s infinite;
 }
 @keyframes shimmer {
+  /* 光影从右到左循环扫过，模拟加载中的光泽 */
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
 
 /* ── 8. 标签 ──────────────────────────────── */
+/* 小型药丸标签：毛玻璃底、低对比度文字、悬停高亮 */
 .pill-light {
   display: inline-block;
   background: rgba(255, 255, 255, 0.06);
@@ -248,10 +278,12 @@ ul { list-style: none; }
 
 /* ── 9. 表单 ──────────────────────────────── */
 .form-group { margin-bottom: 14px; }
+/* 标签：小号、低对比度、大间距 */
 .form-group label {
   display: block; font-size: 0.75rem; color: rgba(255,255,255,0.4);
   margin-bottom: 4px; letter-spacing: 0.03em;
 }
+/* 输入框：深色玻璃底 + 圆角 + 聚焦时边框高亮 */
 .form-group input, .form-group select, .form-group textarea {
   width: 100%; padding: 10px 14px;
   background: rgba(255,255,255,0.03);
@@ -266,6 +298,7 @@ ul { list-style: none; }
 .form-group input::placeholder, .form-group textarea::placeholder {
   color: rgba(255,255,255,0.2);
 }
+/* 原生 select 下拉选项的背景色适配深色主题 */
 .form-group select option {
   background: #131822;
   color: #e8edf5;
@@ -274,6 +307,7 @@ ul { list-style: none; }
 }
 
 /* ── 9b. 自定义下拉框 ────────────────────────── */
+/* 完全 CSS 驱动的自定义 select 替代方案 */
 .glow-select-wrap {
   position: relative;
   background: rgba(255,255,255,0.03);
@@ -284,6 +318,7 @@ ul { list-style: none; }
 }
 .glow-select-wrap:hover { border-color: rgba(255,255,255,0.15); }
 .glow-select-wrap.is-open { border-color: rgba(255,255,255,0.2); }
+/* 触发区域：flex 布局让文字居左箭头居右 */
 .glow-select-trigger {
   display: flex; align-items: center; justify-content: space-between;
   padding: 10px 14px; font-size: 0.85rem; color: #e8edf5;
@@ -293,7 +328,9 @@ ul { list-style: none; }
   font-size: 0.6rem; color: rgba(255,255,255,0.3);
   transition: transform 0.3s; flex-shrink: 0;
 }
+/* 展开时箭头旋转 180° */
 .glow-select-wrap.is-open .glow-select-arrow { transform: rotate(180deg); }
+/* 下拉菜单：毛玻璃、绝对定位、阴影、最大高度带滚动 */
 .glow-select-menu {
   position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 200;
   background: rgba(19, 24, 34, 0.96);
@@ -305,6 +342,7 @@ ul { list-style: none; }
   max-height: 220px; overflow-y: auto;
 }
 .glow-select-wrap.is-open .glow-select-menu { display: block; }
+/* 选项项：圆角、悬停变亮、选中态粉色高亮 */
 .glow-select-option {
   padding: 8px 12px; font-size: 0.8rem; color: rgba(255,255,255,0.5);
   border-radius: 8px; cursor: pointer; transition: all 0.15s;
@@ -316,6 +354,7 @@ ul { list-style: none; }
 .form-group textarea { resize: vertical; min-height: 80px; }
 
 /* ── 10. 按钮 ──────────────────────────────── */
+/* 基础按钮：玻璃质感 + inline-flex 居中图标和文字 */
 .btn {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 10px 24px; border-radius: 40px;
@@ -332,6 +371,7 @@ ul { list-style: none; }
   transform: translateY(-2px);
   box-shadow: 0 12px 30px -10px rgba(0,120,255,0.2);
 }
+/* 主按钮：蓝色调强调 */
 .btn-primary {
   background: rgba(0, 102, 255, 0.15);
   border-color: rgba(0, 102, 255, 0.25);
@@ -342,6 +382,7 @@ ul { list-style: none; }
   border-color: rgba(0, 102, 255, 0.4);
   box-shadow: 0 12px 30px -10px rgba(0, 102, 255, 0.3);
 }
+/* 幽灵按钮：完全透明，hover 后出现微弱的玻璃底 */
 .btn-ghost {
   background: transparent;
   border-color: transparent;
@@ -353,6 +394,7 @@ ul { list-style: none; }
   border-color: rgba(255,255,255,0.08);
 }
 .btn-sm { padding: 6px 16px; font-size: 0.75rem; }
+/* 危险按钮：红色调 */
 .btn-danger {
   background: rgba(255, 60, 60, 0.1);
   border-color: rgba(255, 60, 60, 0.2);
@@ -365,6 +407,7 @@ ul { list-style: none; }
 .btn-pill { padding: 12px 36px; font-size: 0.9rem; }
 
 /* ── 11. 侧边栏 ──────────────────────────────── */
+/* sticky 定位，紧跟导航栏下方 */
 .sidebar { position: sticky; top: 84px; }
 .widget {
   background: rgba(255,255,255,0.02);
@@ -373,6 +416,7 @@ ul { list-style: none; }
   backdrop-filter: blur(10px) saturate(1.4);
   -webkit-backdrop-filter: blur(10px) saturate(1.4);
 }
+/* 小部件标题：大写 + 大间距 + 底部分隔线 */
 .widget-title {
   font-size: 0.65rem; font-weight: 600; text-transform: uppercase;
   letter-spacing: 0.08em; color: rgba(255,255,255,0.3);
@@ -381,6 +425,7 @@ ul { list-style: none; }
 }
 /* profile widget */
 .profile-card { display: flex; flex-direction: column; gap: 10px; }
+/* 个人信息行：flex 水平排列头像和信息 */
 .profile-link {
   display: flex; align-items: center; gap: 12px;
   padding: 6px; border-radius: 12px;
@@ -391,6 +436,7 @@ ul { list-style: none; }
   width: 44px; height: 44px; border-radius: 50%;
   object-fit: cover; border: 2px solid rgba(0, 150, 255, 0.3);
 }
+/* 无头像时的占位符 */
 .profile-avatar-placeholder {
   display: flex; align-items: center; justify-content: center;
   background: rgba(255,255,255,0.03); color: rgba(255,255,255,0.2);
@@ -401,6 +447,7 @@ ul { list-style: none; }
 .profile-role { font-size: 0.65rem; color: rgba(255,255,255,0.3); }
 .profile-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 /* search widget */
+/* 搜索框：左侧输入 + 右侧按钮无缝拼接 */
 .sidebar-search { display: flex; gap: 0; width: 100%; }
 .sidebar-search input {
   flex: 1; min-width: 0; padding: 10px 14px;
@@ -432,6 +479,7 @@ ul { list-style: none; }
   background: rgba(255,255,255,0.03);
 }
 .recent-list .recent-item .thumb img { width: 100%; height: 100%; object-fit: cover; }
+/* 无图片时的图标占位 */
 .recent-list .recent-item .thumb.no-image {
   display: flex; align-items: center; justify-content: center;
   color: rgba(255,255,255,0.15);
@@ -443,6 +491,7 @@ ul { list-style: none; }
 .recent-list .recent-item .info h5 a { color: rgba(255,255,255,0.7); transition: color 0.3s; }
 .recent-list .recent-item .info h5 a:hover { color: #fff; }
 /* category tags */
+/* 分类标签：flex-wrap 自动换行布局 */
 .cat-tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .cat-tag {
   display: inline-flex; align-items: center; gap: 4px;
@@ -452,12 +501,14 @@ ul { list-style: none; }
 }
 .cat-tag:hover { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.8); }
 .cat-tag.active { background: rgba(0, 102, 255, 0.12); color: #7abfff; }
+/* 分类计数徽章：小圆角数字指示器 */
 .cat-tag .cat-count {
   background: rgba(255,255,255,0.04); padding: 0 6px; border-radius: 10px;
   font-size: 0.6rem; color: rgba(255,255,255,0.25); line-height: 16px;
 }
 
 /* ── 12. 分页 ──────────────────────────────── */
+/* 居中布局，gap 分隔页码和跳转控件 */
 .pagination-wrap {
   display: flex; justify-content: center; align-items: center;
   gap: 16px; margin-top: 40px; flex-wrap: wrap;
@@ -476,11 +527,13 @@ ul { list-style: none; }
   border-color: rgba(255,255,255,0.15);
   color: #fff; transform: translateY(-1px);
 }
+/* 当前页：蓝色强调，与普通页区分 */
 .pagination li.active a, .pagination li.active span {
   background: rgba(0, 102, 255, 0.15);
   border-color: rgba(0, 102, 255, 0.3);
   color: #7abfff; font-weight: 600;
 }
+/* 跳转输入框 + 每页条数下拉框 */
 .page-jump { display: flex; align-items: center; gap: 8px; }
 .page-jump input {
   width: 52px; padding: 6px;
@@ -499,6 +552,7 @@ ul { list-style: none; }
 }
 
 /* ── 13. 文章详情 ──────────────────────────────── */
+/* 居中窄列（720px）提高阅读体验 */
 .post-detail { max-width: 720px; margin: 0 auto; }
 .featured-image { border-radius: 20px; overflow: hidden; margin-bottom: 24px; }
 .post-content { font-size: 1rem; line-height: 1.8; color: rgba(255,255,255,0.8); }
@@ -519,12 +573,14 @@ ul { list-style: none; }
 .post-content a { color: #7abfff; }
 .post-content a:hover { color: #b8d6ff; text-decoration: underline; }
 .post-content img { border-radius: 14px; margin: 1em 0; }
+/* 引用块：左侧蓝色竖线 + 斜体 */
 .post-content blockquote {
   border-left: 2px solid rgba(0, 102, 255, 0.3);
   padding-left: 20px; color: rgba(255,255,255,0.5);
   font-style: italic; margin: 1em 0;
 }
 /* author box */
+/* 文章底部作者信息卡片：水平布局 + 头像 + 简介 */
 .author-box {
   display: flex; gap: 16px; align-items: center;
   background: rgba(255,255,255,0.02);
@@ -564,6 +620,7 @@ ul { list-style: none; }
 .comment-form h5 { font-weight: 500; font-size: 0.9rem; margin-bottom: 12px; color: rgba(255,255,255,0.7); }
 
 /* ── 15. 空状态 ──────────────────────────────── */
+/* 列表/搜索结果为空时的占位提示 */
 .empty-state { text-align: center; padding: 60px 20px; }
 .empty-state h2 { font-size: 1.3rem; font-weight: 300; color: rgba(255,255,255,0.4); }
 .empty-state p { color: rgba(255,255,255,0.25); margin-top: 8px; font-size: 0.85rem; }
@@ -581,6 +638,7 @@ ul { list-style: none; }
 }
 
 /* ── 17. 提示消息 ────────────────────────────── */
+/* Flash 消息：成功/失败两种状态，彩色半透明底 */
 .alert-success, .flash.success {
   padding: 14px 18px; border-radius: 16px;
   background: rgba(0, 200, 100, 0.08);
@@ -598,6 +656,7 @@ ul { list-style: none; }
 }
 
 /* ── 18. 徽章 ──────────────────────────────── */
+/* 小型状态指示器：圆角药丸 + 语义色 */
 .badge {
   display: inline-block; padding: 3px 12px; border-radius: 20px;
   font-size: 0.65rem; font-weight: 500; white-space: nowrap;
@@ -616,6 +675,7 @@ ul { list-style: none; }
 }
 
 /* ── 19. 后台管理布局 ────────────────────────── */
+/* 固定侧边栏：240px 宽、全高、毛玻璃、独立滚动 */
 .admin-sidebar {
   width: 240px;
   background: rgba(255,255,255,0.02);
@@ -639,13 +699,16 @@ ul { list-style: none; }
 }
 .admin-sidebar a:hover { background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.7); }
 .admin-sidebar a.active { background: rgba(0, 102, 255, 0.08); color: #7abfff; }
+/* 退出按钮：红色调，视觉警示 */
 .admin-sidebar .logout-link { color: rgba(255, 80, 80, 0.6) !important; }
 .admin-sidebar .logout-link:hover { background: rgba(255, 60, 60, 0.06) !important; }
 
+/* 主区域：紧贴侧边栏右侧 */
 .admin-main { margin-left: 240px; flex: 1; padding: 28px 32px; min-height: 100vh; position: relative; z-index: 1; }
 .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
 .admin-table-wrapper { overflow-x: auto; }
 .admin-header h3 { font-size: 1.3rem; font-weight: 400; color: rgba(255,255,255,0.8); }
+/* 管理卡片：与 glass-card 类似，带鼠标追踪光晕 */
 .admin-card {
   position: relative;
   background: rgba(255,255,255,0.02);
@@ -659,6 +722,7 @@ ul { list-style: none; }
   border-color: rgba(255,255,255,0.12);
   box-shadow: 0 8px 32px -16px rgba(0, 0, 0, 0.4);
 }
+/* 管理卡片的鼠标追踪光晕（强度略低于前台卡片） */
 .admin-card::before {
   content: ''; position: absolute; inset: -1px; border-radius: 22px;
   background: radial-gradient(
@@ -679,11 +743,13 @@ ul { list-style: none; }
   margin-bottom: 14px; padding-bottom: 10px;
   border-bottom: 1px solid rgba(255,255,255,0.04);
 }
+/* 统计数据网格 */
 .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 16px; margin-bottom: 24px; }
 .stat-card { text-align: center; padding: 28px 16px; }
 .stat-card .num { font-size: 2rem; font-weight: 700; color: #7abfff; font-variant-numeric: tabular-nums; }
 .stat-card .label { font-size: 0.65rem; color: rgba(255,255,255,0.3); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.06em; }
 
+/* 管理表格 */
 .admin-table { width: 100%; border-collapse: collapse; }
 .admin-table th {
   padding: 10px 12px; text-align: left;
@@ -704,6 +770,7 @@ ul { list-style: none; }
 .admin-container { max-width: 1100px; margin: 0 auto; width: 100%; }
 .admin-toggle { display: none; }
 .admin-fill { flex: 1; min-width: 0; }
+/* 后台个人资料头部：头像 + 名称 + 邮箱 */
 .admin-profile-header {
   display: flex; align-items: center; gap: 20px;
   margin-bottom: 20px; padding-bottom: 20px;
@@ -714,6 +781,7 @@ ul { list-style: none; }
   width: 72px; height: 72px; border-radius: 50%;
   object-fit: cover; border: 2px solid rgba(0,150,255,0.2);
 }
+/* 头像编辑按钮：定位在头像右下角 */
 .admin-avatar-edit {
   position: absolute; bottom: -4px; right: -4px;
   width: 28px; height: 28px; border-radius: 50%;
@@ -730,7 +798,9 @@ ul { list-style: none; }
 .admin-step-nav { display: flex; justify-content: space-between; margin-top: 16px; }
 .admin-step-nav-right { text-align: right; margin-top: 16px; }
 
+/* 管理后台响应式（≤768px） */
 @media (max-width: 768px) {
+  /* 汉堡菜单按钮：固定左上角 + 三条横线 → X 动画 */
   .admin-toggle {
     display: flex !important; flex-direction: column; gap: 5px; cursor: pointer;
     background: rgba(8,10,15,0.8); backdrop-filter: blur(12px);
@@ -748,6 +818,7 @@ ul { list-style: none; }
   .admin-overlay.show { display: block; }
   .admin-main { margin-left: 0; padding: 16px; padding-top: 50px; }
   .admin-header { flex-direction: column; gap: 8px; }
+  /* 侧边栏滑出式：默认隐藏在左侧 -280px 处 */
   .admin-sidebar {
     display: block; position: fixed; left: -280px; width: 260px;
     height: 100vh; z-index: 9999; padding-top: 60px;
@@ -758,6 +829,7 @@ ul { list-style: none; }
   .card-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
   .stat-card { padding: 14px 8px; }
   .stat-card .num { font-size: 1.5rem; }
+  /* 表格 → 卡片布局：隐藏表头，每行变为独立卡片 */
   .admin-table thead { display: none; }
   .admin-table, .admin-table tbody, .admin-table tr { display: block; width: 100%; }
   .admin-table tr {
@@ -770,6 +842,7 @@ ul { list-style: none; }
     display: flex; font-size: 0.8rem; padding: 4px 0;
     border: none; flex: 1 1 100%; align-items: baseline;
   }
+  /* 利用 data-label 属性在每行前面显示标签文字 */
   .admin-table td::before {
     content: attr(data-label); display: inline-block;
     font-size: 0.6rem; font-weight: 600; text-transform: uppercase;
@@ -826,7 +899,9 @@ ul { list-style: none; }
 .price-table td { color: rgba(255,255,255,0.6); }
 .price-table tbody tr:hover { background: rgba(0, 240, 255, 0.02); }
 
+/* 5 列等宽统计网格 */
 .price-stats { display: grid; grid-template-columns: repeat(5,1fr); gap: 10px; }
+/* 图表容器：毛玻璃卡片 */
 .chart-wrap {
   background: rgba(255,255,255,0.02);
   backdrop-filter: blur(10px) saturate(1.4);
@@ -840,6 +915,7 @@ ul { list-style: none; }
 }
 
 /* ── 22. 工具页面 ──────────────────────────── */
+/* 导航按钮：flex-wrap 自动换行，每项图标 + 标签纵向排列 */
 .tools-nav { display: flex; gap: 8px; justify-content: center; margin-bottom: 24px; flex-wrap: wrap; }
 .tools-nav-btn {
   display: flex; flex-direction: column; align-items: center; gap: 4px;
@@ -859,6 +935,7 @@ ul { list-style: none; }
 .tools-nav-icon { font-size: 1rem; font-weight: 600; line-height: 1; }
 .tools-nav-label { font-size: 0.65rem; }
 
+/* 工具卡片容器 */
 .tools-card {
   background: rgba(255,255,255,0.02);
   backdrop-filter: blur(10px) saturate(1.4);
@@ -873,6 +950,7 @@ ul { list-style: none; }
   text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 16px;
   padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.04);
 }
+/* 统一工具输入框样式 */
 .tool-input, .tool-field input, .tool-field select, .tool-input-hash {
   width: 100%; padding: 10px 14px; box-sizing: border-box;
   background: rgba(255,255,255,0.03);
@@ -883,6 +961,7 @@ ul { list-style: none; }
 .tool-input:focus, .tool-field input:focus, .tool-field select:focus {
   border-color: rgba(255,255,255,0.2);
 }
+/* 代码类输入框使用等宽字体 */
 .tool-input { font-family: 'SF Mono', 'Fira Code', monospace; resize: vertical; }
 .tool-input-code { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.75rem; line-height: 1.6; }
 .tool-input[readonly] { color: rgba(255,255,255,0.4); cursor: default; }
@@ -892,6 +971,7 @@ ul { list-style: none; }
 .tool-field label { display: block; font-size: 0.7rem; color: rgba(255,255,255,0.3); margin-bottom: 4px; }
 .tool-field select { cursor: pointer; appearance: auto; }
 
+/* 字数统计：三项横向卡片（字符数/含空格/行数） */
 .wc-stats { display: flex; gap: 10px; margin-top: 12px; }
 .wc-stat {
   flex: 1; background: rgba(255,255,255,0.02);
@@ -901,6 +981,7 @@ ul { list-style: none; }
 .wc-stat-num { display: block; font-size: 1.4rem; font-weight: 700; color: #7abfff; font-variant-numeric: tabular-nums; }
 .wc-stat-lbl { display: block; font-size: 0.65rem; color: rgba(255,255,255,0.3); margin-top: 2px; }
 
+/* 颜色转换：取色器 + 文本框并排 */
 .color-layout { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
 .color-layout input[type=color] {
   width: 90px; height: 90px; border: none; border-radius: 16px;
@@ -908,12 +989,14 @@ ul { list-style: none; }
 }
 .color-fields { flex: 1; min-width: 220px; }
 
+/* 时间戳结果展示卡片 */
 .ts-result {
   margin-top: 10px; padding: 14px; background: rgba(255,255,255,0.02);
   border: 1px solid rgba(255,255,255,0.06); border-radius: 12px;
   font-size: 0.8rem; line-height: 1.8; color: rgba(255,255,255,0.5);
 }
 
+/* 图片压缩控件布局 */
 .iz-controls { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 16px; }
 .iz-controls .tool-field { flex: 1; min-width: 140px; margin-bottom: 0; }
 .iz-controls input[type=range] { width: 100%; }
@@ -930,6 +1013,7 @@ ul { list-style: none; }
 .iz-preview-info { font-size: 0.65rem; color: rgba(255,255,255,0.3); margin-top: 4px; }
 
 /* ── 23. 工具标签（Price 等） ──────────────── */
+/* 选项卡式按钮，可切换不同内容面板 */
 .tool-tab {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 8px 20px; border-radius: 12px;
@@ -948,6 +1032,7 @@ ul { list-style: none; }
 
 /* ── 24. 入场动画 ──────────────────────────── */
 @keyframes fadeInUp {
+  /* 从下方 20px 淡入升起 */
   0% { opacity: 0; transform: translateY(20px); }
   100% { opacity: 1; transform: translateY(0); }
 }
@@ -955,6 +1040,7 @@ ul { list-style: none; }
   opacity: 0;
   animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+/* 交错延迟，实现逐个入场效果 */
 .masonry-item:nth-child(1) { animation-delay: 0.05s; }
 .masonry-item:nth-child(2) { animation-delay: 0.12s; }
 .masonry-item:nth-child(3) { animation-delay: 0.19s; }
@@ -985,6 +1071,7 @@ ul { list-style: none; }
 .footer a:hover { color: rgba(255,255,255,0.3); }
 
 /* ── 27. 页面头部（Price 等） ──────────────── */
+/* 页面顶部标题区：渐变背景 + 居中文字 */
 .page-header {
   position: relative; z-index: 10;
   padding: 100px 28px 40px; text-align: center;
@@ -1015,6 +1102,7 @@ ul { list-style: none; }
   font-size: 1.3rem; font-weight: 700; font-variant-numeric: tabular-nums;
   color: #e8edf5;
 }
+/* 涨/跌语义色：涨＝橙色，跌＝绿色 */
 .price-stat-value.change-up { color: #f0a030; }
 .price-stat-value.change-down { color: #3dd68c; }
 
@@ -1042,6 +1130,7 @@ ul { list-style: none; }
 .detail-tabs {
   display: flex; gap: 8px; margin-bottom: 16px; justify-content: center;
 }
+/* 来源网格：自适应列数 */
 .source-grid {
   margin-top: 24px;
   display: grid; grid-template-columns: repeat(auto-fill, minmax(280px,1fr)); gap: 16px;
@@ -1050,6 +1139,7 @@ ul { list-style: none; }
   font-size: 0.75rem; color: #7abfff; word-break: break-all;
 }
 .source-link:hover { color: #b8d6ff; }
+/* 历史价格卡片 */
 .history-card {
   margin-top: 32px;
   background: rgba(255,255,255,0.02);
@@ -1091,6 +1181,7 @@ ul { list-style: none; }
 .form-control:focus { border-color: rgba(255,255,255,0.2); }
 .form-control::placeholder { color: rgba(255,255,255,0.2); }
 .price-section { padding-bottom: 60px; position: relative; z-index: 10; }
+/* 商品网格布局 */
 .product-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(280px,1fr)); gap: 16px;
 }
@@ -1135,6 +1226,7 @@ ul { list-style: none; }
 
 /* ── 31. 响应式微调 ────────────────────────── */
 /* ── 31b. 移动端抽屉 ────────────────────────── */
+/* 默认隐藏，仅在 ≤640px 时激活 */
 .mobile-drawer {
   display: none;
 }
@@ -1142,6 +1234,7 @@ ul { list-style: none; }
   display: none;
 }
 @media (max-width: 640px) {
+  /* 左侧滑出式抽屉菜单：通过 left 切换显示/隐藏 */
   .mobile-drawer {
     display: flex; flex-direction: column; gap: 2px;
     position: fixed; top: 0; left: -280px; width: 260px; height: 100vh;
@@ -1165,10 +1258,11 @@ ul { list-style: none; }
     background: rgba(0,0,0,0.5); z-index: 99999;
   }
   .drawer-overlay.show { display: block !important; }
+  /* 移动端其他响应式调优 */
   .hero h1 { font-size: 2.8rem; }
-  .nav-links { display: none; }
+  .nav-links { display: none; }        /* 隐藏桌面导航链接 */
   .footer { flex-direction: column; align-items: center; gap: 8px; }
-  .sidebar { position: static; }
+  .sidebar { position: static; }       /* 侧边栏取消 sticky，跟随流式布局 */
   .post-content { font-size: 0.9rem; }
   .author-box { flex-direction: column; text-align: center; }
   .tools-card { padding: 16px; }

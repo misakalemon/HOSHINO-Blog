@@ -1,3 +1,19 @@
+<!-- ============================================================
+     价格追踪看板 (price/dashboard.html)
+     用途：电子产品价格追踪主页，展示商品列表和品类筛选
+     继承：base.html
+     定义块：
+       - title   : 页面标题
+       - content : 页面主体内容
+     模板变量：
+       - products          : Flask-SQLAlchemy 分页对象（商品列表）
+       - categories        : 所有品类名称列表
+       - current_category  : 当前筛选的品类
+       - current_per_page  : 当前每页条数
+       - per_page_options  : 每页条数可选值列表
+       - current_user      : 当前用户（用于显示管理操作）
+       - csrf_token()      : CSRF 令牌函数
+     ============================================================ -->
 {% extends 'base.html' %}
 {% block title %}价格追踪 - Hoshino{% endblock %}
 {% block content %}
@@ -12,10 +28,12 @@
             <form id="crawl-form" method="POST" action="{{ url_for('price.trigger_crawl') }}" style="display:none">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             </form>
+            <!-- 仅已登录用户可添加新品 -->
             {% if current_user.is_authenticated %}
             <button class="btn btn-ghost" onclick="toggleAddForm()">添加新品</button>
             {% endif %}
         </div>
+        <!-- 添加新品表单（默认隐藏） -->
         {% if current_user.is_authenticated %}
         <div id="add-form" class="add-product-form" style="display:none">
             <div class="price-card add-card">
@@ -50,6 +68,7 @@
             <div class="col-8">
                 {% if products.items %}
                 <div class="product-grid">
+                    <!-- 遍历商品列表 -->
                     {% for product in products.items %}
                     <div class="price-card">
                         <a href="{{ url_for('price.detail', id=product.id) }}" class="price-card-link">
@@ -60,6 +79,7 @@
                             </div>
                             <h3>{{ product.name }}</h3>
                             <div class="price-card-footer">
+                                <!-- 调用 latest_price() 获取最新价格 -->
                                 {% set lp = product.latest_price() %}
                                 {% if lp %}
                                     <span class="price-amount">¥{{ '%.0f' % lp }}</span>
@@ -67,6 +87,7 @@
                                     <span class="price-na">暂无价格</span>
                                 {% endif %}
                             </div>
+                            <!-- 商品规格，仅显示前 3 项 -->
                             {% if product.specs %}
                             <div class="specs-row">
                                 {% for key, val in product.specs.items() %}
@@ -78,6 +99,7 @@
                             {% endif %}
                         </div>
                         </a>
+                        <!-- 已登录用户可手动录入价格 -->
                         {% if current_user.is_authenticated %}
                         <form method="POST" action="{{ url_for('price.manual_price') }}" class="manual-price-form">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -90,6 +112,7 @@
                     {% endfor %}
                 </div>
 
+                <!-- 分页 -->
                 {% if products.pages > 1 %}
                 <div class="pagination-wrap">
                     <ul class="pagination">
@@ -129,6 +152,7 @@
                 {% endif %}
             </div>
 
+            <!-- 侧边栏：品类筛选、看板信息 -->
             <div class="col-4">
                 <aside class="sidebar">
                     <div class="widget">

@@ -2,10 +2,25 @@
 HOSHINO Blog — 前台路由
 
 处理所有公开访问的页面路由：
-  首页文章列表、文章详情、分类筛选、关于、联系、
-  全文搜索、RSS 订阅、缩略图动态生成。
+   首页文章列表、文章详情、分类筛选、关于、联系、
+   全文搜索、RSS 订阅、缩略图动态生成、工具页面。
 
 所有路由挂在 blog_bp（Blueprint）上，URL 前缀为空。
+
+函数列表：
+   _get_sidebar_data()     — 侧边栏数据（分类+最新文章），带 Redis 缓存
+   index()                 — 首页文章瀑布流（分页+分类筛选）
+   single_post(slug)       — 文章详情页（Markdown 渲染+评论表单）
+   category(slug)          — 按分类查看文章列表
+   about()                 — 关于页面
+   contact()               — 联系页面（留言表单）
+   tools()                 — 工具页面（Base64/字数/颜色/JSON/时间戳等）
+   search()                — 全文搜索（ILIKE 模糊匹配）
+   rss_feed()              — RSS/Atom 订阅源
+   thumbnail()             — 动态缩略图生成（磁盘缓存）
+   _cleanup_old_cache()    — 清理旧版本缩略图缓存
+   format_date()           — 模板全局函数：日期格式化
+   now()                   — 模板全局函数：当前 UTC 时间
 """
 import datetime
 import logging
@@ -36,6 +51,8 @@ def _get_sidebar_data():
 
     Returns:
         tuple: (categories, recent_posts)
+            categories  — list[Category]，全部分类按名称排序
+            recent_posts — list[dict] 或 list[Post]，最新 4 篇文章
     """
     from flask import current_app
 
@@ -254,7 +271,19 @@ def contact():
 # ═══════════════════════════════════════════════
 @blog_bp.route('/tools')
 def tools():
-    """工具页面：Base64 / 字数 / 颜色 / JSON / 时间戳 / 哈希 / 图片压缩。"""
+    """工具页面：提供多种在线小工具。
+
+    包含功能：
+      - Base64 编码/解码
+      - 字数统计
+      - 颜色选择器与格式转换
+      - JSON 格式化与校验
+      - 时间戳与日期互转
+      - 哈希计算（MD5/SHA1/SHA256）
+      - 图片压缩
+
+    Template: tools.html
+    """
     return render_template('tools.html')
 
 
@@ -479,6 +508,13 @@ def format_date(dt, fmt='%Y/%m/%d'):
 
 @blog_bp.app_template_global()
 def now():
-    """模板中获取当前 UTC 时间。"""
+    """模板中获取当前 UTC 时间。
+
+    注册为全局函数，模板中可直接调用：
+      {{ now() }}  →  datetime.datetime(2026, 1, 15, 12, 30, 0)
+
+    Returns:
+        datetime: 当前 UTC 时间
+    """
     import datetime
     return datetime.datetime.utcnow()

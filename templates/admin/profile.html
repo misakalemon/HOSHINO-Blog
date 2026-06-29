@@ -1,3 +1,14 @@
+<!-- ============================================================
+     个人资料编辑 (admin/profile.html)
+     用途：当前用户修改个人资料（头像、显示名、简介、邮箱、密码）
+     继承：admin/base_admin.html
+     定义块：
+       - title         : 页面标题
+       - admin_content : 后台主体内容
+     模板变量：
+       - current_user : Flask-Login 当前用户对象
+       - form         : Flask-WTF 个人资料表单对象
+     ============================================================ -->
 {% extends 'admin/base_admin.html' %}
 {% block title %}个人资料{% endblock %}
 {% block admin_content %}
@@ -6,8 +17,10 @@
     <form method="POST" enctype="multipart/form-data">
         {{ form.hidden_tag() }}
 
+        <!-- 头像与基本信息 -->
         <div class="admin-profile-header">
             <div class="admin-avatar-wrap">
+                <!-- 头像：当前用户头像，若为空则使用默认头像 -->
                 <img src="{{ url_for('blog.thumbnail', path=current_user.avatar or 'images/avatar/main-avatar.jpg', w=120) }}"
                      alt="avatar" class="admin-avatar">
                 <label for="avatarInput" class="admin-avatar-edit">✎</label>
@@ -18,11 +31,13 @@
             </div>
         </div>
 
+        <!-- 隐藏文件选择器：选择后自动提交表单 -->
         <input type="file" id="avatarInput" name="avatar" accept="image/*" style="display:none" onchange="this.form.submit()">
 
         <div class="form-group"><label>显示名</label><input type="text" name="display_name" value="{{ form.display_name.data or '' }}"></div>
         <div class="form-group"><label>个人简介</label><textarea name="bio" rows="3">{{ form.bio.data or '' }}</textarea></div>
         <div class="form-group"><label>邮箱</label><input type="email" name="email" value="{{ form.email.data or '' }}"></div>
+        <!-- 密码留空表示不修改 -->
         <div class="form-group"><label>新密码（留空则保持当前密码）</label><input type="password" name="password"></div>
         <button type="submit" class="btn btn-primary">更新资料</button>
     </form>

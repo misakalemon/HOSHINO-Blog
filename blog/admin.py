@@ -13,6 +13,35 @@ HOSHINO Blog — 管理后台路由
   - 用户管理   ─ 用户 CRUD（仅管理员）
   - 个人资料   ─ 当前用户编辑头像 / 邮箱 / 密码
   - 图片上传   ─ 富文本编辑器图片上传 API
+  - 特色卡片   ─ 首页特色卡片 CRUD
+
+函数列表：
+  _invalidate_sidebar_cache()  — 使侧边栏和 RSS 缓存失效
+  admin_required(f)            — 权限控制装饰器（@login_required + is_admin 检查）
+  login()                      — 管理员登录
+  logout()                     — 退出登录
+  dashboard()                  — 仪表盘统计概览
+  post_list()                  — 文章列表（分页）
+  new_post()                   — 新建文章
+  edit_post(id)                — 编辑文章
+  delete_post(id)              — 删除文章（含关联评论）
+  category_list()              — 分类列表
+  new_category()               — 新建分类
+  edit_category(id)            — 编辑分类
+  delete_category(id)          — 删除分类（含解除文章关联）
+  comment_list()               — 评论列表
+  approve_comment(id)          — 审核通过评论
+  delete_comment(id)           — 删除评论
+  user_list()                  — 用户列表
+  new_user()                   — 新建用户
+  edit_user(id)                — 编辑用户
+  delete_user(id)              — 删除用户（含级联操作）
+  profile()                    — 个人资料编辑（含头像上传）
+  upload_image()               — 图片上传 API（供编辑器调用）
+  featured_card_list()         — 特色卡片列表
+  new_featured_card()          — 新建特色卡片
+  edit_featured_card(id)       — 编辑特色卡片
+  delete_featured_card(id)     — 删除特色卡片
 """
 import datetime
 import logging
@@ -57,6 +86,12 @@ def admin_required(f):
         @admin_required
         def post_list():
             ...
+
+    Args:
+        f: 被装饰的视图函数
+
+    Returns:
+        function: 包装后的函数，自动执行登录和权限检查
     """
     @wraps(f)
     @login_required
@@ -262,6 +297,9 @@ def edit_post(id):
       - slug 唯一性检查要排除自身（Post.id != id）
       - 编辑时回填已有的分类选中状态
 
+    Args:
+        id: 文章 ID
+
     Template: admin/post-form.html (editing=True)
     """
     post = Post.query.get_or_404(id)
@@ -332,6 +370,9 @@ def delete_post(id):
     先删除所有关联的评论，再删除文章本身，
     避免数据库外键约束冲突。
 
+    Args:
+        id: 文章 ID
+
     POST 请求（通过表单按钮触发），删除后重定向到文章列表。
     """
     post = Post.query.get_or_404(id)
@@ -390,6 +431,9 @@ def new_category():
 def edit_category(id):
     """编辑分类。
 
+    Args:
+        id: 分类 ID
+
     Template: admin/category-form.html (editing=True)
     """
     cat = Category.query.get_or_404(id)
@@ -412,6 +456,9 @@ def delete_category(id):
 
     删除前遍历所有包含此分类的文章，手动解除关联关系，
     确保多对多关联表也被清理。
+
+    Args:
+        id: 分类 ID
     """
     cat = Category.query.get_or_404(id)
     # 遍历所有包含此分类的文章，解除关联
@@ -447,6 +494,9 @@ def approve_comment(id):
     """审核通过评论。
 
     将评论的 is_approved 设为 True，使其在前台可见。
+
+    Args:
+        id: 评论 ID
     """
     comment = Comment.query.get_or_404(id)
     comment.is_approved = True
@@ -458,7 +508,11 @@ def approve_comment(id):
 @admin_bp.route('/comments/<int:id>/delete', methods=['POST'])
 @admin_required
 def delete_comment(id):
-    """删除评论。"""
+    """删除评论。
+
+    Args:
+        id: 评论 ID
+    """
     comment = Comment.query.get_or_404(id)
     db.session.delete(comment)
     db.session.commit()
@@ -515,6 +569,9 @@ def edit_user(id):
     可修改用户名、邮箱、显示名、简介、管理员权限。
     密码字段为空时不修改密码。
 
+    Args:
+        id: 用户 ID
+
     Template: admin/user-form.html (editing)
     """
     user = User.query.get_or_404(id)
@@ -542,6 +599,9 @@ def delete_user(id):
     安全限制：
       - 不能删除当前登录的管理员自己
       - 级联删除该用户的所有文章（以及文章的评论）
+
+    Args:
+        id: 用户 ID
     """
     user = User.query.get_or_404(id)
     if user.id == current_user.id:
@@ -691,7 +751,13 @@ def upload_image():
 @admin_bp.route('/featured-cards')
 @admin_required
 def featured_card_list():
-    """特色卡片列表页。"""
+    """特色卡片列表页。
+
+    特色卡片展示在首页的精选区域，每张卡片关联一个分类。
+    显示卡片标题、图标、排序权重、启禁用状态等。
+
+    Template: admin/featured-card-list.html
+    """
     cards = FeaturedCard.query.order_by(FeaturedCard.sort_order).all()
     categories = Category.query.all()
     cat_lookup = {c.slug: c.name for c in categories}
@@ -701,7 +767,12 @@ def featured_card_list():
 @admin_bp.route('/featured-cards/new', methods=['GET', 'POST'])
 @admin_required
 def new_featured_card():
-    """新建特色卡片。"""
+    """新建特色卡片。
+
+    需要先有分类才能创建卡片（卡片必须关联一个分类）。
+
+    Template: admin/featured-card-form.html (editing=False)
+    """
     categories = Category.query.order_by(Category.name).all()
     if not categories:
         flash('请先创建分类，再添加特色卡片', 'error')
@@ -736,7 +807,13 @@ def new_featured_card():
 @admin_bp.route('/featured-cards/<int:id>/edit', methods=['GET', 'POST'])
 @admin_required
 def edit_featured_card(id):
-    """编辑特色卡片。"""
+    """编辑特色卡片。
+
+    Args:
+        id: 卡片 ID
+
+    Template: admin/featured-card-form.html (editing=True)
+    """
     card = FeaturedCard.query.get_or_404(id)
     form = FeaturedCardForm(obj=card)
     form.tag.choices = [(c.slug, c.name) for c in Category.query.order_by(Category.name).all()]
@@ -765,7 +842,11 @@ def edit_featured_card(id):
 @admin_bp.route('/featured-cards/<int:id>/delete', methods=['POST'])
 @admin_required
 def delete_featured_card(id):
-    """删除特色卡片。"""
+    """删除特色卡片。
+
+    Args:
+        id: 卡片 ID
+    """
     card = FeaturedCard.query.get_or_404(id)
     db.session.delete(card)
     db.session.commit()

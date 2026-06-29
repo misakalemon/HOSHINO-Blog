@@ -1,8 +1,22 @@
+<!-- ============================================================
+     评论管理 (admin/comment-list.html)
+     用途：后台评论审核，分待审核和已通过两个表格
+     继承：admin/base_admin.html
+     定义块：
+       - title         : 页面标题
+       - admin_content : 后台主体内容
+     模板变量：
+       - pending       : 待审核评论列表
+       - approved      : 已通过评论列表
+       - csrf_token()  : CSRF 令牌函数
+       - format_date   : 日期格式化函数
+     ============================================================ -->
 {% extends 'admin/base_admin.html' %}
 {% block title %}评论管理{% endblock %}
 {% block admin_content %}
 <div class="admin-header"><h3>评论管理</h3></div>
 
+<!-- 待审核评论 -->
 <div class="admin-card" data-glow>
     <h5>待审核（{{ pending|length }}）</h5>
     <div class="admin-table-wrapper">
@@ -11,14 +25,17 @@
         {% for c in pending %}
         <tr>
             <td data-label="作者">{{ c.author_name }}</td>
+            <!-- 限制显示长度 -->
             <td data-label="内容">{{ c.content[:50] }}{% if c.content|length > 50 %}…{% endif %}</td>
             <td data-label="文章"><a href="{{ url_for('admin.edit_post', id=c.post.id) }}">{{ c.post.title[:30] }}{% if c.post.title|length > 30 %}…{% endif %}</a></td>
             <td data-label="日期">{{ format_date(c.created_at, '%Y-%m-%d') }}</td>
             <td data-label="操作">
+                <!-- 通过审核 -->
                 <form method="POST" action="{{ url_for('admin.approve_comment', id=c.id) }}" style="display:inline">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button class="btn btn-primary btn-sm">通过</button>
                 </form>
+                <!-- 删除评论 -->
                 <form method="POST" action="{{ url_for('admin.delete_comment', id=c.id) }}" style="display:inline" onsubmit="return confirm('确定删除？')">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button class="btn btn-danger btn-sm">删除</button>
@@ -32,6 +49,7 @@
     </div>
 </div>
 
+<!-- 已通过评论 -->
 <div class="admin-card" data-glow>
     <h5>已通过（{{ approved|length }}）</h5>
     <div class="admin-table-wrapper">
@@ -44,6 +62,7 @@
             <td data-label="文章">{{ c.post.title[:30] }}{% if c.post.title|length > 30 %}…{% endif %}</td>
             <td data-label="日期">{{ format_date(c.created_at, '%Y-%m-%d') }}</td>
             <td data-label="操作">
+                <!-- 已通过评论仅有删除操作 -->
                 <form method="POST" action="{{ url_for('admin.delete_comment', id=c.id) }}" style="display:inline" onsubmit="return confirm('确定删除？')">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button class="btn btn-danger btn-sm">删除</button>

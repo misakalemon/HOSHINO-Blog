@@ -1,12 +1,29 @@
 <!DOCTYPE html>
+<!-- ============================================================
+     基础布局模板 (base.html)
+     用途：全站基础 HTML 骨架，所有公开页面继承此模板
+     定义块：
+       - title        : 页面标题（默认 site_name 或 'Hoshino'）
+       - description  : 页面 meta description
+       - extra_head   : 头部额外标签（CSS、meta 等）
+       - content      : 页面主体内容
+     模板变量：
+       - site_name    : 站点名称
+       - request.endpoint : Flask 当前路由端点，用于高亮导航
+       - current_user : Flask-Login 当前用户对象
+       - now          : 当前时间对象（用于页脚年份）
+     ============================================================ -->
 <html lang="zh-CN">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- title 块：渲染页面标题，默认显示 site_name 或 'Hoshino' -->
     <title>{% block title %}{{ site_name|default('Hoshino') }}{% endblock %}</title>
+    <!-- description 块：页面描述，默认 'Hoshino Blog' -->
     <meta name="description" content="{% block description %}Hoshino Blog{% endblock %}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/glow-design.css') }}">
     <link rel="shortcut icon" href="{{ url_for('static', filename='images/logo/favicon.svg') }}">
+    <!-- extra_head 块：子模板可注入额外的 <link>/<script>/<meta> -->
     {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -24,11 +41,14 @@
         <a href="{{ url_for('blog.index') }}" class="nav-logo" id="navLogo">✦ Hoshino <span style="font-size:0.65rem;font-weight:400;background:linear-gradient(135deg,#ff8aae,#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:0.08em">—— 星野、参上！——</span></a>
     </div>
     <div class="nav-links">
+        <!-- 博客导航项：如果当前端点是 blog.index 或 blog.category 则高亮 -->
         <a href="{{ url_for('blog.index') }}" {% if request.endpoint == 'blog.index' or request.endpoint == 'blog.category' %}class="nav-link-active"{% endif %}>博客</a>
         <a href="{{ url_for('blog.about') }}" {% if request.endpoint == 'blog.about' %}class="nav-link-active"{% endif %}>关于</a>
         <a href="{{ url_for('blog.contact') }}" {% if request.endpoint == 'blog.contact' %}class="nav-link-active"{% endif %}>联系</a>
+        <!-- 价格导航项：如果端点包含 'price' 则高亮 -->
         <a href="{{ url_for('price.index') }}" {% if request.endpoint and 'price' in request.endpoint %}class="nav-link-active"{% endif %}>价格</a>
         <a href="{{ url_for('blog.tools') }}" {% if request.endpoint == 'blog.tools' %}class="nav-link-active"{% endif %}>工具</a>
+        <!-- 如果用户已登录，显示"写文章"按钮 -->
         {% if current_user.is_authenticated %}
         <a href="{{ url_for('admin.new_post') }}" class="nav-write-btn">写文章</a>
         {% endif %}
@@ -37,6 +57,7 @@
 
 <!-- 移动端抽屉 -->
 <div class="mobile-drawer" id="mobileDrawer">
+    <!-- 与桌面导航相同的移动端导航链接 -->
     <a href="{{ url_for('blog.index') }}" {% if request.endpoint == 'blog.index' or request.endpoint == 'blog.category' %}class="nav-link-active"{% endif %}>博客</a>
     <a href="{{ url_for('blog.about') }}" {% if request.endpoint == 'blog.about' %}class="nav-link-active"{% endif %}>关于</a>
     <a href="{{ url_for('blog.contact') }}" {% if request.endpoint == 'blog.contact' %}class="nav-link-active"{% endif %}>联系</a>
@@ -53,11 +74,12 @@
     <img id="lightboxImg" src="" alt="" style="max-width:90vw;max-height:90vh;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.6)">
 </div>
 
-<!-- 页面内容 -->
+<!-- content 块：子模板填充页面主体内容 -->
 {% block content %}{% endblock %}
 
 <!-- 页脚 -->
 <footer class="footer">
+    <!-- 如果 now 可用则显示动态年份，否则显示 2026 -->
     <span>&copy; {{ now().year if now else '2026' }} Hoshino</span>
     <span>
         <a href="#" title="Twitter">Twitter</a>

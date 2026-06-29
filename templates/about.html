@@ -1,3 +1,13 @@
+<!-- ============================================================
+     关于页面 (about.html)
+     用途：展示博客关于信息
+     继承：base.html
+     定义块：
+       - title   : 页面标题
+       - content : 页面主体内容
+     模板变量：
+       - about_content : 关于页面的 HTML 内容（已通过 safe 过滤器渲染）
+     ============================================================ -->
 {% extends 'base.html' %}
 {% block title %}关于 - Hoshino{% endblock %}
 {% block content %}
@@ -9,6 +19,7 @@
 
 <div class="content">
     <div class="page-content">
+        <!-- about_content 为富文本 HTML，使用 safe 不过滤标签 -->
         {{ about_content|safe }}
     </div>
 </div>
