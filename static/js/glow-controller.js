@@ -94,7 +94,7 @@
     });
   });
   window.addEventListener('resize', updateRects);
-  window.addEventListener('scroll', updateRects);
+  window.addEventListener('scroll', function() { updateRects(); updateGlow(); });
 
   updateRects();
   /* 初始状态光晕不可见 */
