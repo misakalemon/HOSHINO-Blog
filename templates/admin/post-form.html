@@ -66,6 +66,17 @@
 #rte-content th { background:rgba(255,255,255,0.05); font-weight:600; }
 #rte-content td { background:rgba(255,255,255,0.02); }
 
+/* --- RTE Modal --- */
+.rte-modal-overlay { display:none; position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,0.6); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); align-items:center; justify-content:center; }
+.rte-modal { background:rgba(20,20,30,0.96); border:1px solid rgba(255,255,255,0.08); border-radius:16px; padding:28px 32px; max-width:380px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,0.5); }
+.rte-modal h4 { font-size:16px; font-weight:600; color:rgba(255,255,255,0.9); margin:0 0 20px; text-align:center; }
+.rte-modal-fields label { display:block; font-size:13px; color:var(--text-secondary); margin-bottom:4px; margin-top:12px; }
+.rte-modal-fields label:first-child { margin-top:0; }
+.rte-modal-fields input, .rte-modal-fields select { width:100%; padding:10px 14px; border-radius:10px; background:rgba(255,255,255,0.04); border:1px solid var(--border-subtle); color:var(--text-primary); font-size:14px; outline:none; box-sizing:border-box; }
+.rte-modal-fields input:focus, .rte-modal-fields select:focus { border-color:var(--accent); }
+.rte-modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:24px; }
+.rte-modal-actions .btn { padding:8px 20px; font-size:13px; }
+
 /* 预览区域 */
 #cover-preview { margin-top:12px; }
 </style>
@@ -287,6 +298,84 @@ function insertHTML(html) {
 }
 function rteIndent(dir) { rte(dir > 0 ? 'indent' : 'outdent'); }
 
+// === 通用 Modal 弹窗（替换 prompt） ===
+function showModal(options) {
+  var overlay = document.getElementById('rte-modal-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'rte-modal-overlay';
+    overlay.className = 'rte-modal-overlay';
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) overlay.style.display = 'none';
+    });
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = '';
+  var modal = document.createElement('div');
+  modal.className = 'rte-modal';
+  var title = document.createElement('h4');
+  title.textContent = options.title || '';
+  modal.appendChild(title);
+  var fieldsDiv = document.createElement('div');
+  fieldsDiv.className = 'rte-modal-fields';
+  var inputs = {};
+  options.fields.forEach(function(f) {
+    if (f.type === 'select') {
+      var label = document.createElement('label');
+      label.textContent = f.label;
+      var select = document.createElement('select');
+      f.options.forEach(function(o) {
+        var opt = document.createElement('option');
+        opt.value = o.value; opt.textContent = o.label;
+        select.appendChild(opt);
+      });
+      select.value = f.value || '';
+      inputs[f.key] = select;
+      fieldsDiv.appendChild(label);
+      fieldsDiv.appendChild(select);
+    } else {
+      var label = document.createElement('label');
+      label.textContent = f.label;
+      var input = document.createElement('input');
+      input.type = f.type || 'text';
+      input.value = f.value || '';
+      input.placeholder = f.placeholder || '';
+      if (f.min !== undefined) input.min = f.min;
+      if (f.max !== undefined) input.max = f.max;
+      inputs[f.key] = input;
+      fieldsDiv.appendChild(label);
+      fieldsDiv.appendChild(input);
+    }
+  });
+  modal.appendChild(fieldsDiv);
+  var actions = document.createElement('div');
+  actions.className = 'rte-modal-actions';
+  var cancelBtn = document.createElement('button');
+  cancelBtn.className = 'btn btn-ghost';
+  cancelBtn.textContent = '取消';
+  cancelBtn.onclick = function() { overlay.style.display = 'none'; };
+  var confirmBtn = document.createElement('button');
+  confirmBtn.className = 'btn btn-primary';
+  confirmBtn.textContent = '确定';
+  confirmBtn.onclick = function() {
+    var result = {};
+    options.fields.forEach(function(f) { result[f.key] = inputs[f.key].value; });
+    overlay.style.display = 'none';
+    options.onConfirm(result);
+  };
+  actions.appendChild(cancelBtn);
+  actions.appendChild(confirmBtn);
+  modal.appendChild(actions);
+  overlay.appendChild(modal);
+  overlay.style.display = 'flex';
+  var first = modal.querySelector('input,select');
+  if (first) setTimeout(function() { first.focus(); }, 100);
+  modal.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') confirmBtn.click();
+    if (e.key === 'Escape') cancelBtn.click();
+  });
+}
+
 // Enter/Tab 在 <pre>/<code> 内按需处理
 document.getElementById('rte-content').addEventListener('keydown', function(e) {
   var sel = window.getSelection();
@@ -308,11 +397,16 @@ document.getElementById('rte-content').addEventListener('keydown', function(e) {
 
 function rteLink() {
   saveSelection();
-  var url = prompt('输入链接地址：', 'https://');
-  if (url) {
-    var sel = window.getSelection().toString();
-    if (sel) insertHTML('<a href="' + url.replace(/"/g,'&quot;') + '">' + sel.replace(/</g,'&lt;') + '</a>');
-  }
+  showModal({
+    title: '插入链接',
+    fields: [{ key:'url', label:'链接地址', type:'text', placeholder:'https://', value:'https://' }],
+    onConfirm: function(vals) {
+      if (vals.url) {
+        var sel = window.getSelection().toString();
+        if (sel) insertHTML('<a href="' + vals.url.replace(/"/g,'&quot;') + '">' + sel.replace(/</g,'&lt;') + '</a>');
+      }
+    }
+  });
 }
 function rteCode() {
   var sel = window.getSelection().toString();
@@ -334,24 +428,50 @@ function onFormatChange(select) {
 function insertCodeBlock() {
   var selected = window.getSelection().toString();
   saveSelection();
-  var lang = prompt('输入代码语言 (python / javascript / html / css / sql / bash / json / yaml 等):', 'python');
-  if (lang === null) return;
-  var cls = lang ? 'language-' + lang.trim().toLowerCase() : 'language-none';
-  var html;
-  if (selected) {
-    html = '<pre class="line-numbers"><code class="' + cls + '">' + selected.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</code></pre>';
-  } else {
-    html = '<pre class="line-numbers"><code class="' + cls + '"><br><br></code></pre>';
-  }
-  insertHTML(html);
-  loadPrism().then(function() { setTimeout(highlightEditorCode, 100); });
+  showModal({
+    title: '插入代码块',
+    fields: [{
+      key:'lang', label:'代码语言', type:'select',
+      value:'python',
+      options:[
+        { value:'python', label:'Python' },
+        { value:'javascript', label:'JavaScript' },
+        { value:'html', label:'HTML' },
+        { value:'css', label:'CSS' },
+        { value:'sql', label:'SQL' },
+        { value:'bash', label:'Bash' },
+        { value:'json', label:'JSON' },
+        { value:'yaml', label:'YAML' },
+        { value:'none', label:'无 (纯文本)' },
+      ]
+    }],
+    onConfirm: function(vals) {
+      var cls = vals.lang ? 'language-' + vals.lang : 'language-none';
+      var html;
+      if (selected) {
+        html = '<pre class="line-numbers"><code class="' + cls + '">' + selected.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</code></pre>';
+      } else {
+        html = '<pre class="line-numbers"><code class="' + cls + '"><br><br></code></pre>';
+      }
+      insertHTML(html);
+      loadPrism().then(function() { setTimeout(highlightEditorCode, 100); });
+    }
+  });
 }
 function highlightEditorCode() {
-  if (typeof Prism !== 'undefined') {
-    document.querySelectorAll('#rte-content pre code').forEach(function(block) {
-      Prism.highlightElement(block);
-    });
-  }
+  if (typeof Prism === 'undefined') return;
+  var blocks = document.querySelectorAll('#rte-content pre code[class*="language-"]');
+  if (!blocks.length) return;
+  var langs = new Set();
+  blocks.forEach(function(b) {
+    var m = b.className.match(/language-(\w+)/);
+    if (m && m[1] !== 'none') langs.add(m[1]);
+  });
+  var ps = [];
+  langs.forEach(function(l) { ps.push(loadPrismLang(l)); });
+  Promise.all(ps).then(function() {
+    blocks.forEach(function(b) { Prism.highlightElement(b); });
+  });
 }
 function loadPrism() {
   if (typeof Prism !== 'undefined') return Promise.resolve();
@@ -578,16 +698,23 @@ function inlineMD(text) {
 }
 function rteInsertTable() {
   saveSelection();
-  var rows = prompt('行数：', '3'), cols = prompt('列数：', '3');
-  if (!rows || !cols) return;
-  var html = '<table><tbody>';
-  for (var r = 0; r < parseInt(rows); r++) {
-    html += '<tr>';
-    for (var c = 0; c < parseInt(cols); c++) html += '<td>&nbsp;</td>';
-    html += '</tr>';
-  }
-  html += '</tbody></table><br>';
-  insertHTML(html);
+  showModal({
+    title: '插入表格',
+    fields: [
+      { key:'rows', label:'行数', type:'number', value:'3', min:1, max:50 },
+      { key:'cols', label:'列数', type:'number', value:'3', min:1, max:20 },
+    ],
+    onConfirm: function(vals) {
+      var html = '<table><tbody>';
+      for (var r = 0; r < parseInt(vals.rows); r++) {
+        html += '<tr>';
+        for (var c = 0; c < parseInt(vals.cols); c++) html += '<td>&nbsp;</td>';
+        html += '</tr>';
+      }
+      html += '</tbody></table><br>';
+      insertHTML(html);
+    }
+  });
 }
 function rteImage() {
   var input = document.createElement('input');
