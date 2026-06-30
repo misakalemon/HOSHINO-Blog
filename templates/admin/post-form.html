@@ -264,6 +264,27 @@ function rte(cmd, val) {
   else document.getElementById('rte-content').focus();
   document.execCommand(cmd, false, val);
 }
+function insertHTML(html) {
+  var el = document.getElementById('rte-content');
+  el.focus();
+  var sel = window.getSelection();
+  if (sel.rangeCount > 0) {
+    try {
+      var range = sel.getRangeAt(0);
+      range.deleteContents();
+      var frag = range.createContextualFragment(html);
+      var last = frag.lastChild || frag;
+      range.insertNode(frag);
+      range.setStartAfter(last);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      return true;
+    } catch(e) {}
+  }
+  try { return document.execCommand('insertHTML', false, html); } catch(e2) {}
+  return false;
+}
 function rteIndent(dir) { rte(dir > 0 ? 'indent' : 'outdent'); }
 
 // Enter/Tab 在 <pre>/<code> 内按需处理
@@ -275,10 +296,10 @@ document.getElementById('rte-content').addEventListener('keydown', function(e) {
     if (n.tagName === 'PRE' || n.tagName === 'CODE') {
       if (e.key === 'Enter') {
         e.preventDefault();
-        document.execCommand('insertHTML', false, '<br>');
+        insertHTML('<br>');
       } else if (e.key === 'Tab') {
         e.preventDefault();
-        document.execCommand('insertHTML', false, '  ');
+        insertHTML('  ');
       }
       return;
     }
@@ -288,14 +309,17 @@ document.getElementById('rte-content').addEventListener('keydown', function(e) {
 function rteLink() {
   saveSelection();
   var url = prompt('输入链接地址：', 'https://');
-  if (url) rte('createLink', false, url);
+  if (url) {
+    var sel = window.getSelection().toString();
+    if (sel) insertHTML('<a href="' + url.replace(/"/g,'&quot;') + '">' + sel.replace(/</g,'&lt;') + '</a>');
+  }
 }
 function rteCode() {
   var sel = window.getSelection().toString();
   if (sel) {
-    rte('insertHTML', false, '<code>' + sel.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</code>');
+    insertHTML('<code>' + sel.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</code>');
   } else {
-    rte('insertHTML', false, '<code>代码</code>');
+    insertHTML('<code>代码</code>');
   }
 }
 function onFormatChange(select) {
@@ -319,7 +343,7 @@ function insertCodeBlock() {
   } else {
     html = '<pre class="line-numbers"><code class="' + cls + '"><br><br></code></pre>';
   }
-  rte('insertHTML', false, html);
+  insertHTML(html);
   loadPrism().then(function() { setTimeout(highlightEditorCode, 100); });
 }
 function highlightEditorCode() {
@@ -369,9 +393,7 @@ function rteImportFile() {
     if (ext === 'md' || ext === 'markdown') {
       var reader = new FileReader();
       reader.onload = function(e) {
-        var html = simpleMDtoHTML(e.target.result);
-        document.getElementById('rte-content').focus();
-        document.execCommand('insertHTML', false, html);
+        insertHTML(simpleMDtoHTML(e.target.result));
       };
       reader.readAsText(file, 'UTF-8');
     } else if (ext === 'pdf') {
@@ -399,8 +421,7 @@ function importPDFStyled(file) {
           })(i));
         }
         Promise.all(ps).then(function(pages) {
-          document.getElementById('rte-content').focus();
-          document.execCommand('insertHTML', false, pages.join('\n'));
+          insertHTML(pages.join('\n'));
         });
       });
     });
@@ -482,9 +503,7 @@ function importDOCX(file) {
           "r[style-name='Emphasis'] => em"
         ]
       }).then(function(result) {
-        var html = result.value;
-        document.getElementById('rte-content').focus();
-        document.execCommand('insertHTML', false, html);
+        insertHTML(result.value);
       });
     });
   };
@@ -568,7 +587,7 @@ function rteInsertTable() {
     html += '</tr>';
   }
   html += '</tbody></table><br>';
-  rte('insertHTML', false, html);
+  insertHTML(html);
 }
 function rteImage() {
   var input = document.createElement('input');
@@ -586,10 +605,7 @@ function rteImage() {
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      if (data.url) {
-        document.getElementById('rte-content').focus();
-        document.execCommand('insertHTML', false, '<img src="' + data.url + '" style="max-width:100%" alt="image">');
-      }
+      if (data.url) insertHTML('<img src="' + data.url + '" style="max-width:100%" alt="image">');
     })
     .catch(function() { alert('图片上传失败'); });
   };
