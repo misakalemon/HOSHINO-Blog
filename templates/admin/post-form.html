@@ -115,8 +115,8 @@
                 <label>正文</label>
                 <!-- 全量富文本工具栏 -->
                 <div id="rte-toolbar">
-                    <button type="button" onclick="rte('undo')" title="撤销"></button>
-                    <button type="button" onclick="rte('redo')" title="重做"></button>
+                    <button type="button" onclick="rte('undo')" title="撤销">↩</button>
+                    <button type="button" onclick="rte('redo')" title="重做">↪</button>
                     <span class="sep"></span>
                     <select onchange="rte('formatBlock',this.value);this.selectedIndex=0">
                         <option value="">段落</option>
@@ -148,24 +148,24 @@
                     <input type="color" onchange="rte('foreColor',this.value)" title="文字颜色" style="width:28px;height:28px;padding:2px;border:1px solid var(--border-subtle);border-radius:6px;background:transparent;cursor:pointer">
                     <input type="color" onchange="rte('hiliteColor',this.value)" title="背景高亮" style="width:28px;height:28px;padding:2px;border:1px solid var(--border-subtle);border-radius:6px;background:transparent;cursor:pointer">
                     <span class="sep"></span>
-                    <button type="button" onclick="rte('justifyLeft')" title="左对齐"></button>
-                    <button type="button" onclick="rte('justifyCenter')" title="居中"></button>
-                    <button type="button" onclick="rte('justifyRight')" title="右对齐"></button>
+                    <button type="button" onclick="rte('justifyLeft')" title="左对齐">◀</button>
+                    <button type="button" onclick="rte('justifyCenter')" title="居中">≡</button>
+                    <button type="button" onclick="rte('justifyRight')" title="右对齐">▶</button>
                     <span class="sep"></span>
                     <button type="button" onclick="rte('insertUnorderedList')" title="无序列表">UL</button>
                     <button type="button" onclick="rte('insertOrderedList')" title="有序列表">OL</button>
                     <span class="sep"></span>
-                    <button type="button" onclick="rteIndent(-1)" title="减少缩进"></button>
-                    <button type="button" onclick="rteIndent(1)" title="增加缩进"></button>
+                    <button type="button" onclick="rteIndent(-1)" title="减少缩进">⇤</button>
+                    <button type="button" onclick="rteIndent(1)" title="增加缩进">⇥</button>
                     <span class="sep"></span>
-                    <button type="button" onclick="rte('insertHorizontalRule')" title="分割线"></button>
-                    <button type="button" onclick="rteInsertTable()" title="插入表格"></button>
+                    <button type="button" onclick="rte('insertHorizontalRule')" title="分割线">—</button>
+                    <button type="button" onclick="rteInsertTable()" title="插入表格">⊞</button>
                     <button type="button" onclick="rteCode()" title="行内代码">&lt;/&gt;</button>
-                    <button type="button" onclick="rteLink()" title="插入链接"></button>
-                    <button type="button" onclick="rteImage()" title="插入图片"></button>
-                    <button type="button" onclick="rteMarkdown()" title="导入 Markdown"></button>
+                    <button type="button" onclick="rteLink()" title="插入链接">🔗</button>
+                    <button type="button" onclick="rteImage()" title="插入图片">🖼</button>
+                    <button type="button" onclick="rteMarkdown()" title="导入 Markdown">M↓</button>
                     <span class="sep"></span>
-                    <button type="button" onclick="rte('removeFormat')" title="清除格式"></button>
+                    <button type="button" onclick="rte('removeFormat')" title="清除格式">✕</button>
                 </div>
                 <!-- 可编辑区域：显示已有内容（编辑模式） -->
                 <div id="rte-content" contenteditable="true">{{ form.content.data|safe if form.content.data else '' }}</div>

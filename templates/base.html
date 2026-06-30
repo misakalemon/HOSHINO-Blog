@@ -41,30 +41,26 @@
         <a href="{{ url_for('blog.index') }}" class="nav-logo" id="navLogo">✦ Hoshino <span style="font-size:0.65rem;font-weight:400;background:linear-gradient(135deg,#ff8aae,#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:0.08em">—— 星野、参上！——</span></a>
     </div>
     <div class="nav-links">
-        <!-- 博客导航项：如果当前端点是 blog.index 或 blog.category 则高亮 -->
-        <a href="{{ url_for('blog.index') }}" {% if request.endpoint == 'blog.index' or request.endpoint == 'blog.category' %}class="nav-link-active"{% endif %}>博客</a>
-        <a href="{{ url_for('blog.about') }}" {% if request.endpoint == 'blog.about' %}class="nav-link-active"{% endif %}>关于</a>
-        <a href="{{ url_for('blog.contact') }}" {% if request.endpoint == 'blog.contact' %}class="nav-link-active"{% endif %}>联系</a>
-        <!-- 价格导航项：如果端点包含 'price' 则高亮 -->
-        <a href="{{ url_for('price.index') }}" {% if request.endpoint and 'price' in request.endpoint %}class="nav-link-active"{% endif %}>价格</a>
-        <a href="{{ url_for('blog.tools') }}" {% if request.endpoint == 'blog.tools' %}class="nav-link-active"{% endif %}>工具</a>
-        <!-- 如果用户已登录，显示"写文章"按钮 -->
+        <a href="{{ url_for('blog.index') }}" {% if request.endpoint == 'blog.index' or request.endpoint == 'blog.category' %}class="nav-link-active"{% endif %}><i class="hm-public-home"></i>博客</a>
+        <a href="{{ url_for('blog.about') }}" {% if request.endpoint == 'blog.about' %}class="nav-link-active"{% endif %}><i class="hm-public-highlights"></i>关于</a>
+        <a href="{{ url_for('blog.contact') }}" {% if request.endpoint == 'blog.contact' %}class="nav-link-active"{% endif %}><i class="hm-public-email"></i>联系</a>
+        <a href="{{ url_for('price.index') }}" {% if request.endpoint and 'price' in request.endpoint %}class="nav-link-active"{% endif %}><i class="hm-public-history"></i>价格</a>
+        <a href="{{ url_for('blog.tools') }}" {% if request.endpoint == 'blog.tools' %}class="nav-link-active"{% endif %}><i class="hm-public-settings"></i>工具</a>
         {% if current_user.is_authenticated %}
-        <a href="{{ url_for('admin.new_post') }}" class="nav-write-btn">写文章</a>
+        <a href="{{ url_for('admin.new_post') }}" class="nav-write-btn"><i class="hm-edit"></i>写文章</a>
         {% endif %}
     </div>
 </nav>
 
 <!-- 移动端抽屉 -->
 <div class="mobile-drawer" id="mobileDrawer">
-    <!-- 与桌面导航相同的移动端导航链接 -->
-    <a href="{{ url_for('blog.index') }}" {% if request.endpoint == 'blog.index' or request.endpoint == 'blog.category' %}class="nav-link-active"{% endif %}>博客</a>
-    <a href="{{ url_for('blog.about') }}" {% if request.endpoint == 'blog.about' %}class="nav-link-active"{% endif %}>关于</a>
-    <a href="{{ url_for('blog.contact') }}" {% if request.endpoint == 'blog.contact' %}class="nav-link-active"{% endif %}>联系</a>
-    <a href="{{ url_for('price.index') }}" {% if request.endpoint and 'price' in request.endpoint %}class="nav-link-active"{% endif %}>价格</a>
-    <a href="{{ url_for('blog.tools') }}" {% if request.endpoint == 'blog.tools' %}class="nav-link-active"{% endif %}>工具</a>
+    <a href="{{ url_for('blog.index') }}" {% if request.endpoint == 'blog.index' or request.endpoint == 'blog.category' %}class="nav-link-active"{% endif %}><i class="hm-public-home"></i>博客</a>
+    <a href="{{ url_for('blog.about') }}" {% if request.endpoint == 'blog.about' %}class="nav-link-active"{% endif %}><i class="hm-public-highlights"></i>关于</a>
+    <a href="{{ url_for('blog.contact') }}" {% if request.endpoint == 'blog.contact' %}class="nav-link-active"{% endif %}><i class="hm-public-email"></i>联系</a>
+    <a href="{{ url_for('price.index') }}" {% if request.endpoint and 'price' in request.endpoint %}class="nav-link-active"{% endif %}><i class="hm-public-history"></i>价格</a>
+    <a href="{{ url_for('blog.tools') }}" {% if request.endpoint == 'blog.tools' %}class="nav-link-active"{% endif %}><i class="hm-public-settings"></i>工具</a>
     {% if current_user.is_authenticated %}
-    <a href="{{ url_for('admin.new_post') }}" class="nav-write-btn">写文章</a>
+    <a href="{{ url_for('admin.new_post') }}" class="nav-write-btn"><i class="hm-edit"></i>写文章</a>
     {% endif %}
 </div>
 <div class="drawer-overlay" id="drawerOverlay" onclick="toggleDrawer()"></div>
