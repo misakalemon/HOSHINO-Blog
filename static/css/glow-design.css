@@ -803,7 +803,7 @@ ul { list-style: none; }
   /* 汉堡菜单按钮：固定左上角 + 三条横线 → X 动画 */
   .admin-toggle {
     display: flex !important; flex-direction: column; gap: 5px; cursor: pointer;
-    background: rgba(8,10,15,0.8); backdrop-filter: blur(12px);
+    background: rgba(8,10,15,0.3); backdrop-filter: blur(12px);
     border: 1px solid rgba(255,255,255,0.06); border-radius: 12px;
     padding: 10px; z-index: 10000; position: fixed; top: 10px; left: 10px;
   }
