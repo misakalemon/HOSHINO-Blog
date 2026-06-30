@@ -431,8 +431,4 @@ function closeLightbox() {
   document.body.style.overflow = '';
 }
 
-/* ── 6. 移动端：点击标题打开侧栏 ──────────── */
-/* 在移动端（<640px）点击导航 Logo 触发抽屉菜单，而非跳转首页 */
-document.getElementById('navLogo') && document.getElementById('navLogo').addEventListener('click', function(e) {
-  if (window.innerWidth < 640) { e.preventDefault(); toggleDrawer(); }
-});
+

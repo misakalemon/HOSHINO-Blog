@@ -38,7 +38,7 @@
 <!-- 导航栏 -->
 <nav class="navbar">
     <div style="display:flex;align-items:center;gap:16px">
-        <a href="{{ url_for('blog.index') }}" class="nav-logo" id="navLogo">✦ Hoshino <span style="font-size:0.65rem;font-weight:400;background:linear-gradient(135deg,#ff8aae,#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:0.08em">—— 星野、参上！——</span></a>
+        <a href="{{ url_for('blog.index') }}" class="nav-logo" id="navLogo" onclick="if(window.innerWidth<640){event.preventDefault();toggleDrawer();}">✦ Hoshino <span style="font-size:0.65rem;font-weight:400;background:linear-gradient(135deg,#ff8aae,#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:0.08em">—— 星野、参上！——</span></a>
     </div>
     <div class="nav-links">
         <a href="{{ url_for('blog.index') }}" {% if request.endpoint == 'blog.index' or request.endpoint == 'blog.category' %}class="nav-link-active"{% endif %}><i class="hm-public-home"></i>博客</a>
