@@ -325,9 +325,8 @@ function izDownload() {
  * 2. 绑定点击展开/收起、选项选择、全局点击关闭等交互
  */
 function initGlowSelects() {
-  /* 自动包装原生 <select> → glow-select-wrap（排除已包装的和 RTE 工具栏） */
+  /* 自动包装原生 <select> → glow-select-wrap（排除已包装的） */
   document.querySelectorAll('select:not([multiple])').forEach(function(select) {
-    if (select.closest('#rte-toolbar')) return;
     if (select.closest('.glow-select-wrap')) return;
     if (!select.options.length) return;
     var selected = select.options[select.selectedIndex];
