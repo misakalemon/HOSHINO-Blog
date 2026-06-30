@@ -53,8 +53,9 @@ def create_app():
     app.config.from_object('config.ActiveConfig')
     # JSON 返回中文，不转义为 \\uXXXX
     app.config['JSON_AS_ASCII'] = False
-    # 最大上传 100MB（支持 PDF/DOCX 导入）
-    app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
+    # 最大上传 200MB（支持 PDF/DOCX 导入）
+    app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024
+    os.environ['MAX_CONTENT_LENGTH'] = str(200 * 1024 * 1024)
 
     # ── CSRF 保护（全局，影响所有 POST/PUT/DELETE）──
     csrf = CSRFProtect(app)
@@ -156,7 +157,7 @@ def create_app():
     app.after_request(log_request)
 
     elapsed = time.time() - _startup_time
-    logger.info('应用就绪 (%.2fs)', elapsed)
+    logger.info('应用就绪 (%.2fs)  MAX_CONTENT_LENGTH=%dMB', elapsed, app.config['MAX_CONTENT_LENGTH'] / 1024 / 1024)
     return app
 
 
