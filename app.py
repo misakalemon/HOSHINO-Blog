@@ -53,8 +53,8 @@ def create_app():
     app.config.from_object('config.ActiveConfig')
     # JSON 返回中文，不转义为 \\uXXXX
     app.config['JSON_AS_ASCII'] = False
-    # 最大上传 16MB
-    app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
+    # 最大上传 100MB（支持 PDF/DOCX 导入）
+    app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
 
     # ── CSRF 保护（全局，影响所有 POST/PUT/DELETE）──
     csrf = CSRFProtect(app)
