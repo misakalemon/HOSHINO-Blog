@@ -163,7 +163,7 @@
                     <button type="button" onclick="rteCode()" title="行内代码">&lt;/&gt;</button>
                     <button type="button" onclick="rteLink()" title="插入链接">🔗</button>
                     <button type="button" onclick="rteImage()" title="插入图片">🖼</button>
-                    <button type="button" onclick="rteMarkdown()" title="导入 Markdown">M↓</button>
+                    <button type="button" onclick="rteImportFile()" title="导入文件 (Markdown/PDF/DOCX)">📄</button>
                     <span class="sep"></span>
                     <button type="button" onclick="rte('removeFormat')" title="清除格式">✕</button>
                 </div>
@@ -260,23 +260,86 @@ function rteCode() {
     rte('insertHTML', false, '<code>代码</code>');
   }
 }
-function rteMarkdown() {
+function rteImportFile() {
   var input = document.createElement('input');
   input.type = 'file';
-  input.accept = '.md,.markdown,text/markdown';
+  input.accept = '.md,.markdown,.pdf,.docx';
   input.onchange = function() {
     var file = input.files[0];
     if (!file) return;
-    var reader = new FileReader();
-    reader.onload = function(e) {
-      var md = e.target.result;
-      var html = simpleMDtoHTML(md);
-      document.getElementById('rte-content').focus();
-      document.execCommand('insertHTML', false, html);
-    };
-    reader.readAsText(file, 'UTF-8');
+    var ext = file.name.split('.').pop().toLowerCase();
+    if (ext === 'md' || ext === 'markdown') {
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        var html = simpleMDtoHTML(e.target.result);
+        document.getElementById('rte-content').focus();
+        document.execCommand('insertHTML', false, html);
+      };
+      reader.readAsText(file, 'UTF-8');
+    } else if (ext === 'pdf') {
+      importPDFText(file);
+    } else if (ext === 'docx') {
+      importDOCX(file);
+    }
   };
   input.click();
+}
+function importPDFText(file) {
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var data = new Uint8Array(e.target.result);
+    loadPDFJS().then(function(pdfjsLib) {
+      pdfjsLib.getDocument({ data: data }).promise.then(function(pdf) {
+        var promises = [];
+        for (var i = 1; i <= pdf.numPages; i++) promises.push(pdf.getPage(i).then(function(page) {
+          return page.getTextContent().then(function(tc) {
+            return tc.items.map(function(item) { return item.str; }).join(' ');
+          });
+        }));
+        Promise.all(promises).then(function(pages) {
+          var html = pages.map(function(p) { return '<p>' + p.replace(/\n/g, '<br>') + '</p>'; }).join('\n');
+          document.getElementById('rte-content').focus();
+          document.execCommand('insertHTML', false, html);
+        });
+      });
+    });
+  };
+  reader.readAsArrayBuffer(file);
+}
+function importDOCX(file) {
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    loadMammoth().then(function(mammoth) {
+      mammoth.convertToHtml({ arrayBuffer: e.target.result }).then(function(result) {
+        document.getElementById('rte-content').focus();
+        document.execCommand('insertHTML', false, result.value);
+      });
+    });
+  };
+  reader.readAsArrayBuffer(file);
+}
+function loadPDFJS() {
+  return new Promise(function(resolve, reject) {
+    if (window.pdfjsLib) { resolve(window.pdfjsLib); return; }
+    var s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload = function() {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      resolve(window.pdfjsLib);
+    };
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+function loadMammoth() {
+  return new Promise(function(resolve, reject) {
+    if (window.mammoth) { resolve(window.mammoth); return; }
+    var s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js';
+    s.onload = function() { resolve(window.mammoth); };
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
 }
 function simpleMDtoHTML(md) {
   // 简单的 Markdown → HTML 转换
