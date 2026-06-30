@@ -55,6 +55,10 @@ def create_app():
     app.config['JSON_AS_ASCII'] = False
     # 最大上传 200MB（支持 PDF/DOCX 导入）
     app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024
+    # 表单字段内存大小上限（文章 HTML 内容经表单字段提交，默认 500KB 不够）
+    app.config['MAX_FORM_MEMORY_SIZE'] = 100 * 1024 * 1024
+    # 最大表单部件数
+    app.config['MAX_FORM_PARTS'] = 2000
     os.environ['MAX_CONTENT_LENGTH'] = str(200 * 1024 * 1024)
 
     # ── CSRF 保护（全局，影响所有 POST/PUT/DELETE）──
