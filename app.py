@@ -27,7 +27,7 @@ import os
 import time
 
 from dotenv import load_dotenv
-from flask import Flask
+from flask import Flask, request
 from flask_compress import Compress
 from flask_login import LoginManager
 from flask_wtf.csrf import CSRFProtect
@@ -151,6 +151,16 @@ def create_app():
     # ── Gzip 压缩 ────────────────────────────────
     compress.init_app(app)
     logger.info('Gzip 压缩已启用')
+
+    # ── 413 请求过大处理 ──────────────────────────
+    from werkzeug.exceptions import RequestEntityTooLarge
+    app.register_error_handler(RequestEntityTooLarge, lambda e: (
+        logger.error('413 REQUEST TOO LARGE: Content-Length=%s  Remote=%s  Path=%s',
+                     request.content_length, request.remote_addr, request.path),
+        (f'<h1>413 Request Entity Too Large</h1><p>请求体过大 (Content-Length: {request.content_length})，'
+         f'当前限制: {app.config["MAX_CONTENT_LENGTH"]//1024//1024}MB。'
+         f'请减小文件或联系管理员。</p>', 413, {'Content-Type': 'text/html; charset=utf-8'})
+    )[1])
 
     # ── 全局请求日志中间件 ───────────────────────
     # 每次 HTTP 响应返回到客户端之前执行 log_request()
