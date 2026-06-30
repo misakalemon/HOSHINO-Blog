@@ -36,20 +36,17 @@
 <!-- 特色卡片网格：遍历所有特色卡片 -->
 <div class="featured-grid">
     {% for card in featured_cards %}
-    <!-- 如果卡片配置了链接，则将其包裹为可点击区域 -->
-    {% if card.link %}<a href="{{ card.link }}">{% endif %}
     <div class="featured-card" data-glow>
-        <!-- 卡片图标区域：支持 emoji 图标或图片 URL（以 uploads/ 或 /static/ 开头视为图片） -->
-        <div class="featured-card-img {% if card.icon and (card.icon.startswith('uploads/') or card.icon.startswith('/static/')) %}has-img{% endif %}" style="background:linear-gradient(145deg,#1a1030,#2a1a40);display:flex;align-items:center;justify-content:center;{% if card.icon and (card.icon.startswith('uploads/') or card.icon.startswith('/static/')) %}overflow:hidden;cursor:zoom-in{% else %}font-size:3rem{% endif %}">{% if card.icon and (card.icon.startswith('uploads/') or card.icon.startswith('/static/')) %}<img src="{{ url_for('static', filename=card.icon.replace('/static/', '')) }}" alt="{{ card.title }}" style="width:100%;height:100%;object-fit:cover" onclick="event.stopPropagation();event.preventDefault();openLightbox(this.src)">{% else %}{{ card.icon or '✦' }}{% endif %}</div>
+        <!-- 卡片图标区域：支持 emoji 图标或图片 URL -->
+        <div class="featured-card-img {% if card.icon and (card.icon.startswith('uploads/') or card.icon.startswith('/static/')) %}has-img{% endif %}" style="background:linear-gradient(145deg,#1a1030,#2a1a40);display:flex;align-items:center;justify-content:center;{% if card.icon and (card.icon.startswith('uploads/') or card.icon.startswith('/static/')) %}overflow:hidden;cursor:zoom-in{% else %}font-size:3rem{% endif %}">{% if card.icon and (card.icon.startswith('uploads/') or card.icon.startswith('/static/')) %}<img src="{{ url_for('static', filename=card.icon.replace('/static/', '')) }}" alt="{{ card.title }}" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in" onclick="event.stopPropagation();openLightbox(this.src)">{% else %}{{ card.icon or '✦' }}{% endif %}</div>
         <div class="featured-card-body">
+            {% if card.link %}<a href="{{ card.link }}" style="display:block;color:inherit;text-decoration:none">{% endif %}
             <h3>{{ card.title }}</h3>
-            <!-- 卡片描述为可选字段 -->
             {% if card.description %}<p>{{ card.description }}</p>{% endif %}
-            <!-- 通过 cat_lookup 将 tag ID 转为中文分类名 -->
             <span class="featured-card-tag tag-{{ card.tag }}">{{ cat_lookup.get(card.tag, card.tag) }}</span>
+            {% if card.link %}</a>{% endif %}
         </div>
     </div>
-    {% if card.link %}</a>{% endif %}
     <!-- 如果没有特色卡片，显示引导提示 -->
     {% else %}
     <div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:rgba(255,255,255,0.3)">
