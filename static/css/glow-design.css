@@ -221,19 +221,18 @@ ul { list-style: none; }
 .glass-card:hover {
   transform: translateY(-6px);
   border-color: rgba(255, 255, 255, 0.15);
-  box-shadow: 0 24px 64px -20px rgba(0, 120, 255, 0.25),
+  box-shadow: 0 24px 64px -20px rgba(168, 85, 247, 0.3),
               0 0 0 1px rgba(255, 255, 255, 0.03) inset;
 }
 /* ::before 伪元素实现鼠标追踪光晕，通过 JS 写入的 CSS 变量驱动 */
 .glass-card::before {
-  content: ''; position: absolute; inset: -1px; border-radius: 22px;
+  content: ''; position: absolute; inset: -2px; border-radius: 22px;
   background: radial-gradient(
     circle at var(--gx, 50%) var(--gy, 50%),
-    rgba(0, 180, 255, calc(var(--glow-intensity, 0) * 1.0)) 0%,
-    rgba(160, 80, 255, calc(var(--glow-intensity, 0) * 0.5)) 30%,
-    transparent 45%
+    rgba(255, 138, 174, calc(var(--glow-intensity, 0) * 0.9)) 0%,
+    rgba(192, 132, 252, calc(var(--glow-intensity, 0) * 0.7)) 5%,
+    transparent 10%
   );
-  /* clip-path: inset(2px) 裁剪掉伪元素超出圆角的边缘，模拟内发光 */
   clip-path: inset(2px); pointer-events: none; z-index: 0;
   opacity: var(--glow-opacity, 0);
   transition: opacity 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
@@ -725,12 +724,12 @@ ul { list-style: none; }
 }
 /* 管理卡片的鼠标追踪光晕（强度略低于前台卡片） */
 .admin-card::before {
-  content: ''; position: absolute; inset: -1px; border-radius: 22px;
+  content: ''; position: absolute; inset: -2px; border-radius: 22px;
   background: radial-gradient(
     circle at var(--gx, 50%) var(--gy, 50%),
-    rgba(0, 180, 255, calc(var(--glow-intensity, 0) * 0.6)) 0%,
-    rgba(160, 80, 255, calc(var(--glow-intensity, 0) * 0.3)) 30%,
-    transparent 45%
+    rgba(255, 138, 174, calc(var(--glow-intensity, 0) * 0.6)) 0%,
+    rgba(192, 132, 252, calc(var(--glow-intensity, 0) * 0.4)) 5%,
+    transparent 10%
   );
   clip-path: inset(2px); pointer-events: none; z-index: 0;
   opacity: var(--glow-opacity, 0);
