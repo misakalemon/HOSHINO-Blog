@@ -81,7 +81,11 @@
                                 <a href="{{ url_for('blog.single_post', slug=post.slug) }}" style="transition:color 0.3s">{{ post.title }}</a>
                             </h2>
                             <!-- 文章内容摘要（截断至 120 字符） -->
-                            {% if post.content %}
+                            {% if post.summary %}
+                            <p style="color:rgba(255,255,255,0.35);font-size:0.75rem;line-height:1.6;margin-top:8px;font-weight:300">
+                                {{ post.summary|truncate(120) }}
+                            </p>
+                            {% elif post.content %}
                             <p style="color:rgba(255,255,255,0.35);font-size:0.75rem;line-height:1.6;margin-top:8px;font-weight:300">
                                 {{ post.content|striptags|truncate(120) }}
                             </p>

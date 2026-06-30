@@ -60,6 +60,8 @@ def create_app():
     # 最大表单部件数
     app.config['MAX_FORM_PARTS'] = 2000
     os.environ['MAX_CONTENT_LENGTH'] = str(200 * 1024 * 1024)
+    # 静态文件缓存 — 7 天（文件内容变更时手动清浏览器缓存即可）
+    app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 604800
 
     # ── CSRF 保护（全局，影响所有 POST/PUT/DELETE）──
     csrf = CSRFProtect(app)

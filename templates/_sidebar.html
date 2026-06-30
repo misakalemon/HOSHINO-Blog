@@ -80,11 +80,9 @@
 <div class="widget">
     <h4 class="widget-title">分类</h4>
     <div class="cat-tags">
-        <!-- "全部"链接，文章数取 recent_posts 长度 -->
         <a href="{{ url_for('blog.index') }}" class="cat-tag">全部 <span class="cat-count">{{ recent_posts|length if recent_posts else 0 }}</span></a>
-        <!-- 遍历全部分类，调用 post_count() 获取该分类文章数 -->
         {% for cat in categories %}
-        <a href="{{ url_for('blog.category', slug=cat.slug) }}" class="cat-tag">{{ cat.name }} <span class="cat-count">{{ cat.post_count() }}</span></a>
+        <a href="{{ url_for('blog.category', slug=cat.slug) }}" class="cat-tag">{{ cat.name }} <span class="cat-count">{{ cat_post_counts.get(cat.id, 0) }}</span></a>
         <!-- 无分类时提示 -->
         {% else %}
         <span style="color:rgba(255,255,255,0.3); font-size:0.8rem">暂无分类</span>

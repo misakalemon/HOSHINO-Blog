@@ -133,10 +133,10 @@ class Config:
     SQLALCHEMY_DATABASE_URI = _build_database_uri()
     # 连接池配置（适合 MySQL 5.7 conda 版本，不宜过大）
     SQLALCHEMY_ENGINE_OPTIONS = {
-        'pool_size': 2,          # 连接池大小（并发不高时 2 个足够）
-        'pool_recycle': 60,      # 空闲连接 60 秒后回收（MySQL 默认 8h 超时）
+        'pool_size': 5,          # 连接池大小（应对并发访问）
+        'pool_recycle': 3600,    # 空闲连接 1 小时后回收（MySQL 默认 8h 超时）
         'pool_pre_ping': True,   # 每次借用连接前发送 ping 检测有效性
-        'max_overflow': 0,       # 不允许超出 pool_size 的临时连接
+        'max_overflow': 5,       # 突发流量时允许的临时连接数
     }
 
     # ── 上传 ──────────────────────────────────────

@@ -18,11 +18,11 @@
 
 <!-- 待审核评论 -->
 <div class="admin-card" data-glow>
-    <h5>待审核（{{ pending|length }}）</h5>
+    <h5>待审核（{{ pending.total }}）</h5>
     <div class="admin-table-wrapper">
     <table class="admin-table">
         <tr><th>作者</th><th>内容</th><th>文章</th><th>日期</th><th>操作</th></tr>
-        {% for c in pending %}
+        {% for c in pending.items %}
         <tr>
             <td data-label="作者">{{ c.author_name }}</td>
             <!-- 限制显示长度 -->
@@ -51,11 +51,11 @@
 
 <!-- 已通过评论 -->
 <div class="admin-card" data-glow>
-    <h5>已通过（{{ approved|length }}）</h5>
+    <h5>已通过（{{ approved.total }}）</h5>
     <div class="admin-table-wrapper">
     <table class="admin-table">
         <tr><th>作者</th><th>内容</th><th>文章</th><th>日期</th><th>操作</th></tr>
-        {% for c in approved %}
+        {% for c in approved.items %}
         <tr>
             <td data-label="作者">{{ c.author_name }}</td>
             <td data-label="内容">{{ c.content[:50] }}{% if c.content|length > 50 %}…{% endif %}</td>

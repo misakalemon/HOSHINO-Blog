@@ -30,9 +30,12 @@ import time
 import bleach
 from flask import Response, abort, current_app, redirect, render_template, request, url_for
 
+from sqlalchemy import func
+from sqlalchemy.orm import load_only
+
 from . import blog_bp
 from .forms import CommentForm, ContactForm
-from .models import Category, Comment, FeaturedCard, Post, db
+from .models import Category, Comment, FeaturedCard, Post, db, post_categories
 
 logger = logging.getLogger(__name__)
 
@@ -44,41 +47,66 @@ THUMB_CACHE_VER = 'v2'
 def _get_sidebar_data():
     """获取侧边栏数据（分类列表 + 最新文章），带 Redis 缓存。
 
-    分类数据量小且极少变化，直接查数据库（无需缓存）。
-    最新文章缓存键：hblog:sidebar:recent_posts — TTL: CACHE_TTL_SIDEBAR
+    使用 ThreadPoolExecutor 并行执行 3 个独立的数据获取操作：
+      1. 分类列表查询
+      2. 分类文章数聚合查询
+      3. 最新文章（Redis 缓存命中则跳过 DB）
 
     当 Redis 不可用时，回退到数据库查询，不影响页面渲染。
 
     Returns:
-        tuple: (categories, recent_posts)
-            categories  — list[Category]，全部分类按名称排序
-            recent_posts — list[dict] 或 list[Post]，最新 4 篇文章
+        tuple: (categories, recent_posts, cat_post_counts)
     """
+    from concurrent.futures import ThreadPoolExecutor
+
     from flask import current_app
 
     from .cache import cache_get, cache_set
 
     ttl = current_app.config.get('CACHE_TTL_SIDEBAR', 300)
+    app = current_app._get_current_object()
 
-    # ── 分类列表（直接查数据库，缓存收益不大） ──
-    categories = Category.query.order_by(Category.name).all()
+    def _fetch_categories():
+        with app.app_context():
+            return Category.query.order_by(Category.name).all()
 
-    # ── 最新文章 ──────────────────────────────
-    recent_posts = cache_get('sidebar:recent_posts')
-    if recent_posts is None:
-        recent_posts = Post.query.filter_by(is_published=True).order_by(
-            Post.created_at.desc()).limit(4).all()
-        # 缓存为序列化字典，created_at 用 ISO 字符串
-        cache_set('sidebar:recent_posts', [
-            {
-                'id': p.id, 'title': p.title, 'slug': p.slug,
-                'cover_image': p.cover_image,
-                'created_at': p.created_at.isoformat() if p.created_at else None
-            }
-            for p in recent_posts
-        ], ttl)
+    def _fetch_cat_post_counts():
+        with app.app_context():
+            return dict(
+                db.session.query(post_categories.c.category_id, func.count(post_categories.c.post_id))
+                .join(Post, Post.id == post_categories.c.post_id)
+                .filter(Post.is_published == True)
+                .group_by(post_categories.c.category_id).all()
+            )
 
-    return categories, recent_posts
+    def _fetch_recent_posts():
+        with app.app_context():
+            cached = cache_get('sidebar:recent_posts')
+            if cached is not None:
+                return cached
+            posts = Post.query.filter_by(is_published=True).options(
+                load_only(Post.id, Post.title, Post.slug, Post.cover_image, Post.created_at)
+            ).order_by(Post.created_at.desc()).limit(4).all()
+            result = [
+                {
+                    'id': p.id, 'title': p.title, 'slug': p.slug,
+                    'cover_image': p.cover_image,
+                    'created_at': p.created_at.isoformat() if p.created_at else None
+                }
+                for p in posts
+            ]
+            cache_set('sidebar:recent_posts', result, ttl)
+            return result
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        fut_cat = pool.submit(_fetch_categories)
+        fut_counts = pool.submit(_fetch_cat_post_counts)
+        fut_recent = pool.submit(_fetch_recent_posts)
+        categories = fut_cat.result()
+        cat_post_counts = fut_counts.result()
+        recent_posts = fut_recent.result()
+
+    return categories, recent_posts, cat_post_counts
 
 
 # ═══════════════════════════════════════════════
@@ -100,7 +128,11 @@ def index():
 
     # 基础查询：只取已发布的文章，同时使用 joinedload 预加载作者信息
     # 避免 N+1 查询问题
-    query = Post.query.options(db.joinedload(Post.author)).filter_by(is_published=True)
+    query = Post.query.options(
+        db.joinedload(Post.author),
+        db.joinedload(Post.categories),
+        load_only(Post.id, Post.title, Post.slug, Post.summary, Post.cover_image, Post.created_at)
+    ).filter_by(is_published=True)
     # 按分类筛选（多对多关联）
     if category_slug:
         cat = Category.query.filter_by(slug=category_slug).first_or_404()
@@ -112,13 +144,13 @@ def index():
     posts = query.order_by(Post.created_at.desc()).paginate(
         page=page, per_page=per_page, error_out=False
     )
-    categories, recent_posts = _get_sidebar_data()
+    categories, recent_posts, cat_post_counts = _get_sidebar_data()
     featured_cards = FeaturedCard.query.filter_by(is_active=True).order_by(FeaturedCard.sort_order).all()
     cat_lookup = {c.slug: c.name for c in categories}
 
     return render_template('index.html',
         posts=posts, categories=categories,
-        recent_posts=recent_posts, current_category=category_slug,
+        recent_posts=recent_posts, cat_post_counts=cat_post_counts, current_category=category_slug,
         current_per_page=per_page,
         per_page_options=current_app.config['PER_PAGE_OPTIONS'],
         featured_cards=featured_cards,
@@ -144,7 +176,7 @@ def single_post(slug):
     Template: single-post.html
     """
     post = Post.query.filter_by(slug=slug, is_published=True).first_or_404()
-    categories, recent_posts = _get_sidebar_data()
+    categories, recent_posts, cat_post_counts = _get_sidebar_data()
     form = CommentForm()
 
     # ── 处理评论提交 ──────────────────────────
@@ -192,7 +224,7 @@ def single_post(slug):
 
     return render_template('single-post.html',
         post=post, categories=categories,
-        recent_posts=recent_posts, form=form
+        recent_posts=recent_posts, cat_post_counts=cat_post_counts, form=form
     )
 
 
@@ -214,15 +246,17 @@ def category(slug):
     page = request.args.get('page', 1, type=int)
     # per_page 取自 URL 参数或配置默认值，与首页一致
     per_page = request.args.get('per_page', current_app.config['POSTS_PER_PAGE'], type=int)
-    posts = Post.query.filter(
+    posts = Post.query.options(
+        load_only(Post.id, Post.title, Post.slug, Post.cover_image, Post.created_at)
+    ).filter(
         Post.categories.any(id=cat.id), Post.is_published == True
     ).order_by(Post.created_at.desc()).paginate(
         page=page, per_page=per_page, error_out=False
     )
-    categories, recent_posts = _get_sidebar_data()
+    categories, recent_posts, cat_post_counts = _get_sidebar_data()
     return render_template('category-grid.html',
         category=cat, posts=posts,
-        categories=categories, recent_posts=recent_posts,
+        categories=categories, recent_posts=recent_posts, cat_post_counts=cat_post_counts,
         current_per_page=per_page,
         per_page_options=current_app.config['PER_PAGE_OPTIONS']
     )
@@ -238,8 +272,8 @@ def about():
     展示博主信息、站点介绍等静态内容。
     Template: about.html
     """
-    categories, recent_posts = _get_sidebar_data()
-    return render_template('about.html', categories=categories, recent_posts=recent_posts)
+    categories, recent_posts, cat_post_counts = _get_sidebar_data()
+    return render_template('about.html', categories=categories, recent_posts=recent_posts, cat_post_counts=cat_post_counts)
 
 
 # ═══════════════════════════════════════════════
@@ -259,9 +293,9 @@ def contact():
     if form.validate_on_submit():
         # 表单有效：标记为已发送（生产环境应改为发送邮件）
         message_sent = True
-    categories, recent_posts = _get_sidebar_data()
+    categories, recent_posts, cat_post_counts = _get_sidebar_data()
     return render_template('contact.html',
-        categories=categories, recent_posts=recent_posts,
+        categories=categories, recent_posts=recent_posts, cat_post_counts=cat_post_counts,
         message_sent=message_sent, form=form
     )
 
@@ -308,9 +342,12 @@ def search():
         return redirect(url_for('blog.index'))
     # per_page 取自 URL 参数或配置默认值，搜索结果也支持分页调整
     per_page = request.args.get('per_page', current_app.config['POSTS_PER_PAGE'], type=int)
-    categories, recent_posts = _get_sidebar_data()
+    categories, recent_posts, cat_post_counts = _get_sidebar_data()
     # 使用 db.or_() 在标题、摘要、正文三个字段中同时搜索
-    results = Post.query.filter(
+    results = Post.query.options(
+        db.joinedload(Post.categories),
+        load_only(Post.id, Post.title, Post.slug, Post.summary, Post.cover_image, Post.created_at)
+    ).filter(
         Post.is_published == True,
         db.or_(
             Post.title.ilike(f'%{q}%'),
@@ -322,7 +359,7 @@ def search():
     )
     return render_template('index.html',
         posts=results, categories=categories,
-        recent_posts=recent_posts, search_query=q,
+        recent_posts=recent_posts, cat_post_counts=cat_post_counts, search_query=q,
         current_category=None, current_per_page=per_page,
         per_page_options=current_app.config['PER_PAGE_OPTIONS']
     )

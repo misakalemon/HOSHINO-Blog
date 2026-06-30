@@ -169,8 +169,9 @@ def dashboard():
     统计数据缓存 60 秒（CACHE_TTL_DASHBOARD），
     避免每次刷新页面都查询数据库。
 
-    展示：文章总数、已发布数、待审核评论数、用户数、
-    最近 5 篇文章、最近 5 条待审核评论。
+    使用 ThreadPoolExecutor 并行执行 6 个独立统计查询：
+      文章总数、已发布数、待审核评论数、用户数、
+      最近 5 篇文章、最近 5 条待审核评论（含 joinedload 预加载）。
 
     Template: admin/dashboard.html
     """
@@ -180,22 +181,33 @@ def dashboard():
     if stats:
         return render_template('admin/dashboard.html', **stats)
 
-    post_count = Post.query.count()
-    published_count = Post.query.filter_by(is_published=True).count()
-    comment_count = Comment.query.filter_by(is_approved=False).count()
-    user_count = User.query.count()
-    recent_posts = Post.query.order_by(Post.created_at.desc()).limit(5).all()
-    recent_comments = Comment.query.filter_by(is_approved=False).order_by(
-        Comment.created_at.desc()).limit(5).all()
+    from concurrent.futures import ThreadPoolExecutor
 
-    stats = {
-        'post_count': post_count,
-        'published_count': published_count,
-        'comment_count': comment_count,
-        'user_count': user_count,
-        'recent_posts': recent_posts,
-        'recent_comments': recent_comments,
-    }
+    app = current_app._get_current_object()
+
+    def _run(fn):
+        with app.app_context():
+            return fn()
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        fut_pc = pool.submit(_run, lambda: Post.query.count())
+        fut_pub = pool.submit(_run, lambda: Post.query.filter_by(is_published=True).count())
+        fut_cc = pool.submit(_run, lambda: Comment.query.filter_by(is_approved=False).count())
+        fut_uc = pool.submit(_run, lambda: User.query.count())
+        fut_rp = pool.submit(_run, lambda: Post.query.order_by(Post.created_at.desc()).limit(5).all())
+        fut_rc = pool.submit(_run, lambda: Comment.query.options(
+            db.joinedload(Comment.post)
+        ).filter_by(is_approved=False).order_by(
+            Comment.created_at.desc()).limit(5).all())
+
+        stats = {
+            'post_count': fut_pc.result(),
+            'published_count': fut_pub.result(),
+            'comment_count': fut_cc.result(),
+            'user_count': fut_uc.result(),
+            'recent_posts': fut_rp.result(),
+            'recent_comments': fut_rc.result(),
+        }
     cache_set('dashboard:stats', stats, ttl)
     return render_template('admin/dashboard.html', **stats)
 
@@ -211,10 +223,11 @@ def post_list():
 
     Template: admin/post-list.html
     """
+    from sqlalchemy.orm import joinedload
     page = request.args.get('page', 1, type=int)
-    posts = Post.query.order_by(Post.created_at.desc()).paginate(
-        page=page, per_page=20, error_out=False
-    )
+    posts = Post.query.options(joinedload(Post.categories)).order_by(
+        Post.created_at.desc()
+    ).paginate(page=page, per_page=20, error_out=False)
     return render_template('admin/post-list.html', posts=posts)
 
 
@@ -478,14 +491,26 @@ def delete_category(id):
 @admin_bp.route('/comments')
 @admin_required
 def comment_list():
-    """评论列表页。
+    """评论列表页（已分页）。
 
-    显示所有评论（含已审核和未审核），按时间倒序排列。
+    显示所有评论，按审核状态分两个表格：
+      - 待审核（pending）：is_approved=False
+      - 已通过（approved）：is_approved=True
+
+    使用 joinedload(Comment.post) 预加载关联文章，避免 N+1。
+    默认每页 20 条，支持 ?page= 参数翻页。
 
     Template: admin/comment-list.html
     """
-    comments = Comment.query.order_by(Comment.created_at.desc()).all()
-    return render_template('admin/comment-list.html', comments=comments)
+    from sqlalchemy.orm import joinedload
+    page = request.args.get('page', 1, type=int)
+    pending = Comment.query.options(joinedload(Comment.post)).filter_by(is_approved=False).order_by(
+        Comment.created_at.desc()
+    ).paginate(page=page, per_page=20, error_out=False)
+    approved = Comment.query.options(joinedload(Comment.post)).filter_by(is_approved=True).order_by(
+        Comment.created_at.desc()
+    ).paginate(page=page, per_page=20, error_out=False)
+    return render_template('admin/comment-list.html', pending=pending, approved=approved)
 
 
 @admin_bp.route('/comments/<int:id>/approve', methods=['POST'])

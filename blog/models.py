@@ -21,6 +21,7 @@ import datetime
 
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.dialects.mysql import MEDIUMTEXT
 from werkzeug.security import check_password_hash, generate_password_hash
 
 # SQLAlchemy 实例，所有模型共享
@@ -150,7 +151,7 @@ class Post(db.Model):
     title = db.Column(db.String(256), nullable=False)      # 文章标题
     slug = db.Column(db.String(256), unique=True, nullable=False, index=True)  # URL 标识
     summary = db.Column(db.Text, default='')               # 文章摘要（列表页使用）
-    content = db.Column(db.MEDIUMTEXT, nullable=False)     # 正文（支持长文）
+    content = db.Column(MEDIUMTEXT, nullable=False)     # 正文（支持长文）
     cover_image = db.Column(db.String(256), default='')    # 封面图片路径
     author_id = db.Column(                                  # 作者（外键 → users.id）
         db.Integer, db.ForeignKey('users.id'), nullable=False

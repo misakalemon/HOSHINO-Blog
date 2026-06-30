@@ -60,6 +60,50 @@
 
 ---
 
+## 2026-06-30 第二弹 — 性能优化
+
+### 后端 N+1 查询修复
+- 首页/搜索页文章列表：`joinedload(Post.categories)` 消除分类标签 N+1 + `load_only` 跳过 `content`（MEDIUMTEXT）减少 DB 传输
+- 分类页文章列表：`load_only` 跳过 `content`
+- 侧边栏分类计数：独立聚合查询 `cat_post_counts` 一次查出全部计数，替代逐条 `cat.post_count()`（N+1）
+- 仪表盘 `recent_comments`：添加 `joinedload(Comment.post)` 消除 N+1
+- 评论列表：添加 `joinedload(Comment.post)` 消除 N+1
+
+### 并行执行（concurrent.futures.ThreadPoolExecutor）
+- `_get_sidebar_data()`：3 个独立数据获取（分类列表 / 分类计数 / 最新文章）并行执行
+- `dashboard()` 统计页：6 个独立统计查询（文章数/已发布/待审核评论/用户数/最近文章/最近评论）并行执行
+- 每个 worker 线程独立推 `app.app_context()` 确保 SQLAlchemy session 安全
+
+### 数据库连接池调优
+- `pool_size: 2→5`：应对并发访问
+- `max_overflow: 0→5`：突发流量允许临时连接
+- `pool_recycle: 60→3600`：减少不必要的连接回收
+
+### 摘要字段利用
+- 首页列表优先显示 `post.summary`，不存在时回退到 `post.content|striptags`
+- 避免每次列表页都传输大文本 `content` 字段
+
+### 后台修复
+- 评论管理路由修复：正确传参 `pending`/`approved` 分页对象（原为未使用的 `comments` 变量）
+- 评论列表模板适配分页对象（`.items` / `.total`）
+
+### CDN 自托管
+- `pdf.min.js` / `pdf.worker.min.js` / `mammoth.browser.min.js` 下载到 `static/vendor/`
+- 文章编辑页 `post-form.html` 中 CDN 引用替换为本地路径
+
+### 孤儿资源清理
+- 删除 10 个未引用 CSS + 17 个未引用 JS 文件（约 2.6MB）
+- 包括 jquery.min.js, bootstrap.css, gsap.min.js, Swiper, SplitText 等
+
+### 静态文件缓存
+- `SEND_FILE_MAX_AGE_DEFAULT = 604800`（7 天浏览器缓存）
+
+### 前端光效性能
+- `updateGlow()` 去回流：`getBoundingClientRect()` 从 rAF 循环移到 resize/scroll 事件
+- `glow-orb` GPU 合成：添加 `will-change: filter` + `transform: translateZ(0)`
+
+---
+
 ## 历史记录
 
 ### 2026-06-29

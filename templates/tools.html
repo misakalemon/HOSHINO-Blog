@@ -44,6 +44,10 @@
             <span class="tools-nav-icon">#</span>
             <span class="tools-nav-label">哈希</span>
         </button>
+        <button class="tools-nav-btn" data-tool="passwd" onclick="switchTool('passwd')">
+            <span class="tools-nav-icon">🔑</span>
+            <span class="tools-nav-label">密码</span>
+        </button>
         <button class="tools-nav-btn" data-tool="imagezip" onclick="switchTool('imagezip')">
             <span class="tools-nav-icon">🖼</span>
             <span class="tools-nav-label">图片</span>
@@ -77,12 +81,90 @@
         <!-- 颜色转换 -->
         <div class="tool-pane" id="tool-color">
             <div class="tool-heading">颜色转换</div>
-            <div class="color-layout">
-                <input type="color" id="color-picker" value="#6c42d1" onchange="colorFromPicker()">
-                <div class="color-fields">
-                    <div class="tool-field"><label>HEX</label><input id="color-hex" value="#6c42d1" oninput="colorFromHex(this.value)"></div>
-                    <div class="tool-field"><label>RGB</label><input id="color-rgb" value="rgb(108,66,209)" oninput="colorFromRGB(this.value)"></div>
-                    <div class="tool-field"><label>HSL</label><input id="color-hsl" value="hsl(258,62%,54%)" readonly></div>
+
+            <!-- 1. 预览区 -->
+            <div class="preview-section">
+                <div class="preview-swatch" id="previewSwatch" style="background:#6C42D1" title="点击复制 HEX"></div>
+                <div class="preview-info">
+                    <div class="color-hex"><span class="hash">#</span><span id="previewHex">6C42D1</span></div>
+                    <div class="color-rgb-hsl">
+                        <span id="previewRgb">rgb(108, 66, 209)</span>
+                        <span id="previewHsl">hsl(258, 62%, 54%)</span>
+                    </div>
+                    <div class="preview-actions">
+                        <button class="btn-preview" onclick="copyColor('hex')">📋 HEX</button>
+                        <button class="btn-preview" onclick="copyColor('rgb')">📋 RGB</button>
+                        <button class="btn-preview" onclick="copyColor('hsl')">📋 HSL</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. 取色器触发器 -->
+            <div class="picker-trigger-section">
+                <div class="picker-trigger" id="colorTrigger">
+                    <div class="mini-swatch" id="triggerSwatch" style="background:#6C42D1"></div>
+                    <span class="label">打开取色面板</span>
+                    <span class="arrow" id="triggerArrow">▼</span>
+                </div>
+            </div>
+
+            <!-- 3. 数值输入网格 -->
+            <div class="inputs-section">
+                <div class="input-group">
+                    <div class="input-label">HEX</div>
+                    <input type="text" id="colorHex" value="6C42D1" maxlength="6" spellcheck="false" placeholder="6C42D1">
+                </div>
+                <div class="input-group">
+                    <div class="input-label">RGB <span class="sub">(R · G · B)</span></div>
+                    <div class="sub-inputs">
+                        <div class="sub-item"><span class="sl" style="color:#f87171">R</span><input type="number" id="colorR" min="0" max="255" value="108"></div>
+                        <div class="sub-item"><span class="sl" style="color:#6ee7b7">G</span><input type="number" id="colorG" min="0" max="255" value="66"></div>
+                        <div class="sub-item"><span class="sl" style="color:#60a5fa">B</span><input type="number" id="colorB" min="0" max="255" value="209"></div>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <div class="input-label">HSL <span class="sub">(H · S · L)</span></div>
+                    <div class="sub-inputs">
+                        <div class="sub-item"><span class="sl" style="color:#fbbf24">H</span><input type="number" id="colorH" min="0" max="360" value="258" step="1"><span class="unit">°</span></div>
+                        <div class="sub-item"><span class="sl" style="color:#34d399">S</span><input type="number" id="colorS" min="0" max="100" value="62" step="1"><span class="unit">%</span></div>
+                        <div class="sub-item"><span class="sl" style="color:#a78bfa">L</span><input type="number" id="colorL" min="0" max="100" value="54" step="1"><span class="unit">%</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. 预设色板 -->
+            <div class="presets-section">
+                <div class="presets-header">
+                    <span class="presets-label">🎨 快速预设</span>
+                    <span class="presets-hint">点击即用</span>
+                </div>
+                <div class="presets-grid" id="presetsGrid"></div>
+            </div>
+
+            <!-- 5. Toast -->
+            <div class="color-toast" id="colorToast">已复制</div>
+        </div>
+
+        <!-- 6. 取色面板浮层 -->
+        <div class="panel-overlay" id="colorPanelOverlay">
+            <div class="color-panel" id="colorPanel">
+                <div class="panel-header">
+                    <h3>🎨 取色器</h3>
+                    <button class="panel-close" id="panelCloseBtn">✕ 关闭</button>
+                </div>
+                <div class="picker-main">
+                    <div class="sv-wrap" id="svWrap">
+                        <canvas id="svCanvas"></canvas>
+                        <div class="cursor-dot" id="svCursor" style="left:85%;top:35%"></div>
+                    </div>
+                    <div class="hue-wrap" id="hueWrap">
+                        <canvas id="hueCanvas"></canvas>
+                        <div class="hue-handle" id="hueHandle" style="top:43%"></div>
+                    </div>
+                </div>
+                <div class="panel-actions">
+                    <button class="btn-ghost-sm" id="eyedropperBtn">💉 吸管</button>
+                    <button class="btn-primary-sm" id="confirmColorBtn">✓ 确认</button>
                 </div>
             </div>
         </div>
@@ -115,6 +197,64 @@
             <div class="tool-field"><label>MD5</label><input class="tool-input-hash" id="hash-md5" readonly></div>
             <div class="tool-field"><label>SHA-1</label><input class="tool-input-hash" id="hash-sha1" readonly></div>
             <div class="tool-field"><label>SHA-256</label><input class="tool-input-hash" id="hash-sha256" readonly></div>
+            <div class="tool-field"><label>SHA-384</label><input class="tool-input-hash" id="hash-sha384" readonly></div>
+            <div class="tool-field"><label>SHA-512</label><input class="tool-input-hash" id="hash-sha512" readonly></div>
+        </div>
+
+        <!-- 密码 & 密钥生成 -->
+        <div class="tool-pane" id="tool-passwd">
+            <div class="tool-heading">密码 &amp; 密钥生成器</div>
+            <div class="pw-layout">
+                <div class="pw-section">
+                    <div class="pw-section-title">🔐 随机密码</div>
+                    <div class="pw-row"><span class="pw-label">长度</span><input type="range" id="pwLen" min="4" max="128" value="16" oninput="pwLenVal.textContent=this.value"><span class="pw-val" id="pwLenVal">16</span></div>
+                    <div class="pw-charset">
+                        <label class="pw-cb"><input type="checkbox" id="pwUpper" checked><span>大写 A-Z</span></label>
+                        <label class="pw-cb"><input type="checkbox" id="pwLower" checked><span>小写 a-z</span></label>
+                        <label class="pw-cb"><input type="checkbox" id="pwDigit" checked><span>数字 0-9</span></label>
+                        <label class="pw-cb"><input type="checkbox" id="pwSym" checked><span>符号 !@#$...</span></label>
+                    </div>
+                    <div class="pw-row">
+                        <label class="pw-cb"><input type="checkbox" id="pwAmb"><span>排除易混淆字符 (0O1lI|)</span></label>
+                    </div>
+                    <div class="pw-row">
+                        <span class="pw-label">生成数量</span>
+                        <input type="number" id="pwCount" min="1" max="50" value="5" style="width:60px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;color:#e8edf5;padding:6px 8px;text-align:center;font-family:monospace">
+                    </div>
+                    <div class="pw-row" style="gap:8px">
+                        <button class="btn btn-primary btn-sm" onclick="pwGenerate()">⚡ 生成</button>
+                        <button class="btn btn-ghost btn-sm" onclick="pwCopy()">📋 复制全部</button>
+                    </div>
+                    <div class="pw-strength" id="pwStrength">强度: <span id="pwStrengthText">强</span></div>
+                    <textarea class="tool-input pw-output" id="pwOutput" rows="6" readonly></textarea>
+                </div>
+                <div class="pw-divider"></div>
+                <div class="pw-section">
+                    <div class="pw-section-title">🗝️ 随机密钥</div>
+                    <div class="pw-row"><span class="pw-label">强度</span>
+                        <select id="keyBits" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;color:#e8edf5;padding:6px 10px;font-family:inherit">
+                            <option value="128">128 位</option>
+                            <option value="192">192 位</option>
+                            <option value="256" selected>256 位</option>
+                            <option value="512">512 位</option>
+                            <option value="1024">1024 位</option>
+                        </select>
+                    </div>
+                    <div class="pw-row"><span class="pw-label">格式</span>
+                        <label class="pw-cb"><input type="radio" name="keyFmt" value="hex" checked><span>HEX</span></label>
+                        <label class="pw-cb"><input type="radio" name="keyFmt" value="base64"><span>Base64</span></label>
+                        <label class="pw-cb"><input type="radio" name="keyFmt" value="base64url"><span>Base64 URL</span></label>
+                    </div>
+                    <div class="pw-row"><span class="pw-label">数量</span>
+                        <input type="number" id="keyCount" min="1" max="20" value="3" style="width:60px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;color:#e8edf5;padding:6px 8px;text-align:center;font-family:monospace">
+                    </div>
+                    <div class="pw-row" style="gap:8px">
+                        <button class="btn btn-primary btn-sm" onclick="keyGenerate()">⚡ 生成密钥</button>
+                        <button class="btn btn-ghost btn-sm" onclick="keyCopy()">📋 复制全部</button>
+                    </div>
+                    <textarea class="tool-input pw-output" id="keyOutput" rows="6" readonly></textarea>
+                </div>
+            </div>
         </div>
 
         <!-- 图片压缩 -->
@@ -164,9 +304,9 @@
     </div>
 </div>
 
-<!-- DOMContentLoaded 时初始化时间戳工具 -->
+<!-- DOMContentLoaded 时初始化时间戳 + 密码工具 -->
 <script>
-document.addEventListener('DOMContentLoaded', function() { initTimestamp(); });
+document.addEventListener('DOMContentLoaded', function() { initTimestamp(); if (document.getElementById('pwOutput')) pwGenerate(); });
 </script>
 
 {% endblock %}

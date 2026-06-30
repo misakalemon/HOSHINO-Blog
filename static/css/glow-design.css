@@ -89,45 +89,87 @@ ul { list-style: none; }
 /* 固定定位的渐变背景层，位于所有内容下方 (z-index: 0) */
 .glow-bg {
   position: fixed; inset: 0; z-index: 0;
-  background: radial-gradient(ellipse at 30% 40%, #0b1a2e 0%, #06070a 70%);
+  background:
+    radial-gradient(ellipse at 50% 50%, #0b1a2e 0%, #1a0b2e 20%, #0e0b1a 45%, #06070a 70%);
+  background-size: 200% 200%;
+  background-position: 0% 50%;
   overflow: hidden; pointer-events: none;
+  animation: gradientShift 30s ease-in-out infinite;
+}
+/* 背景渐变缓慢漂移：利用 background-position 平滑插值，无突变 */
+@keyframes gradientShift {
+  0%   { background-position: 0% 50%; }
+  25%  { background-position: 100% 0%; }
+  50%  { background-position: 100% 100%; }
+  75%  { background-position: 0% 100%; }
+  100% { background-position: 0% 50%; }
 }
 /* 浮动光球：大尺寸模糊圆形，配合 floatOrb 动画缓慢漂移 */
 .glow-orb {
   position: absolute; border-radius: 50%; filter: blur(80px);
-  opacity: 0.4; will-change: transform;
-  animation: floatOrb 18s infinite alternate ease-in-out;
+  opacity: 0.4; will-change: transform, filter;
+  transform: translateZ(0);
+  animation: floatOrb 20s infinite alternate ease-in-out;
 }
-/* 三个光球分别定位在不同的角落，各自动画时长/延迟不同，形成错落感 */
+/* 六个光球覆盖全屏，粉紫配色错落分布 */
 .glow-orb:nth-child(1) {
-  width: 500px; height: 500px; background: #ff6b9d;
-  top: -10%; left: -10%; animation-duration: 22s; opacity: 0.25;
+  width: 600px; height: 600px; background: #ff6b9d;
+  top: -15%; left: -10%; animation-duration: 25s; opacity: 0.3;
 }
 .glow-orb:nth-child(2) {
-  width: 400px; height: 400px; background: #a855f7;
-  bottom: -15%; right: -5%; animation-duration: 26s;
-  animation-delay: -5s; opacity: 0.3;
+  width: 500px; height: 500px; background: #a855f7;
+  bottom: -20%; right: -8%; animation-duration: 30s;
+  animation-delay: -6s; opacity: 0.35;
 }
 .glow-orb:nth-child(3) {
-  width: 350px; height: 350px; background: #ff6b9d;
-  top: 40%; left: 40%; animation-duration: 20s;
-  animation-delay: -10s; opacity: 0.15;
+  width: 450px; height: 450px; background: #ec4899;
+  top: 25%; left: 45%; animation-duration: 28s;
+  animation-delay: -12s; opacity: 0.2;
+}
+.glow-orb:nth-child(4) {
+  width: 380px; height: 380px; background: #c084fc;
+  top: 55%; left: -5%; animation-duration: 22s;
+  animation-delay: -4s; opacity: 0.25;
+}
+.glow-orb:nth-child(5) {
+  width: 400px; height: 400px; background: #f472b6;
+  top: -10%; right: 10%; animation-duration: 26s;
+  animation-delay: -8s; opacity: 0.2;
+}
+.glow-orb:nth-child(6) {
+  width: 350px; height: 350px; background: #8b5cf6;
+  bottom: 25%; left: 25%; animation-duration: 24s;
+  animation-delay: -15s; opacity: 0.15;
 }
 @keyframes floatOrb {
   /* 平移 + 缩放 + 旋转的复合动画，模拟光球在空间中缓慢漂浮 */
-  0% { transform: translate(0, 0) scale(1) rotate(0deg); }
-  33% { transform: translate(60px, -80px) scale(1.2) rotate(10deg); }
-  66% { transform: translate(-40px, 60px) scale(0.9) rotate(-5deg); }
-  100% { transform: translate(30px, -30px) scale(1.1) rotate(15deg); }
+  0%   { transform: translate(0, 0) scale(1) rotate(0deg); }
+  25%  { transform: translate(80px, -60px) scale(1.15) rotate(8deg); }
+  50%  { transform: translate(-50px, 40px) scale(0.9) rotate(-6deg); }
+  75%  { transform: translate(60px, 80px) scale(1.05) rotate(12deg); }
+  100% { transform: translate(-30px, -50px) scale(1.1) rotate(4deg); }
+}
+
+/* ── 2b. 星空粒子 ────────────────────────────── */
+/* 由 JS 生成的 .star 小圆点，使用 CSS 变量控制每颗星的位置和闪烁节奏 */
+.star {
+  position: absolute; width: 2px; height: 2px;
+  background: #fff; border-radius: 50%;
+  animation: twinkle var(--dur) ease-in-out infinite alternate;
+}
+.star-lg { width: 3px; height: 3px; }
+@keyframes twinkle {
+  0%   { opacity: 0.08; transform: scale(0.6); }
+  100% { opacity: 0.9;  transform: scale(1.3); }
 }
 
 /* ── 3. 导航栏 ──────────────────────────────── */
 /* 固定顶部 + 毛玻璃效果 + 半透明白色底边 */
 .navbar {
   position: fixed; top: 0; left: 0; right: 0; height: 64px; z-index: 100;
-  background: rgba(8, 10, 15, 0.5);
-  backdrop-filter: blur(16px) saturate(1.2);
-  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  background: linear-gradient(180deg, rgba(8,10,15,0.7) 0%, rgba(8,10,15,0.35) 100%);
+  backdrop-filter: blur(20px) saturate(1.3);
+  -webkit-backdrop-filter: blur(20px) saturate(1.3);
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   display: flex; align-items: center;
   justify-content: space-between;
@@ -163,9 +205,16 @@ ul { list-style: none; }
 }
 /* 高亮文字使用与 logo 同风格的渐变 */
 .hero h1 .highlight {
-  background: linear-gradient(135deg, #ff8aae, #ff6b9d);
+  background: linear-gradient(135deg, #ff8aae, #ff6b9d, #c084fc, #ff8aae);
+  background-size: 300% 300%;
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   background-clip: text;
+  animation: hueFlow 8s ease-in-out infinite;
+}
+@keyframes hueFlow {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 .hero p {
   font-size: 1.1rem; color: rgba(255,255,255,0.35);
@@ -182,10 +231,10 @@ ul { list-style: none; }
   cursor: pointer; font-family: inherit;
 }
 .hero .btn:hover, .btn-pill:hover {
-  background: rgba(255,255,255,0.08);
-  border-color: rgba(255,255,255,0.2);
-  transform: translateY(-2px);
-  box-shadow: 0 12px 30px -10px rgba(0,120,255,0.2);
+  background: rgba(255,255,255,0.1);
+  border-color: rgba(255,255,255,0.25);
+  transform: translateY(-3px);
+  box-shadow: 0 16px 40px -12px rgba(168, 85, 247, 0.3);
 }
 
 /* ── 4b. 特色卡片区 ──────────────────────────── */
@@ -197,18 +246,20 @@ ul { list-style: none; }
 }
 .featured-card {
   position: relative;
-  background: rgba(255,255,255,0.02);
-  backdrop-filter: blur(10px) saturate(1.4);
-  -webkit-backdrop-filter: blur(10px) saturate(1.4);
+  background: linear-gradient(145deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+  backdrop-filter: blur(14px) saturate(1.5);
+  -webkit-backdrop-filter: blur(14px) saturate(1.5);
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 20px; overflow: hidden;
-  /* 平滑缓动曲线：先快后慢，自然弹性感 */
-  transition: transform 0.4s cubic-bezier(0.16,1,0.3,1), border-color 0.4s;
+  transition: transform 0.4s cubic-bezier(0.16,1,0.3,1), border-color 0.4s, box-shadow 0.4s;
   cursor: pointer;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.02) inset;
 }
 .featured-card:hover {
   transform: translateY(-6px);
-  border-color: rgba(255,255,255,0.15);
+  border-color: rgba(255,255,255,0.18);
+  box-shadow: 0 16px 48px -16px rgba(168, 85, 247, 0.3),
+              0 0 0 1px rgba(255,255,255,0.04) inset;
 }
 .featured-card-img {
   width: 100%; height: 160px; object-fit: cover;
@@ -234,7 +285,9 @@ ul { list-style: none; }
 }
 .section-title {
   font-size: 1.8rem; font-weight: 250; letter-spacing: 0.02em;
-  margin-bottom: 32px; color: rgba(255,255,255,0.6);
+  margin-bottom: 28px; color: rgba(255,255,255,0.5);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  padding-bottom: 12px;
 }
 .section-title span { color: #fff; }
 
@@ -250,21 +303,22 @@ ul { list-style: none; }
 /* 核心 UI 组件：毛玻璃背景 + 悬停上移 + 鼠标追踪光晕伪元素 */
 .glass-card {
   position: relative;
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(10px) saturate(1.4);
-  -webkit-backdrop-filter: blur(10px) saturate(1.4);
+  background: linear-gradient(145deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
+  backdrop-filter: blur(16px) saturate(1.6);
+  -webkit-backdrop-filter: blur(16px) saturate(1.6);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 20px;
   transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
               border-color 0.4s ease, box-shadow 0.4s ease;
-  box-shadow: 0 8px 32px -16px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 8px 32px -16px rgba(0, 0, 0, 0.6),
+              0 0 0 1px rgba(255,255,255,0.02) inset;
   will-change: transform; overflow: hidden;
 }
 .glass-card:hover {
   transform: translateY(-6px);
-  border-color: rgba(255, 255, 255, 0.15);
-  box-shadow: 0 24px 64px -20px rgba(168, 85, 247, 0.3),
-              0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 24px 64px -20px rgba(168, 85, 247, 0.35),
+              0 0 0 1px rgba(255, 255, 255, 0.05) inset;
 }
 /* ::before 伪元素实现鼠标追踪光晕，通过 JS 写入的 CSS 变量驱动 */
 .glass-card::before {
@@ -283,6 +337,15 @@ ul { list-style: none; }
 /* 确保卡片内容在 z-index 上层，不被光晕遮挡 */
 .glass-card > * { position: relative; z-index: 1; }
 .card-content { border-radius: 20px; overflow: hidden; padding: 1.25rem; }
+
+/* 卡片入场动画：淡入上移 */
+.glass-card, .featured-card, .admin-card {
+  animation: fadeUp 0.6s ease both;
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 
 /* 图片占位骨架屏：加载前显示渐变背景 + 从左到右扫光动画 */
 .img-glow {
@@ -753,16 +816,18 @@ ul { list-style: none; }
 /* 管理卡片：与 glass-card 类似，带鼠标追踪光晕 */
 .admin-card {
   position: relative;
-  background: rgba(255,255,255,0.02);
-  backdrop-filter: blur(10px) saturate(1.4);
-  -webkit-backdrop-filter: blur(10px) saturate(1.4);
+  background: linear-gradient(145deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+  backdrop-filter: blur(14px) saturate(1.5);
+  -webkit-backdrop-filter: blur(14px) saturate(1.5);
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 20px; padding: 24px; margin-bottom: 20px;
   transition: transform 0.3s, border-color 0.3s, box-shadow 0.3s;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.02) inset;
 }
 .admin-card:hover {
-  border-color: rgba(255,255,255,0.12);
-  box-shadow: 0 8px 32px -16px rgba(0, 0, 0, 0.4);
+  border-color: rgba(255,255,255,0.15);
+  box-shadow: 0 12px 40px -20px rgba(168, 85, 247, 0.25),
+              0 0 0 1px rgba(255,255,255,0.04) inset;
 }
 /* 管理卡片的鼠标追踪光晕（强度略低于前台卡片） */
 .admin-card::before {
@@ -1023,13 +1088,196 @@ ul { list-style: none; }
 .wc-stat-num { display: block; font-size: 1.4rem; font-weight: 700; color: #7abfff; font-variant-numeric: tabular-nums; }
 .wc-stat-lbl { display: block; font-size: 0.65rem; color: rgba(255,255,255,0.3); margin-top: 2px; }
 
-/* 颜色转换：取色器 + 文本框并排 */
-.color-layout { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
-.color-layout input[type=color] {
-  width: 90px; height: 90px; border: none; border-radius: 16px;
-  cursor: pointer; padding: 0; flex-shrink: 0;
+/* ── 颜色转换 — 重新排版 ────────────────── */
+
+/* ── 1. 预览区 ──────────────────────────── */
+.preview-section {
+  display: flex; align-items: stretch; gap: 20px; margin-bottom: 24px;
 }
-.color-fields { flex: 1; min-width: 220px; }
+.preview-swatch {
+  flex: 0 0 120px; height: 120px; border-radius: 20px;
+  background: #6C42D1; border: 1px solid rgba(255,255,255,0.06);
+  transition: background 0.15s; cursor: pointer;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+}
+.preview-info { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 8px; min-width: 0; }
+.color-hex { font-size: 26px; font-weight: 700; font-family: 'SF Mono','Fira Code',monospace; letter-spacing: 0.5px; color: #f0ecff; line-height: 1.2; word-break: break-all; }
+.color-hex .hash { color: #606080; }
+.color-rgb-hsl { font-size: 13px; font-family: 'SF Mono','Fira Code',monospace; color: #a0a0c8; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.color-rgb-hsl span { background: rgba(0,0,0,0.25); padding: 2px 12px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.04); }
+.preview-actions { display: flex; gap: 6px; margin-top: 2px; flex-wrap: wrap; }
+.btn-preview {
+  border: 1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.04);
+  padding: 5px 14px; border-radius: 30px; font-size: 12px; font-weight: 500;
+  cursor: pointer; transition: all 0.2s; color: #c8c0e8; font-family: inherit;
+}
+.btn-preview:hover { background: rgba(124,92,240,0.15); border-color: rgba(124,92,240,0.3); color: #fff; transform: translateY(-1px); }
+.btn-preview:active { transform: scale(0.96); }
+
+/* ── 2. 取色器触发器 ────────────────────── */
+.picker-trigger-section { margin-bottom: 20px; }
+.picker-trigger {
+  display: inline-flex; align-items: center; gap: 10px;
+  background: rgba(0,0,0,0.3); padding: 5px 20px 5px 6px;
+  border-radius: 60px; border: 1px solid rgba(255,255,255,0.06);
+  cursor: pointer; transition: all 0.2s; user-select: none;
+}
+.picker-trigger:hover { border-color: rgba(255,255,255,0.18); background: rgba(0,0,0,0.4); transform: translateY(-1px); }
+.picker-trigger:active { transform: scale(0.97); }
+.mini-swatch { width: 36px; height: 36px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.06); flex-shrink: 0; transition: background 0.15s; }
+.picker-trigger .label { font-size: 14px; font-weight: 500; color: #d0c8f0; }
+.picker-trigger .arrow { font-size: 13px; color: #606080; transition: transform 0.3s; margin-left: 2px; }
+.picker-trigger .arrow.open { transform: rotate(180deg); }
+
+/* ── 3. 数值输入网格 ────────────────────── */
+.inputs-section { display: grid; grid-template-columns: 1fr 1.6fr 1.8fr; gap: 10px; margin-bottom: 22px; }
+.input-group {
+  display: flex; flex-direction: column; gap: 4px;
+  background: rgba(0,0,0,0.2); border-radius: 14px;
+  padding: 8px 14px 12px; border: 1px solid rgba(255,255,255,0.04);
+  transition: border-color 0.2s;
+}
+.input-group:focus-within { border-color: rgba(124,92,240,0.25); }
+.input-label { font-size: 11px; font-weight: 600; color: #8080a8; letter-spacing: 0.5px; text-transform: uppercase; }
+.input-label .sub { font-weight: 400; color: #606080; font-size: 10px; text-transform: none; }
+.input-group input {
+  background: transparent; border: none; padding: 4px 0 2px;
+  color: #f0ecff; font-family: 'SF Mono','Fira Code',monospace;
+  font-size: 17px; font-weight: 500; outline: none; width: 100%;
+}
+.input-group input::placeholder { color: #404060; font-weight: 400; }
+.input-group input[type="number"] { -moz-appearance: textfield; }
+.input-group input[type="number"]::-webkit-inner-spin-button,
+.input-group input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+.sub-inputs { display: flex; gap: 5px; }
+.sub-item { display: flex; align-items: center; gap: 2px; flex: 1; min-width: 0; }
+.sub-item .sl { font-size: 11px; font-weight: 600; flex-shrink: 0; min-width: 10px; }
+.sub-item input { font-size: 14px !important; padding: 2px 0 !important; width: 100%; min-width: 0; }
+.sub-item .unit { font-size: 11px; color: #505070; flex-shrink: 0; }
+
+/* ── 4. 预设色板 ────────────────────────── */
+.presets-section { padding-top: 2px; }
+.presets-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.presets-label { font-size: 12px; font-weight: 500; color: #8080a8; letter-spacing: 0.3px; }
+.presets-hint { font-size: 11px; color: #505070; }
+.presets-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.preset-swatch {
+  width: 36px; height: 36px; border-radius: 50%; cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.22,1,0.36,1);
+  border: 2px solid transparent; flex-shrink: 0;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3); position: relative;
+}
+.preset-swatch:hover { transform: scale(1.16); z-index: 2; box-shadow: 0 6px 24px rgba(0,0,0,0.6); }
+.preset-swatch.active { border-color: #fff; box-shadow: 0 0 0 2px #1a1630, 0 0 0 4px #a78bfa; transform: scale(1.06); }
+.preset-swatch.bl { border-color: rgba(255,255,255,0.15); }
+.preset-swatch.bl.active { border-color: #fff; }
+
+/* ── 5. 取色面板浮层 ────────────────────── */
+.panel-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  z-index: 1000; display: none; align-items: center; justify-content: center; padding: 20px;
+}
+.panel-overlay.open { display: flex; }
+.color-panel {
+  max-width: 460px; width: 100%;
+  background: rgba(18,16,34,0.96); backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
+  border-radius: 32px; border: 1px solid rgba(255,255,255,0.06);
+  padding: 22px 24px 26px;
+  box-shadow: 0 40px 100px rgba(0,0,0,0.9);
+  animation: panelIn 0.25s ease;
+}
+@keyframes panelIn { from{opacity:0;transform:scale(0.96) translateY(-12px)} to{opacity:1;transform:scale(1) translateY(0)} }
+.panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.panel-header h3 { font-size: 17px; font-weight: 600; color: #e0daff; }
+.panel-close {
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 30px; padding: 4px 14px; color: #9090b8; font-size: 13px;
+  cursor: pointer; transition: all 0.2s; font-family: inherit;
+}
+.panel-close:hover { background: rgba(255,255,255,0.08); color: #fff; }
+
+.picker-main { display: flex; gap: 14px; margin-bottom: 14px; align-items: stretch; }
+.sv-wrap {
+  flex: 1; position: relative; border-radius: 16px; overflow: hidden;
+  cursor: crosshair; border: 1px solid rgba(255,255,255,0.06);
+  min-height: 200px; background: #ff0000;
+}
+.sv-wrap canvas { display: block; width: 100%; height: 100%; aspect-ratio:1/1; touch-action:none; }
+.cursor-dot {
+  position: absolute; width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid #fff; box-shadow: 0 0 0 2px rgba(0,0,0,0.4);
+  pointer-events: none; transform: translate(-50%,-50%);
+  transition: left 0.05s, top 0.05s;
+}
+.hue-wrap {
+  width: 26px; flex-shrink: 0; position: relative; border-radius: 16px;
+  overflow: hidden; border: 1px solid rgba(255,255,255,0.06); cursor: pointer; touch-action:none;
+}
+.hue-wrap canvas { display: block; width: 100%; height: 100%; min-height: 200px; }
+.hue-handle {
+  position: absolute; left: -4px; right: -4px; height: 20px;
+  border-radius: 30px; border: 2px solid #fff;
+  box-shadow: 0 0 0 2px rgba(0,0,0,0.3);
+  pointer-events: none; transform: translateY(-50%);
+  transition: top 0.05s;
+}
+.panel-actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.04); }
+.btn-ghost-sm {
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
+  padding: 8px 22px; border-radius: 30px; font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: all 0.2s; color: #c8c0e8; font-family: inherit;
+}
+.btn-ghost-sm:hover { background: rgba(255,255,255,0.08); }
+.btn-primary-sm {
+  background: linear-gradient(135deg,#7c5cf0,#6c42d1); color: #fff; border: none;
+  padding: 8px 22px; border-radius: 30px; font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: all 0.2s; font-family: inherit;
+  box-shadow: 0 4px 16px rgba(108,66,209,0.3);
+}
+.btn-primary-sm:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(108,66,209,0.5); }
+
+/* ── Toast ──────────────────────────────── */
+.color-toast {
+  position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(70px);
+  background: rgba(18,16,34,0.95); backdrop-filter: blur(16px);
+  padding: 10px 28px; border-radius: 60px;
+  border: 1px solid rgba(255,255,255,0.08);
+  color: #e0daff; font-weight: 500; font-size: 13px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+  opacity: 0; transition: all 0.4s cubic-bezier(0.22,1,0.36,1);
+  pointer-events: none; z-index: 999;
+}
+.color-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── 响应式 ─────────────────────────────── */
+@media (max-width: 640px) {
+  .preview-section { flex-direction: column; align-items: stretch; gap: 14px; }
+  .preview-swatch { flex: unset; width: 100%; height: 100px; }
+  .color-hex { font-size: 20px; }
+  .inputs-section { grid-template-columns: 1fr; gap: 8px; }
+  .input-group input { font-size: 15px; }
+  .sub-item input { font-size: 13px !important; }
+  .picker-trigger { padding: 4px 14px 4px 5px; }
+  .mini-swatch { width: 30px; height: 30px; }
+  .picker-trigger .label { font-size: 13px; }
+  .preset-swatch { width: 32px; height: 32px; }
+  .color-panel { padding: 16px 14px 20px; }
+  .picker-main { flex-direction: column; }
+  .hue-wrap { width: 100%; height: 20px; min-height: unset; }
+  .hue-wrap canvas { min-height: unset; height: 20px; }
+  .hue-handle { left: -6px; right: -6px; top: 50% !important; height: 28px; transform: translateY(-50%); }
+  .sv-wrap { min-height: 160px; }
+  .btn-preview { font-size: 11px; padding: 4px 10px; }
+}
+@media (max-width: 400px) {
+  .color-rgb-hsl { font-size: 11px; gap: 2px 8px; }
+  .color-rgb-hsl span { padding: 1px 6px; }
+  .preset-swatch { width: 28px; height: 28px; }
+  .presets-grid { gap: 6px; }
+}
 
 /* 时间戳结果展示卡片 */
 .ts-result {
@@ -1039,6 +1287,24 @@ ul { list-style: none; }
 }
 
 /* 图片压缩控件布局 */
+/* ── 密码 & 密钥生成器 ─────────────────────── */
+.pw-layout { display: flex; gap: 24px; flex-wrap: wrap; }
+.pw-section { flex: 1; min-width: 280px; }
+.pw-section-title { font-size:13px; font-weight:600; color:rgba(255,255,255,0.5); margin-bottom:14px; letter-spacing:0.3px; }
+.pw-row { display:flex; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap; }
+.pw-label { font-size:12px; color:rgba(255,255,255,0.4); min-width:52px; flex-shrink:0; }
+.pw-val { font-size:13px; color:#c8c0e8; font-weight:600; min-width:28px; text-align:center; font-family:monospace; }
+.pw-charset { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+.pw-cb { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-size:12px; color:rgba(255,255,255,0.5); transition:color 0.2s; }
+.pw-cb:hover { color:rgba(255,255,255,0.8); }
+.pw-cb input[type=checkbox], .pw-cb input[type=radio] { accent-color:#a78bfa; width:14px; height:14px; cursor:pointer; }
+.pw-strength { font-size:12px; color:rgba(255,255,255,0.3); margin-bottom:10px; }
+.pw-strength span { font-weight:600; }
+.pw-output { font-family:'SF Mono','Fira Code',monospace; font-size:13px; }
+.pw-divider { width:1px; background:rgba(255,255,255,0.06); flex-shrink:0; }
+@media (max-width:700px) { .pw-divider { width:100%; height:1px; } }
+.pw-row input[type=range] { flex:1; min-width:80px; accent-color:#a78bfa; height:4px; cursor:pointer; background:rgba(255,255,255,0.1); border-radius:4px; }
+
 .iz-controls { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 16px; }
 .iz-controls .tool-field { flex: 1; min-width: 140px; margin-bottom: 0; }
 .iz-controls input[type=range] { width: 100%; }
@@ -1281,7 +1547,7 @@ ul { list-style: none; }
     display: flex; flex-direction: column; gap: 2px;
     position: fixed; top: 0; left: -280px; width: 260px; height: 100vh;
     z-index: 100000; padding: 80px 16px 20px;
-    background: rgba(8,10,15,0.75);
+    background: rgba(8,10,15,0.55);
     backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
     border-right: 1px solid rgba(255,255,255,0.06);
     transition: left 0.3s cubic-bezier(0.16,1,0.3,1);
