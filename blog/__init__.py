@@ -76,6 +76,9 @@ def init_db(app):
         # ── 迁移 FeaturedCard.icon 字段长度 ────
         _migrate_featured_icon(app)
 
+        # ── 迁移 Post.content 从 TEXT 到 MEDIUMTEXT ────
+        _migrate_post_content(app)
+
         # ── 添加示例价格追踪商品（首次启动） ─────
         from .crawler import init_sample_products
         init_sample_products()
@@ -136,6 +139,21 @@ def _migrate_featured_icon(app):
                 'ALTER TABLE featured_cards MODIFY icon VARCHAR(256) DEFAULT \'✦\''
             ))
             db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+
+def _migrate_post_content(app):
+    """迁移 Post.content 从 TEXT 到 MEDIUMTEXT（支持长文）。"""
+    engine = db.get_engine()
+    dialect = engine.dialect.name
+    if dialect == 'mysql':
+        try:
+            db.session.execute(db.text(
+                'ALTER TABLE posts MODIFY content MEDIUMTEXT NOT NULL'
+            ))
+            db.session.commit()
+            app.logger.info('迁移: posts.content 已扩展为 MEDIUMTEXT')
         except Exception:
             db.session.rollback()
 
