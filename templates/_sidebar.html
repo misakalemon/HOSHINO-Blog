@@ -58,7 +58,7 @@
                 <a href="{{ url_for('blog.single_post', slug=rp.slug) }}">
                     <!-- 有封面图则显示缩略图，否则显示默认图标 -->
                     {% if rp.cover_image %}
-                    <img src="{{ url_for('blog.thumbnail', path=rp.cover_image, w=120) }}" alt="{{ rp.title }}" loading="lazy">
+                    <img src="{{ url_for('blog.thumbnail', path=rp.cover_image, w=120) }}" alt="{{ rp.title }}" loading="lazy" decoding="async">
                     {% else %}
                     ✦
                     {% endif %}

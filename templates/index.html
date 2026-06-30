@@ -72,8 +72,8 @@
                             {% if post.cover_image %}
                             <a href="{{ url_for('blog.single_post', slug=post.slug) }}">
                                 <div class="img-glow" style="margin-bottom:1rem">
-                                    <!-- thumbnail 路由生成缩略图，onerror 隐藏加载失败的图片 -->
-                                    <img src="{{ url_for('blog.thumbnail', path=post.cover_image, w=400) }}" alt="{{ post.title }}" loading="lazy" style="width:100%;display:block;border-radius:14px" onerror="this.style.display='none'">
+                                    <!-- thumbnail 路由生成 WebP 缩略图，onerror 隐藏加载失败的图片 -->
+                                    <img src="{{ url_for('blog.thumbnail', path=post.cover_image, w=400) }}" alt="{{ post.title }}" loading="lazy" decoding="async"{% if loop.first %} fetchpriority="high"{% endif %} style="width:100%;display:block;border-radius:14px" onerror="this.style.display='none'">
                                 </div>
                             </a>
                             {% endif %}

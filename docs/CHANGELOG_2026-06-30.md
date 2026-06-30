@@ -102,6 +102,14 @@
 - `updateGlow()` 去回流：`getBoundingClientRect()` 从 rAF 循环移到 resize/scroll 事件
 - `glow-orb` GPU 合成：添加 `will-change: filter` + `transform: translateZ(0)`
 
+### 博客卡片图片传输优化
+- 缩略图路由默认输出 WebP（体积比 JPEG 小 30-50%），支持 `?fmt=jpg|png` 回退
+- PIL WebP 输出：`quality=80, method=6`（最佳压缩），RGBA 图片自动转 RGB 再存 JPEG
+- 缓存版本升至 `v3`，自动清理旧版 `.webp`/`.jpg`/`.png` 缓存磁盘文件
+- 所有卡片图片添加 `decoding="async"` 异步解码，不阻塞渲染
+- 首屏文章封面添加 `fetchpriority="high"` 提升 LCP
+- 文章详情页封面 `fetchpriority="high"`，作者头像 `loading="lazy"`
+
 ---
 
 ## 历史记录

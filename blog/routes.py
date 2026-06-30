@@ -40,7 +40,7 @@ from .models import Category, Comment, FeaturedCard, Post, db, post_categories
 logger = logging.getLogger(__name__)
 
 # 缩略图缓存版本号（修改此值使旧缓存自动失效并清理）
-THUMB_CACHE_VER = 'v2'
+THUMB_CACHE_VER = 'v3'
 
 
 # ── 侧边栏数据缓存（Redis，降级友好） ─────────
@@ -406,11 +406,14 @@ def thumbnail():
     URL 参数：
       path — 图片相对路径（相对于 static/，如 'uploads/abc.jpg'）
       w    — 目标宽度（px，默认 400）
+      fmt  — 输出格式（webp/jpg/png，默认 webp）
 
     特性：
-      - 保持原格式（JPEG/PNG），不转 WebP（兼容性更好）
+      - 默认输出 WebP（体积比 JPEG 小 30-50%），保持原宽高比
+      - 支持格式覆盖（?fmt=jpg 用于兼容旧浏览器）
       - 磁盘缓存 + 版本号控制（升级时自动失效）
       - 路径安全检查（禁止 ../ 遍历）
+      - RGBA 图片自动转换为 RGB 再存 JPEG
       - 出错时返回原始图片（不会中断页面渲染）
 
     Template: none（直接返回图片二进制数据）
@@ -438,8 +441,17 @@ def thumbnail():
             b'\x01\x00\x01\x00\x00\x02\x02D\x01\x00;',
             mimetype='image/gif', headers={'Cache-Control': 'no-cache'}
         )
+
+    # ── 输出格式 ──────────────────────────────
+    fmt_param = request.args.get('fmt', '').upper()
+    if fmt_param in ('JPEG', 'JPG'):
+        output_fmt, ext, save_kwargs, mime_type = 'JPEG', '.jpg', {'quality': 85, 'optimize': True}, 'image/jpeg'
+    elif fmt_param == 'PNG':
+        output_fmt, ext, save_kwargs, mime_type = 'PNG', '.png', {'quality': 85, 'optimize': True}, 'image/png'
+    else:
+        output_fmt, ext, save_kwargs, mime_type = 'WEBP', '.webp', {'quality': 80, 'method': 6}, 'image/webp'
+
     # 生成缓存文件路径
-    ext = os.path.splitext(path)[1].lower() or '.jpg'
     cache_key = f'{THUMB_CACHE_VER}_{path.replace("/","_")}_{w}{ext}'
     cache_dir = os.path.join(current_app.root_path, 'static', '.thumb_cache')
     cache_path = os.path.join(cache_dir, cache_key)
@@ -455,7 +467,7 @@ def thumbnail():
         if cache_mtime >= img_mtime:
             with open(cache_path, 'rb') as f:
                 return Response(f.read(),
-                    mimetype=mimetypes.guess_type(cache_key)[0] or 'image/jpeg',
+                    mimetype=mime_type,
                     headers={'Cache-Control': 'public, max-age=2592000'}
                 )
     # ── 生成缩略图 ──────────────────────────
@@ -468,11 +480,13 @@ def thumbnail():
             new_w = int(img.width * ratio)
             new_h = int(img.height * ratio)
             img = img.resize((new_w, new_h), Image.LANCZOS)
-        fmt = 'JPEG' if ext in ('.jpg', '.jpeg') else 'PNG'
-        img.save(cache_path, fmt, quality=85, optimize=True)
+        # JPEG 不支持 RGBA，先转换
+        if output_fmt == 'JPEG' and img.mode in ('RGBA', 'P'):
+            img = img.convert('RGB')
+        img.save(cache_path, output_fmt, **save_kwargs)
         with open(cache_path, 'rb') as f:
             return Response(f.read(),
-                mimetype=mimetypes.guess_type(cache_key)[0] or 'image/jpeg',
+                mimetype=mime_type,
                 headers={'Cache-Control': 'public, max-age=2592000'}
             )
     except Exception as e:
