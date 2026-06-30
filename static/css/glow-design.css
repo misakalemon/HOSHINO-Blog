@@ -684,6 +684,13 @@ ul { list-style: none; }
   padding-left: 20px; color: rgba(255,255,255,0.5);
   font-style: italic; margin: 1em 0;
 }
+.post-content table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+.post-content th, .post-content td {
+  border: 1px solid rgba(255,255,255,0.15);
+  padding: 10px 14px; text-align: left;
+}
+.post-content th { background: rgba(255,255,255,0.05); font-weight: 600; }
+.post-content td { background: rgba(255,255,255,0.02); }
 /* author box */
 /* 文章底部作者信息卡片：水平布局 + 头像 + 简介 */
 .author-box {
