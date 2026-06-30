@@ -15,6 +15,8 @@
 {% block title %}{{ '编辑' if editing else '新建' }}文章{% endblock %}
 {% block extra_head %}
 <meta name="csrf-token" content="{{ csrf_token() }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/prism-okaidia.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/prism-line-numbers.min.css') }}">
 <style>
 /* --- 多步骤导航 --- */
 .steps { display:flex; gap:0; margin-bottom:28px; background:rgba(255,255,255,0.02); border-radius:14px; padding:4px; border:1px solid var(--border-subtle); }
@@ -56,18 +58,9 @@
 #rte-content h3 { font-size:18px; font-weight:600; color:var(--accent); margin:12px 0 6px; }
 #rte-content p { margin-bottom:8px; }
 #rte-content blockquote { border-left:3px solid var(--accent); padding:8px 16px; margin:12px 0; background:rgba(108,66,209,0.06); border-radius:0 8px 8px 0; color:var(--text-secondary); font-style:italic; }
-#rte-content pre { background:rgba(0,0,0,0.3); border-radius:8px; padding:12px 16px; font-family:'JetBrains Mono',monospace; font-size:13px; overflow-x:auto; margin:12px 0; color:var(--accent-green); }
-#rte-content a { color:var(--accent); text-decoration:underline; }
-#rte-content ul, #rte-content ol { padding-left:24px; margin-bottom:8px; }
-#rte-content ul li { list-style:disc; margin-bottom:4px; }
-#rte-content ol li { list-style:decimal; margin-bottom:4px; }
-#rte-content img { max-width:100%; border-radius:8px; margin:8px 0; }
-#rte-content table { width:100%; border-collapse:collapse; margin:12px 0; }
-#rte-content td, #rte-content th { border:1px solid var(--border-subtle); padding:8px 12px; }
-#rte-content th { background:rgba(255,255,255,0.04); font-weight:600; color:var(--text-primary); }
-#rte-content hr { border:none; border-top:1px dashed var(--border-subtle); margin:20px 0; }
-#rte-content code { background:rgba(108,66,209,0.15); padding:2px 6px; border-radius:4px; font-family:'JetBrains Mono',monospace; font-size:0.9em; color:var(--accent); }
-#rte-content pre code { background:none; padding:0; color:inherit; font-size:inherit; }
+#rte-content pre { background:rgba(0,0,0,0.45); border-radius:8px; padding:14px 16px; font-family:'JetBrains Mono','Fira Code',monospace; font-size:13px; overflow-x:auto; margin:12px 0; color:#e6e6e6; border:1px solid rgba(255,255,255,0.06); }
+#rte-content pre code { background:none; padding:0; color:inherit; font-size:inherit; font-family:inherit; line-height:1.6; }
+#rte-content code { background:rgba(255,80,140,0.12); padding:2px 7px; border-radius:4px; font-family:'JetBrains Mono','Fira Code',monospace; font-size:0.85em; color:#ff6b9d; border:1px solid rgba(255,80,140,0.08); }
 
 /* 预览区域 */
 #cover-preview { margin-top:12px; }
@@ -123,7 +116,7 @@
                     <button type="button" onclick="rte('undo')" title="撤销">↩</button>
                     <button type="button" onclick="rte('redo')" title="重做">↪</button>
                     <span class="sep"></span>
-                    <select onchange="rte('formatBlock',this.value);this.selectedIndex=0">
+                    <select onchange="onFormatChange(this)">
                         <option value="">段落</option>
                         <option value="h1">H1 标题</option>
                         <option value="h2">H2 标题</option>
@@ -264,6 +257,67 @@ function rteCode() {
   } else {
     rte('insertHTML', false, '<code>代码</code>');
   }
+}
+function onFormatChange(select) {
+  var val = select.value;
+  select.selectedIndex = 0;
+  if (val === 'pre') {
+    insertCodeBlock();
+  } else if (val) {
+    rte('formatBlock', val);
+  }
+}
+function insertCodeBlock() {
+  var lang = prompt('输入代码语言 (python / javascript / html / css / sql / bash / json / yaml 等):', 'python');
+  if (lang === null) return;
+  var cls = lang ? 'language-' + lang.trim().toLowerCase() : 'language-none';
+  var sel = window.getSelection().toString();
+  var html;
+  if (sel) {
+    html = '<pre class="line-numbers"><code class="' + cls + '">' + sel.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</code></pre>';
+  } else {
+    html = '<pre class="line-numbers"><code class="' + cls + '">\n\n</code></pre>';
+  }
+  loadPrism().then(function() {
+    rte('insertHTML', false, html);
+    setTimeout(highlightEditorCode, 100);
+  });
+}
+function highlightEditorCode() {
+  if (typeof Prism !== 'undefined') {
+    document.querySelectorAll('#rte-content pre code').forEach(function(block) {
+      Prism.highlightElement(block);
+    });
+  }
+}
+function loadPrism() {
+  if (typeof Prism !== 'undefined') return Promise.resolve();
+  return new Promise(function(resolve) {
+    var link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = '/static/vendor/prism-okaidia.min.css';
+    document.head.appendChild(link);
+    var link2 = document.createElement('link');
+    link2.rel = 'stylesheet';
+    link2.href = '/static/vendor/prism-line-numbers.min.css';
+    document.head.appendChild(link2);
+    var s = document.createElement('script');
+    s.src = '/static/vendor/prism.min.js';
+    s.onload = resolve;
+    document.head.appendChild(s);
+  });
+}
+function loadPrismLang(lang) {
+  var map = {python:1,javascript:1,js:1,html:'markup',css:1,sql:1,bash:1,json:1,yaml:1};
+  var name = map[lang] || lang;
+  if (name === 1) name = lang;
+  return new Promise(function(resolve) {
+    if (document.querySelector('script[src*="prism-'+name+'"]')) { resolve(); return; }
+    var s = document.createElement('script');
+    s.src = '/static/vendor/prism-' + name + '.min.js';
+    s.onload = resolve;
+    document.head.appendChild(s);
+  });
 }
 function rteImportFile() {
   var input = document.createElement('input');
@@ -555,6 +609,13 @@ function removeCover(e) {
     document.getElementById('coverPlaceholder').style.display = 'none';
     document.getElementById('coverUpload').classList.add('has-image');
   }
+})();
+
+// 加载 Prism 并高亮编辑器中已有的代码块
+(function() {
+  loadPrism().then(function() {
+    highlightEditorCode();
+  });
 })();
 </script>
 {% endblock %}

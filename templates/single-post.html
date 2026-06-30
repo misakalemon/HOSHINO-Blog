@@ -12,6 +12,10 @@
      ============================================================ -->
 {% extends 'base.html' %}
 {% block title %}{{ post.title }} - Hoshino{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/prism-okaidia.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/prism-line-numbers.min.css') }}">
+{% endblock %}
 {% block content %}
 
 <div class="content" style="padding-top:80px">
@@ -103,5 +107,17 @@
         </div>
     </div>
 </div>
+
+<script src="{{ url_for('static', filename='vendor/prism.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/prism-markup.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/prism-css.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/prism-javascript.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/prism-python.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/prism-sql.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/prism-bash.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/prism-json.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/prism-yaml.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/prism-line-numbers.min.js') }}"></script>
+<script>Prism.highlightAll();</script>
 
 {% endblock %}

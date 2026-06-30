@@ -666,11 +666,11 @@ ul { list-style: none; }
   color: rgba(255,255,255,0.95);
 }
 .post-content p { margin-bottom: 1em; }
-.post-content code {
+.post-content code:not([class*="language-"]) {
   background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 6px;
   font-size: 0.85rem;
 }
-.post-content pre {
+.post-content pre:not([class*="language-"]) {
   background: rgba(255,255,255,0.03);
   border: 1px solid rgba(255,255,255,0.06);
   padding: 20px; border-radius: 16px; overflow-x: auto; margin-bottom: 1em;
