@@ -827,6 +827,7 @@ ul { list-style: none; }
 .admin-main { margin-left: 240px; flex: 1; padding: 28px 32px; min-height: 100vh; position: relative; z-index: 1; }
 .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
 .admin-table-wrapper { overflow-x: auto; }
+@media (min-width: 769px) { .admin-table-wrapper { overflow-x: visible; } }
 .admin-header h3 { font-size: 1.3rem; font-weight: 400; color: rgba(255,255,255,0.8); }
 /* 管理卡片：与 glass-card 类似，带鼠标追踪光晕 */
 .admin-card {
@@ -891,7 +892,7 @@ ul { list-style: none; }
 .admin-table td a:not(.btn):hover { color: #b8d6ff; }
 .admin-row { display: flex; gap: 16px; flex-wrap: wrap; }
 .admin-row > * { flex: 1; min-width: 200px; }
-.admin-container { max-width: 1100px; margin: 0 auto; width: 100%; }
+.admin-container { max-width: 1400px; margin: 0 auto; width: 100%; }
 .admin-toggle { display: none; }
 .admin-fill { flex: 1; min-width: 0; }
 /* 后台个人资料头部：头像 + 名称 + 邮箱 */
