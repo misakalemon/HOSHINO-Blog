@@ -5,7 +5,7 @@
     <h3>{{ '编辑' if editing else '新建' }}用户</h3>
     <a href="{{ url_for('admin.user_list') }}" class="btn btn-ghost">← 返回</a>
 </div>
-<div class="admin-card" data-glow>
+<div class="admin-card">
     <form method="POST">
         {{ form.hidden_tag() }}
         <div class="form-group"><label>用户名</label><input type="text" name="username" value="{{ form.username.data or '' }}" required></div>
