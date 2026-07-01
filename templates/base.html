@@ -87,5 +87,12 @@
     </span>
 </footer>
 
+<div class="cookie-banner" id="cookieBanner">
+    <span>本站使用 Cookie 来改善体验。<a href="{{ url_for('blog.about') }}" style="color:rgba(0,150,255,0.8);text-decoration:underline">了解更多</a></span>
+    <button onclick="document.getElementById('cookieBanner').style.display='none';localStorage.setItem('cookie_consent','1')">同意</button>
+</div>
+
+<script>(function(){if(localStorage.getItem('cookie_consent'))document.getElementById('cookieBanner').style.display='none'})();</script>
+
 </body>
 </html>

@@ -1597,3 +1597,20 @@ ul { list-style: none; }
   .wc-stat { padding: 10px; }
   .wc-stat-num { font-size: 1.1rem; }
 }
+
+/* ── Cookie 同意横幅 ──────────────────────────── */
+.cookie-banner {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 999999;
+  background: rgba(10,12,20,0.95); backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid rgba(255,255,255,0.06);
+  padding: 14px 24px; display: flex; align-items: center;
+  justify-content: center; gap: 16px; flex-wrap: wrap;
+  font-size: 0.85rem; color: rgba(255,255,255,0.7);
+}
+.cookie-banner button {
+  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1);
+  color: #e8edf5; padding: 6px 22px; border-radius: 20px; cursor: pointer;
+  font-size: 0.85rem; transition: background 0.2s; white-space: nowrap;
+}
+.cookie-banner button:hover { background: rgba(255,255,255,0.15); }
