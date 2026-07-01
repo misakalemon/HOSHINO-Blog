@@ -31,7 +31,7 @@
     <h3>{{ '编辑' if editing else '新建' }}特色卡片</h3>
     <a href="{{ url_for('admin.featured_card_list') }}" class="btn btn-ghost">← 返回</a>
 </div>
-<div class="admin-card" data-glow>
+<div class="admin-card">
     <form method="POST">
         {{ form.hidden_tag() }}
         <div class="form-group"><label>标题</label><input type="text" name="title" value="{{ form.title.data or '' }}" required></div>

@@ -36,7 +36,7 @@
 <!-- 特色卡片网格：遍历所有特色卡片 -->
 <div class="featured-grid">
     {% for card in featured_cards %}
-    <div class="featured-card" data-glow>
+    <div class="featured-card">
         <!-- 卡片图标区域：支持 emoji 图标或图片 URL -->
         <div class="featured-card-img {% if card.icon and (card.icon.startswith('uploads/') or card.icon.startswith('/static/')) %}has-img{% endif %}" style="background:linear-gradient(145deg,#1a1030,#2a1a40);display:flex;align-items:center;justify-content:center;{% if card.icon and (card.icon.startswith('uploads/') or card.icon.startswith('/static/')) %}overflow:hidden;cursor:zoom-in{% else %}font-size:3rem{% endif %}">{% if card.icon and (card.icon.startswith('uploads/') or card.icon.startswith('/static/')) %}<img src="{{ url_for('static', filename=card.icon.replace('/static/', '')) }}" alt="{{ card.title }}" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in" onclick="event.stopPropagation();openLightbox(this.src)">{% else %}{{ card.icon or '✦' }}{% endif %}</div>
         <div class="featured-card-body">
@@ -66,7 +66,7 @@
                 <!-- 遍历文章列表 -->
                 {% for post in posts.items %}
                 <div class="masonry-item">
-                    <div class="glass-card" data-glow>
+                    <div class="glass-card">
                         <div class="card-content">
                             <!-- 文章封面图（可选） -->
                             {% if post.cover_image %}
