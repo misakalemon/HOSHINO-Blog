@@ -874,15 +874,17 @@ ul { list-style: none; }
 /* 管理表格 */
 .admin-table { width: 100%; border-collapse: collapse; }
 .admin-table th {
-  padding: 10px 12px; text-align: left;
-  font-size: 0.65rem; font-weight: 600; text-transform: uppercase;
+  padding: 14px 16px; text-align: left;
+  font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
   letter-spacing: 0.06em; color: rgba(255,255,255,0.3);
   border-bottom: 1px solid rgba(255,255,255,0.04);
+  white-space: nowrap;
 }
 .admin-table td {
-  padding: 10px 12px; font-size: 0.8rem;
+  padding: 14px 16px; font-size: 0.85rem;
   color: rgba(255,255,255,0.5);
   border-bottom: 1px solid rgba(255,255,255,0.04);
+  white-space: nowrap;
 }
 .admin-table tr:hover td { background: rgba(255,255,255,0.01); }
 .admin-table td a:not(.btn) { color: #7abfff; font-weight: 500; }
