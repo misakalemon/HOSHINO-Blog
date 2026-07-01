@@ -1,4 +1,68 @@
 services:
+  mysql:
+    image: mysql:8.0
+    container_name: hoshino-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
+      MYSQL_DATABASE: hoshino_blog
+      MYSQL_USER: hoshino
+      MYSQL_PASSWORD: hoshino_pass
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hoshino_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: hoshino-redis
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - hoshino_net
+
+  app:
+    build: .
+    container_name: hoshino-blog
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - DATABASE_URL=mysql+pymysql://hoshino:hoshino_pass@mysql:3306/hoshino_blog?charset=utf8mb4
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-CHANGE_ME}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@localhost}
+      - ADMIN_DISPLAY_NAME=${ADMIN_DISPLAY_NAME:-Admin}
+      - FLASK_ENV=production
+      - SESSION_COOKIE_SECURE=false
+      - SCRAPING_PROXY=${SCRAPING_PROXY:-}
+      - EXA_API_KEY=${EXA_API_KEY:-}
+    volumes:
+      - uploads:/app/static/uploads
+      - secret_keys:/app/.secret_keys
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - hoshino_net
+
   chrome:
     image: selenium/standalone-chrome:4.28.1
     container_name: hoshino-chrome
@@ -13,6 +77,11 @@ services:
       - SE_NODE_SESSION_TIMEOUT=600
     networks:
       - hoshino_net
+
+volumes:
+  mysql_data:
+  uploads:
+  secret_keys:
 
 networks:
   hoshino_net:
