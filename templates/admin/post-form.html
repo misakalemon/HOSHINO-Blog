@@ -100,7 +100,7 @@
 
     <!-- ===== Step 1: 基本信息 ===== -->
     <div class="step-panel active" id="panel1">
-        <div class="admin-card">
+        <div class="admin-card" data-glow>
             <div class="form-group">
                 <label>标题</label>
                 <input type="text" name="title" value="{{ form.title.data or '' }}" required placeholder="输入文章标题">
@@ -123,7 +123,7 @@
 
     <!-- ===== Step 2: 正文编辑 ===== -->
     <div class="step-panel" id="panel2">
-        <div class="admin-card">
+        <div class="admin-card" data-glow>
             <div class="form-group">
                 <label>正文</label>
                 <!-- 全量富文本工具栏 -->
@@ -195,7 +195,7 @@
 
     <!-- ===== Step 3: 封面与发布 ===== -->
     <div class="step-panel" id="panel3">
-        <div class="admin-card">
+        <div class="admin-card" data-glow>
             <div class="admin-row">
                 <div style="flex:1.2;min-width:0">
                     <div class="form-group">

@@ -16,7 +16,7 @@
     <h3>{{ '编辑' if editing else '新建' }}分类</h3>
     <a href="{{ url_for('admin.category_list') }}" class="btn btn-ghost">← 返回</a>
 </div>
-<div class="admin-card">
+<div class="admin-card" data-glow>
     <form method="POST">
         {{ form.hidden_tag() }}
         <div class="form-group"><label>名称</label><input type="text" name="name" value="{{ form.name.data or '' }}" required></div>
