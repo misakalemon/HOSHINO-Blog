@@ -51,7 +51,7 @@ import uuid
 from collections import defaultdict
 from functools import wraps
 
-from flask import abort, current_app, flash, jsonify, redirect, render_template, request, url_for
+from flask import abort, current_app, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
 from . import admin_bp
@@ -138,6 +138,7 @@ def login():
             user.last_login_ip = ip
             user.login_count = (user.login_count or 0) + 1
             db.session.commit()
+            session.permanent = True
             login_user(user)
             return redirect(url_for('admin.dashboard'))
         _login_attempts[ip].append(now)
