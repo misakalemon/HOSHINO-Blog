@@ -1,14 +1,3 @@
-<!-- ============================================================
-     用户编辑/新建表单 (admin/user-form.html)
-     用途：管理员创建或编辑用户（用户名、邮箱、密码、角色等）
-     继承：admin/base_admin.html
-     定义块：
-       - title         : 页面标题（"编辑用户" 或 "新建用户"）
-       - admin_content : 后台主体内容
-     模板变量：
-       - editing  : 布尔值，是否为编辑模式
-       - form     : Flask-WTF 用户表单对象
-     ============================================================ -->
 {% extends 'admin/base_admin.html' %}
 {% block title %}{{ '编辑' if editing else '新建' }}用户{% endblock %}
 {% block admin_content %}
@@ -21,11 +10,18 @@
         {{ form.hidden_tag() }}
         <div class="form-group"><label>用户名</label><input type="text" name="username" value="{{ form.username.data or '' }}" required></div>
         <div class="form-group"><label>邮箱</label><input type="email" name="email" value="{{ form.email.data or '' }}" required></div>
-        <!-- 编辑模式时密码留空表示保持不变 -->
         <div class="form-group"><label>密码{{ '(留空则保持不变)' if editing else '' }}</label><input type="password" name="password" {{ 'required' if not editing else '' }}></div>
         <div class="form-group"><label>显示名</label><input type="text" name="display_name" value="{{ form.display_name.data or '' }}"></div>
         <div class="form-group"><label>个人简介</label><textarea name="bio" rows="3">{{ form.bio.data or '' }}</textarea></div>
-        <div class="form-group"><label><input type="checkbox" name="is_admin" {% if form.is_admin.data %}checked{% endif %}> 管理员</label></div>
+        <div class="form-group"><label>个人网站</label><input type="url" name="website" value="{{ form.website.data or '' }}" placeholder="https://"></div>
+        <div class="form-group"><label>角色</label>
+            <select name="role">
+                <option value="user" {% if form.role.data == 'user' %}selected{% endif %}>用户</option>
+                <option value="author" {% if form.role.data == 'author' %}selected{% endif %}>作者</option>
+                <option value="editor" {% if form.role.data == 'editor' %}selected{% endif %}>编辑</option>
+                <option value="admin" {% if form.role.data == 'admin' %}selected{% endif %}>管理员</option>
+            </select>
+        </div>
         <button type="submit" class="btn btn-primary">{{ '更新' if editing else '创建' }}</button>
     </form>
 </div>

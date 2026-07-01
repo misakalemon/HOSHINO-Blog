@@ -71,7 +71,13 @@ class UserForm(FlaskForm):
     password = PasswordField('密码', validators=[Optional(), Length(min=6)])           # 密码，选填（留空不修改）
     display_name = StringField('显示名', validators=[Optional(), Length(max=128)])     # 显示昵称，选填
     bio = TextAreaField('个人简介', validators=[Optional()])                            # 个人简介，选填
-    is_admin = BooleanField('管理员')                                                   # 是否授予管理员权限
+    website = StringField('个人网站', validators=[Optional(), Length(max=256)])         # 个人网站链接，选填
+    role = SelectField('角色', choices=[
+        ('user', '用户'),
+        ('author', '作者'),
+        ('editor', '编辑'),
+        ('admin', '管理员'),
+    ], default='user')
 
 
 class ProfileForm(FlaskForm):
@@ -79,10 +85,11 @@ class ProfileForm(FlaskForm):
 
     与 UserForm 的区别：
       - username 不可修改（保持唯一性）
-      - 字段更少，仅显示名/简介/邮箱/密码
+      - 字段更少，仅显示名/简介/网站/邮箱/密码
     """
     display_name = StringField('显示名', validators=[Optional(), Length(max=128)])     # 显示昵称，选填
     bio = TextAreaField('个人简介', validators=[Optional()])                            # 个人简介，选填
+    website = StringField('个人网站', validators=[Optional(), Length(max=256)])         # 个人网站链接，选填
     email = StringField('邮箱', validators=[Optional(), Email(), Length(max=120)])     # 邮箱，选填
     password = PasswordField('新密码（留空则不修改）', validators=[Optional(), Length(min=6)])  # 新密码，选填
 

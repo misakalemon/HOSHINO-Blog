@@ -1,14 +1,3 @@
-<!-- ============================================================
-     用户列表管理 (admin/user-list.html)
-     用途：后台用户管理表格，展示所有用户信息
-     继承：admin/base_admin.html
-     定义块：
-       - title         : 页面标题
-       - admin_content : 后台主体内容
-     模板变量：
-       - users        : 全部用户列表
-       - format_date  : 日期格式化函数
-     ============================================================ -->
 {% extends 'admin/base_admin.html' %}
 {% block title %}用户管理{% endblock %}
 {% block admin_content %}
@@ -19,22 +8,41 @@
 <div class="admin-card" data-glow>
     <div class="admin-table-wrapper">
     <table class="admin-table">
-        <tr><th>ID</th><th>用户名</th><th>邮箱</th><th>显示名</th><th>角色</th><th>文章数</th><th>创建时间</th></tr>
-        <!-- 遍历用户列表 -->
+        <tr><th>ID</th><th>用户名</th><th>邮箱</th><th>显示名</th><th>角色</th><th>状态</th><th>文章数</th><th>登录次数</th><th>最后登录</th><th>创建时间</th><th>操作</th></tr>
         {% for u in users %}
         <tr>
             <td data-label="ID">{{ u.id }}</td>
             <td data-label="用户名"><strong>{{ u.username }}</strong></td>
             <td data-label="邮箱">{{ u.email }}</td>
             <td data-label="显示名">{{ u.display_name or '-' }}</td>
-            <!-- 角色徽章：管理员或普通用户 -->
-            <td data-label="角色"><span class="badge {{ 'badge-admin' if u.is_admin else 'badge-user' }}">{{ '管理员' if u.is_admin else '用户' }}</span></td>
-            <!-- 调用 posts.count() 获取该用户的文章数 -->
+            <td data-label="角色"><span class="badge {{ u.role_badge_class }}">{{ u.role_label }}</span></td>
+            <td data-label="状态">
+                {%- if u.is_active -%}
+                <span style="color:rgba(0,200,100,0.8)">● 正常</span>
+                {%- else -%}
+                <span style="color:rgba(255,60,60,0.8)">● 禁用</span>
+                {%- endif -%}
+            </td>
             <td data-label="文章数">{{ u.posts.count() }}</td>
+            <td data-label="登录次数">{{ u.login_count or 0 }}</td>
+            <td data-label="最后登录">{{ format_date(u.last_login_at, '%m-%d %H:%M') if u.last_login_at else '-' }}</td>
             <td data-label="创建时间">{{ format_date(u.created_at, '%Y-%m-%d') }}</td>
+            <td data-label="操作">
+                <a href="{{ url_for('admin.edit_user', id=u.id) }}" class="btn btn-sm">编辑</a>
+                {% if u.id != current_user.id %}
+                <form method="POST" action="{{ url_for('admin.toggle_user_active', id=u.id) }}" style="display:inline">
+                    <button type="submit" class="btn btn-sm" style="background:rgba(255,255,255,0.05)">
+                        {{ '禁用' if u.is_active else '启用' }}
+                    </button>
+                </form>
+                <form method="POST" action="{{ url_for('admin.delete_user', id=u.id) }}" style="display:inline" onsubmit="return confirm('确定要删除用户 {{ u.username }} 吗？')">
+                    <button type="submit" class="btn btn-sm" style="background:rgba(255,60,60,0.2);color:rgba(255,100,100,0.9)">删除</button>
+                </form>
+                {% endif %}
+            </td>
         </tr>
         {% else %}
-        <tr><td colspan="7">暂无用户</td></tr>
+        <tr><td colspan="11">暂无用户</td></tr>
         {% endfor %}
     </table>
     </div>

@@ -785,6 +785,14 @@ ul { list-style: none; }
   background: rgba(255, 60, 60, 0.1); color: rgba(255, 100, 100, 0.8);
   border: 1px solid rgba(255, 60, 60, 0.15);
 }
+.badge-editor {
+  background: rgba(0, 120, 255, 0.1); color: rgba(0, 150, 255, 0.8);
+  border: 1px solid rgba(0, 120, 255, 0.15);
+}
+.badge-author {
+  background: rgba(255, 180, 0, 0.1); color: rgba(255, 180, 0, 0.8);
+  border: 1px solid rgba(255, 180, 0, 0.15);
+}
 
 /* ── 19. 后台管理布局 ────────────────────────── */
 /* 固定侧边栏：240px 宽、全高、毛玻璃、独立滚动 */

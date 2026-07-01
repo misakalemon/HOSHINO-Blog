@@ -36,6 +36,7 @@
 
         <div class="form-group"><label>显示名</label><input type="text" name="display_name" value="{{ form.display_name.data or '' }}"></div>
         <div class="form-group"><label>个人简介</label><textarea name="bio" rows="3">{{ form.bio.data or '' }}</textarea></div>
+        <div class="form-group"><label>个人网站</label><input type="url" name="website" value="{{ form.website.data or '' }}" placeholder="https://"></div>
         <div class="form-group"><label>邮箱</label><input type="email" name="email" value="{{ form.email.data or '' }}"></div>
         <!-- 密码留空表示不修改 -->
         <div class="form-group"><label>新密码（留空则保持当前密码）</label><input type="password" name="password"></div>

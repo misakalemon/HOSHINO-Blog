@@ -76,27 +76,22 @@ def _invalidate_sidebar_cache():
 # 权限控制装饰器
 # ═══════════════════════════════════════════════
 def admin_required(f):
-    """装饰器：仅允许管理员访问。
-
-    组合了 @login_required（必须登录）和 is_admin 检查。
-    非管理员用户访问会返回 403 Forbidden。
-
-    用法：
-        @admin_bp.route('/posts')
-        @admin_required
-        def post_list():
-            ...
-
-    Args:
-        f: 被装饰的视图函数
-
-    Returns:
-        function: 包装后的函数，自动执行登录和权限检查
-    """
+    """装饰器：仅允许管理员访问。"""
     @wraps(f)
     @login_required
     def decorated_function(*args, **kwargs):
         if not current_user.is_admin:
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+def editor_required(f):
+    """装饰器：允许管理员和编辑访问。"""
+    @wraps(f)
+    @login_required
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_editor:
             abort(403)
         return f(*args, **kwargs)
     return decorated_function
@@ -139,6 +134,10 @@ def login():
         user = User.query.filter_by(username=form.username.data).first()
         if user and user.check_password(form.password.data):
             _login_attempts[ip] = []
+            user.last_login_at = datetime.datetime.utcnow()
+            user.last_login_ip = ip
+            user.login_count = (user.login_count or 0) + 1
+            db.session.commit()
             login_user(user)
             return redirect(url_for('admin.dashboard'))
         _login_attempts[ip].append(now)
@@ -162,7 +161,7 @@ def logout():
 # ═══════════════════════════════════════════════
 
 @admin_bp.route('/')
-@admin_required
+@editor_required
 def dashboard():
     """管理后台首页：显示统计数据概览。
 
@@ -217,7 +216,7 @@ def dashboard():
 # ═══════════════════════════════════════════════
 
 @admin_bp.route('/posts')
-@admin_required
+@editor_required
 def post_list():
     """文章列表页（分页，每页 20 条）。
 
@@ -232,7 +231,7 @@ def post_list():
 
 
 @admin_bp.route('/posts/new', methods=['GET', 'POST'])
-@admin_required
+@editor_required
 def new_post():
     """新建文章。支持多分类选择（最多 15 个）。
 
@@ -302,7 +301,7 @@ def new_post():
 
 
 @admin_bp.route('/posts/<int:id>/edit', methods=['GET', 'POST'])
-@admin_required
+@editor_required
 def edit_post(id):
     """编辑文章。
 
@@ -376,7 +375,7 @@ def edit_post(id):
 
 
 @admin_bp.route('/posts/<int:id>/delete', methods=['POST'])
-@admin_required
+@editor_required
 def delete_post(id):
     """删除文章（同时删除关联评论）。
 
@@ -405,7 +404,7 @@ def delete_post(id):
 # ═══════════════════════════════════════════════
 
 @admin_bp.route('/categories')
-@admin_required
+@editor_required
 def category_list():
     """分类列表页。
 
@@ -416,7 +415,7 @@ def category_list():
 
 
 @admin_bp.route('/categories/new', methods=['GET', 'POST'])
-@admin_required
+@editor_required
 def new_category():
     """新建分类。
 
@@ -440,7 +439,7 @@ def new_category():
 
 
 @admin_bp.route('/categories/<int:id>/edit', methods=['GET', 'POST'])
-@admin_required
+@editor_required
 def edit_category(id):
     """编辑分类。
 
@@ -463,7 +462,7 @@ def edit_category(id):
 
 
 @admin_bp.route('/categories/<int:id>/delete', methods=['POST'])
-@admin_required
+@editor_required
 def delete_category(id):
     """删除分类。同时从所有文章中移除该分类（多对多关联）。
 
@@ -489,7 +488,7 @@ def delete_category(id):
 # ═══════════════════════════════════════════════
 
 @admin_bp.route('/comments')
-@admin_required
+@editor_required
 def comment_list():
     """评论列表页（已分页）。
 
@@ -514,7 +513,7 @@ def comment_list():
 
 
 @admin_bp.route('/comments/<int:id>/approve', methods=['POST'])
-@admin_required
+@editor_required
 def approve_comment(id):
     """审核通过评论。
 
@@ -531,7 +530,7 @@ def approve_comment(id):
 
 
 @admin_bp.route('/comments/<int:id>/delete', methods=['POST'])
-@admin_required
+@editor_required
 def delete_comment(id):
     """删除评论。
 
@@ -576,7 +575,8 @@ def new_user():
             email=form.email.data,
             display_name=form.display_name.data,
             bio=form.bio.data,
-            is_admin=form.is_admin.data
+            website=form.website.data,
+            role=form.role.data
         )
         user.set_password(form.password.data)
         db.session.add(user)
@@ -606,8 +606,8 @@ def edit_user(id):
         user.email = form.email.data
         user.display_name = form.display_name.data
         user.bio = form.bio.data
-        user.is_admin = form.is_admin.data
-        # 密码留空则不修改
+        user.website = form.website.data
+        user.role = form.role.data
         if form.password.data:
             user.set_password(form.password.data)
         db.session.commit()
@@ -642,6 +642,24 @@ def delete_user(id):
     return redirect(url_for('admin.user_list'))
 
 
+@admin_bp.route('/users/<int:id>/toggle-active', methods=['POST'])
+@admin_required
+def toggle_user_active(id):
+    """切换用户的激活/禁用状态。
+
+    不能禁用自己。
+    """
+    user = User.query.get_or_404(id)
+    if user.id == current_user.id:
+        flash('不能禁用自己', 'error')
+        return redirect(url_for('admin.user_list'))
+    user.is_active = not user.is_active
+    db.session.commit()
+    status = '已启用' if user.is_active else '已禁用'
+    flash(f'用户 {user.username} {status}', 'success')
+    return redirect(url_for('admin.user_list'))
+
+
 # ═══════════════════════════════════════════════
 # 个人资料
 # ═══════════════════════════════════════════════
@@ -666,6 +684,7 @@ def profile():
     if form.validate_on_submit():
         current_user.display_name = form.display_name.data
         current_user.bio = form.bio.data
+        current_user.website = form.website.data
 
         # ── 头像上传 ──────────────────────────
         if 'avatar' in request.files:

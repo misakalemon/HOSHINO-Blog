@@ -49,6 +49,10 @@ def init_db(app):
         # 如果有则将其数据复制到新版的 post_categories 关联表
         _migrate_category_to_many2many(app)
 
+        # ── 迁移 is_admin 布尔值 → role 字符串 ──
+        # 必须在任何 User 查询之前执行，因为新字段还不存在于 MySQL 表中
+        _migrate_is_admin_to_role(app)
+
         # ── 创建默认管理员 ────────────────────────
         # 仅当 users 表中没有任何用户名为 "admin" 的记录时执行
         if not User.query.filter_by(username='admin').first():
@@ -127,6 +131,56 @@ def _migrate_category_to_many2many(app):
             rowcount
         )
     db.session.commit()
+
+
+def _migrate_is_admin_to_role(app):
+    """迁移：添加 role 字段 + 将 is_admin 布尔值转换为 role 字符串。
+
+    1. 检查并添加 role / last_login_at / last_login_ip / login_count / website 列
+    2. 将 is_admin=True 的用户设为 role='admin'
+    3. 删除旧的 is_admin 列
+    """
+    engine = db.get_engine()
+    inspector = db.inspect(engine)
+    cols = {c['name'] for c in inspector.get_columns('users')}
+    dialect = engine.dialect.name
+    from sqlalchemy import text
+
+    # ── 添加缺失的列（仅 MySQL） ─────────────
+    if dialect == 'mysql':
+        new_columns = {
+            'role': "VARCHAR(16) DEFAULT 'user'",
+            'last_login_at': 'DATETIME NULL',
+            'last_login_ip': "VARCHAR(45) DEFAULT ''",
+            'login_count': 'INT DEFAULT 0',
+            'website': "VARCHAR(256) DEFAULT ''",
+        }
+        for col, col_type in new_columns.items():
+            if col not in cols:
+                try:
+                    db.session.execute(text(f'ALTER TABLE users ADD COLUMN {col} {col_type}'))
+                    db.session.commit()
+                    app.logger.info('迁移: 已添加 users.%s 列', col)
+                except Exception as e:
+                    db.session.rollback()
+                    app.logger.warning('迁移: 添加 users.%s 列失败: %s', col, e)
+
+    # ── 数据迁移：is_admin → role ────────────
+    if 'is_admin' in cols and 'role' in cols:
+        result = db.session.execute(
+            text("UPDATE users SET role = 'admin' WHERE is_admin = 1 OR is_admin = TRUE")
+        )
+        if result.rowcount > 0:
+            app.logger.info('迁移: 已将 %d 个用户从 is_admin 迁移到 role', result.rowcount)
+        db.session.commit()
+
+        if dialect == 'mysql':
+            try:
+                db.session.execute(text('ALTER TABLE users DROP COLUMN is_admin'))
+                db.session.commit()
+                app.logger.info('迁移: 已删除 is_admin 列')
+            except Exception:
+                db.session.rollback()
 
 
 def _migrate_featured_icon(app):

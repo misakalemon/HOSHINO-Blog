@@ -49,8 +49,19 @@ class User(UserMixin, db.Model):
     不需要显式实现这些方法。
 
     __tablename__ = 'users'
+
+    角色系统：
+      admin  — 超级管理员，所有权限
+      editor — 编辑，可管理文章/分类/评论
+      author — 作者，可撰写/编辑自己的文章
+      user   — 普通订阅用户，仅前台浏览
     """
     __tablename__ = 'users'
+
+    ROLE_ADMIN = 'admin'
+    ROLE_EDITOR = 'editor'
+    ROLE_AUTHOR = 'author'
+    ROLE_USER = 'user'
 
     # ── 基本信息 ────────────────────────────────
     id = db.Column(db.Integer, primary_key=True)                    # 主键，自增
@@ -64,41 +75,73 @@ class User(UserMixin, db.Model):
     avatar = db.Column(                                    # 头像路径（相对于 static/）
         db.String(256), default='images/avatar/main-avatar.jpg'
     )
+    website = db.Column(db.String(256), default='')        # 个人网站/社交媒体链接
 
     # ── 权限状态 ────────────────────────────────
-    is_admin = db.Column(db.Boolean, default=False)   # 是否管理员（可访问后台）
-    is_active = db.Column(db.Boolean, default=True)    # 是否激活（可登录）
+    role = db.Column(db.String(16), default='user')       # 角色：admin/editor/author/user
+    is_active = db.Column(db.Boolean, default=True)        # 是否激活（可登录）
+
+    # ── 登录追踪 ────────────────────────────────
+    last_login_at = db.Column(db.DateTime, nullable=True)  # 最后登录时间
+    last_login_ip = db.Column(db.String(45), default='')   # 最后登录 IP
+    login_count = db.Column(db.Integer, default=0)         # 登录次数
 
     # ── 时间戳 ──────────────────────────────────
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
     # ── 关联关系 ────────────────────────────────
-    # 一对多：一个用户有多篇文章
-    # backref='author' 给 Post 添加 .author 属性
-    # lazy='dynamic' 返回 Query 对象而非列表，可继续链式过滤
     posts = db.relationship('Post', backref='author', lazy='dynamic')
+
+    # ── 属性 ────────────────────────────────────
+    @property
+    def is_admin(self):
+        return self.role == self.ROLE_ADMIN
+
+    @is_admin.setter
+    def is_admin(self, value):
+        self.role = self.ROLE_ADMIN if value else self.ROLE_USER
+
+    @property
+    def is_editor(self):
+        return self.role in (self.ROLE_ADMIN, self.ROLE_EDITOR)
+
+    @property
+    def is_author(self):
+        return self.role in (self.ROLE_ADMIN, self.ROLE_EDITOR, self.ROLE_AUTHOR)
+
+    @property
+    def role_label(self):
+        return {
+            self.ROLE_ADMIN: '管理员',
+            self.ROLE_EDITOR: '编辑',
+            self.ROLE_AUTHOR: '作者',
+            self.ROLE_USER: '用户',
+        }.get(self.role, '用户')
+
+    @property
+    def role_badge_class(self):
+        return {
+            self.ROLE_ADMIN: 'badge-admin',
+            self.ROLE_EDITOR: 'badge-editor',
+            self.ROLE_AUTHOR: 'badge-author',
+            self.ROLE_USER: 'badge-user',
+        }.get(self.role, 'badge-user')
 
     # ── 密码方法 ────────────────────────────────
     def set_password(self, password):
-        """设置加密密码。
-
-        使用 Werkzeug 的 generate_password_hash，
-        默认使用 PBKDF2-SHA256 算法，自动加盐。
-        """
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
-        """验证密码。"""
         return check_password_hash(self.password_hash, password)
 
     # ── 序列化 ──────────────────────────────────
     def to_dict(self):
-        """返回用户信息的字典（用于 JSON API）。"""
         return {
             'id': self.id,
             'username': self.username,
             'email': self.email,
             'display_name': self.display_name,
+            'role': self.role,
             'is_admin': self.is_admin,
         }
 
