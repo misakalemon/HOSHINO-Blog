@@ -23,7 +23,7 @@ from wtforms import (
     StringField,
     TextAreaField,
 )
-from wtforms.validators import DataRequired, Email, Length, Optional
+from wtforms.validators import DataRequired, Email, EqualTo, Length, Optional
 
 
 class LoginForm(FlaskForm):
@@ -37,6 +37,7 @@ class RegisterForm(FlaskForm):
     username = StringField('用户名', validators=[DataRequired(), Length(min=2, max=64)])
     email = StringField('邮箱', validators=[DataRequired(), Email(), Length(max=120)])
     password = PasswordField('密码', validators=[DataRequired(), Length(min=6)])
+    password_confirm = PasswordField('确认密码', validators=[DataRequired(), EqualTo('password', message='两次密码输入不一致')])
     display_name = StringField('显示名', validators=[Optional(), Length(max=128)])
 
 
@@ -100,7 +101,9 @@ class ProfileForm(FlaskForm):
     gitcode_url = StringField('GitCode', validators=[Optional(), Length(max=256)])     # GitCode 主页
     github_url = StringField('GitHub', validators=[Optional(), Length(max=256)])       # GitHub 主页
     email = StringField('邮箱', validators=[Optional(), Email(), Length(max=120)])     # 邮箱，选填
-    password = PasswordField('新密码（留空则不修改）', validators=[Optional(), Length(min=6)])  # 新密码，选填
+    current_password = PasswordField('当前密码', validators=[Optional()])                # 当前密码，改密码时需要
+    password = PasswordField('新密码', validators=[Optional(), Length(min=6)])          # 新密码，选填
+    password_confirm = PasswordField('确认新密码', validators=[Optional(), EqualTo('password', message='两次密码输入不一致')])  # 确认新密码
     about_content = TextAreaField('关于页面内容', validators=[Optional()])               # 关于页富文本，选填
 
 

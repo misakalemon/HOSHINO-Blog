@@ -846,6 +846,12 @@ def profile():
 
         # ── 修改密码 ──────────────────────────
         if form.password.data:
+            if not form.current_password.data:
+                flash('请输入当前密码以修改密码', 'error')
+                return render_template('admin/profile.html', form=form)
+            if not current_user.check_password(form.current_password.data):
+                flash('当前密码错误', 'error')
+                return render_template('admin/profile.html', form=form)
             current_user.set_password(form.password.data)
 
         # ── 关于页面内容 ──────────────────────

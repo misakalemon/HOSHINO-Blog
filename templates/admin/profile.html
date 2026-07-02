@@ -60,7 +60,17 @@
         </div>
 
         <div class="form-group"><label>邮箱</label><input type="email" name="email" value="{{ form.email.data or '' }}"></div>
-        <div class="form-group"><label>新密码（留空则保持当前密码）</label><input type="password" name="password"></div>
+
+        <!-- 密码修改：需验证当前密码 + 确认新密码 -->
+        <div class="admin-card" style="margin-top:20px;padding:20px">
+            <h4 style="font-weight:400;font-size:0.95rem;color:rgba(255,255,255,0.6);margin-bottom:16px">修改密码（选填）</h4>
+            <div class="admin-row" style="display:flex;gap:12px;flex-wrap:wrap">
+                <div class="form-group" style="flex:1;min-width:180px"><label>当前密码</label><input type="password" name="current_password" id="current_password" autocomplete="current-password"></div>
+                <div class="form-group" style="flex:1;min-width:180px"><label>新密码</label><input type="password" name="password" id="new_password" autocomplete="new-password" minlength="6"></div>
+                <div class="form-group" style="flex:1;min-width:180px"><label>确认新密码</label><input type="password" name="password_confirm" id="password_confirm" autocomplete="new-password"></div>
+            </div>
+            <div id="pwMatchHint" style="font-size:0.75rem;margin-top:4px;min-height:1.2em">&nbsp;</div>
+        </div>
 
         <!-- 关于页面内容：富文本编辑器 -->
         {% if current_user.is_admin %}
@@ -114,5 +124,24 @@ document.getElementById('profileForm').addEventListener('submit', function() {
   var html = document.getElementById('about-rte-content').innerHTML;
   document.getElementById('aboutContentHidden').value = html;
 });
+
+// 密码确认实时校验
+(function() {
+  var pwd = document.getElementById('new_password');
+  var confirm = document.getElementById('password_confirm');
+  var hint = document.getElementById('pwMatchHint');
+  if (!pwd || !confirm || !hint) return;
+  function check() {
+    if (!confirm.value) { hint.innerHTML = '&nbsp;'; return; }
+    if (confirm.value.length < 6) { hint.innerHTML = '<span style="color:rgba(255,180,60,0.7)">密码至少 6 位</span>'; return; }
+    if (pwd.value !== confirm.value) {
+      hint.innerHTML = '<span style="color:rgba(255,80,80,0.8)">⚠ 两次密码不一致</span>';
+    } else {
+      hint.innerHTML = '<span style="color:rgba(80,200,120,0.8)">✓ 密码一致</span>';
+    }
+  }
+  pwd.addEventListener('input', check);
+  confirm.addEventListener('input', check);
+})();
 </script>
 {% endblock %}

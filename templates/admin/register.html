@@ -26,7 +26,11 @@
                         <input type="email" name="email" placeholder="邮箱" required>
                     </div>
                     <div class="form-group">
-                        <input type="password" name="password" placeholder="密码（至少6位）" required>
+                        <input type="password" name="password" id="reg_password" placeholder="密码（至少6位）" required minlength="6">
+                    </div>
+                    <div class="form-group">
+                        <input type="password" name="password_confirm" id="reg_password_confirm" placeholder="确认密码" required>
+                        <div id="regPwHint" style="font-size:0.75rem;margin-top:4px;min-height:1.2em;text-align:left">&nbsp;</div>
                     </div>
                     <div class="form-group">
                         <input type="text" name="display_name" placeholder="显示名（选填）">
@@ -41,5 +45,25 @@
         </div>
     </div>
 </div>
+
+<script>
+(function() {
+  var pwd = document.getElementById('reg_password');
+  var confirm = document.getElementById('reg_password_confirm');
+  var hint = document.getElementById('regPwHint');
+  if (!pwd || !confirm || !hint) return;
+  function check() {
+    if (!confirm.value) { hint.innerHTML = '&nbsp;'; return; }
+    if (confirm.value.length < 6) { hint.innerHTML = '<span style="color:rgba(255,180,60,0.7)">密码至少 6 位</span>'; return; }
+    if (pwd.value !== confirm.value) {
+      hint.innerHTML = '<span style="color:rgba(255,80,80,0.8)">⚠ 两次密码不一致</span>';
+    } else {
+      hint.innerHTML = '<span style="color:rgba(80,200,120,0.8)">✓ 密码一致</span>';
+    }
+  }
+  pwd.addEventListener('input', check);
+  confirm.addEventListener('input', check);
+})();
+</script>
 
 {% endblock %}
