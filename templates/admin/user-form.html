@@ -8,12 +8,16 @@
 <div class="admin-card">
     <form method="POST">
         {{ form.hidden_tag() }}
-        <div class="form-group"><label>用户名</label><input type="text" name="username" value="{{ form.username.data or '' }}" required></div>
-        <div class="form-group"><label>邮箱</label><input type="email" name="email" value="{{ form.email.data or '' }}" required></div>
-        <div class="form-group"><label>密码{{ '(留空则保持不变)' if editing else '' }}</label><input type="password" name="password" {{ 'required' if not editing else '' }}></div>
-        <div class="form-group"><label>显示名</label><input type="text" name="display_name" value="{{ form.display_name.data or '' }}"></div>
-        <div class="form-group"><label>个人简介</label><textarea name="bio" rows="3">{{ form.bio.data or '' }}</textarea></div>
-        <div class="form-group"><label>个人网站</label><input type="url" name="website" value="{{ form.website.data or '' }}" placeholder="https://"></div>
+        <div class="form-group"><label>用户名</label><input type="text" name="username" value="{{ form.username.data or '' }}" {{ 'readonly' if editing else 'required' }}></div>
+        <div class="form-group"><label>邮箱</label><input type="email" name="email" value="{{ form.email.data or '' }}" {{ 'readonly' if editing else 'required' }}></div>
+        {% if editing %}
+        <!-- 编辑模式：不显示密码字段 -->
+        {% else %}
+        <div class="form-group"><label>密码</label><input type="password" name="password" required></div>
+        {% endif %}
+        <div class="form-group"><label>显示名</label><input type="text" name="display_name" value="{{ form.display_name.data or '' }}" {{ 'readonly' if editing else '' }}></div>
+        <div class="form-group"><label>个人简介</label><textarea name="bio" rows="3" {{ 'readonly' if editing else '' }}>{{ form.bio.data or '' }}</textarea></div>
+        <div class="form-group"><label>个人网站</label><input type="url" name="website" value="{{ form.website.data or '' }}" placeholder="https://" {{ 'readonly' if editing else '' }}></div>
         <div class="form-group"><label>角色</label>
             <div class="glow-select-wrap">
                 <div class="glow-select-trigger" onclick="toggleGlowSelect(this)">

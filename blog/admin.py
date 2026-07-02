@@ -719,18 +719,12 @@ def edit_user(id):
     user = User.query.get_or_404(id)
     form = UserForm(obj=user)
     if form.validate_on_submit():
-        user.username = form.username.data
-        user.email = form.email.data
-        user.display_name = form.display_name.data
-        user.bio = form.bio.data
-        user.website = form.website.data
+        # 编辑模式：仅更新角色，其他字段只读不写
         user.role = form.role.data
-        if form.password.data:
-            user.set_password(form.password.data)
         db.session.commit()
-        flash('用户已更新', 'success')
+        flash('用户角色已更新', 'success')
         return redirect(url_for('admin.user_list'))
-    return render_template('admin/user-form.html', form=form, user=user)
+    return render_template('admin/user-form.html', form=form, user=user, editing=True)
 
 
 @admin_bp.route('/users/<int:id>/delete', methods=['POST'])
