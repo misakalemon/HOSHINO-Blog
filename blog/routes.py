@@ -270,10 +270,16 @@ def about():
     """关于页面。
 
     展示博主信息、站点介绍等静态内容。
+    内容取自管理员账号的 about_content 字段（富文本 HTML）。
     Template: about.html
     """
     categories, recent_posts, cat_post_counts = _get_sidebar_data()
-    return render_template('about.html', categories=categories, recent_posts=recent_posts, cat_post_counts=cat_post_counts)
+    from .models import User
+    admin = User.query.filter_by(role='admin').order_by(User.id).first()
+    about_content = admin.about_content if admin and admin.about_content else '<p>欢迎来到 Hoshino Blog</p>'
+    return render_template('about.html', about_content=about_content,
+                           categories=categories, recent_posts=recent_posts,
+                           cat_post_counts=cat_post_counts)
 
 
 # ═══════════════════════════════════════════════

@@ -53,6 +53,10 @@ def init_db(app):
         # 必须在任何 User 查询之前执行，因为新字段还不存在于 MySQL 表中
         _migrate_is_admin_to_role(app)
 
+        # ── 迁移 User 新增列（gitcode_url, github_url, about_content）──
+        # 也必须在任何 User 查询之前执行
+        _migrate_user_profile_fields(app)
+
         # ── 创建默认管理员 ────────────────────────
         # 仅当 users 表中没有任何用户名为 "admin" 的记录时执行
         if not User.query.filter_by(username='admin').first():
@@ -228,6 +232,31 @@ def _migrate_author_to_user(app):
     if result.rowcount > 0:
         app.logger.info('迁移: 已将 %d 个用户从 author 角色合并到 user 角色', result.rowcount)
     db.session.commit()
+
+
+def _migrate_user_profile_fields(app):
+    """迁移：为 User 表添加社交链接和关于页面字段（仅 MySQL 需 ALTER）。"""
+    engine = db.get_engine()
+    inspector = db.inspect(engine)
+    cols = {c['name'] for c in inspector.get_columns('users')}
+    dialect = engine.dialect.name
+    if dialect != 'mysql':
+        return
+    from sqlalchemy import text
+    new_columns = {
+        'gitcode_url': "VARCHAR(256) DEFAULT ''",
+        'github_url': "VARCHAR(256) DEFAULT ''",
+        'about_content': "MEDIUMTEXT",
+    }
+    for col, col_type in new_columns.items():
+        if col not in cols:
+            try:
+                db.session.execute(text(f'ALTER TABLE users ADD COLUMN {col} {col_type}'))
+                db.session.commit()
+                app.logger.info('迁移: 已添加 users.%s 列', col)
+            except Exception as e:
+                db.session.rollback()
+                app.logger.warning('迁移: 添加 users.%s 列失败: %s', col, e)
 
 
 # ── 后导入路由（延迟导入） ─────────────────────

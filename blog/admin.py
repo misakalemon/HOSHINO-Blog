@@ -803,6 +803,8 @@ def profile():
         current_user.display_name = form.display_name.data
         current_user.bio = form.bio.data
         current_user.website = form.website.data
+        current_user.gitcode_url = form.gitcode_url.data
+        current_user.github_url = form.github_url.data
 
         # ── 头像上传 ──────────────────────────
         if 'avatar' in request.files:
@@ -845,6 +847,9 @@ def profile():
         # ── 修改密码 ──────────────────────────
         if form.password.data:
             current_user.set_password(form.password.data)
+
+        # ── 关于页面内容 ──────────────────────
+        current_user.about_content = form.about_content.data or ''
 
         db.session.commit()
         flash('个人资料已更新', 'success')

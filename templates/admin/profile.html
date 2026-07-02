@@ -1,9 +1,10 @@
 <!-- ============================================================
      个人资料编辑 (admin/profile.html)
-     用途：当前用户修改个人资料（头像、显示名、简介、邮箱、密码）
+     用途：当前用户修改个人资料（头像、显示名、简介、邮箱、密码、社交链接、关于页内容）
      继承：admin/base_admin.html
      定义块：
        - title         : 页面标题
+       - extra_head    : 引入富文本编辑器样式
        - admin_content : 后台主体内容
      模板变量：
        - current_user : Flask-Login 当前用户对象
@@ -11,16 +12,31 @@
      ============================================================ -->
 {% extends 'admin/base_admin.html' %}
 {% block title %}个人资料{% endblock %}
+{% block extra_head %}
+<style>
+#about-rte-toolbar { display:flex; align-items:center; gap:2px; flex-wrap:wrap; padding:6px 8px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.08); border-bottom:none; border-radius:12px 12px 0 0; }
+#about-rte-toolbar button { background:transparent; border:none; color:rgba(255,255,255,0.5); padding:4px 8px; border-radius:6px; cursor:pointer; font-size:13px; transition:all 0.2s; }
+#about-rte-toolbar button:hover { background:rgba(255,255,255,0.06); color:var(--accent); }
+#about-rte-toolbar .sep { width:1px; background:rgba(255,255,255,0.08); margin:4px 3px; height:20px; }
+#about-rte-content { min-height:300px; padding:16px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.08); border-radius:0 0 12px 12px; color:var(--text-primary); font-size:15px; line-height:1.8; outline:none; overflow-y:auto; }
+#about-rte-content:focus { border-color:rgba(255,255,255,0.2); }
+#about-rte-content h1 { font-size:28px; font-weight:700; margin:16px 0 8px; }
+#about-rte-content h2 { font-size:22px; font-weight:600; margin:14px 0 6px; }
+#about-rte-content h3 { font-size:18px; font-weight:600; margin:12px 0 4px; }
+#about-rte-content p { margin:8px 0; }
+#about-rte-content pre { background:rgba(0,0,0,0.3); border-radius:8px; padding:12px; overflow-x:auto; }
+#about-rte-content blockquote { border-left:3px solid var(--accent); padding-left:12px; color:rgba(255,255,255,0.6); margin:8px 0; }
+</style>
+{% endblock %}
 {% block admin_content %}
 <div class="admin-header"><h3>个人资料</h3></div>
 <div class="admin-card">
-    <form method="POST" enctype="multipart/form-data">
+    <form method="POST" enctype="multipart/form-data" id="profileForm">
         {{ form.hidden_tag() }}
 
         <!-- 头像与基本信息 -->
         <div class="admin-profile-header">
             <div class="admin-avatar-wrap">
-                <!-- 头像：当前用户头像，若为空则使用默认头像 -->
                 <img src="{{ url_for('blog.thumbnail', path=current_user.avatar or 'images/avatar/main-avatar.jpg', w=120) }}"
                      alt="avatar" class="admin-avatar">
                 <label for="avatarInput" class="admin-avatar-edit">✎</label>
@@ -31,16 +47,72 @@
             </div>
         </div>
 
-        <!-- 隐藏文件选择器：选择后自动提交表单 -->
         <input type="file" id="avatarInput" name="avatar" accept="image/*" style="display:none" onchange="this.form.submit()">
 
         <div class="form-group"><label>显示名</label><input type="text" name="display_name" value="{{ form.display_name.data or '' }}"></div>
         <div class="form-group"><label>个人简介</label><textarea name="bio" rows="3">{{ form.bio.data or '' }}</textarea></div>
-        <div class="form-group"><label>个人网站</label><input type="url" name="website" value="{{ form.website.data or '' }}" placeholder="https://"></div>
+
+        <!-- 社交链接 -->
+        <div class="admin-row" style="display:flex;gap:12px;flex-wrap:wrap">
+            <div class="form-group" style="flex:1;min-width:200px"><label>个人网站</label><input type="url" name="website" value="{{ form.website.data or '' }}" placeholder="https://"></div>
+            <div class="form-group" style="flex:1;min-width:200px"><label>GitCode</label><input type="url" name="gitcode_url" value="{{ form.gitcode_url.data or '' }}" placeholder="https://gitcode.com/"></div>
+            <div class="form-group" style="flex:1;min-width:200px"><label>GitHub</label><input type="url" name="github_url" value="{{ form.github_url.data or '' }}" placeholder="https://github.com/"></div>
+        </div>
+
         <div class="form-group"><label>邮箱</label><input type="email" name="email" value="{{ form.email.data or '' }}"></div>
-        <!-- 密码留空表示不修改 -->
         <div class="form-group"><label>新密码（留空则保持当前密码）</label><input type="password" name="password"></div>
-        <button type="submit" class="btn btn-primary">更新资料</button>
+
+        <!-- 关于页面内容：富文本编辑器 -->
+        {% if current_user.is_admin %}
+        <div class="form-group" style="margin-top:24px">
+            <label>关于页面内容（仅管理员可编辑）</label>
+            <div id="about-rte-toolbar">
+                <button type="button" onclick="aboutRte('undo')" title="撤销">↩</button>
+                <button type="button" onclick="aboutRte('redo')" title="重做">↪</button>
+                <span class="sep"></span>
+                <button type="button" onclick="aboutRte('bold')" title="粗体"><b>B</b></button>
+                <button type="button" onclick="aboutRte('italic')" title="斜体"><i>I</i></button>
+                <button type="button" onclick="aboutRte('underline')" title="下划线"><u>U</u></button>
+                <span class="sep"></span>
+                <button type="button" onclick="aboutRte('formatBlock','h2')" title="标题">H2</button>
+                <button type="button" onclick="aboutRte('formatBlock','h3')" title="小标题">H3</button>
+                <span class="sep"></span>
+                <button type="button" onclick="aboutRte('insertUnorderedList')" title="列表">• list</button>
+                <button type="button" onclick="aboutRte('insertOrderedList')" title="编号">1. list</button>
+                <span class="sep"></span>
+                <button type="button" onclick="aboutInsertLink()" title="链接">🔗</button>
+                <button type="button" onclick="aboutRte('formatBlock','pre')" title="代码块">&lt;/&gt;</button>
+                <button type="button" onclick="aboutRte('formatBlock','blockquote')" title="引用">❝</button>
+            </div>
+            <div id="about-rte-content" contenteditable="true">{{ form.about_content.data or ''|safe }}</div>
+            <textarea name="about_content" id="aboutContentHidden" style="display:none">{{ form.about_content.data or '' }}</textarea>
+        </div>
+        {% endif %}
+
+        <button type="submit" class="btn btn-primary" style="margin-top:16px">更新资料</button>
     </form>
 </div>
+
+<script>
+// 富文本命令
+function aboutRte(cmd, val) {
+  document.getElementById('about-rte-content').focus();
+  document.execCommand(cmd, false, val || null);
+}
+
+// 插入链接
+function aboutInsertLink() {
+  var sel = window.getSelection().toString();
+  var url = prompt('链接地址:', 'https://');
+  if (url) {
+    aboutRte('insertHTML', '<a href="' + url.replace(/"/g,'&quot;') + '">' + (sel || url) + '</a>');
+  }
+}
+
+// 提交前将编辑器内容同步到隐藏 textarea
+document.getElementById('profileForm').addEventListener('submit', function() {
+  var html = document.getElementById('about-rte-content').innerHTML;
+  document.getElementById('aboutContentHidden').value = html;
+});
+</script>
 {% endblock %}
