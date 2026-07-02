@@ -96,12 +96,13 @@
                                 <span class="pill-light">{{ cat.name }}</span>
                                 {% endfor %}
                             </div>
-                            <!-- 发布日期 -->
-                            <time style="display:block;color:rgba(255,255,255,0.15);font-size:0.6rem;margin-top:10px;font-family:'SF Mono','Fira Code',monospace">{{ format_date(post.created_at, '%Y.%m.%d') }}</time>
-                            <!-- 作者 -->
-                            {% if post.author %}
-                            <span style="color:rgba(255,255,255,0.2);font-size:0.6rem;margin-top:2px;display:block">✎ {{ post.author.display_name or post.author.username }}</span>
-                            {% endif %}
+                            <!-- 作者 + 日期（同一行） -->
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
+                                {% if post.author %}
+                                <span style="color:rgba(255,255,255,0.2);font-size:0.6rem">✎ {{ post.author.display_name or post.author.username }}</span>
+                                {% endif %}
+                                <time style="color:rgba(255,255,255,0.15);font-size:0.6rem;font-family:'SF Mono','Fira Code',monospace;margin-left:auto">{{ format_date(post.created_at, '%Y.%m.%d') }}</time>
+                            </div>
                         </div>
                     </div>
                 </div>
