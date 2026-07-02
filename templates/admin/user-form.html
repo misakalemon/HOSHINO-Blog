@@ -15,12 +15,22 @@
         <div class="form-group"><label>个人简介</label><textarea name="bio" rows="3">{{ form.bio.data or '' }}</textarea></div>
         <div class="form-group"><label>个人网站</label><input type="url" name="website" value="{{ form.website.data or '' }}" placeholder="https://"></div>
         <div class="form-group"><label>角色</label>
-            <select name="role">
-                <option value="user" {% if form.role.data == 'user' %}selected{% endif %}>用户</option>
-                <option value="author" {% if form.role.data == 'author' %}selected{% endif %}>作者</option>
-                <option value="editor" {% if form.role.data == 'editor' %}selected{% endif %}>编辑</option>
-                <option value="admin" {% if form.role.data == 'admin' %}selected{% endif %}>管理员</option>
-            </select>
+            <div class="glow-select-wrap">
+                <div class="glow-select-trigger" onclick="toggleGlowSelect(this)">
+                    <span class="glow-select-value">{{ form.role.label.text if form.role.data else '用户' }}</span>
+                    <span class="glow-select-arrow">▼</span>
+                </div>
+                <select name="role" style="display:none">
+                    <option value="user" {% if form.role.data == 'user' %}selected{% endif %}>用户</option>
+                    <option value="editor" {% if form.role.data == 'editor' %}selected{% endif %}>编辑</option>
+                    <option value="admin" {% if form.role.data == 'admin' %}selected{% endif %}>管理员</option>
+                </select>
+                <div class="glow-select-menu">
+                    <div class="glow-select-option{% if form.role.data == 'user' %} is-selected{% endif %}" data-value="user">用户</div>
+                    <div class="glow-select-option{% if form.role.data == 'editor' %} is-selected{% endif %}" data-value="editor">编辑</div>
+                    <div class="glow-select-option{% if form.role.data == 'admin' %} is-selected{% endif %}" data-value="admin">管理员</div>
+                </div>
+            </div>
         </div>
         <button type="submit" class="btn btn-primary">{{ '更新' if editing else '创建' }}</button>
     </form>

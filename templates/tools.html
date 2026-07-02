@@ -232,13 +232,26 @@
                 <div class="pw-section">
                     <div class="pw-section-title">🗝️ 随机密钥</div>
                     <div class="pw-row"><span class="pw-label">强度</span>
-                        <select id="keyBits" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;color:#e8edf5;padding:6px 10px;font-family:inherit">
-                            <option value="128">128 位</option>
-                            <option value="192">192 位</option>
-                            <option value="256" selected>256 位</option>
-                            <option value="512">512 位</option>
-                            <option value="1024">1024 位</option>
-                        </select>
+                        <div class="glow-select-wrap" style="display:inline-flex;background:transparent;border:none;vertical-align:middle">
+                            <div class="glow-select-trigger" onclick="toggleGlowSelect(this)" style="padding:6px 10px;font-size:0.85rem;color:#e8edf5;gap:4px">
+                                <span class="glow-select-value">256 位</span>
+                                <span class="glow-select-arrow" style="font-size:0.5rem">▼</span>
+                            </div>
+                            <select id="keyBits" style="display:none">
+                                <option value="128">128 位</option>
+                                <option value="192">192 位</option>
+                                <option value="256" selected>256 位</option>
+                                <option value="512">512 位</option>
+                                <option value="1024">1024 位</option>
+                            </select>
+                            <div class="glow-select-menu" style="min-width:100px">
+                                <div class="glow-select-option" data-value="128">128 位</div>
+                                <div class="glow-select-option" data-value="192">192 位</div>
+                                <div class="glow-select-option is-selected" data-value="256">256 位</div>
+                                <div class="glow-select-option" data-value="512">512 位</div>
+                                <div class="glow-select-option" data-value="1024">1024 位</div>
+                            </div>
+                        </div>
                     </div>
                     <div class="pw-row"><span class="pw-label">格式</span>
                         <label class="pw-cb"><input type="radio" name="keyFmt" value="hex" checked><span>HEX</span></label>
@@ -265,22 +278,48 @@
                     <input type="range" id="iz-quality" min="1" max="100" value="80" oninput="izUpdate()">
                 </div>
                 <div class="tool-field"><label>最大宽度</label>
-                    <select id="iz-maxw" onchange="izUpdate()">
-                        <option value="0">原图尺寸</option>
-                        <option value="3840">3840 (4K)</option>
-                        <option value="2560">2560 (2K)</option>
-                        <option value="1920" selected>1920 (全高清)</option>
-                        <option value="1280">1280 (HD)</option>
-                        <option value="800">800</option>
-                        <option value="400">400</option>
-                    </select>
+                    <div class="glow-select-wrap" style="display:inline-flex;background:transparent;border:none;vertical-align:middle;width:100%">
+                        <div class="glow-select-trigger" onclick="toggleGlowSelect(this)" style="padding:10px 14px;font-size:0.8rem;color:#e8edf5;gap:4px;width:100%;box-sizing:border-box">
+                            <span class="glow-select-value">1920 (全高清)</span>
+                            <span class="glow-select-arrow" style="font-size:0.5rem">▼</span>
+                        </div>
+                        <select id="iz-maxw" onchange="izUpdate()" style="display:none">
+                            <option value="0">原图尺寸</option>
+                            <option value="3840">3840 (4K)</option>
+                            <option value="2560">2560 (2K)</option>
+                            <option value="1920" selected>1920 (全高清)</option>
+                            <option value="1280">1280 (HD)</option>
+                            <option value="800">800</option>
+                            <option value="400">400</option>
+                        </select>
+                        <div class="glow-select-menu">
+                            <div class="glow-select-option" data-value="0">原图尺寸</div>
+                            <div class="glow-select-option" data-value="3840">3840 (4K)</div>
+                            <div class="glow-select-option" data-value="2560">2560 (2K)</div>
+                            <div class="glow-select-option is-selected" data-value="1920">1920 (全高清)</div>
+                            <div class="glow-select-option" data-value="1280">1280 (HD)</div>
+                            <div class="glow-select-option" data-value="800">800</div>
+                            <div class="glow-select-option" data-value="400">400</div>
+                        </div>
+                    </div>
                 </div>
                 <div class="tool-field"><label>输出格式</label>
-                    <select id="iz-fmt" onchange="izUpdate()">
-                        <option value="image/jpeg">JPEG</option>
-                        <option value="image/webp">WebP</option>
-                        <option value="image/png">PNG</option>
-                    </select>
+                    <div class="glow-select-wrap" style="display:inline-flex;background:transparent;border:none;vertical-align:middle;width:100%">
+                        <div class="glow-select-trigger" onclick="toggleGlowSelect(this)" style="padding:10px 14px;font-size:0.8rem;color:#e8edf5;gap:4px;width:100%;box-sizing:border-box">
+                            <span class="glow-select-value">JPEG</span>
+                            <span class="glow-select-arrow" style="font-size:0.5rem">▼</span>
+                        </div>
+                        <select id="iz-fmt" onchange="izUpdate()" style="display:none">
+                            <option value="image/jpeg">JPEG</option>
+                            <option value="image/webp">WebP</option>
+                            <option value="image/png">PNG</option>
+                        </select>
+                        <div class="glow-select-menu">
+                            <div class="glow-select-option is-selected" data-value="image/jpeg">JPEG</div>
+                            <div class="glow-select-option" data-value="image/webp">WebP</div>
+                            <div class="glow-select-option" data-value="image/png">PNG</div>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="tool-actions">

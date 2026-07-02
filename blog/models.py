@@ -107,14 +107,14 @@ class User(UserMixin, db.Model):
 
     @property
     def is_author(self):
-        return self.role in (self.ROLE_ADMIN, self.ROLE_EDITOR, self.ROLE_AUTHOR)
+        """可撰写/管理自己的文章：admin、editor、user 均有此权限。"""
+        return self.role in (self.ROLE_ADMIN, self.ROLE_EDITOR, self.ROLE_USER)
 
     @property
     def role_label(self):
         return {
             self.ROLE_ADMIN: '管理员',
             self.ROLE_EDITOR: '编辑',
-            self.ROLE_AUTHOR: '作者',
             self.ROLE_USER: '用户',
         }.get(self.role, '用户')
 
@@ -123,7 +123,6 @@ class User(UserMixin, db.Model):
         return {
             self.ROLE_ADMIN: 'badge-admin',
             self.ROLE_EDITOR: 'badge-editor',
-            self.ROLE_AUTHOR: 'badge-author',
             self.ROLE_USER: 'badge-user',
         }.get(self.role, 'badge-user')
 

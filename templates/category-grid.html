@@ -79,11 +79,22 @@
                     <!-- 页码跳转输入框 -->
                     <input type="number" min="1" max="{{ posts.pages }}" placeholder="跳转" onkeydown="if(event.key=='Enter'){var p=parseInt(this.value);if(p>=1&&p<={{ posts.pages }})window.location='{{ url_for('blog.category', slug=category.slug) }}?page='+p+'&per_page={{ current_per_page }}';}">
                     <!-- 每页条数选择器 -->
-                    <select class="per-page-select" onchange="var p=new URLSearchParams(location.search);p.set('per_page',this.value);p.set('page','1');location.search=p.toString();">
-                        {% for opt in per_page_options %}
-                        <option value="{{ opt }}" {% if current_per_page == opt %}selected{% endif %}>{{ opt }} 条/页</option>
-                        {% endfor %}
-                    </select>
+                    <div class="glow-select-wrap" style="display:inline-flex;background:transparent;border:none;vertical-align:middle">
+                        <div class="glow-select-trigger" onclick="toggleGlowSelect(this)" style="padding:4px 8px;font-size:0.7rem;color:rgba(255,255,255,0.5);gap:4px">
+                            <span class="glow-select-value">{{ current_per_page }} 条/页</span>
+                            <span class="glow-select-arrow" style="font-size:0.5rem">▼</span>
+                        </div>
+                        <select class="per-page-select" onchange="var p=new URLSearchParams(location.search);p.set('per_page',this.value);p.set('page','1');location.search=p.toString();" style="display:none">
+                            {% for opt in per_page_options %}
+                            <option value="{{ opt }}" {% if current_per_page == opt %}selected{% endif %}>{{ opt }} 条/页</option>
+                            {% endfor %}
+                        </select>
+                        <div class="glow-select-menu" style="min-width:80px;left:auto;right:0">
+                            {% for opt in per_page_options %}
+                            <div class="glow-select-option{% if current_per_page == opt %} is-selected{% endif %}" data-value="{{ opt }}">{{ opt }} 条/页</div>
+                            {% endfor %}
+                        </div>
+                    </div>
                 </div>
             </div>
             {% endif %}

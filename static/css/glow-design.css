@@ -923,6 +923,51 @@ ul { list-style: none; }
 .admin-step-nav { display: flex; justify-content: space-between; margin-top: 16px; }
 .admin-step-nav-right { text-align: right; margin-top: 16px; }
 
+/* 后台搜索框 */
+.admin-search { display: flex; gap: 8px; align-items: center; }
+.admin-search input {
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px; padding: 8px 14px; color: rgba(255,255,255,0.7);
+  font-size: 0.85rem; outline: none; width: 200px;
+  transition: border-color 0.3s, width 0.3s;
+}
+.admin-search input:focus { border-color: rgba(0,102,255,0.4); width: 260px; }
+.admin-search input::placeholder { color: rgba(255,255,255,0.2); }
+.admin-search button {
+  border-radius: 12px; padding: 8px 16px; font-size: 0.85rem;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.5); cursor: pointer;
+  transition: all 0.3s; font-family: inherit;
+}
+.admin-search button:hover {
+  background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8);
+  border-color: rgba(255,255,255,0.15);
+}
+
+/* 后台分页 */
+.pagination {
+  display: flex; align-items: center; gap: 4px;
+  margin-top: 20px; flex-wrap: wrap;
+}
+.page-link {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 36px; height: 36px; padding: 0 10px;
+  border-radius: 10px; font-size: 0.8rem; color: rgba(255,255,255,0.4);
+  background: rgba(255,255,255,0.03); text-decoration: none;
+  transition: all 0.2s;
+}
+.page-link:hover { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.7); }
+.page-link.active {
+  background: rgba(0,102,255,0.15); color: #7abfff;
+  border: 1px solid rgba(0,102,255,0.2);
+}
+.page-link.disabled { opacity: 0.3; cursor: default; pointer-events: none; }
+.page-link.dots { background: transparent; cursor: default; min-width: 24px; }
+.page-info {
+  margin-left: auto; font-size: 0.75rem; color: rgba(255,255,255,0.2);
+  white-space: nowrap;
+}
+
 /* 管理后台响应式（≤768px） */
 @media (max-width: 768px) {
   /* 汉堡菜单按钮：固定左上角 + 三条横线 → X 动画 */

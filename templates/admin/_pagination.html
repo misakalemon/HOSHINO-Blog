@@ -1,0 +1,19 @@
+{% macro pagination(paginate, page_param='page', extra_params='') %}
+{% if paginate.pages > 1 %}
+{% set p = page_param %}
+<div class="pagination">
+  <a href="?{{ p }}={{ paginate.prev_num }}{% if extra_params %}&{{ extra_params }}{% endif %}" class="page-link {{ 'disabled' if not paginate.has_prev }}" {% if not paginate.has_prev %}onclick="return false"{% endif %}>‹ 上一页</a>
+  {% for n in range(1, paginate.pages + 1) %}
+    {% if n == paginate.page %}
+      <span class="page-link active">{{ n }}</span>
+    {% elif n == 1 or n == paginate.pages or (n >= paginate.page - 2 and n <= paginate.page + 2) %}
+      <a href="?{{ p }}={{ n }}{% if extra_params %}&{{ extra_params }}{% endif %}" class="page-link">{{ n }}</a>
+    {% elif n == paginate.page - 3 or n == paginate.page + 3 %}
+      <span class="page-link dots">…</span>
+    {% endif %}
+  {% endfor %}
+  <a href="?{{ p }}={{ paginate.next_num }}{% if extra_params %}&{{ extra_params }}{% endif %}" class="page-link {{ 'disabled' if not paginate.has_next }}" {% if not paginate.has_next %}onclick="return false"{% endif %}>下一页 ›</a>
+  <span class="page-info">{{ paginate.page }} / {{ paginate.pages }} 页（共 {{ paginate.total }} 条）</span>
+</div>
+{% endif %}
+{% endmacro %}

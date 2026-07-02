@@ -55,7 +55,7 @@ from flask import abort, current_app, flash, jsonify, redirect, render_template,
 from flask_login import current_user, login_required, login_user, logout_user
 
 from . import admin_bp
-from .forms import CategoryForm, FeaturedCardForm, LoginForm, PostForm, ProfileForm, UserForm
+from .forms import CategoryForm, FeaturedCardForm, LoginForm, PostForm, ProfileForm, RegisterForm, UserForm
 from .models import Category, Comment, FeaturedCard, Post, User, db
 
 logger = logging.getLogger(__name__)
@@ -75,11 +75,18 @@ def _invalidate_sidebar_cache():
 # ═══════════════════════════════════════════════
 # 权限控制装饰器
 # ═══════════════════════════════════════════════
+def _check_active():
+    """检查当前用户是否被禁用，禁用则 403。"""
+    if not current_user.is_active:
+        abort(403)
+
+
 def admin_required(f):
-    """装饰器：仅允许管理员访问。"""
+    """装饰器：仅允许管理员访问（同时检查用户未被禁用）。"""
     @wraps(f)
     @login_required
     def decorated_function(*args, **kwargs):
+        _check_active()
         if not current_user.is_admin:
             abort(403)
         return f(*args, **kwargs)
@@ -87,14 +94,57 @@ def admin_required(f):
 
 
 def editor_required(f):
-    """装饰器：允许管理员和编辑访问。"""
+    """装饰器：允许管理员和编辑访问（同时检查用户未被禁用）。"""
     @wraps(f)
     @login_required
     def decorated_function(*args, **kwargs):
+        _check_active()
         if not current_user.is_editor:
             abort(403)
         return f(*args, **kwargs)
     return decorated_function
+
+
+def author_required(f):
+    """装饰器：允许管理员、编辑和作者访问（同时检查用户未被禁用）。"""
+    @wraps(f)
+    @login_required
+    def decorated_function(*args, **kwargs):
+        _check_active()
+        if not current_user.is_author:
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+# ═══════════════════════════════════════════════
+# 诊断
+# ═══════════════════════════════════════════════
+
+@admin_bp.route('/_debug')
+def debug_info():
+    """诊断端点：查看当前请求的 session、cookie、请求头等信息。
+    
+    帮助排查 CSRF 403 等远程访问问题。仅管理员可访问。
+    """
+    if not current_user.is_authenticated or not current_user.is_admin:
+        abort(403)
+    from flask import jsonify
+    headers = dict(request.headers)
+    headers.pop('Cookie', None)
+    return jsonify({
+        'session': dict(session),
+        'session_permanent': session.permanent,
+        'remote_addr': request.remote_addr,
+        'host': request.host,
+        'origin': request.headers.get('Origin', ''),
+        'referrer': request.headers.get('Referer', ''),
+        'x_forwarded_for': request.headers.get('X-Forwarded-For', ''),
+        'x_forwarded_proto': request.headers.get('X-Forwarded-Proto', ''),
+        'has_csrf_token': 'csrf_token' in session,
+        'is_authenticated': current_user.is_authenticated,
+        'user': current_user.username if current_user.is_authenticated else None,
+    })
 
 
 # ═══════════════════════════════════════════════
@@ -120,7 +170,9 @@ def login():
     Template: admin/login.html
     """
     if current_user.is_authenticated:
-        return redirect(url_for('admin.dashboard'))
+        if current_user.is_editor:
+            return redirect(url_for('admin.dashboard'))
+        return redirect(url_for('admin.profile'))
 
     ip = request.remote_addr or 'unknown'
     now = time.time()
@@ -133,6 +185,9 @@ def login():
     if form.validate_on_submit():
         user = User.query.filter_by(username=form.username.data).first()
         if user and user.check_password(form.password.data):
+            if not user.is_active:
+                flash('账号已被禁用，请联系管理员', 'error')
+                return render_template('admin/login.html', form=form)
             _login_attempts[ip] = []
             user.last_login_at = datetime.datetime.utcnow()
             user.last_login_ip = ip
@@ -140,10 +195,52 @@ def login():
             db.session.commit()
             session.permanent = True
             login_user(user)
-            return redirect(url_for('admin.dashboard'))
+            if user.is_editor:
+                return redirect(url_for('admin.dashboard'))
+            return redirect(url_for('admin.profile'))
         _login_attempts[ip].append(now)
         flash('用户名或密码错误', 'error')
     return render_template('admin/login.html', form=form)
+
+
+@admin_bp.route('/register', methods=['GET', 'POST'])
+def register():
+    """用户注册页面。
+
+    GET  — 显示注册表单
+    POST — 创建新用户（默认 role='user'）
+    """
+    if current_user.is_authenticated:
+        return redirect(url_for('admin.profile'))
+
+    form = RegisterForm()
+    if form.validate_on_submit():
+        # 检查注册功能是否启用
+        if not current_app.config.get('ENABLE_REGISTRATION', False):
+            flash('注册功能已关闭', 'error')
+            return render_template('admin/register.html', form=form)
+        if User.query.filter_by(username=form.username.data).first():
+            flash('用户名已存在', 'error')
+            return render_template('admin/register.html', form=form)
+        if User.query.filter_by(email=form.email.data).first():
+            flash('邮箱已被注册', 'error')
+            return render_template('admin/register.html', form=form)
+
+        user = User(
+            username=form.username.data,
+            email=form.email.data,
+            display_name=form.display_name.data or form.username.data,
+            role='user',
+            is_active=True,
+        )
+        user.set_password(form.password.data)
+        db.session.add(user)
+        db.session.commit()
+
+        flash('注册成功，请登录', 'success')
+        return redirect(url_for('admin.login'))
+
+    return render_template('admin/register.html', form=form)
 
 
 @admin_bp.route('/logout')
@@ -217,22 +314,29 @@ def dashboard():
 # ═══════════════════════════════════════════════
 
 @admin_bp.route('/posts')
-@editor_required
+@author_required
 def post_list():
-    """文章列表页（分页，每页 20 条）。
+    """文章列表页（分页 + 搜索，每页 20 条）。
 
+    管理员和编辑可见全部文章，作者仅见自己的文章。
     Template: admin/post-list.html
     """
     from sqlalchemy.orm import joinedload
     page = request.args.get('page', 1, type=int)
-    posts = Post.query.options(joinedload(Post.categories)).order_by(
-        Post.created_at.desc()
-    ).paginate(page=page, per_page=20, error_out=False)
+    q = request.args.get('q', '').strip()
+    query = Post.query.options(joinedload(Post.categories))
+    if q:
+        query = query.filter(Post.title.ilike(f'%{q}%'))
+    if not current_user.is_editor:
+        query = query.filter(Post.author_id == current_user.id)
+    posts = query.order_by(Post.created_at.desc()).paginate(
+        page=page, per_page=20, error_out=False
+    )
     return render_template('admin/post-list.html', posts=posts)
 
 
 @admin_bp.route('/posts/new', methods=['GET', 'POST'])
-@editor_required
+@author_required
 def new_post():
     """新建文章。支持多分类选择（最多 15 个）。
 
@@ -302,7 +406,7 @@ def new_post():
 
 
 @admin_bp.route('/posts/<int:id>/edit', methods=['GET', 'POST'])
-@editor_required
+@author_required
 def edit_post(id):
     """编辑文章。
 
@@ -314,8 +418,12 @@ def edit_post(id):
         id: 文章 ID
 
     Template: admin/post-form.html (editing=True)
+
+    权限：作者只能编辑自己的文章，编辑/管理员可编辑任何文章。
     """
     post = Post.query.get_or_404(id)
+    if not current_user.is_editor and post.author_id != current_user.id:
+        abort(403)
     # obj=post 让表单自动填充现有字段值
     form = PostForm(obj=post)
     form.categories.choices = [
@@ -376,7 +484,7 @@ def edit_post(id):
 
 
 @admin_bp.route('/posts/<int:id>/delete', methods=['POST'])
-@editor_required
+@author_required
 def delete_post(id):
     """删除文章（同时删除关联评论）。
 
@@ -387,8 +495,12 @@ def delete_post(id):
         id: 文章 ID
 
     POST 请求（通过表单按钮触发），删除后重定向到文章列表。
+
+    权限：作者只能删除自己的文章，编辑/管理员可删除任何文章。
     """
     post = Post.query.get_or_404(id)
+    if not current_user.is_editor and post.author_id != current_user.id:
+        abort(403)
     # 先删除关联评论，避免外键约束
     Comment.query.filter_by(post_id=post.id).delete()
     db.session.delete(post)
@@ -491,25 +603,26 @@ def delete_category(id):
 @admin_bp.route('/comments')
 @editor_required
 def comment_list():
-    """评论列表页（已分页）。
+    """评论列表页（已分页，独立翻页）。
 
     显示所有评论，按审核状态分两个表格：
       - 待审核（pending）：is_approved=False
       - 已通过（approved）：is_approved=True
 
     使用 joinedload(Comment.post) 预加载关联文章，避免 N+1。
-    默认每页 20 条，支持 ?page= 参数翻页。
+    默认每页 20 条，支持 ?pending_page= 和 ?approved_page= 独立翻页。
 
     Template: admin/comment-list.html
     """
     from sqlalchemy.orm import joinedload
-    page = request.args.get('page', 1, type=int)
+    pending_page = request.args.get('pending_page', 1, type=int)
+    approved_page = request.args.get('approved_page', 1, type=int)
     pending = Comment.query.options(joinedload(Comment.post)).filter_by(is_approved=False).order_by(
         Comment.created_at.desc()
-    ).paginate(page=page, per_page=20, error_out=False)
+    ).paginate(page=pending_page, per_page=20, error_out=False)
     approved = Comment.query.options(joinedload(Comment.post)).filter_by(is_approved=True).order_by(
         Comment.created_at.desc()
-    ).paginate(page=page, per_page=20, error_out=False)
+    ).paginate(page=approved_page, per_page=20, error_out=False)
     return render_template('admin/comment-list.html', pending=pending, approved=approved)
 
 
@@ -552,11 +665,14 @@ def delete_comment(id):
 @admin_bp.route('/users')
 @admin_required
 def user_list():
-    """用户列表页。
+    """用户列表页（分页，每页 20 条）。
 
     Template: admin/user-list.html
     """
-    users = User.query.order_by(User.created_at.desc()).all()
+    page = request.args.get('page', 1, type=int)
+    users = User.query.order_by(User.created_at.desc()).paginate(
+        page=page, per_page=20, error_out=False
+    )
     return render_template('admin/user-list.html', users=users)
 
 
@@ -681,6 +797,7 @@ def profile():
 
     Template: admin/profile.html
     """
+    _check_active()
     form = ProfileForm(obj=current_user)
     if form.validate_on_submit():
         current_user.display_name = form.display_name.data
@@ -740,7 +857,7 @@ def profile():
 # ═══════════════════════════════════════════════
 
 @admin_bp.route('/upload-image', methods=['POST'])
-@login_required
+@author_required
 def upload_image():
     """图片上传接口（供富文本编辑器调用）。
 

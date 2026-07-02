@@ -77,6 +77,9 @@ def init_db(app):
             db.session.add(admin)
             db.session.commit()
 
+        # ── 迁移 author 角色 → user 角色 ────────
+        _migrate_author_to_user(app)
+
         # ── 迁移 FeaturedCard.icon 字段长度 ────
         _migrate_featured_icon(app)
 
@@ -210,6 +213,21 @@ def _migrate_post_content(app):
             app.logger.info('迁移: posts.content 已扩展为 MEDIUMTEXT')
         except Exception:
             db.session.rollback()
+
+
+def _migrate_author_to_user(app):
+    """迁移：将已废弃的 author 角色合并到 user 角色。
+
+    author 角色已被移除，所有权限已转移给 user。
+    将数据库中 role='author' 的用户改为 role='user'。
+    """
+    from sqlalchemy import text
+    result = db.session.execute(
+        text("UPDATE users SET role = 'user' WHERE role = 'author'")
+    )
+    if result.rowcount > 0:
+        app.logger.info('迁移: 已将 %d 个用户从 author 角色合并到 user 角色', result.rowcount)
+    db.session.commit()
 
 
 # ── 后导入路由（延迟导入） ─────────────────────

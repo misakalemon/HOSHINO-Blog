@@ -131,25 +131,47 @@
                     <button type="button" onclick="rte('undo')" title="撤销">↩</button>
                     <button type="button" onclick="rte('redo')" title="重做">↪</button>
                     <span class="sep"></span>
-                    <select onchange="onFormatChange(this)">
-                        <option value="">段落</option>
-                        <option value="h1">H1 标题</option>
-                        <option value="h2">H2 标题</option>
-                        <option value="h3">H3 标题</option>
-                        <option value="h4">H4 标题</option>
-                        <option value="pre">代码块</option>
-                        <option value="blockquote">引用</option>
-                    </select>
-                    <select onchange="rte('fontSize',this.value);this.selectedIndex=0" title="字体大小">
-                        <option value="">字号</option>
-                        <option value="1">极小</option>
-                        <option value="2">小</option>
-                        <option value="3">正常</option>
-                        <option value="4">中大</option>
-                        <option value="5">大</option>
-                        <option value="6">很大</option>
-                        <option value="7">极大</option>
-                    </select>
+                    <div class="glow-select-wrap" data-select="format">
+                        <div class="glow-select-trigger" onclick="toggleGlowSelect(this)">
+                            <span class="glow-select-value">段落</span>
+                            <span class="glow-select-arrow">▼</span>
+                        </div>
+                        <div class="glow-select-menu">
+                            <div class="glow-select-option is-selected" data-value="">段落</div>
+                            <div class="glow-select-option" data-value="h1">H1 标题</div>
+                            <div class="glow-select-option" data-value="h2">H2 标题</div>
+                            <div class="glow-select-option" data-value="h3">H3 标题</div>
+                            <div class="glow-select-option" data-value="h4">H4 标题</div>
+                            <div class="glow-select-option" data-value="pre">代码块</div>
+                            <div class="glow-select-option" data-value="blockquote">引用</div>
+                        </div>
+                    </div>
+                    <div class="glow-select-wrap" style="display:inline-flex;background:transparent;border:none">
+                        <div class="glow-select-trigger" onclick="toggleGlowSelect(this)" style="padding:5px 8px;font-size:12px;color:var(--text-secondary);gap:4px">
+                            <span class="glow-select-value">字号</span>
+                            <span class="glow-select-arrow" style="font-size:0.5rem">▼</span>
+                        </div>
+                        <select onchange="rte('fontSize',this.value);this.selectedIndex=0" title="字体大小" style="display:none">
+                            <option value="">字号</option>
+                            <option value="1">极小</option>
+                            <option value="2">小</option>
+                            <option value="3">正常</option>
+                            <option value="4">中大</option>
+                            <option value="5">大</option>
+                            <option value="6">很大</option>
+                            <option value="7">极大</option>
+                        </select>
+                        <div class="glow-select-menu" style="min-width:90px;left:auto;right:0">
+                            <div class="glow-select-option is-selected" data-value="">字号</div>
+                            <div class="glow-select-option" data-value="1">极小</div>
+                            <div class="glow-select-option" data-value="2">小</div>
+                            <div class="glow-select-option" data-value="3">正常</div>
+                            <div class="glow-select-option" data-value="4">中大</div>
+                            <div class="glow-select-option" data-value="5">大</div>
+                            <div class="glow-select-option" data-value="6">很大</div>
+                            <div class="glow-select-option" data-value="7">极大</div>
+                        </div>
+                    </div>
                     <span class="sep"></span>
                     <button type="button" onclick="rte('bold')" title="粗体"><b>B</b></button>
                     <button type="button" onclick="rte('italic')" title="斜体"><i>I</i></button>
@@ -416,9 +438,7 @@ function rteCode() {
     insertHTML('<code>代码</code>');
   }
 }
-function onFormatChange(select) {
-  var val = select.value;
-  select.selectedIndex = 0;
+function onFormatChange(val) {
   if (val === 'pre') {
     insertCodeBlock();
   } else if (val) {
@@ -800,5 +820,48 @@ function removeCover(e) {
     highlightEditorCode();
   });
 })();
+
+// ── 自定义下拉框 (glow-select) ─────────────
+function toggleGlowSelect(trigger) {
+  var wrap = trigger.parentNode;
+  var isOpen = wrap.classList.contains('is-open');
+  document.querySelectorAll('.glow-select-wrap.is-open').forEach(function(w) {
+    w.classList.remove('is-open');
+  });
+  if (!isOpen) wrap.classList.add('is-open');
+}
+
+// 通用 glow-select 选项点击处理
+document.addEventListener('click', function(e) {
+  var opt = e.target.closest('.glow-select-option');
+  if (opt) {
+    var wrap = opt.closest('.glow-select-wrap');
+    if (!wrap) return;
+    var val = opt.getAttribute('data-value');
+    // 更新 trigger 文字
+    var trigger = wrap.querySelector('.glow-select-trigger');
+    if (trigger) {
+      trigger.querySelector('.glow-select-value').textContent = opt.textContent;
+    }
+    // 更新选中态
+    wrap.querySelectorAll('.glow-select-option').forEach(function(o) {
+      o.classList.toggle('is-selected', o === opt);
+    });
+    // 关闭菜单
+    wrap.classList.remove('is-open');
+    // 同步隐藏的 native select 并触发 change
+    var native = wrap.querySelector('select');
+    if (native) {
+      native.value = val;
+      native.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }
+  // 点击外部关闭所有 glow-select
+  if (!e.target.closest('.glow-select-wrap')) {
+    document.querySelectorAll('.glow-select-wrap.is-open').forEach(function(w) {
+      w.classList.remove('is-open');
+    });
+  }
+});
 </script>
 {% endblock %}

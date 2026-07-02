@@ -36,13 +36,23 @@
 <div class="admin-overlay" id="adminOverlay" onclick="toggleAdminSidebar()"></div>
 <div class="admin-sidebar" id="adminSidebar">
     <a href="{{ url_for('admin.dashboard') }}" class="logo">✦ Hoshino</a>
-    <!-- 根据 request.endpoint 匹配高亮 -->
+    <!-- 根据当前用户权限显示对应菜单项，防止前端猜测后端接口 -->
+    {% if current_user.is_editor %}
     <a href="{{ url_for('admin.dashboard') }}" {% if request.endpoint == 'admin.dashboard' %}class="active"{% endif %}><i class="hm-public-home"></i>仪表盘</a>
+    {% endif %}
     <a href="{{ url_for('admin.post_list') }}" {% if request.endpoint and 'post' in request.endpoint %}class="active"{% endif %}><i class="hm-public-file"></i>文章</a>
+    {% if current_user.is_editor %}
     <a href="{{ url_for('admin.category_list') }}" {% if request.endpoint and 'category' in request.endpoint %}class="active"{% endif %}><i class="hm-folder"></i>分类</a>
+    {% endif %}
+    {% if current_user.is_admin %}
     <a href="{{ url_for('admin.featured_card_list') }}" {% if request.endpoint and 'featured_card' in request.endpoint %}class="active"{% endif %}><i class="hm-public-highlights"></i>特色卡片</a>
+    {% endif %}
+    {% if current_user.is_editor %}
     <a href="{{ url_for('admin.comment_list') }}" {% if request.endpoint and 'comment' in request.endpoint %}class="active"{% endif %}><i class="hm-comments"></i>评论</a>
+    {% endif %}
+    {% if current_user.is_admin %}
     <a href="{{ url_for('admin.user_list') }}" {% if request.endpoint and 'user' in request.endpoint %}class="active"{% endif %}><i class="hm-contacts"></i>用户</a>
+    {% endif %}
     <a href="{{ url_for('admin.profile') }}" {% if request.endpoint == 'admin.profile' %}class="active"{% endif %}><i class="hm-set"></i>个人资料</a>
     <a href="{{ url_for('blog.index') }}" style="color:rgba(255,255,255,0.25);margin-top:20px;font-size:0.75rem">← 查看网站</a>
     <a href="{{ url_for('admin.logout') }}" class="logout-link"><i class="hm-quit"></i>退出登录</a>
@@ -65,12 +75,19 @@
     </div>
 </div>
 
-<div class="cookie-banner" id="cookieBanner">
-    <span>本站使用 Cookie 来改善体验。<a href="{{ url_for('blog.about') }}" style="color:rgba(0,150,255,0.8);text-decoration:underline">了解更多</a></span>
-    <button onclick="document.getElementById('cookieBanner').style.display='none';localStorage.setItem('cookie_consent','1')">同意</button>
-</div>
+{% include 'admin/_cookie_banner.html' %}
 
-<script>(function(){if(localStorage.getItem('cookie_consent'))document.getElementById('cookieBanner').style.display='none'})();</script>
+<!-- 自定义下拉框 (glow-select) 驱动 -->
+<script>
+// 汉堡菜单：切换侧边栏和覆盖层
+function toggleAdminSidebar() {
+  document.getElementById('adminSidebar').classList.toggle('open');
+  document.getElementById('adminToggle').classList.toggle('open');
+  document.getElementById('adminOverlay').classList.toggle('show');
+}
+function toggleGlowSelect(t){var r=t.parentNode,u=r.classList.contains('is-open');document.querySelectorAll('.glow-select-wrap.is-open').forEach(function(w){w.classList.remove('is-open')});if(!u)r.classList.add('is-open')}
+document.addEventListener('click',function(e){var o=e.target.closest('.glow-select-option');if(o){var w=o.closest('.glow-select-wrap');if(!w)return;var v=o.getAttribute('data-value'),t=w.querySelector('.glow-select-trigger');if(t)t.querySelector('.glow-select-value').textContent=o.textContent;w.querySelectorAll('.glow-select-option').forEach(function(x){x.classList.toggle('is-selected',x===o)});w.classList.remove('is-open');var n=w.querySelector('select');if(n){n.value=v;n.dispatchEvent(new Event('change',{bubbles:true}))}}if(!e.target.closest('.glow-select-wrap')){document.querySelectorAll('.glow-select-wrap.is-open').forEach(function(w){w.classList.remove('is-open')})}});
+</script>
 
 </body>
 </html>

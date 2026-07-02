@@ -14,16 +14,22 @@
     <div class="profile-card">
         <!-- 已登录：显示用户头像、姓名、角色及操作按钮 -->
         {% if current_user.is_authenticated %}
-        <a href="{{ url_for('admin.dashboard') }}" class="profile-link">
+        <a href="{{ url_for('admin.profile') }}" class="profile-link">
             <img src="{{ url_for('blog.thumbnail', path=current_user.avatar, w=80) }}" alt="avatar" class="profile-avatar">
             <div class="profile-info">
                 <span class="profile-name">{{ current_user.display_name or current_user.username }}</span>
-                <span class="profile-role">{{ '管理员' if current_user.is_admin else '用户' }}</span>
+                <span class="profile-role">{{ current_user.role_label }}</span>
             </div>
         </a>
         <div class="profile-actions">
+            {% if current_user.is_author %}
             <a href="{{ url_for('admin.new_post') }}" class="btn btn-sm btn-primary">写文章</a>
+            {% endif %}
+            {% if current_user.is_editor %}
             <a href="{{ url_for('admin.dashboard') }}" class="btn btn-sm btn-ghost">后台</a>
+            {% else %}
+            <a href="{{ url_for('admin.profile') }}" class="btn btn-sm btn-ghost">个人资料</a>
+            {% endif %}
         </div>
         <!-- 未登录：显示占位头像及登录入口 -->
         {% else %}

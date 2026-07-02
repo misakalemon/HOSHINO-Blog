@@ -29,6 +29,7 @@ from flask import flash, jsonify, redirect, render_template, request, url_for
 from flask_login import login_required
 
 from . import price_bp
+from .admin import editor_required
 from .crawler import crawl_all_active_sources
 from .models import ExchangeRate, PriceRecord, Product, ProductSource, db
 
@@ -163,7 +164,7 @@ def api_history(id):
 # 手动触发爬取（仅管理员）
 # ═══════════════════════════════════════════════
 @price_bp.route('/crawl', methods=['POST'])
-@login_required
+@editor_required
 def trigger_crawl():
     """手动触发一次价格爬取。
 
@@ -181,7 +182,7 @@ def trigger_crawl():
 # 手动输入价格
 # ═══════════════════════════════════════════════
 @price_bp.route('/manual-price', methods=['POST'])
-@login_required
+@editor_required
 def manual_price():
     """手动输入/更新商品价格。
 
@@ -231,7 +232,7 @@ def manual_price():
 # 添加新产品
 # ═══════════════════════════════════════════════
 @price_bp.route('/add-product', methods=['POST'])
-@login_required
+@editor_required
 def add_product():
     """添加新产品到追踪列表。
 

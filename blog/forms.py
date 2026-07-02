@@ -32,6 +32,14 @@ class LoginForm(FlaskForm):
     password = PasswordField('密码', validators=[DataRequired()])      # 登录密码，必填
 
 
+class RegisterForm(FlaskForm):
+    """用户注册表单。"""
+    username = StringField('用户名', validators=[DataRequired(), Length(min=2, max=64)])
+    email = StringField('邮箱', validators=[DataRequired(), Email(), Length(max=120)])
+    password = PasswordField('密码', validators=[DataRequired(), Length(min=6)])
+    display_name = StringField('显示名', validators=[Optional(), Length(max=128)])
+
+
 class PostForm(FlaskForm):
     """文章编辑表单（新建 / 编辑共用）。
 
@@ -74,7 +82,6 @@ class UserForm(FlaskForm):
     website = StringField('个人网站', validators=[Optional(), Length(max=256)])         # 个人网站链接，选填
     role = SelectField('角色', choices=[
         ('user', '用户'),
-        ('author', '作者'),
         ('editor', '编辑'),
         ('admin', '管理员'),
     ], default='user')

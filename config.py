@@ -128,6 +128,17 @@ class Config:
     SESSION_COOKIE_SECURE = os.environ.get('SESSION_COOKIE_SECURE', str(_default_secure)).lower() in ('true', '1')
     PERMANENT_SESSION_LIFETIME = timedelta(days=7)
 
+    # ── CSRF 保护 ──────────────────────────────────
+    # 关闭 SSL 严格检查（HTTP 环境下误报率低）
+    WTF_CSRF_SSL_STRICT = False
+    # 不设 CSRF token 过期时间（由 session 7 天过期兜底）
+    WTF_CSRF_TIME_LIMIT = None
+
+    # ── Flask-Login 记住我 cookie ─────────────────
+    REMEMBER_COOKIE_SECURE = SESSION_COOKIE_SECURE
+    REMEMBER_COOKIE_HTTPONLY = True
+    REMEMBER_COOKIE_SAMESITE = 'Lax'
+
     # ── 数据库 ──────────────────────────────────
     # 关闭 SQLAlchemy 的事件追踪（减少内存开销）
     SQLALCHEMY_TRACK_MODIFICATIONS = False
@@ -169,6 +180,11 @@ class Config:
     ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'CHANGE_ME')
     ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', 'admin@localhost')
     ADMIN_DISPLAY_NAME = os.environ.get('ADMIN_DISPLAY_NAME', 'Admin')
+
+    # ── 用户注册开关 ───────────────────────────────
+    # 关闭后 /admin/register 路由返回禁止注册提示。
+    # 生产环境建议关闭，需要新用户时由管理员在后台创建。
+    ENABLE_REGISTRATION = os.environ.get('ENABLE_REGISTRATION', 'false').lower() in ('true', '1')
 
     # ── Redis 缓存 ────────────────────────────────
     # 连接串格式: redis://[:password]@host:port/db

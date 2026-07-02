@@ -12,6 +12,7 @@
      ============================================================ -->
 {% extends 'admin/base_admin.html' %}
 {% block title %}文章管理{% endblock %}
+{% from 'admin/_pagination.html' import pagination %}
 {% block admin_content %}
 <style>
 .cat-pill {
@@ -28,35 +29,38 @@
 </style>
 <div class="admin-header">
     <h3>文章管理</h3>
-    <a href="{{ url_for('admin.new_post') }}" class="btn btn-primary">+ 新建文章</a>
+    <div style="display:flex;gap:8px;align-items:center">
+        <form method="GET" class="admin-search">
+            <input type="search" name="q" placeholder="搜索标题…" value="{{ request.args.get('q', '') }}">
+            <button type="submit" class="btn btn-sm">搜索</button>
+            {% if request.args.get('q') %}<a href="{{ url_for('admin.post_list') }}" class="btn btn-sm">清除</a>{% endif %}
+        </form>
+        <a href="{{ url_for('admin.new_post') }}" class="btn btn-primary">+ 新建文章</a>
+    </div>
 </div>
 <div class="admin-card">
     <div class="admin-table-wrapper">
     <table class="admin-table">
         <tr><th>标题</th><th>分类</th><th>状态</th><th>日期</th><th>操作</th></tr>
-        <!-- 遍历文章列表 -->
         {% for p in posts.items %}
         <tr>
             <td data-label="标题"><a href="{{ url_for('admin.edit_post', id=p.id) }}">{{ p.title[:50] }}{% if p.title|length > 50 %}…{% endif %}</a></td>
-            <!-- 文章分类（未分类时显示"未分类"） -->
             <td data-label="分类">{% if p.categories %}{% for cat in p.categories %}<span class="cat-pill">{{ cat.name }}</span> {% endfor %}{% else %}未分类{% endif %}</td>
-            <!-- 状态徽章 -->
             <td data-label="状态"><span class="badge {{ 'badge-published' if p.is_published else 'badge-draft' }}">{{ '已发布' if p.is_published else '草稿' }}</span></td>
             <td data-label="日期">{{ format_date(p.created_at, '%Y-%m-%d') }}</td>
             <td data-label="操作" style="white-space:nowrap">
                 <a href="{{ url_for('admin.edit_post', id=p.id) }}" class="btn btn-primary btn-sm">编辑</a>
-                <!-- 删除表单：确认后提交 -->
                 <form method="POST" action="{{ url_for('admin.delete_post', id=p.id) }}" style="display:inline" onsubmit="return confirm('确定删除此文章？')">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-danger btn-sm">删除</button>
                 </form>
             </td>
         </tr>
-        <!-- 无文章时显示提示 -->
         {% else %}
         <tr><td colspan="5" style="color:rgba(255,255,255,0.3)">暂无文章 · <a href="{{ url_for('admin.new_post') }}">新建一篇</a></td></tr>
         {% endfor %}
     </table>
     </div>
+    {{ pagination(posts, extra_params='q=' + request.args.get('q', '')|urlencode if request.args.get('q') else '') }}
 </div>
 {% endblock %}

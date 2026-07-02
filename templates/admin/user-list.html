@@ -1,5 +1,6 @@
 {% extends 'admin/base_admin.html' %}
 {% block title %}用户管理{% endblock %}
+{% from 'admin/_pagination.html' import pagination %}
 {% block admin_content %}
 <div class="admin-header">
     <h3>用户管理</h3>
@@ -9,7 +10,7 @@
     <div class="admin-table-wrapper">
     <table class="admin-table">
         <tr><th>ID</th><th>用户名</th><th>邮箱</th><th>显示名</th><th>角色</th><th>状态</th><th>文章数</th><th>登录次数</th><th>最后登录</th><th>创建时间</th><th>操作</th></tr>
-        {% for u in users %}
+        {% for u in users.items %}
         <tr>
             <td data-label="ID">{{ u.id }}</td>
             <td data-label="用户名"><strong>{{ u.username }}</strong></td>
@@ -46,5 +47,6 @@
         {% endfor %}
     </table>
     </div>
+    {{ pagination(users) }}
 </div>
 {% endblock %}
