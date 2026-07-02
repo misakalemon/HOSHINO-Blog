@@ -98,6 +98,10 @@
                             </div>
                             <!-- 发布日期 -->
                             <time style="display:block;color:rgba(255,255,255,0.15);font-size:0.6rem;margin-top:10px;font-family:'SF Mono','Fira Code',monospace">{{ format_date(post.created_at, '%Y.%m.%d') }}</time>
+                            <!-- 作者 -->
+                            {% if post.author %}
+                            <span style="color:rgba(255,255,255,0.2);font-size:0.6rem;margin-top:2px;display:block">✎ {{ post.author.display_name or post.author.username }}</span>
+                            {% endif %}
                         </div>
                     </div>
                 </div>

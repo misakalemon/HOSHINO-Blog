@@ -41,10 +41,11 @@
 <div class="admin-card">
     <div class="admin-table-wrapper">
     <table class="admin-table">
-        <tr><th>标题</th><th>分类</th><th>状态</th><th>日期</th><th>操作</th></tr>
+        <tr><th>标题</th><th>作者</th><th>分类</th><th>状态</th><th>日期</th><th>操作</th></tr>
         {% for p in posts.items %}
         <tr>
             <td data-label="标题"><a href="{{ url_for('admin.edit_post', id=p.id) }}">{{ p.title[:50] }}{% if p.title|length > 50 %}…{% endif %}</a></td>
+            <td data-label="作者">{{ p.author.display_name or p.author.username if p.author else '-' }}</td>
             <td data-label="分类">{% if p.categories %}{% for cat in p.categories %}<span class="cat-pill">{{ cat.name }}</span> {% endfor %}{% else %}未分类{% endif %}</td>
             <td data-label="状态"><span class="badge {{ 'badge-published' if p.is_published else 'badge-draft' }}">{{ '已发布' if p.is_published else '草稿' }}</span></td>
             <td data-label="日期">{{ format_date(p.created_at, '%Y-%m-%d') }}</td>

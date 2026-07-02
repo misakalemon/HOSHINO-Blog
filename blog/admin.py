@@ -324,7 +324,10 @@ def post_list():
     from sqlalchemy.orm import joinedload
     page = request.args.get('page', 1, type=int)
     q = request.args.get('q', '').strip()
-    query = Post.query.options(joinedload(Post.categories))
+    query = Post.query.options(
+        joinedload(Post.categories),
+        joinedload(Post.author),
+    )
     if q:
         query = query.filter(Post.title.ilike(f'%{q}%'))
     if not current_user.is_editor:
