@@ -575,3 +575,20 @@ def now():
     """
     import datetime
     return datetime.datetime.utcnow()
+
+
+@blog_bp.app_template_global()
+def admin_social():
+    """获取管理员社交链接，供页脚显示。
+
+    返回 dict: { website, gitcode_url, github_url }
+    """
+    from .models import User
+    admin = User.query.filter_by(role='admin').order_by(User.id).first()
+    if admin:
+        return {
+            'website': admin.website or '',
+            'gitcode_url': admin.gitcode_url or '',
+            'github_url': admin.github_url or '',
+        }
+    return {'website': '', 'gitcode_url': '', 'github_url': ''}
