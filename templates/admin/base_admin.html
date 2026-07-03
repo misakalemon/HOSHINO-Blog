@@ -89,30 +89,86 @@ function toggleGlowSelect(t){var r=t.parentNode,u=r.classList.contains('is-open'
 document.addEventListener('click',function(e){var o=e.target.closest('.glow-select-option');if(o){var w=o.closest('.glow-select-wrap');if(!w)return;var v=o.getAttribute('data-value'),t=w.querySelector('.glow-select-trigger');if(t)t.querySelector('.glow-select-value').textContent=o.textContent;w.querySelectorAll('.glow-select-option').forEach(function(x){x.classList.toggle('is-selected',x===o)});w.classList.remove('is-open');var n=w.querySelector('select');if(n){n.value=v;n.dispatchEvent(new Event('change',{bubbles:true}))}}if(!e.target.closest('.glow-select-wrap')){document.querySelectorAll('.glow-select-wrap.is-open').forEach(function(w){w.classList.remove('is-open')})}});
 
 // ── 全局弹窗（暗色粉紫风格，替换原生 alert/confirm/prompt）──
-(function(){
-  var ov=document.createElement('div');ov.className='glow-modal-overlay';
-  ov.innerHTML='<div class="glow-modal"><h4 id="gmd-title"></h4><p id="gmd-msg"></p><input class="glow-modal-input" id="gmd-input" style="display:none"><div class="glow-modal-actions" id="gmd-actions"></div></div>';
-  ov.addEventListener('click',function(e){if(e.target===ov)ov.style.display='none'});
-  document.body.appendChild(ov);
-  var t=document.getElementById('gmd-title'),m=document.getElementById('gmd-msg'),i=document.getElementById('gmd-input'),a=document.getElementById('gmd-actions');
-  function hide(){ov.style.display='none'}
-  window.alert=function(msg){t.textContent='提示';m.innerHTML=msg;a.innerHTML='<button class="btn btn-primary" style="flex:1;justify-content:center">确定</button>';a.querySelector('button').onclick=hide;ov.style.display='flex'};
-  window.confirm=function(msg,cb){if(typeof cb!='function')return true;t.textContent='确认操作';m.innerHTML=msg;a.innerHTML='<button class="btn btn-ghost" style="flex:1;justify-content:center">取消</button><button class="btn btn-primary" style="flex:1;justify-content:center">确定</button>';var b=a.querySelectorAll('button');b[0].onclick=function(){hide();cb(false)};b[1].onclick=function(){hide();cb(true)};ov.style.display='flex'};
-  window.prompt=function(msg,def){t.textContent='输入';m.innerHTML=msg;i.style.display='block';i.value=def||'';var r=null;a.innerHTML='<button class="btn btn-ghost" style="flex:1;justify-content:center">取消</button><button class="btn btn-primary" style="flex:1;justify-content:center">确定</button>';var b=a.querySelectorAll('button');b[0].onclick=function(){hide();i.style.display='none'};b[1].onclick=function(){r=i.value;hide();i.style.display='none'};ov.style.display='flex';return def||''};
+(function() {
+  // 创建遮罩层
+  var overlay = document.createElement('div');
+  overlay.className = 'glow-modal-overlay';
+  overlay.innerHTML =
+    '<div class="glow-modal">' +
+      '<h4 id="gmd-title"></h4>' +
+      '<p id="gmd-msg"></p>' +
+      '<input class="glow-modal-input" id="gmd-input" style="display:none">' +
+      '<div class="glow-modal-actions" id="gmd-actions"></div>' +
+    '</div>';
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) overlay.style.display = 'none';
+  });
+  document.body.appendChild(overlay);
+
+  var titleEl = document.getElementById('gmd-title');
+  var msgEl = document.getElementById('gmd-msg');
+  var inputEl = document.getElementById('gmd-input');
+  var actionsEl = document.getElementById('gmd-actions');
+
+  function hideOverlay() {
+    overlay.style.display = 'none';
+  }
+
+  // alert
+  window.alert = function(msg) {
+    titleEl.textContent = '提示';
+    msgEl.innerHTML = msg;
+    actionsEl.innerHTML = '<button class="btn btn-primary" style="flex:1;justify-content:center">确定</button>';
+    actionsEl.querySelector('button').onclick = hideOverlay;
+    overlay.style.display = 'flex';
+  };
+
+  // confirm（异步 callback 版，同步调用返回 true）
+  window.confirm = function(msg, cb) {
+    if (typeof cb !== 'function') return true;
+    titleEl.textContent = '确认操作';
+    msgEl.innerHTML = msg;
+    actionsEl.innerHTML =
+      '<button class="btn btn-ghost" style="flex:1;justify-content:center">取消</button>' +
+      '<button class="btn btn-primary" style="flex:1;justify-content:center">确定</button>';
+    var btns = actionsEl.querySelectorAll('button');
+    btns[0].onclick = function() { hideOverlay(); cb(false); };
+    btns[1].onclick = function() { hideOverlay(); cb(true); };
+    overlay.style.display = 'flex';
+  };
+
+  // prompt（保留原生同步行为）
+  window.prompt = function(msg, def) {
+    titleEl.textContent = '输入';
+    msgEl.innerHTML = msg;
+    inputEl.style.display = 'block';
+    inputEl.value = def || '';
+    actionsEl.innerHTML =
+      '<button class="btn btn-ghost" style="flex:1;justify-content:center">取消</button>' +
+      '<button class="btn btn-primary" style="flex:1;justify-content:center">确定</button>';
+    var btns = actionsEl.querySelectorAll('button');
+    btns[0].onclick = function() { hideOverlay(); inputEl.style.display = 'none'; };
+    btns[1].onclick = function() { inputEl.value = inputEl.value; hideOverlay(); inputEl.style.display = 'none'; };
+    overlay.style.display = 'flex';
+    return def || '';
+  };
 })();
 
 // showConfirm — 替换 onsubmit 中的 return confirm()
-function showConfirm(msg,cb){
-  var ov=document.querySelector('.glow-modal-overlay');if(!ov){cb(true);return}
-  document.getElementById('gmd-input').style.display='none';
-  document.getElementById('gmd-title').textContent='确认操作';
-  document.getElementById('gmd-msg').innerHTML=msg;
-  var a=document.getElementById('gmd-actions');
-  a.innerHTML='<button class="btn btn-ghost" style="flex:1;justify-content:center">取消</button><button class="btn btn-primary" style="flex:1;justify-content:center">确定</button>';
-  var b=a.querySelectorAll('button');
-  b[0].onclick=function(){ov.style.display='none';if(cb)cb(false)};
-  b[1].onclick=function(){ov.style.display='none';if(cb)cb(true)};
-  ov.style.display='flex';
+function showConfirm(msg, cb) {
+  var overlay = document.querySelector('.glow-modal-overlay');
+  if (!overlay) { if (cb) cb(true); return; }
+  document.getElementById('gmd-input').style.display = 'none';
+  document.getElementById('gmd-title').textContent = '确认操作';
+  document.getElementById('gmd-msg').innerHTML = msg;
+  var actionsEl = document.getElementById('gmd-actions');
+  actionsEl.innerHTML =
+    '<button class="btn btn-ghost" style="flex:1;justify-content:center">取消</button>' +
+    '<button class="btn btn-primary" style="flex:1;justify-content:center">确定</button>';
+  var btns = actionsEl.querySelectorAll('button');
+  btns[0].onclick = function() { overlay.style.display = 'none'; if (cb) cb(false); };
+  btns[1].onclick = function() { overlay.style.display = 'none'; if (cb) cb(true); };
+  overlay.style.display = 'flex';
 }
 </script>
 
