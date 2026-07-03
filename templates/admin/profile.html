@@ -110,13 +110,31 @@ function aboutRte(cmd, val) {
   document.execCommand(cmd, false, val || null);
 }
 
-// 插入链接
+// 插入链接（使用自定义弹窗）
 function aboutInsertLink() {
   var sel = window.getSelection().toString();
-  var url = prompt('链接地址:', 'https://');
-  if (url) {
-    aboutRte('insertHTML', '<a href="' + url.replace(/"/g,'&quot;') + '">' + (sel || url) + '</a>');
-  }
+  var ov = document.querySelector('.glow-modal-overlay');
+  if (!ov) return;
+  var gtitle = document.getElementById('gmd-title');
+  var gmsg = document.getElementById('gmd-msg');
+  var ginput = document.getElementById('gmd-input');
+  var gactions = document.getElementById('gmd-actions');
+  gtitle.textContent = '插入链接';
+  gmsg.innerHTML = '链接地址:';
+  ginput.style.display = 'block';
+  ginput.value = 'https://';
+  ginput.focus();
+  ginput.select();
+  gactions.innerHTML = '<button class="btn btn-ghost" style="flex:1;justify-content:center">取消</button><button class="btn btn-primary" style="flex:1;justify-content:center">确定</button>';
+  var btns = gactions.querySelectorAll('button');
+  btns[0].onclick = function(){ ov.style.display='none'; ginput.style.display='none'; };
+  btns[1].onclick = function(){
+    var url = ginput.value;
+    ov.style.display='none'; ginput.style.display='none';
+    if (url) aboutRte('insertHTML', '<a href="' + url.replace(/"/g,'&quot;') + '">' + (sel || url) + '</a>');
+  };
+  ov.style.display = 'flex';
+  ginput.onkeydown = function(e){ if(e.key==='Enter') btns[1].click(); if(e.key==='Escape') btns[0].click(); };
 }
 
 // 提交前将编辑器内容同步到隐藏 textarea

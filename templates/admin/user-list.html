@@ -36,7 +36,7 @@
                         {{ '禁用' if u.is_active else '启用' }}
                     </button>
                 </form>
-                <form method="POST" action="{{ url_for('admin.delete_user', id=u.id) }}" style="display:inline" onsubmit="return confirm('确定要删除用户 {{ u.username }} 吗？')">
+                <form method="POST" action="{{ url_for('admin.delete_user', id=u.id) }}" style="display:inline" onsubmit="event.preventDefault();showConfirm('确定要删除用户 {{ u.username }} 吗？',function(r){if(r)this.submit()}.bind(this))">
                     <button type="submit" class="btn btn-sm" style="background:rgba(255,60,60,0.2);color:rgba(255,100,100,0.9)">删除</button>
                 </form>
                 {% endif %}

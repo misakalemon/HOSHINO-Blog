@@ -969,6 +969,16 @@ ul { list-style: none; }
   white-space: nowrap;
 }
 
+/* ── 全局自定义弹窗 (替换原生 alert/confirm/prompt) ──── */
+.glow-modal-overlay { display:none; position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,0.6); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); align-items:center; justify-content:center; }
+.glow-modal { background:rgba(20,20,30,0.96); border:1px solid rgba(255,255,255,0.08); border-radius:16px; padding:28px 32px; max-width:380px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,0.5); }
+.glow-modal h4 { font-size:16px; font-weight:600; color:rgba(255,255,255,0.9); margin:0 0 8px; text-align:center; }
+.glow-modal p { font-size:13px; color:rgba(255,255,255,0.5); text-align:center; margin:0 0 20px; line-height:1.6; }
+.glow-modal-input { width:100%; padding:10px 14px; border-radius:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); color:#e8edf5; font-size:14px; outline:none; box-sizing:border-box; margin-top:12px; }
+.glow-modal-input:focus { border-color:#ff6b9d; }
+.glow-modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:20px; }
+.glow-modal-actions .btn { padding:8px 20px; font-size:13px; }
+
 /* 管理后台响应式（≤768px） */
 @media (max-width: 768px) {
   /* 汉堡菜单按钮：固定左上角 + 三条横线 → X 动画 */
