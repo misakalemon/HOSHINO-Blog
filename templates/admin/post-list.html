@@ -51,7 +51,7 @@
             <td data-label="日期">{{ format_date(p.created_at, '%Y-%m-%d') }}</td>
             <td data-label="操作" style="white-space:nowrap">
                 <a href="{{ url_for('admin.edit_post', id=p.id) }}" class="btn btn-primary btn-sm">编辑</a>
-                <form method="POST" action="{{ url_for('admin.delete_post', id=p.id) }}" style="display:inline" onsubmit="event.preventDefault();showConfirm('确定删除此文章？',function(r){if(r)this.submit()}.bind(this))">
+                <form method="POST" action="{{ url_for('admin.delete_post', id=p.id) }}" style="display:inline" onsubmit="var _f=this;event.preventDefault();showConfirm('确定删除此文章？',function(r){if(r){_f.onsubmit=null;_f.submit()}})">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-danger btn-sm">删除</button>
                 </form>
