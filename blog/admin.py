@@ -208,7 +208,11 @@ def register():
     """用户注册页面。
 
     GET  — 显示注册表单
-    POST — 创建新用户（默认 role='user'）
+    POST — 创建新用户（默认 role='user'，需要密码二次确认）
+
+    注意：
+      - 注册功能受 ENABLE_REGISTRATION 配置开关控制，默认关闭
+      - 生产环境建议由管理员在后台创建用户
     """
     if current_user.is_authenticated:
         return redirect(url_for('admin.profile'))
@@ -709,10 +713,10 @@ def new_user():
 @admin_bp.route('/users/<int:id>/edit', methods=['GET', 'POST'])
 @admin_required
 def edit_user(id):
-    """编辑用户信息。
+    """编辑用户角色。
 
-    可修改用户名、邮箱、显示名、简介、管理员权限。
-    密码字段为空时不修改密码。
+    编辑模式下仅可修改角色，其他字段只读且不会保存到数据库。
+    如需修改用户名/邮箱等信息，请删除后重建用户。
 
     Args:
         id: 用户 ID
@@ -784,10 +788,11 @@ def profile():
     """个人资料编辑页，支持头像上传。
 
     功能：
-      - 修改显示名、简介
+      - 修改显示名、简介、个人网站、社交链接（GitCode/GitHub）
       - 上传新头像（自动缩放至 200px 宽，PNG/JPEG）
       - 修改邮箱（检查唯一性）
-      - 修改密码（留空则不修改）
+      - 修改密码（需验证当前密码，且两次新密码一致）
+      - 编辑关于页面内容（仅管理员，富文本编辑器）
 
     注意：此路由使用 @login_required 而非 @admin_required，
     任何已登录用户均可编辑自己的资料。
