@@ -773,14 +773,18 @@ function rteImageUpload(align) {
   input.onchange = function() {
     var file = input.files[0];
     if (!file) return;
-    var formData = new FormData();
-    formData.append('file', file);
-    fetch('{{ url_for("admin.upload_image") }}', {
-      method:'POST',
-      headers: { 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content') },
-      body:formData
-    })
-    .then(function(r) { return r.json(); })
+    // 先裁剪，再上传
+    openCropModal(file, function(cropped) {
+      if (!cropped) return;
+      var formData = new FormData();
+      formData.append('file', cropped, file.name);
+      showToast('上传中…');
+      fetch('{{ url_for("admin.upload_image") }}', {
+        method:'POST',
+        headers: { 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content') },
+        body:formData
+      })
+      .then(function(r) { return r.json(); })
     .then(function(data) {
       if (!data.url) return;
       // 如果已有对齐模式，直接插入
@@ -814,7 +818,7 @@ function rteImageUpload(align) {
         }
       });
     })
-    .catch(function() { window.alert('图片上传失败'); });
+    .catch(function() { showToast('图片上传失败', 'error'); });
   };
   input.click();
 }
