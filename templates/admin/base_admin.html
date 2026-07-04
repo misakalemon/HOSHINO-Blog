@@ -171,153 +171,173 @@ function showConfirm(msg, cb) {
   overlay.style.display = 'flex';
 }
 
-// ── 图片裁剪工具 ──────────────────────────
+// ── 图片裁剪工具（视窗拖拽模式）─────────────
 // openCropModal(file, callback) — 打开裁剪弹窗
 // callback 接收裁剪后的 Blob 对象
 function openCropModal(file, callback) {
-  // 创建遮罩
+  var outputSize = 512; // 输出图片边长（正方形）
+
   var ov = document.createElement('div');
   ov.className = 'crop-overlay';
   ov.innerHTML =
     '<div class="crop-box">' +
-      '<h4>✂ 裁剪图片</h4>' +
-      '<div class="crop-image-wrap" id="cropWrap">' +
+      '<h4>✂ 调整图片位置</h4>' +
+      '<div class="crop-viewport" id="cropViewport">' +
         '<img id="cropImg" src="">' +
-        '<div class="crop-selection" id="cropSel"></div>' +
       '</div>' +
-      '<div class="crop-preview-wrap">' +
-        '<span>预览</span>' +
-        '<div class="crop-preview"><canvas id="cropPreview" width="160" height="160"></canvas></div>' +
-        '<span id="cropSize" style="flex:1;text-align:right;font-size:11px"></span>' +
+      '<div class="crop-zoom-row">' +
+        '<label>缩放</label>' +
+        '<input type="range" id="cropZoom" min="0.2" max="3" step="0.01" value="1">' +
+        '<span class="zoom-val" id="cropZoomVal">100%</span>' +
+      '</div>' +
+      '<div class="crop-info">' +
+        '<span id="cropPos">位置: (0, 0)</span>' +
+        '<span>拖拽移动 · 滚轮缩放</span>' +
       '</div>' +
       '<div class="crop-actions">' +
         '<button class="btn btn-ghost" id="cropCancel">取消</button>' +
-        '<button class="btn btn-primary" id="cropConfirm">确定裁剪</button>' +
+        '<button class="btn btn-primary" id="cropReset">重置</button>' +
+        '<button class="btn btn-primary" id="cropConfirm">确定</button>' +
       '</div>' +
     '</div>';
   document.body.appendChild(ov);
 
+  var viewport = ov.querySelector('#cropViewport');
   var img = ov.querySelector('#cropImg');
-  var sel = ov.querySelector('#cropSel');
-  var wrap = ov.querySelector('#cropWrap');
-  var preview = ov.querySelector('#cropPreview');
-  var pctx = preview.getContext('2d');
-  var sizeEl = ov.querySelector('#cropSize');
+  var zoomSlider = ov.querySelector('#cropZoom');
+  var zoomVal = ov.querySelector('#cropZoomVal');
+  var posEl = ov.querySelector('#cropPos');
 
-  var startX, startY, isDown = false;
-  var sx = 0, sy = 0, sw = 0, sh = 0; // 选择区域（归一化 0-1）
-  var iw = 0, ih = 0; // 图片原始尺寸
-  var rw = 0, rh = 0; // 图片渲染尺寸
+  var imgW = 0, imgH = 0;          // 图片原始尺寸
+  var tx = 0, ty = 0, scale = 1;   // 变换状态
+  var dragging = false;
+  var dStartX = 0, dStartY = 0, dTx = 0, dTy = 0;
 
   // 读取图片
   var reader = new FileReader();
   reader.onload = function(e) {
     img.src = e.target.result;
     img.onload = function() {
-      iw = img.naturalWidth; ih = img.naturalHeight;
-      rw = img.offsetWidth; rh = img.offsetHeight;
-      resetSelection();
+      imgW = img.naturalWidth;
+      imgH = img.naturalHeight;
+      // 初始缩放：让图片宽或高填满视窗
+      var vw = viewport.clientWidth;
+      var vh = viewport.clientHeight;
+      var s = Math.max(vw / imgW, vh / imgH);
+      // 但最小保证完整显示
+      s = Math.min(s, 1);
+      scale = s;
+      zoomSlider.value = s;
+      tx = 0; ty = 0;
+      applyTransform();
     };
   };
   reader.readAsDataURL(file);
 
-  function resetSelection() {
-    var s = Math.min(rw, rh) * 0.85;
-    sx = (rw - s) / 2 / rw;
-    sy = (rh - s) / 2 / rh;
-    sw = s / rw;
-    sh = s / rh;
-    updateSel();
+  function applyTransform() {
+    img.style.width = (imgW * scale) + 'px';
+    img.style.height = (imgH * scale) + 'px';
+    img.style.transform = 'translate(' + tx + 'px, ' + ty + 'px)';
+    zoomVal.textContent = Math.round(scale * 100) + '%';
+    posEl.textContent = '位置: (' + Math.round(-tx / scale) + ', ' + Math.round(-ty / scale) + ')';
   }
 
-  function updateSel() {
-    var l = sx * rw, t = sy * rh, w = sw * rw, h = sh * rh;
-    sel.style.left = l + 'px'; sel.style.top = t + 'px';
-    sel.style.width = w + 'px'; sel.style.height = h + 'px';
-    updatePreview();
+  function clampPos() {
+    var vw = viewport.clientWidth, vh = viewport.clientHeight;
+    var sw = imgW * scale, sh = imgH * scale;
+    var maxTx = 0, minTx = -(sw - vw);
+    var maxTy = 0, minTy = -(sh - vh);
+    if (sw <= vw) { minTx = (vw - sw) / 2; maxTx = (vw - sw) / 2; }
+    if (sh <= vh) { minTy = (vh - sh) / 2; maxTy = (vh - sh) / 2; }
+    tx = Math.max(minTx, Math.min(maxTx, tx));
+    ty = Math.max(minTy, Math.min(maxTy, ty));
   }
 
-  function updatePreview() {
-    var cx = sx * iw, cy = sy * ih, cw = sw * iw, ch = sh * ih;
-    var dim = Math.min(cw, ch);
-    var px = cx + (cw - dim) / 2, py = cy + (ch - dim) / 2;
-    pctx.clearRect(0, 0, 160, 160);
-    pctx.drawImage(img, px, py, dim, dim, 0, 0, 160, 160);
-    var cropW = Math.round(dim), cropH = Math.round(dim);
-    sizeEl.textContent = cropW + '×' + cropH;
-  }
-
-  // 鼠标/触摸拖拽
-  function onDown(e) {
-    var rect = wrap.getBoundingClientRect();
-    startX = (e.clientX || e.touches[0].clientX) - rect.left;
-    startY = (e.clientY || e.touches[0].clientY) - rect.top;
-    // 检查是否在选区内（允许拖动选区）
-    var l = sx * rw, t = sy * rh, w = sw * rw, h = sh * rh;
-    if (startX >= l && startX <= l + w && startY >= t && startY <= t + h) {
-      isDown = 'move';
-    } else {
-      isDown = 'new';
-    }
-  }
-
-  function onMove(e) {
-    if (!isDown) return;
+  // 鼠标拖拽
+  viewport.addEventListener('mousedown', function(e) {
+    if (e.button !== 0) return;
+    dragging = true;
+    dStartX = e.clientX; dStartY = e.clientY;
+    dTx = tx; dTy = ty;
+    viewport.style.cursor = 'grabbing';
     e.preventDefault();
-    var rect = wrap.getBoundingClientRect();
-    var cx = (e.clientX || e.touches[0].clientX) - rect.left;
-    var cy = (e.clientY || e.touches[0].clientY) - rect.top;
-    cx = Math.max(0, Math.min(rw, cx));
-    cy = Math.max(0, Math.min(rh, cy));
+  });
 
-    if (isDown === 'new') {
-      var x1 = Math.min(startX, cx) / rw, y1 = Math.min(startY, cy) / rh;
-      var x2 = Math.max(startX, cx) / rw, y2 = Math.max(startY, cy) / rh;
-      // 保持正方形
-      var dw = x2 - x1, dh = y2 - y1;
-      var d = Math.max(dw, dh);
-      sx = (x1 + x2 - d) / 2;
-      sy = (y1 + y2 - d) / 2;
-      sw = d; sh = d;
-      // 边界修正
-      if (sx < 0) sx = 0; if (sy < 0) sy = 0;
-      if (sx + sw > 1) sx = 1 - sw;
-      if (sy + sh > 1) sy = 1 - sh;
-    } else if (isDown === 'move') {
-      var dx = (cx - startX) / rw, dy = (cy - startY) / rh;
-      sx += dx; sy += dy;
-      if (sx < 0) sx = 0; if (sy < 0) sy = 0;
-      if (sx + sw > 1) sx = 1 - sw;
-      if (sy + sh > 1) sy = 1 - sh;
-      startX = cx; startY = cy;
-    }
-    updateSel();
-  }
+  window.addEventListener('mousemove', function(e) {
+    if (!dragging) return;
+    tx = dTx + (e.clientX - dStartX);
+    ty = dTy + (e.clientY - dStartY);
+    clampPos();
+    applyTransform();
+    e.preventDefault();
+  });
 
-  function onUp() { isDown = false; }
+  window.addEventListener('mouseup', function() {
+    if (dragging) { dragging = false; viewport.style.cursor = 'grab'; }
+  });
 
-  // 鼠标事件
-  wrap.addEventListener('mousedown', onDown);
-  window.addEventListener('mousemove', onMove);
-  window.addEventListener('mouseup', onUp);
-  // 触摸事件
-  wrap.addEventListener('touchstart', onDown);
-  window.addEventListener('touchmove', onMove);
-  window.addEventListener('touchend', onUp);
+  // 触摸
+  viewport.addEventListener('touchstart', function(e) {
+    var t = e.touches[0]; if (!t) return;
+    dragging = true;
+    dStartX = t.clientX; dStartY = t.clientY;
+    dTx = tx; dTy = ty;
+  }, { passive: true });
 
-  // 确定裁剪
+  window.addEventListener('touchmove', function(e) {
+    if (!dragging) return;
+    var t = e.touches[0]; if (!t) return;
+    tx = dTx + (t.clientX - dStartX);
+    ty = dTy + (t.clientY - dStartY);
+    clampPos();
+    applyTransform();
+    e.preventDefault();
+  }, { passive: false });
+
+  window.addEventListener('touchend', function() { dragging = false; }, { passive: true });
+
+  // 滚轮缩放
+  viewport.addEventListener('wheel', function(e) {
+    e.preventDefault();
+    var delta = e.deltaY > 0 ? -0.05 : 0.05;
+    scale = Math.max(0.2, Math.min(3, scale + delta));
+    zoomSlider.value = scale;
+    clampPos();
+    applyTransform();
+  }, { passive: false });
+
+  // 缩放滑块
+  zoomSlider.addEventListener('input', function() {
+    scale = parseFloat(this.value);
+    clampPos();
+    applyTransform();
+  });
+
+  // 重置
+  ov.querySelector('#cropReset').onclick = function() {
+    scale = 1; tx = 0; ty = 0;
+    zoomSlider.value = 1;
+    applyTransform();
+  };
+
+  // 确定：从视窗中心区域截取正方形
   ov.querySelector('#cropConfirm').onclick = function() {
-    var cx = Math.round(sx * iw), cy = Math.round(sy * ih);
-    var cw = Math.round(sw * iw), ch = Math.round(sh * ih);
-    var cropCanvas = document.createElement('canvas');
-    cropCanvas.width = cw; cropCanvas.height = ch;
-    var ctx = cropCanvas.getContext('2d');
-    ctx.drawImage(img, cx, cy, cw, ch, 0, 0, cw, ch);
-    cropCanvas.toBlob(function(blob) {
+    var vw = viewport.clientWidth, vh = viewport.clientHeight;
+    var size = Math.min(vw, vh);
+    var ox = (vw - size) / 2 - tx;
+    var oy = (vh - size) / 2 - ty;
+    var sx = ox / scale, sy = oy / scale;
+    var sw = size / scale;
+
+    var canvas = document.createElement('canvas');
+    canvas.width = outputSize; canvas.height = outputSize;
+    var ctx = canvas.getContext('2d');
+    ctx.drawImage(img, sx, sy, sw, sw, 0, 0, outputSize, outputSize);
+    canvas.toBlob(function(blob) {
       blob.name = file.name;
       document.body.removeChild(ov);
       if (callback) callback(blob);
-    }, 'image/jpeg', 90);
+    }, 'image/jpeg', 92);
   };
 
   // 取消
@@ -326,7 +346,6 @@ function openCropModal(file, callback) {
     if (callback) callback(null);
   };
 
-  // 点击外部取消
   ov.addEventListener('click', function(e) {
     if (e.target === ov) { document.body.removeChild(ov); if (callback) callback(null); }
   });
@@ -334,8 +353,7 @@ function openCropModal(file, callback) {
   ov.style.display = 'flex';
 }
 
-// 通用裁剪上传辅助：替换 input file 的 onchange 为裁剪流程
-// 用法: bindCropUpload(inputId, uploadUrl, fieldSelector, previewSelector)
+// 通用裁剪上传辅助
 function bindCropUpload(inputId, uploadUrl, fieldSelector, previewSelector) {
   var input = document.getElementById(inputId);
   if (!input) return;
