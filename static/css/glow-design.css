@@ -987,7 +987,7 @@ ul { list-style: none; }
 .crop-modal {
   position:relative;
   background:rgba(18,20,28,0.97); border:1px solid rgba(255,255,255,0.08);
-  border-radius:20px; width:960px; min-width:480px; min-height:360px;
+  border-radius:20px; width:960px; max-width:96vw; min-width:480px; min-height:360px;
   display:flex; flex-direction:column;
   box-shadow:0 24px 80px rgba(0,0,0,0.6);
 }
@@ -1100,9 +1100,51 @@ ul { list-style: none; }
 .crop-zoom-val { min-width:36px; font-size:13px; color:rgba(255,255,255,0.5); text-align:center; }
 
 .crop-actions { display:flex; gap:8px; margin-left:auto; }
-.glow-modal-actions .btn { padding:8px 20px; font-size:13px; }
+.crop-actions .action-btn {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:8px 20px; border-radius:30px; font-size:13px; font-weight:500;
+  cursor:pointer; transition:all 0.2s; font-family:inherit;
+  border:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.04);
+  color:#c8c0e8;
+}
+.crop-actions .action-btn:hover {
+  background:rgba(255,255,255,0.08);
+  border-color:rgba(255,255,255,0.12);
+  color:#fff;
+}
+.crop-actions .crop-apply {
+  background:linear-gradient(135deg,#7c5cf0,#6c42d1); color:#fff; border:none;
+  box-shadow:0 4px 16px rgba(108,66,209,0.3);
+}
+.crop-actions .crop-apply:hover {
+  transform:translateY(-2px);
+  box-shadow:0 8px 28px rgba(108,66,209,0.5);
+}
+.crop-actions .crop-apply:disabled,
+.crop-actions .crop-apply.loading {
+  opacity:0.5; cursor:not-allowed; pointer-events:none;
+  transform:none; box-shadow:none;
+}
+.crop-actions .crop-apply.loading::before {
+  content:''; display:inline-block; width:14px; height:14px;
+  border:2px solid rgba(255,255,255,0.3); border-top-color:#fff;
+  border-radius:50%; animation:crop-spin 0.6s linear infinite;
+}
+@keyframes crop-spin { to { transform:rotate(360deg); } }
 
 /* 管理后台响应式（≤768px） */
+@media (max-width: 768px) {
+  /* 裁剪弹窗适配小屏幕 */
+  .crop-modal { width:94vw; min-width:0; min-height:300px; border-radius:16px; }
+  .crop-modal-header { padding:12px 16px; }
+  .crop-modal-header h3 { font-size:14px; }
+  .crop-viewport-area { min-height:300px; }
+  .crop-footer { padding:10px 14px; gap:10px; flex-direction:column; align-items:stretch; }
+  .crop-ratios { justify-content:center; }
+  .crop-zoom { margin-left:0; justify-content:center; }
+  .crop-actions { margin-left:0; justify-content:center; }
+}
+/* 管理后台响应式（≤768px） — 原有块合并 */
 @media (max-width: 768px) {
   /* 汉堡菜单按钮：固定左上角 + 三条横线 → X 动画 */
   .admin-toggle {

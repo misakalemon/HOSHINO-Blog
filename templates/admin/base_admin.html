@@ -582,6 +582,9 @@ function openCropModal(file, callback) {
   };
 
   ov.querySelector('#cropConfirm').onclick = function() {
+    var btn = this;
+    if (btn.disabled) return;
+    btn.disabled = true; btn.classList.add('loading');
     // 使用 getBoundingClientRect 获取裁剪框实际像素位置（参考工具的做法）
     var vpRect = viewport.getBoundingClientRect();
     var boxRect = cropBox.getBoundingClientRect();
@@ -590,7 +593,7 @@ function openCropModal(file, callback) {
     var right = boxRect.right - vpRect.left;
     var bottom = boxRect.bottom - vpRect.top;
     var boxW = right - left, boxH = bottom - top;
-    if (boxW < 2 || boxH < 2) { alert('裁剪区域过小'); return; }
+    if (boxW < 2 || boxH < 2) { btn.disabled = false; btn.classList.remove('loading'); alert('裁剪区域过小'); return; }
 
     var vp = getVp();
     var W = st.imgW, H = st.imgH;
@@ -602,7 +605,7 @@ function openCropModal(file, callback) {
     var sy = Math.max(0, (top - imgTop) / scale);
     var sw = Math.min(boxW / scale, W - sx);
     var sh = Math.min(boxH / scale, H - sy);
-    if (sw < 1 || sh < 1) { alert('裁剪区域过小'); return; }
+    if (sw < 1 || sh < 1) { btn.disabled = false; btn.classList.remove('loading'); alert('裁剪区域过小'); return; }
 
     var outW = Math.round(sw), outH = Math.round(sh);
     var canvas = document.createElement('canvas');
