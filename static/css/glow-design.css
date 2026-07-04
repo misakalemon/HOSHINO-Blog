@@ -456,6 +456,23 @@ ul { list-style: none; }
 .glow-select-option.is-selected {
   background: rgba(255,107,157,0.12); color: #ff8aae; font-weight: 500;
 }
+
+/* ── 分类多选标签 ──────────────────────────── */
+.tag-checklist { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
+.tag-check-item {
+  display:inline-flex; align-items:center; gap:4px;
+  padding:5px 14px; border-radius:20px; font-size:13px; cursor:pointer;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(255,255,255,0.02);
+  color:rgba(255,255,255,0.5);
+  transition:all 0.15s; user-select:none;
+}
+.tag-check-item:hover { border-color:rgba(255,255,255,0.15); color:rgba(255,255,255,0.7); }
+.tag-check-item.checked {
+  background:rgba(255,107,157,0.12); border-color:rgba(255,107,157,0.3);
+  color:#ff8aae; font-weight:500;
+}
+.tag-check-item input { display:none; }
 .form-group textarea { resize: vertical; min-height: 80px; }
 
 /* ── 10. 按钮 ──────────────────────────────── */

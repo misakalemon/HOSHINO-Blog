@@ -241,13 +241,16 @@
                 </div>
                 <div style="flex:1">
                     <div class="form-group">
-                        <label>分类（按住 Ctrl 多选）</label>
-                        <select name="categories" multiple size="5">
-                            <!-- 遍历所有分类选项，如果已在 form.categories.data 中则标记 selected -->
+                        <label>分类</label>
+                        <div class="tag-checklist">
                             {% for val, label in form.categories.choices %}
-                            <option value="{{ val }}" {% if form.categories.data and val in form.categories.data %}selected{% endif %}>{{ label }}</option>
+                            <label class="tag-check-item{% if form.categories.data and val in form.categories.data %} checked{% endif %}">
+                                <input type="checkbox" name="categories" value="{{ val }}" {% if form.categories.data and val in form.categories.data %}checked{% endif %}
+                                       onchange="this.parentNode.classList.toggle('checked',this.checked)">
+                                {{ label }}
+                            </label>
                             {% endfor %}
-                        </select>
+                        </div>
                     </div>
                     <div class="form-group" style="margin-top:16px">
                         <!-- 发布状态复选框 -->
