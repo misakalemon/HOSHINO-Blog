@@ -809,7 +809,10 @@ def profile():
         current_user.github_url = form.github_url.data
 
         # ── 头像上传 ──────────────────────────
-        if 'avatar' in request.files:
+        avatar_url = request.form.get('avatar_url', '')
+        if avatar_url:
+            current_user.avatar = avatar_url
+        elif 'avatar' in request.files:
             file = request.files['avatar']
             if file and file.filename:
                 # 判断文件扩展名

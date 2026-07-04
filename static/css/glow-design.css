@@ -979,6 +979,24 @@ ul { list-style: none; }
 .glow-modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:20px; }
 .glow-modal-actions .btn { padding:8px 20px; font-size:13px; }
 
+/* ── 图片裁剪工具 ────────────────────────── */
+.crop-overlay { display:none; position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,0.7); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); align-items:center; justify-content:center; }
+.crop-box { background:rgba(20,20,30,0.98); border:1px solid rgba(255,255,255,0.08); border-radius:16px; padding:24px; max-width:700px; width:92%; box-shadow:0 20px 60px rgba(0,0,0,0.5); }
+.crop-box h4 { font-size:15px; font-weight:600; color:rgba(255,255,255,0.9); margin:0 0 12px; text-align:center; }
+.crop-image-wrap { position:relative; background:rgba(0,0,0,0.3); border-radius:12px; overflow:hidden; cursor:crosshair; max-height:460px; display:flex; align-items:center; justify-content:center; user-select:none; }
+.crop-image-wrap img { display:block; max-width:100%; max-height:440px; }
+.crop-selection { position:absolute; border:2px dashed #ff6b9d; background:rgba(255,107,157,0.08); pointer-events:none; z-index:10; }
+.crop-selection::before,.crop-selection::after{content:'';position:absolute;width:10px;height:10px;border:2px solid #ff6b9d;border-radius:50%;background:rgba(20,20,30,0.9)}
+.crop-selection::before{top:-6px;left:-6px}
+.crop-selection::after{bottom:-6px;right:-6px}
+.crop-grid { position:absolute; inset:0; display:grid; grid-template:1fr 1fr 1fr / 1fr 1fr 1fr; pointer-events:none; }
+.crop-grid-line { border:1px solid rgba(255,255,255,0.12); }
+.crop-preview-wrap { display:flex; align-items:center; gap:16px; margin-top:12px; padding:12px; background:rgba(0,0,0,0.2); border-radius:10px; }
+.crop-preview-wrap span { font-size:12px; color:rgba(255,255,255,0.35); white-space:nowrap; }
+.crop-preview { width:80px; height:80px; border-radius:10px; overflow:hidden; flex-shrink:0; background:rgba(0,0,0,0.3); }
+.crop-preview canvas { width:100%; height:100%; object-fit:cover; display:block; }
+.crop-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:16px; }
+
 /* 管理后台响应式（≤768px） */
 @media (max-width: 768px) {
   /* 汉堡菜单按钮：固定左上角 + 三条横线 → X 动画 */
