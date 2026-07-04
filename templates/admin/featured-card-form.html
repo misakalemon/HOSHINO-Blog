@@ -52,10 +52,16 @@
             </div>
             <div class="form-group"><label>标签</label>
                 <div class="glow-select-wrap">
-                    <div class="glow-select-trigger"><span>{{ form.tag.data or '选择分类' }}</span><span class="glow-select-arrow">▼</span></div>
-                    {{ form.tag() }}
+                    <div class="glow-select-trigger" onclick="toggleGlowSelect(this)">
+                        <span class="glow-select-value">{{ form.tag.data or '选择分类' }}</span>
+                        <span class="glow-select-arrow">▼</span>
+                    </div>
+                    <select name="tag" style="display:none">
+                        {% for val, label in form.tag.choices %}
+                        <option value="{{ val }}" {% if form.tag.data == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
                     <div class="glow-select-menu">
-                        <!-- 遍历标签选项 -->
                         {% for val, label in form.tag.choices %}
                         <div class="glow-select-option{% if form.tag.data == val %} is-selected{% endif %}" data-value="{{ val }}">{{ label }}</div>
                         {% endfor %}
