@@ -521,18 +521,6 @@ function openCropModal(file, callback) {
     if (st.cropMode) renderCrop();
   }, { passive: false });
 
-  // 清理 window 级事件监听，避免多次打开累积
-  function teardown() {
-    window.removeEventListener('mousemove', onMove);
-    window.removeEventListener('mouseup', onUp);
-    window.removeEventListener('touchmove', touchMoveH);
-    window.removeEventListener('touchend', touchEndH);
-    window.removeEventListener('mousemove', resizeMove);
-    window.removeEventListener('mouseup', resizeEnd);
-    window.removeEventListener('touchmove', resizeTouchMove);
-    window.removeEventListener('touchend', resizeTouchEnd);
-  }
-
   zoomSlider.addEventListener('input', function() {
     st.scale = parseFloat(this.value);
     applyTransform();
@@ -558,8 +546,8 @@ function openCropModal(file, callback) {
     if (!resizeState) return;
     var dx = e.clientX - resizeState.startX;
     var dy = e.clientY - resizeState.startY;
-    var newW = Math.max(480, resizeState.startW + dx);
-    var newH = Math.max(360, resizeState.startH + dy);
+    var newW = Math.max(480, Math.min(resizeState.startW + dx, window.innerWidth * 0.96));
+    var newH = Math.max(360, Math.min(resizeState.startH + dy, window.innerHeight * 0.96));
     modalEl.style.width = newW + 'px';
     modalEl.style.height = newH + 'px';
     if (st.cropMode) renderCrop();
@@ -589,6 +577,18 @@ function openCropModal(file, callback) {
   window.addEventListener('touchmove', resizeTouchMove, { passive: false });
   var resizeTouchEnd = function() { resizeEnd(); };
   window.addEventListener('touchend', resizeTouchEnd, { passive: true });
+
+  // 清理 window 级事件监听，避免多次打开累积
+  function teardown() {
+    window.removeEventListener('mousemove', onMove);
+    window.removeEventListener('mouseup', onUp);
+    window.removeEventListener('touchmove', touchMoveH);
+    window.removeEventListener('touchend', touchEndH);
+    window.removeEventListener('mousemove', resizeMove);
+    window.removeEventListener('mouseup', resizeEnd);
+    window.removeEventListener('touchmove', resizeTouchMove);
+    window.removeEventListener('touchend', resizeTouchEnd);
+  }
 
   // --- 按钮 ---
   ov.querySelector('#cropReset').onclick = function() {
@@ -639,9 +639,9 @@ function openCropModal(file, callback) {
     var ext = (filename.split('.').pop() || 'png').toLowerCase();
     var mime = {'png':'image/png','webp':'image/webp','gif':'image/gif'}[ext] || 'image/jpeg';
 
-    function done(blob) {
+    function onCropDone(blob) {
       if (blob) { teardown(); document.body.removeChild(ov); if (callback) callback(blob); return; }
-      // toBlob 失败 → 降级重试（无 quality 参数）
+      // toBlob 失败 → 降级重试
       if (mime !== 'image/png') {
         canvas.toBlob(function(blob2) {
           if (blob2) { teardown(); document.body.removeChild(ov); if (callback) callback(blob2); return; }
@@ -652,8 +652,7 @@ function openCropModal(file, callback) {
       }
     }
 
-    // 不传 quality 参数，避免浏览器兼容性问题
-    canvas.toBlob(done, mime);
+    canvas.toBlob(onCropDone, mime);
   };
 
   ov.querySelector('#cropCancel').onclick = function() {
@@ -684,7 +683,7 @@ function bindCropUpload(inputId, uploadUrl, fieldSelector, previewSelector, onSu
     // 拿到文件引用后立即重置 value，允许下次重复选择同一文件
     this.value = '';
     openCropModal(file, function(cropped) {
-      if (!cropped) { showToast('裁剪已取消', 'error'); return; }
+      if (!cropped) return;  // 用户取消裁剪，静默返回
       var formData = new FormData();
       formData.append('file', cropped, file.name);
       showToast('上传中…');
