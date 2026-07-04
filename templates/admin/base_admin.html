@@ -585,6 +585,11 @@ function openCropModal(file, callback) {
     var btn = this;
     if (btn.disabled) return;
     btn.disabled = true; btn.classList.add('loading');
+
+    function restoreBtn() {
+      btn.disabled = false; btn.classList.remove('loading');
+    }
+
     // 使用 getBoundingClientRect 获取裁剪框实际像素位置（参考工具的做法）
     var vpRect = viewport.getBoundingClientRect();
     var boxRect = cropBox.getBoundingClientRect();
@@ -593,7 +598,7 @@ function openCropModal(file, callback) {
     var right = boxRect.right - vpRect.left;
     var bottom = boxRect.bottom - vpRect.top;
     var boxW = right - left, boxH = bottom - top;
-    if (boxW < 2 || boxH < 2) { btn.disabled = false; btn.classList.remove('loading'); alert('裁剪区域过小'); return; }
+    if (boxW < 2 || boxH < 2) { restoreBtn(); alert('裁剪区域过小'); return; }
 
     var vp = getVp();
     var W = st.imgW, H = st.imgH;
@@ -605,32 +610,33 @@ function openCropModal(file, callback) {
     var sy = Math.max(0, (top - imgTop) / scale);
     var sw = Math.min(boxW / scale, W - sx);
     var sh = Math.min(boxH / scale, H - sy);
-    if (sw < 1 || sh < 1) { btn.disabled = false; btn.classList.remove('loading'); alert('裁剪区域过小'); return; }
+    if (sw < 1 || sh < 1) { restoreBtn(); alert('裁剪区域过小'); return; }
 
     var outW = Math.round(sw), outH = Math.round(sh);
     var canvas = document.createElement('canvas');
     canvas.width = outW; canvas.height = outH;
     var ctx = canvas.getContext('2d');
-    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, outW, outH);
+    try { ctx.drawImage(img, sx, sy, sw, sh, 0, 0, outW, outH); }
+    catch (e) { restoreBtn(); console.error('canvas drawImage 失败', e); alert('图片处理出错'); return; }
 
-    var ext = filename.split('.').pop().toLowerCase();
-    var mime = 'image/jpeg';
-    if (ext === 'png') mime = 'image/png';
-    else if (ext === 'webp') mime = 'image/webp';
-    else if (ext === 'gif') mime = 'image/gif';
-    var quality = (mime === 'image/jpeg' || mime === 'image/webp') ? 0.92 : undefined;
+    var ext = (filename.split('.').pop() || 'png').toLowerCase();
+    var mime = {'png':'image/png','webp':'image/webp','gif':'image/gif'}[ext] || 'image/jpeg';
 
     function done(blob) {
-      teardown();
-      document.body.removeChild(ov);
-      if (callback) callback(blob || null);
+      if (blob) { teardown(); document.body.removeChild(ov); if (callback) callback(blob); return; }
+      // toBlob 失败 → 降级重试（无 quality 参数）
+      if (mime !== 'image/png') {
+        canvas.toBlob(function(blob2) {
+          if (blob2) { teardown(); document.body.removeChild(ov); if (callback) callback(blob2); return; }
+          restoreBtn(); console.error('toBlob 两次均失败'); alert('图片处理失败，请重试');
+        }, 'image/png');
+      } else {
+        restoreBtn(); console.error('toBlob 返回 null'); alert('图片处理失败，请重试');
+      }
     }
 
-    canvas.toBlob(function(blob) {
-      if (blob) { done(blob); return; }
-      // 浏览器不支持该格式，降级到 PNG
-      canvas.toBlob(done, 'image/png');
-    }, mime, quality);
+    // 不传 quality 参数，避免浏览器兼容性问题
+    canvas.toBlob(done, mime);
   };
 
   ov.querySelector('#cropCancel').onclick = function() {
