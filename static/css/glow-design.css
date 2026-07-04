@@ -985,10 +985,35 @@ ul { list-style: none; }
   align-items:center; justify-content:center;
 }
 .crop-modal {
+  position:relative;
   background:rgba(18,20,28,0.97); border:1px solid rgba(255,255,255,0.08);
-  border-radius:20px; width:94vw; max-width:960px;
+  border-radius:20px; width:960px; min-width:480px; min-height:360px;
   display:flex; flex-direction:column;
   box-shadow:0 24px 80px rgba(0,0,0,0.6);
+}
+/* 弹窗拖拽调整大小手柄 */
+.crop-resize-handle {
+  position:absolute; bottom:0; right:0;
+  width:24px; height:24px; cursor:se-resize;
+  z-index:20; pointer-events:auto;
+  display:flex; align-items:flex-end; justify-content:flex-end;
+  padding:5px; box-sizing:border-box;
+}
+.crop-resize-handle::after {
+  content:''; display:block;
+  width:12px; height:12px;
+  border-right:2px solid rgba(255,255,255,0.25);
+  border-bottom:2px solid rgba(255,255,255,0.25);
+  border-radius:0 0 4px 0;
+  transition:border-color 0.2s;
+}
+.crop-resize-handle:hover::after {
+  border-right-color:rgba(255,107,157,0.8);
+  border-bottom-color:rgba(255,107,157,0.8);
+}
+.crop-resize-handle.dragging::after {
+  border-right-color:#ff6b9d;
+  border-bottom-color:#ff6b9d;
 }
 .crop-modal-header {
   display:flex; align-items:center; justify-content:space-between;

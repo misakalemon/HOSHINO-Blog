@@ -231,6 +231,7 @@ function openCropModal(file, callback) {
           '<button class="action-btn crop-apply" id="cropConfirm">确定裁剪</button>' +
         '</div>' +
       '</div>' +
+      '<div class="crop-resize-handle" id="cropResizeHandle"></div>' +
     '</div>';
   document.body.appendChild(ov);
 
@@ -509,6 +510,10 @@ function openCropModal(file, callback) {
     window.removeEventListener('mouseup', onUp);
     window.removeEventListener('touchmove', touchMoveH);
     window.removeEventListener('touchend', touchEndH);
+    window.removeEventListener('mousemove', resizeMove);
+    window.removeEventListener('mouseup', resizeEnd);
+    window.removeEventListener('touchmove', resizeTouchMove);
+    window.removeEventListener('touchend', resizeTouchEnd);
   }
 
   zoomSlider.addEventListener('input', function() {
@@ -516,6 +521,57 @@ function openCropModal(file, callback) {
     applyTransform();
     if (st.cropMode) renderCrop();
   });
+
+  // --- 弹窗拖拽调整大小 ---
+  var modalEl = ov.querySelector('.crop-modal');
+  var resizeHandle = ov.querySelector('#cropResizeHandle');
+  var resizeState = null;
+
+  function resizeStart(e) {
+    if (e.button !== undefined && e.button !== 0) return;
+    resizeState = {
+      startX: e.clientX, startY: e.clientY,
+      startW: modalEl.offsetWidth, startH: modalEl.offsetHeight,
+    };
+    resizeHandle.classList.add('dragging');
+    e.preventDefault();
+  }
+
+  function resizeMove(e) {
+    if (!resizeState) return;
+    var dx = e.clientX - resizeState.startX;
+    var dy = e.clientY - resizeState.startY;
+    var newW = Math.max(480, resizeState.startW + dx);
+    var newH = Math.max(360, resizeState.startH + dy);
+    modalEl.style.width = newW + 'px';
+    modalEl.style.height = newH + 'px';
+    if (st.cropMode) renderCrop();
+    e.preventDefault();
+  }
+
+  function resizeEnd() {
+    if (resizeState) {
+      resizeHandle.classList.remove('dragging');
+      if (st.cropMode) renderCrop();
+      resizeState = null;
+    }
+  }
+
+  resizeHandle.addEventListener('mousedown', resizeStart);
+  window.addEventListener('mousemove', resizeMove);
+  window.addEventListener('mouseup', resizeEnd);
+
+  resizeHandle.addEventListener('touchstart', function(e) {
+    var t = e.touches[0]; if (!t) return;
+    resizeStart({ button: 0, clientX: t.clientX, clientY: t.clientY, preventDefault: function() {} });
+  }, { passive: true });
+  var resizeTouchMove = function(e) {
+    var t = e.touches[0]; if (!t || !resizeState) return;
+    resizeMove({ clientX: t.clientX, clientY: t.clientY, preventDefault: function() { e.preventDefault(); } });
+  };
+  window.addEventListener('touchmove', resizeTouchMove, { passive: false });
+  var resizeTouchEnd = function() { resizeEnd(); };
+  window.addEventListener('touchend', resizeTouchEnd, { passive: true });
 
   // --- 按钮 ---
   ov.querySelector('#cropReset').onclick = function() {
