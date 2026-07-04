@@ -162,9 +162,7 @@ document.getElementById('profileForm').addEventListener('submit', function() {
   confirm.addEventListener('input', check);
 })();
 
-// 头像裁剪上传
-bindCropUpload('avatarInput', '{{ url_for("admin.upload_image") }}', '#avatarHidden', '#avatarPreview');
-// 兼容旧版表单提交：选择裁剪后点击更新资料提交
+// 头像裁剪上传 — 选图弹出裁剪，裁剪后上传，表单提交时保存
 (function() {
   var input = document.getElementById('avatarInput');
   var form = document.getElementById('profileForm');
