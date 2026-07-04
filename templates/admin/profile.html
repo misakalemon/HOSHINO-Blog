@@ -179,18 +179,18 @@ document.getElementById('profileForm').addEventListener('submit', function() {
           headers: { 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content') },
           body: formData
         })
-        .then(function(r) { return r.json(); })
+        .then(function(r) {
+          if (!r.ok) return r.json().then(function(d) { throw new Error(d.error || '上传失败'); });
+          return r.json();
+        })
         .then(function(data) {
-          if (!data.url) return;
-          // 写入隐藏字段，表单提交时一起保存
           var hidden = document.createElement('input');
           hidden.type = 'hidden'; hidden.name = 'avatar_url';
           hidden.value = data.url.replace('/static/', '');
           form.appendChild(hidden);
-          // 刷新头像预览
           document.querySelector('.admin-avatar').src = data.url + '?t=' + Date.now();
         })
-        .catch(function() { window.alert('上传失败'); });
+        .catch(function(err) { window.alert(err.message || '上传失败'); });
       });
     });
   }

@@ -977,34 +977,105 @@ ul { list-style: none; }
 .glow-modal-input { width:100%; padding:10px 14px; border-radius:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); color:#e8edf5; font-size:14px; outline:none; box-sizing:border-box; margin-top:12px; }
 .glow-modal-input:focus { border-color:#ff6b9d; }
 .glow-modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:20px; }
-.glow-modal-actions .btn { padding:8px 20px; font-size:13px; }
 
-/* ── 图片裁剪工具（视窗拖拽模式）───────────── */
-.crop-overlay { display:none; position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,0.7); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); align-items:center; justify-content:center; }
-.crop-box { background:rgba(20,20,30,0.98); border:1px solid rgba(255,255,255,0.08); border-radius:16px; padding:20px 24px 24px; max-width:640px; width:92%; box-shadow:0 20px 60px rgba(0,0,0,0.5); }
-.crop-box h4 { font-size:15px; font-weight:600; color:rgba(255,255,255,0.9); margin:0 0 12px; text-align:center; }
-/* 预设比例按钮 */
-.crop-ratios { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; margin-bottom:12px; }
-.crop-ratio-btn { padding:5px 14px; border-radius:20px; border:1px solid rgba(255,255,255,0.1); background:transparent; color:rgba(255,255,255,0.4); font-size:12px; cursor:pointer; transition:all 0.2s; font-family:inherit; }
+/* ── 图片裁剪弹窗 ──────────────────────────── */
+.crop-overlay {
+  display:none; position:fixed; inset:0; z-index:99998;
+  background:rgba(0,0,0,0.7); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+  align-items:center; justify-content:center;
+}
+.crop-modal {
+  background:rgba(18,20,28,0.97); border:1px solid rgba(255,255,255,0.08);
+  border-radius:20px; width:90vw; max-width:820px;
+  display:flex; flex-direction:column;
+  box-shadow:0 24px 80px rgba(0,0,0,0.6);
+}
+.crop-modal-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:16px 24px; border-bottom:1px solid rgba(255,255,255,0.06);
+}
+.crop-modal-header h3 { font-size:16px; font-weight:600; color:rgba(255,255,255,0.9); margin:0; display:flex; align-items:center; gap:8px; }
+.crop-modal-header .close-btn {
+  background:none; border:none; color:rgba(255,255,255,0.3); font-size:24px; cursor:pointer; padding:4px 8px; border-radius:8px; line-height:1;
+}
+.crop-modal-header .close-btn:hover { background:rgba(255,255,255,0.06); color:rgba(255,255,255,0.6); }
+
+.crop-viewport-area {
+  position:relative; flex:1; min-height:360px; overflow:hidden;
+  background:linear-gradient(rgba(200,212,224,0.06) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(200,212,224,0.06) 1px, transparent 1px);
+  background-size:24px 24px; background-color:rgba(0,0,0,0.15);
+  cursor:default; user-select:none; -webkit-user-select:none;
+}
+.crop-viewport-area img {
+  position:absolute; left:50%; top:50%;
+  transform:translate(-50%,-50%) scale(1);
+  transform-origin:center center;
+  max-width:none; max-height:none;
+  pointer-events:none; z-index:1;
+  border-radius:4px;
+}
+
+.crop-box {
+  position:absolute; z-index:2;
+  border:2px solid #fff;
+  border-radius:3px;
+  box-shadow:0 0 0 1px rgba(0,0,0,0.25);
+  pointer-events:none;
+}
+.crop-box.dragging { border-color:#ffaa00; }
+.crop-edge {
+  position:absolute; pointer-events:auto; background:transparent; z-index:3;
+}
+.crop-edge:hover { background:rgba(255,255,255,0.12); }
+.crop-edge-top { top:-6px; left:0; width:100%; height:12px; cursor:n-resize; }
+.crop-edge-bottom { bottom:-6px; left:0; width:100%; height:12px; cursor:s-resize; }
+.crop-edge-left { top:0; left:-6px; width:12px; height:100%; cursor:w-resize; }
+.crop-edge-right { top:0; right:-6px; width:12px; height:100%; cursor:e-resize; }
+.crop-edge-tl { top:-7px; left:-7px; width:16px; height:16px; cursor:nw-resize; }
+.crop-edge-tr { top:-7px; right:-7px; width:16px; height:16px; cursor:ne-resize; }
+.crop-edge-bl { bottom:-7px; left:-7px; width:16px; height:16px; cursor:sw-resize; }
+.crop-edge-br { bottom:-7px; right:-7px; width:16px; height:16px; cursor:se-resize; }
+
+.crop-mask-layer {
+  position:absolute; inset:0; pointer-events:none; z-index:2;
+}
+.crop-mask-piece {
+  position:absolute; background:rgba(0,0,0,0.45);
+  backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);
+}
+
+.crop-footer {
+  display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+  padding:14px 24px; border-top:1px solid rgba(255,255,255,0.06);
+}
+.crop-ratios { display:flex; gap:4px; flex-wrap:wrap; }
+.crop-ratio-btn {
+  padding:5px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.08);
+  background:transparent; color:rgba(255,255,255,0.5); font-size:12px; cursor:pointer; transition:all 0.15s;
+}
 .crop-ratio-btn:hover { border-color:rgba(255,255,255,0.2); color:rgba(255,255,255,0.7); }
-.crop-ratio-btn.active { background:rgba(255,107,157,0.15); border-color:#ff6b9d; color:#ff6b9d; font-weight:500; }
-/* 视窗：固定大小，overflow:hidden，带棋盘背景 */
-.crop-viewport { position:relative; width:100%; aspect-ratio:1/1; max-height:420px; border-radius:12px; overflow:hidden; background: repeating-conic-gradient(rgba(255,255,255,0.04) 0% 25%, transparent 0% 50%) 0 0 / 20px 20px; cursor:grab; user-select:none; -webkit-user-select:none; border:1px solid rgba(255,255,255,0.06); }
-.crop-viewport:active { cursor:grabbing; }
-.crop-viewport img { position:absolute; top:0; left:0; display:block; pointer-events:none; }
-/* 裁切遮罩：用阴影显示最终裁切区域 */
-.crop-mask { position:absolute; inset:0; pointer-events:none; z-index:5; }
-.crop-mask-inner { position:absolute; border:2px solid rgba(255,107,157,0.6); box-shadow:0 0 0 9999px rgba(0,0,0,0.45); border-radius:4px; }
-/* 缩放控制条 */
-.crop-zoom-row { display:flex; align-items:center; gap:12px; margin-top:14px; }
-.crop-zoom-row label { font-size:13px; color:rgba(255,255,255,0.5); white-space:nowrap; }
-.crop-zoom-row input[type="range"] { flex:1; -webkit-appearance:none; appearance:none; height:4px; border-radius:4px; background:rgba(255,255,255,0.1); outline:none; }
-.crop-zoom-row input[type="range"]::-webkit-slider-thumb { -webkit-appearance:none; width:18px; height:18px; border-radius:50%; background:#ff6b9d; cursor:pointer; border:2px solid rgba(20,20,30,0.8); box-shadow:0 2px 8px rgba(255,107,157,0.4); }
-.crop-zoom-row .zoom-val { min-width:44px; font-size:13px; color:rgba(255,255,255,0.6); text-align:center; font-variant-numeric:tabular-nums; }
-.crop-info { display:flex; justify-content:space-between; align-items:center; margin-top:8px; }
-.crop-info span { font-size:11px; color:rgba(255,255,255,0.25); }
-.crop-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:14px; border-top:1px solid rgba(255,255,255,0.06); padding-top:14px; }
-.crop-actions .btn { padding:8px 20px; font-size:13px; }
+.crop-ratio-btn.active { background:rgba(0,102,255,0.15); border-color:rgba(0,102,255,0.3); color:#7abfff; }
+
+.crop-zoom { display:flex; align-items:center; gap:8px; margin-left:auto; }
+.crop-zoom input[type=range] {
+  -webkit-appearance:none; appearance:none;
+  width:100px; height:3px; border-radius:3px;
+  background:rgba(255,255,255,0.12); outline:none;
+}
+.crop-zoom input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance:none; appearance:none;
+  width:14px; height:14px; border-radius:50%;
+  background:#7abfff; cursor:pointer; border:2px solid #fff;
+}
+.crop-zoom input[type=range]::-moz-range-thumb {
+  width:14px; height:14px; border-radius:50%;
+  background:#7abfff; cursor:pointer; border:2px solid #fff;
+}
+.crop-zoom-val { min-width:36px; font-size:13px; color:rgba(255,255,255,0.5); text-align:center; }
+
+.crop-actions { display:flex; gap:8px; margin-left:auto; }
+.glow-modal-actions .btn { padding:8px 20px; font-size:13px; }
 
 /* 管理后台响应式（≤768px） */
 @media (max-width: 768px) {

@@ -171,57 +171,226 @@ function showConfirm(msg, cb) {
   overlay.style.display = 'flex';
 }
 
-// ── 图片裁剪工具（视窗拖拽模式）─────────────
+// ── 图片裁剪工具（浮动裁剪框模式）─────────────
 // openCropModal(file, callback) — 打开裁剪弹窗
 // callback 接收裁剪后的 Blob 对象
+// 使用 getBoundingClientRect 计算裁剪区域，确保坐标精确
 function openCropModal(file, callback) {
   var RATIOS = [
-    { label: '1:1', w: 1, h: 1, size: 512 },
-    { label: '16:9', w: 16, h: 9, size: 512 },
-    { label: '4:3', w: 4, h: 3, size: 512 },
-    { label: '3:2', w: 3, h: 2, size: 512 },
-    { label: '自由', w: 0, h: 0, size: 0 },
+    { label: '自由', w: 0, h: 0 },
+    { label: '1:1', w: 1, h: 1 },
+    { label: '4:3', w: 4, h: 3 },
+    { label: '16:9', w: 16, h: 9 },
+    { label: '3:2', w: 3, h: 2 },
+    { label: '21:9', w: 21, h: 9 },
+    { label: '2:3', w: 2, h: 3 },
+    { label: '3:4', w: 3, h: 4 },
+    { label: '9:16', w: 9, h: 16 },
+    { label: '1.91:1', w: 1.91, h: 1 },
   ];
   var activeRatio = RATIOS[0];
+  var filename = file.name || 'image.png';
 
+  // --- 构建 DOM ---
   var ov = document.createElement('div');
   ov.className = 'crop-overlay';
   ov.innerHTML =
-    '<div class="crop-box">' +
-      '<h4>✂ 调整图片位置</h4>' +
-      '<div class="crop-ratios" id="cropRatios"></div>' +
-      '<div class="crop-viewport" id="cropViewport">' +
-        '<img id="cropImg" src="">' +
-        '<div class="crop-mask" id="cropMask"><div class="crop-mask-inner" id="cropMaskInner"></div></div>' +
+    '<div class="crop-modal">' +
+      '<div class="crop-modal-header">' +
+        '<h3>✂ 裁剪图片</h3>' +
+        '<button class="close-btn" id="cropModalClose">&times;</button>' +
       '</div>' +
-      '<div class="crop-zoom-row">' +
-        '<label>缩放</label>' +
-        '<input type="range" id="cropZoom" min="0.2" max="3" step="0.01" value="1">' +
-        '<span class="zoom-val" id="cropZoomVal">100%</span>' +
+      '<div class="crop-viewport-area" id="cropViewport">' +
+        '<img id="cropImg" src="" draggable="false">' +
+        '<div class="crop-mask-layer" id="cropMaskLayer">' +
+          '<div class="crop-mask-piece" id="cropMaskTop"></div>' +
+          '<div class="crop-mask-piece" id="cropMaskBottom"></div>' +
+          '<div class="crop-mask-piece" id="cropMaskLeft"></div>' +
+          '<div class="crop-mask-piece" id="cropMaskRight"></div>' +
+        '</div>' +
+        '<div class="crop-box" id="cropBox">' +
+          '<div class="crop-edge crop-edge-top" data-edge="top"></div>' +
+          '<div class="crop-edge crop-edge-bottom" data-edge="bottom"></div>' +
+          '<div class="crop-edge crop-edge-left" data-edge="left"></div>' +
+          '<div class="crop-edge crop-edge-right" data-edge="right"></div>' +
+          '<div class="crop-edge crop-edge-tl" data-edge="tl"></div>' +
+          '<div class="crop-edge crop-edge-tr" data-edge="tr"></div>' +
+          '<div class="crop-edge crop-edge-bl" data-edge="bl"></div>' +
+          '<div class="crop-edge crop-edge-br" data-edge="br"></div>' +
+        '</div>' +
       '</div>' +
-      '<div class="crop-info">' +
-        '<span id="cropPos">位置: (0, 0)</span>' +
-        '<span id="cropOutSize">512×512</span>' +
-      '</div>' +
-      '<div class="crop-actions">' +
-        '<button class="btn btn-ghost" id="cropCancel">取消</button>' +
-        '<button class="btn btn-primary" id="cropReset">重置</button>' +
-        '<button class="btn btn-primary" id="cropConfirm">确定</button>' +
+      '<div class="crop-footer">' +
+        '<div class="crop-ratios" id="cropRatios"></div>' +
+        '<div class="crop-zoom">' +
+          '<input type="range" id="cropZoom" min="0.2" max="3" step="0.01" value="1">' +
+          '<span class="crop-zoom-val" id="cropZoomVal">100%</span>' +
+        '</div>' +
+        '<div class="crop-actions">' +
+          '<button class="action-btn crop-cancel" id="cropReset">重置</button>' +
+          '<button class="action-btn crop-cancel" id="cropCancel">取消</button>' +
+          '<button class="action-btn crop-apply" id="cropConfirm">确定裁剪</button>' +
+        '</div>' +
       '</div>' +
     '</div>';
   document.body.appendChild(ov);
 
+  // --- DOM 引用 ---
   var viewport = ov.querySelector('#cropViewport');
   var img = ov.querySelector('#cropImg');
-  var mask = ov.querySelector('#cropMask');
-  var maskInner = ov.querySelector('#cropMaskInner');
+  var cropBox = ov.querySelector('#cropBox');
+  var maskTop = ov.querySelector('#cropMaskTop');
+  var maskBottom = ov.querySelector('#cropMaskBottom');
+  var maskLeft = ov.querySelector('#cropMaskLeft');
+  var maskRight = ov.querySelector('#cropMaskRight');
   var ratiosEl = ov.querySelector('#cropRatios');
   var zoomSlider = ov.querySelector('#cropZoom');
   var zoomVal = ov.querySelector('#cropZoomVal');
-  var posEl = ov.querySelector('#cropPos');
-  var outSizeEl = ov.querySelector('#cropOutSize');
 
-  // 渲染预设按钮
+  // --- 状态 ---
+  var st = {
+    imgW: 0, imgH: 0,
+    tx: 0, ty: 0, scale: 1,
+    cropMode: false, // 是否已激活裁剪（加载图片后自动激活）
+    ratio: null,     // 'free' 或 '1:1' 等
+    cropLeft: 0, cropTop: 0, cropW: 0, cropH: 0,
+    dragMode: null,  // 'image'|'crop'|'resize'
+    resizeEdge: null,
+    dragX: 0, dragY: 0,
+    dragTx: 0, dragTy: 0,
+    dragCropLeft: 0, dragCropTop: 0, dragCropW: 0, dragCropH: 0,
+  };
+
+  function clamp(v, mn, mx) { return Math.min(Math.max(v, mn), mx); }
+
+  function getVp() {
+    return { w: viewport.clientWidth, h: viewport.clientHeight };
+  }
+
+  // 图片在视窗中的矩形（视窗坐标）
+  function getImgRect() {
+    var vp = getVp();
+    var cx = vp.w / 2 + st.tx, cy = vp.h / 2 + st.ty;
+    var sw = st.imgW * st.scale, sh = st.imgH * st.scale;
+    return { l: cx - sw/2, t: cy - sh/2, r: cx + sw/2, b: cy + sh/2, w: sw, h: sh };
+  }
+
+  // 图片拖动边界（tx/ty 空间，参考工具的实现）
+  function getImgBounds() {
+    var vp = getVp();
+    var sw = st.imgW * st.scale, sh = st.imgH * st.scale;
+    var relax = sw * 0.15, minX, maxX, minY, maxY;
+    if (sw <= vp.w) { minX = -(vp.w - sw) / 2; maxX = (vp.w - sw) / 2; }
+    else { minX = -(vp.w) / 2; maxX = (vp.w) / 2; }
+    if (sh <= vp.h) { minY = -(vp.h - sh) / 2; maxY = (vp.h - sh) / 2; }
+    else { minY = -(vp.h) / 2; maxY = (vp.h) / 2; }
+    return { minX: minX - relax, maxX: maxX + relax, minY: minY - relax, maxY: maxY + relax };
+  }
+
+  // 检测指针在裁剪框边缘
+  function getEdge(px, py) {
+    if (!st.cropMode || !st.ratio) return null;
+    var l = st.cropLeft, t = st.cropTop, r = l + st.cropW, b = t + st.cropH;
+    var S = 10;
+    if (px >= l - S && px <= l + S && py >= t - S && py <= t + S) return 'tl';
+    if (px >= r - S && px <= r + S && py >= t - S && py <= t + S) return 'tr';
+    if (px >= l - S && px <= l + S && py >= b - S && py <= b + S) return 'bl';
+    if (px >= r - S && px <= r + S && py >= b - S && py <= b + S) return 'br';
+    if (py >= t - S && py <= t + S && px >= l && px <= r) return 'top';
+    if (py >= b - S && py <= b + S && px >= l && px <= r) return 'bottom';
+    if (px >= l - S && px <= l + S && py >= t && py <= b) return 'left';
+    if (px >= r - S && px <= r + S && py >= t && py <= b) return 'right';
+    return null;
+  }
+
+  function insideCrop(px, py) {
+    if (!st.cropMode) return false;
+    var pad = 4;
+    return px >= st.cropLeft + pad && px <= st.cropLeft + st.cropW - pad &&
+           py >= st.cropTop + pad && py <= st.cropTop + st.cropH - pad;
+  }
+
+  function vpCoords(e) {
+    var r = viewport.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+
+  // --- 更新视图 ---
+  function applyTransform() {
+    img.style.transform = 'translate(calc(-50% + ' + st.tx + 'px), calc(-50% + ' + st.ty + 'px)) scale(' + st.scale + ')';
+    zoomVal.textContent = Math.round(st.scale * 100) + '%';
+  }
+
+  // 激活裁剪模式，设置裁剪框
+  function activateCrop(ratioStr) {
+    var ir = getImgRect();
+    if (ratioStr === 'free') {
+      st.cropLeft = ir.l; st.cropTop = ir.t;
+      st.cropW = ir.w; st.cropH = ir.h;
+      st.ratio = 'free';
+    } else {
+      var parts = ratioStr.split(':');
+      var rw = parseFloat(parts[0]), rh = parseFloat(parts[1]);
+      var vp = getVp();
+      var maxW = Math.min(vp.w * 0.9, ir.w);
+      var maxH = Math.min(vp.h * 0.9, ir.h);
+      var bw, bh;
+      if (rw / rh > maxW / maxH) { bw = maxW; bh = bw * rh / rw; }
+      else { bh = maxH; bw = bh * rw / rh; }
+      bw = Math.min(bw, ir.w); bh = Math.min(bh, ir.h);
+      if (bw < 2 || bh < 2) { bw = ir.w; bh = ir.h; }
+      st.cropLeft = ir.l + (ir.w - bw) / 2;
+      st.cropTop = ir.t + (ir.h - bh) / 2;
+      st.cropW = bw; st.cropH = bh;
+      st.ratio = ratioStr;
+    }
+    st.cropMode = true;
+    renderCrop();
+  }
+
+  // 约束裁剪框在图片内部
+  function clampCrop() {
+    if (!st.cropMode) return;
+    var ir = getImgRect();
+    st.cropLeft = clamp(st.cropLeft, ir.l, ir.r - st.cropW);
+    st.cropTop = clamp(st.cropTop, ir.t, ir.b - st.cropH);
+    st.cropW = clamp(st.cropW, 4, ir.w);
+    st.cropH = clamp(st.cropH, 4, ir.h);
+  }
+
+  function renderCrop() {
+    if (!st.cropMode) return;
+    clampCrop();
+    var vp = getVp();
+    var l = st.cropLeft, t = st.cropTop, r = l + st.cropW, b = t + st.cropH;
+    cropBox.style.left = l + 'px';
+    cropBox.style.top = t + 'px';
+    cropBox.style.width = st.cropW + 'px';
+    cropBox.style.height = st.cropH + 'px';
+    maskTop.style.cssText = 'left:0;top:0;width:' + vp.w + 'px;height:' + t + 'px';
+    maskBottom.style.cssText = 'left:0;top:' + b + 'px;width:' + vp.w + 'px;height:' + (vp.h - b) + 'px';
+    maskLeft.style.cssText = 'left:0;top:' + t + 'px;width:' + l + 'px;height:' + st.cropH + 'px';
+    maskRight.style.cssText = 'left:' + r + 'px;top:' + t + 'px;width:' + (vp.w - r) + 'px;height:' + st.cropH + 'px';
+  }
+
+  // --- 加载图片 ---
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    img.src = e.target.result;
+    img.onload = function() {
+      st.imgW = img.naturalWidth;
+      st.imgH = img.naturalHeight;
+      var vp = getVp();
+      var s = Math.min(vp.w / st.imgW, vp.h / st.imgH, 1);
+      st.scale = Math.max(s, 0.2);
+      zoomSlider.value = st.scale;
+      st.tx = 0; st.ty = 0;
+      applyTransform();
+      activateCrop('free');
+    };
+  };
+  reader.readAsDataURL(file);
+
+  // --- 比例按钮 ---
   RATIOS.forEach(function(r, idx) {
     var btn = document.createElement('button');
     btn.className = 'crop-ratio-btn' + (idx === 0 ? ' active' : '');
@@ -230,169 +399,193 @@ function openCropModal(file, callback) {
       activeRatio = r;
       ratiosEl.querySelectorAll('.crop-ratio-btn').forEach(function(b) { b.classList.remove('active'); });
       btn.classList.add('active');
-      updateMask();
-      updateOutSize();
+      if (r.w === 0) {
+        activateCrop('free');
+      } else {
+        var ratioStr = r.w + ':' + r.h;
+        activateCrop(ratioStr);
+      }
+      renderCrop();
     };
     ratiosEl.appendChild(btn);
   });
 
-  var imgW = 0, imgH = 0;
-  var tx = 0, ty = 0, scale = 1;
-  var dragging = false;
-  var dStartX = 0, dStartY = 0, dTx = 0, dTy = 0;
-
-  // 读取图片
-  var reader = new FileReader();
-  reader.onload = function(e) {
-    img.src = e.target.result;
-    img.onload = function() {
-      imgW = img.naturalWidth;
-      imgH = img.naturalHeight;
-      var vw = viewport.clientWidth;
-      var vh = viewport.clientHeight;
-      var s = Math.max(vw / imgW, vh / imgH);
-      s = Math.min(s, 1);
-      scale = s;
-      zoomSlider.value = s;
-      tx = 0; ty = 0;
-      applyTransform();
-      updateMask();
-      updateOutSize();
-    };
-  };
-  reader.readAsDataURL(file);
-
-  function applyTransform() {
-    img.style.width = (imgW * scale) + 'px';
-    img.style.height = (imgH * scale) + 'px';
-    img.style.transform = 'translate(' + tx + 'px, ' + ty + 'px)';
-    zoomVal.textContent = Math.round(scale * 100) + '%';
-    posEl.textContent = '位置: (' + Math.round(-tx / scale) + ', ' + Math.round(-ty / scale) + ')';
-  }
-
-  function clampPos() {
-    var vw = viewport.clientWidth, vh = viewport.clientHeight;
-    var sw = imgW * scale, sh = imgH * scale;
-    var maxTx = 0, minTx = -(sw - vw);
-    var maxTy = 0, minTy = -(sh - vh);
-    if (sw <= vw) { minTx = (vw - sw) / 2; maxTx = (vw - sw) / 2; }
-    if (sh <= vh) { minTy = (vh - sh) / 2; maxTy = (vh - sh) / 2; }
-    tx = Math.max(minTx, Math.min(maxTx, tx));
-    ty = Math.max(minTy, Math.min(maxTy, ty));
-  }
-
-  function updateMask() {
-    var vw = viewport.clientWidth, vh = viewport.clientHeight;
-    var r = activeRatio;
-    if (r.w === 0) { mask.style.display = 'none'; return; }
-    mask.style.display = 'block';
-    var mw, mh;
-    if (r.w / r.h > vw / vh) {
-      mw = vw; mh = vw * r.h / r.w;
-    } else {
-      mh = vh; mw = vh * r.w / r.h;
+  // --- 指针事件 ---
+  function onDown(e) {
+    if (e.button !== undefined && e.button !== 0) return;
+    var p = vpCoords(e);
+    if (st.cropMode && st.ratio === 'free') {
+      var edge = getEdge(p.x, p.y);
+      if (edge) {
+        st.dragMode = 'resize'; st.resizeEdge = edge;
+        st.dragX = p.x; st.dragY = p.y;
+        st.dragCropLeft = st.cropLeft; st.dragCropTop = st.cropTop;
+        st.dragCropW = st.cropW; st.dragCropH = st.cropH;
+        cropBox.classList.add('dragging');
+        e.preventDefault(); return;
+      }
     }
-    maskInner.style.left = ((vw - mw) / 2) + 'px';
-    maskInner.style.top = ((vh - mh) / 2) + 'px';
-    maskInner.style.width = mw + 'px';
-    maskInner.style.height = mh + 'px';
-  }
-
-  function updateOutSize() {
-    var r = activeRatio;
-    if (r.w === 0) { outSizeEl.textContent = '原始尺寸'; return; }
-    outSizeEl.textContent = r.size + '×' + Math.round(r.size * r.h / r.w);
-  }
-
-  function getCropRect() {
-    var vw = viewport.clientWidth, vh = viewport.clientHeight;
-    var r = activeRatio;
-    if (r.w === 0) { // 自由 = 全视窗
-      return { sx: -tx / scale, sy: -ty / scale, sw: vw / scale, sh: vh / scale, ow: Math.round(vw), oh: Math.round(vh) };
+    if (st.cropMode && insideCrop(p.x, p.y)) {
+      st.dragMode = 'crop';
+      st.dragX = p.x; st.dragY = p.y;
+      st.dragCropLeft = st.cropLeft; st.dragCropTop = st.cropTop;
+      cropBox.classList.add('dragging');
+      e.preventDefault(); return;
     }
-    var rw = r.w, rh = r.h;
-    var mw, mh;
-    if (rw / rh > vw / vh) { mw = vw; mh = vw * rh / rw; }
-    else { mh = vh; mw = vh * rw / rh; }
-    var ox = (vw - mw) / 2, oy = (vh - mh) / 2;
-    var sx = (ox - tx) / scale, sy = (oy - ty) / scale;
-    var sw = mw / scale, sh = mh / scale;
-    return { sx: sx, sy: sy, sw: sw, sh: sh, ow: Math.round(mw), oh: Math.round(mh) };
-  }
-
-  // 鼠标拖拽
-  viewport.addEventListener('mousedown', function(e) {
-    if (e.button !== 0) return;
-    dragging = true;
-    dStartX = e.clientX; dStartY = e.clientY;
-    dTx = tx; dTy = ty;
-    viewport.style.cursor = 'grabbing';
+    st.dragMode = 'image';
+    st.dragX = p.x; st.dragY = p.y;
+    st.dragTx = st.tx; st.dragTy = st.ty;
     e.preventDefault();
-  });
-  window.addEventListener('mousemove', function(e) {
-    if (!dragging) return;
-    tx = dTx + (e.clientX - dStartX);
-    ty = dTy + (e.clientY - dStartY);
-    clampPos(); applyTransform(); e.preventDefault();
-  });
-  window.addEventListener('mouseup', function() {
-    if (dragging) { dragging = false; viewport.style.cursor = 'grab'; }
-  });
+  }
 
-  // 触摸
+  function onMove(e) {
+    if (!st.dragMode) return;
+    var p = vpCoords(e);
+    var dx = p.x - st.dragX, dy = p.y - st.dragY;
+    if (st.dragMode === 'image') {
+      var b = getImgBounds();
+      st.tx = clamp(st.dragTx + dx, b.minX, b.maxX);
+      st.ty = clamp(st.dragTy + dy, b.minY, b.maxY);
+      applyTransform();
+      if (st.cropMode) renderCrop();
+      e.preventDefault();
+    } else if (st.dragMode === 'crop') {
+      var ir = getImgRect();
+      st.cropLeft = clamp(st.dragCropLeft + dx, ir.l, ir.r - st.cropW);
+      st.cropTop = clamp(st.dragCropTop + dy, ir.t, ir.b - st.cropH);
+      renderCrop();
+      e.preventDefault();
+    } else if (st.dragMode === 'resize') {
+      var edge = st.resizeEdge;
+      var nl = st.dragCropLeft, nt = st.dragCropTop;
+      var nw = st.dragCropW, nh = st.dragCropH;
+      if (edge.includes('r')) nw = Math.max(4, st.dragCropW + dx);
+      if (edge.includes('l')) { nw = Math.max(4, st.dragCropW - dx); nl = st.dragCropLeft + st.dragCropW - nw; }
+      if (edge.includes('b')) nh = Math.max(4, st.dragCropH + dy);
+      if (edge.includes('t')) { nh = Math.max(4, st.dragCropH - dy); nt = st.dragCropTop + st.dragCropH - nh; }
+      st.cropLeft = nl; st.cropTop = nt; st.cropW = nw; st.cropH = nh;
+      renderCrop();
+      e.preventDefault();
+    }
+  }
+
+  function onUp() {
+    if (st.dragMode) {
+      cropBox.classList.remove('dragging');
+      if (st.cropMode) renderCrop();
+      st.dragMode = null; st.resizeEdge = null;
+    }
+  }
+
+  viewport.addEventListener('mousedown', onDown);
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+
   viewport.addEventListener('touchstart', function(e) {
     var t = e.touches[0]; if (!t) return;
-    dragging = true; dStartX = t.clientX; dStartY = t.clientY;
-    dTx = tx; dTy = ty;
+    onDown({ button: 0, clientX: t.clientX, clientY: t.clientY, preventDefault: function() {} });
   }, { passive: true });
-  window.addEventListener('touchmove', function(e) {
-    if (!dragging) return;
-    var t = e.touches[0]; if (!t) return;
-    tx = dTx + (t.clientX - dStartX);
-    ty = dTy + (t.clientY - dStartY);
-    clampPos(); applyTransform(); e.preventDefault();
-  }, { passive: false });
-  window.addEventListener('touchend', function() { dragging = false; }, { passive: true });
+  var touchMoveH = function(e) {
+    var t = e.touches[0]; if (!t || !st.dragMode) return;
+    onMove({ clientX: t.clientX, clientY: t.clientY, preventDefault: function() { e.preventDefault(); } });
+  };
+  window.addEventListener('touchmove', touchMoveH, { passive: false });
+  var touchEndH = function() { onUp(); };
+  window.addEventListener('touchend', touchEndH, { passive: true });
 
-  // 滚轮缩放
+  // --- 滚轮缩放 ---
   viewport.addEventListener('wheel', function(e) {
     e.preventDefault();
     var delta = e.deltaY > 0 ? -0.05 : 0.05;
-    scale = Math.max(0.2, Math.min(3, scale + delta));
-    zoomSlider.value = scale; clampPos(); applyTransform();
+    st.scale = clamp(st.scale + delta, 0.2, 3);
+    zoomSlider.value = st.scale;
+    applyTransform();
+    if (st.cropMode) renderCrop();
   }, { passive: false });
 
+  // 清理 window 级事件监听，避免多次打开累积
+  function teardown() {
+    window.removeEventListener('mousemove', onMove);
+    window.removeEventListener('mouseup', onUp);
+    window.removeEventListener('touchmove', touchMoveH);
+    window.removeEventListener('touchend', touchEndH);
+  }
+
   zoomSlider.addEventListener('input', function() {
-    scale = parseFloat(this.value); clampPos(); applyTransform();
+    st.scale = parseFloat(this.value);
+    applyTransform();
+    if (st.cropMode) renderCrop();
   });
 
+  // --- 按钮 ---
   ov.querySelector('#cropReset').onclick = function() {
-    scale = 1; tx = 0; ty = 0; zoomSlider.value = 1; applyTransform();
+    st.scale = 1; st.tx = 0; st.ty = 0; zoomSlider.value = 1;
+    applyTransform();
+    activateCrop('free');
+    renderCrop();
   };
 
-  // 确定
   ov.querySelector('#cropConfirm').onclick = function() {
-    var rect = getCropRect();
-    var r = activeRatio;
-    var outW, outH;
-    if (r.w === 0) { outW = rect.ow; outH = rect.oh; }
-    else { outW = r.size; outH = Math.round(r.size * r.h / r.w); }
+    // 使用 getBoundingClientRect 获取裁剪框实际像素位置（参考工具的做法）
+    var vpRect = viewport.getBoundingClientRect();
+    var boxRect = cropBox.getBoundingClientRect();
+    var left = boxRect.left - vpRect.left;
+    var top = boxRect.top - vpRect.top;
+    var right = boxRect.right - vpRect.left;
+    var bottom = boxRect.bottom - vpRect.top;
+    var boxW = right - left, boxH = bottom - top;
+    if (boxW < 2 || boxH < 2) { alert('裁剪区域过小'); return; }
+
+    var vp = getVp();
+    var W = st.imgW, H = st.imgH;
+    var scale = st.scale, tx = st.tx, ty = st.ty;
+    var imgLeft = vp.w / 2 + tx - W * scale / 2;
+    var imgTop = vp.h / 2 + ty - H * scale / 2;
+
+    var sx = Math.max(0, (left - imgLeft) / scale);
+    var sy = Math.max(0, (top - imgTop) / scale);
+    var sw = Math.min(boxW / scale, W - sx);
+    var sh = Math.min(boxH / scale, H - sy);
+    if (sw < 1 || sh < 1) { alert('裁剪区域过小'); return; }
+
+    var outW = Math.round(sw), outH = Math.round(sh);
     var canvas = document.createElement('canvas');
     canvas.width = outW; canvas.height = outH;
     var ctx = canvas.getContext('2d');
-    ctx.drawImage(img, rect.sx, rect.sy, rect.sw, rect.sh, 0, 0, outW, outH);
-    canvas.toBlob(function(blob) {
-      blob.name = file.name;
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, outW, outH);
+
+    var ext = filename.split('.').pop().toLowerCase();
+    var mime = 'image/jpeg';
+    if (ext === 'png') mime = 'image/png';
+    else if (ext === 'webp') mime = 'image/webp';
+    else if (ext === 'gif') mime = 'image/gif';
+    var quality = (mime === 'image/jpeg' || mime === 'image/webp') ? 0.92 : undefined;
+
+    function done(blob) {
+      teardown();
       document.body.removeChild(ov);
-      if (callback) callback(blob);
-    }, 'image/jpeg', 92);
+      if (callback) callback(blob || null);
+    }
+
+    canvas.toBlob(function(blob) {
+      if (blob) { done(blob); return; }
+      // 浏览器不支持该格式，降级到 PNG
+      canvas.toBlob(done, 'image/png');
+    }, mime, quality);
   };
 
   ov.querySelector('#cropCancel').onclick = function() {
-    document.body.removeChild(ov); if (callback) callback(null);
+    teardown();
+    document.body.removeChild(ov);
+    if (callback) callback(null);
+  };
+  ov.querySelector('#cropModalClose').onclick = function() {
+    teardown();
+    document.body.removeChild(ov);
+    if (callback) callback(null);
   };
   ov.addEventListener('click', function(e) {
-    if (e.target === ov) { document.body.removeChild(ov); if (callback) callback(null); }
+    if (e.target === ov) { teardown(); document.body.removeChild(ov); if (callback) callback(null); }
   });
 
   ov.style.display = 'flex';
@@ -414,21 +607,22 @@ function bindCropUpload(inputId, uploadUrl, fieldSelector, previewSelector) {
         headers: { 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content') },
         body: formData
       })
-      .then(function(r) { return r.json(); })
+      .then(function(r) {
+        if (!r.ok) return r.json().then(function(d) { throw new Error(d.error || '上传失败'); });
+        return r.json();
+      })
       .then(function(data) {
-        if (!data.url) return;
         if (fieldSelector) {
           document.querySelector(fieldSelector).value = data.url.replace('/static/', '');
         }
         if (previewSelector) {
           var el = document.querySelector(previewSelector);
           if (el) el.innerHTML = '<img src="' + data.url + '" alt="crop">';
-          // 触发 has-image 类
           var upload = input.closest('[class*="-upload"]');
           if (upload) upload.classList.add('has-image');
         }
       })
-      .catch(function() { window.alert('上传失败'); });
+      .catch(function(err) { window.alert(err.message || '上传失败'); });
     });
   });
 }

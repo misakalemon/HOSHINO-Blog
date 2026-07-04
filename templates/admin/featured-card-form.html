@@ -103,19 +103,20 @@ document.getElementById('iconInput').addEventListener('change', function() {
       headers: { 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content') },
       body:formData
     })
-  .then(function(r) { return r.json(); })
-  .then(function(data) {
-    if (data.url) {
-      var path = data.url.replace('/static/', '');
-      document.getElementById('iconHidden').value = path;
-      var preview = document.getElementById('iconPreview');
-      preview.innerHTML = '<img src="' + data.url + '" alt="icon">';
-      preview.style.display = 'block';
-      document.getElementById('iconPlaceholder').style.display = 'none';
-      document.getElementById('iconUpload').classList.add('has-image');
-    }
+  .then(function(r) {
+    if (!r.ok) return r.json().then(function(d) { throw new Error(d.error || '图片上传失败'); });
+    return r.json();
   })
-  .catch(function() { alert('图片上传失败'); });
+  .then(function(data) {
+    var path = data.url.replace('/static/', '');
+    document.getElementById('iconHidden').value = path;
+    var preview = document.getElementById('iconPreview');
+    preview.innerHTML = '<img src="' + data.url + '" alt="icon">';
+    preview.style.display = 'block';
+    document.getElementById('iconPlaceholder').style.display = 'none';
+    document.getElementById('iconUpload').classList.add('has-image');
+  })
+  .catch(function(err) { alert(err.message || '图片上传失败'); });
 });
 
 function removeIcon(e) {

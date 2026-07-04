@@ -840,18 +840,19 @@ document.getElementById('coverInput').addEventListener('change', function() {
     headers: { 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content') },
     body:formData
   })
-  .then(function(r) { return r.json(); })
-  .then(function(data) {
-    if (data.url) {
-      document.getElementById('coverHidden').value = data.url.replace('/static/', '');
-      var preview = document.getElementById('coverPreview');
-      preview.innerHTML = '<img src="' + data.url + '" alt="cover">';
-      preview.style.display = 'block';
-      document.getElementById('coverPlaceholder').style.display = 'none';
-      document.getElementById('coverUpload').classList.add('has-image');
-    }
+  .then(function(r) {
+    if (!r.ok) return r.json().then(function(d) { throw new Error(d.error || '封面上传失败'); });
+    return r.json();
   })
-  .catch(function() { alert('封面上传失败'); });
+  .then(function(data) {
+    document.getElementById('coverHidden').value = data.url.replace('/static/', '');
+    var preview = document.getElementById('coverPreview');
+    preview.innerHTML = '<img src="' + data.url + '" alt="cover">';
+    preview.style.display = 'block';
+    document.getElementById('coverPlaceholder').style.display = 'none';
+    document.getElementById('coverUpload').classList.add('has-image');
+  })
+  .catch(function(err) { alert(err.message || '封面上传失败'); });
 });
 
 function removeCover(e) {
