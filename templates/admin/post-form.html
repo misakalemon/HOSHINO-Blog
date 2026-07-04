@@ -197,7 +197,11 @@
                     <button type="button" onclick="rteInsertTable()" title="插入表格">⊞</button>
                     <button type="button" onclick="rteCode()" title="行内代码">&lt;/&gt;</button>
                     <button type="button" onclick="rteLink()" title="插入链接">🔗</button>
+                    <span class="sep"></span>
                     <button type="button" onclick="rteImage()" title="插入图片">🖼</button>
+                    <button type="button" onclick="rteImage('left')" title="图片左浮动" style="font-size:10px">◀ 🖼</button>
+                    <button type="button" onclick="rteImage('center')" title="图片居中" style="font-size:10px">≡ 🖼</button>
+                    <button type="button" onclick="rteImage('right')" title="图片右浮动" style="font-size:10px">🖼 ▶</button>
                     <button type="button" onclick="rteImportFile()" title="导入文件 (Markdown/PDF/DOCX)">📄</button>
                     <span class="sep"></span>
                     <button type="button" onclick="rte('removeFormat')" title="清除格式">✕</button>
@@ -736,7 +740,33 @@ function rteInsertTable() {
     }
   });
 }
-function rteImage() {
+function rteImage(align) {
+  // 如果有 alignment 参数，先检查选中/光标附近的图片
+  var editor = document.getElementById('rte-content');
+  if (align) {
+    var sel = window.getSelection();
+    if (sel.rangeCount > 0) {
+      var node = sel.anchorNode;
+      // 向上查找 img 标签
+      while (node && node.nodeName !== 'IMG' && node !== editor) node = node.parentNode;
+      if (node && node.nodeName === 'IMG') {
+        var styles = '';
+        if (align === 'left') styles = 'float:left; margin-right:16px; max-width:50%';
+        else if (align === 'center') styles = 'display:block; margin:0 auto; text-align:center';
+        else if (align === 'right') styles = 'float:right; margin-left:16px; max-width:50%';
+        node.setAttribute('style', styles);
+        return;
+      }
+    }
+    // 没找到图片则走上传+指定对齐
+    return rteImageUpload(align);
+  }
+  // 无参数：普通上传，上传后弹窗选对齐
+  rteImageUpload(null);
+}
+
+function rteImageUpload(align) {
+  var alignMode = align; // 'left' | 'center' | 'right' | null
   var input = document.createElement('input');
   input.type = 'file';
   input.accept = 'image/*';
@@ -752,9 +782,39 @@ function rteImage() {
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      if (data.url) insertHTML('<img src="' + data.url + '" style="max-width:100%" alt="image">');
+      if (!data.url) return;
+      // 如果已有对齐模式，直接插入
+      if (alignMode) {
+        var style = '';
+        if (alignMode === 'left') style = ' style="float:left; margin-right:16px; max-width:50%"';
+        else if (alignMode === 'right') style = ' style="float:right; margin-left:16px; max-width:50%"';
+        else if (alignMode === 'center') style = ' style="display:block; margin:0 auto; text-align:center"';
+        insertHTML('<img src="' + data.url + '"' + style + ' alt="image">');
+        return;
+      }
+      // 弹窗选择对齐方式
+      showModal({
+        title: '图片对齐方式',
+        fields: [{
+          key:'align', label:'对齐', type:'select',
+          value:'none',
+          options:[
+            { value:'none', label:'默认（无对齐）' },
+            { value:'left', label:'左浮动（文字环绕）' },
+            { value:'center', label:'居中显示' },
+            { value:'right', label:'右浮动（文字环绕）' },
+          ]
+        }],
+        onConfirm: function(vals) {
+          var style = ' style="max-width:100%"';
+          if (vals.align === 'left') style = ' style="float:left; margin-right:16px; max-width:50%"';
+          else if (vals.align === 'right') style = ' style="float:right; margin-left:16px; max-width:50%"';
+          else if (vals.align === 'center') style = ' style="display:block; margin:0 auto; text-align:center"';
+          insertHTML('<img src="' + data.url + '"' + style + ' alt="image">');
+        }
+      });
     })
-    .catch(function() { alert('图片上传失败'); });
+    .catch(function() { window.alert('图片上传失败'); });
   };
   input.click();
 }
