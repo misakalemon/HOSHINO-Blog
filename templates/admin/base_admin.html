@@ -175,15 +175,24 @@ function showConfirm(msg, cb) {
 // openCropModal(file, callback) — 打开裁剪弹窗
 // callback 接收裁剪后的 Blob 对象
 function openCropModal(file, callback) {
-  var outputSize = 512; // 输出图片边长（正方形）
+  var RATIOS = [
+    { label: '1:1', w: 1, h: 1, size: 512 },
+    { label: '16:9', w: 16, h: 9, size: 512 },
+    { label: '4:3', w: 4, h: 3, size: 512 },
+    { label: '3:2', w: 3, h: 2, size: 512 },
+    { label: '自由', w: 0, h: 0, size: 0 },
+  ];
+  var activeRatio = RATIOS[0];
 
   var ov = document.createElement('div');
   ov.className = 'crop-overlay';
   ov.innerHTML =
     '<div class="crop-box">' +
       '<h4>✂ 调整图片位置</h4>' +
+      '<div class="crop-ratios" id="cropRatios"></div>' +
       '<div class="crop-viewport" id="cropViewport">' +
         '<img id="cropImg" src="">' +
+        '<div class="crop-mask" id="cropMask"><div class="crop-mask-inner" id="cropMaskInner"></div></div>' +
       '</div>' +
       '<div class="crop-zoom-row">' +
         '<label>缩放</label>' +
@@ -192,7 +201,7 @@ function openCropModal(file, callback) {
       '</div>' +
       '<div class="crop-info">' +
         '<span id="cropPos">位置: (0, 0)</span>' +
-        '<span>拖拽移动 · 滚轮缩放</span>' +
+        '<span id="cropOutSize">512×512</span>' +
       '</div>' +
       '<div class="crop-actions">' +
         '<button class="btn btn-ghost" id="cropCancel">取消</button>' +
@@ -204,12 +213,31 @@ function openCropModal(file, callback) {
 
   var viewport = ov.querySelector('#cropViewport');
   var img = ov.querySelector('#cropImg');
+  var mask = ov.querySelector('#cropMask');
+  var maskInner = ov.querySelector('#cropMaskInner');
+  var ratiosEl = ov.querySelector('#cropRatios');
   var zoomSlider = ov.querySelector('#cropZoom');
   var zoomVal = ov.querySelector('#cropZoomVal');
   var posEl = ov.querySelector('#cropPos');
+  var outSizeEl = ov.querySelector('#cropOutSize');
 
-  var imgW = 0, imgH = 0;          // 图片原始尺寸
-  var tx = 0, ty = 0, scale = 1;   // 变换状态
+  // 渲染预设按钮
+  RATIOS.forEach(function(r, idx) {
+    var btn = document.createElement('button');
+    btn.className = 'crop-ratio-btn' + (idx === 0 ? ' active' : '');
+    btn.textContent = r.label;
+    btn.onclick = function() {
+      activeRatio = r;
+      ratiosEl.querySelectorAll('.crop-ratio-btn').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      updateMask();
+      updateOutSize();
+    };
+    ratiosEl.appendChild(btn);
+  });
+
+  var imgW = 0, imgH = 0;
+  var tx = 0, ty = 0, scale = 1;
   var dragging = false;
   var dStartX = 0, dStartY = 0, dTx = 0, dTy = 0;
 
@@ -220,16 +248,16 @@ function openCropModal(file, callback) {
     img.onload = function() {
       imgW = img.naturalWidth;
       imgH = img.naturalHeight;
-      // 初始缩放：让图片宽或高填满视窗
       var vw = viewport.clientWidth;
       var vh = viewport.clientHeight;
       var s = Math.max(vw / imgW, vh / imgH);
-      // 但最小保证完整显示
       s = Math.min(s, 1);
       scale = s;
       zoomSlider.value = s;
       tx = 0; ty = 0;
       applyTransform();
+      updateMask();
+      updateOutSize();
     };
   };
   reader.readAsDataURL(file);
@@ -253,6 +281,45 @@ function openCropModal(file, callback) {
     ty = Math.max(minTy, Math.min(maxTy, ty));
   }
 
+  function updateMask() {
+    var vw = viewport.clientWidth, vh = viewport.clientHeight;
+    var r = activeRatio;
+    if (r.w === 0) { mask.style.display = 'none'; return; }
+    mask.style.display = 'block';
+    var mw, mh;
+    if (r.w / r.h > vw / vh) {
+      mw = vw; mh = vw * r.h / r.w;
+    } else {
+      mh = vh; mw = vh * r.w / r.h;
+    }
+    maskInner.style.left = ((vw - mw) / 2) + 'px';
+    maskInner.style.top = ((vh - mh) / 2) + 'px';
+    maskInner.style.width = mw + 'px';
+    maskInner.style.height = mh + 'px';
+  }
+
+  function updateOutSize() {
+    var r = activeRatio;
+    if (r.w === 0) { outSizeEl.textContent = '原始尺寸'; return; }
+    outSizeEl.textContent = r.size + '×' + Math.round(r.size * r.h / r.w);
+  }
+
+  function getCropRect() {
+    var vw = viewport.clientWidth, vh = viewport.clientHeight;
+    var r = activeRatio;
+    if (r.w === 0) { // 自由 = 全视窗
+      return { sx: -tx / scale, sy: -ty / scale, sw: vw / scale, sh: vh / scale, ow: Math.round(vw), oh: Math.round(vh) };
+    }
+    var rw = r.w, rh = r.h;
+    var mw, mh;
+    if (rw / rh > vw / vh) { mw = vw; mh = vw * rh / rw; }
+    else { mh = vh; mw = vh * rw / rh; }
+    var ox = (vw - mw) / 2, oy = (vh - mh) / 2;
+    var sx = (ox - tx) / scale, sy = (oy - ty) / scale;
+    var sw = mw / scale, sh = mh / scale;
+    return { sx: sx, sy: sy, sw: sw, sh: sh, ow: Math.round(mw), oh: Math.round(mh) };
+  }
+
   // 鼠标拖拽
   viewport.addEventListener('mousedown', function(e) {
     if (e.button !== 0) return;
@@ -262,16 +329,12 @@ function openCropModal(file, callback) {
     viewport.style.cursor = 'grabbing';
     e.preventDefault();
   });
-
   window.addEventListener('mousemove', function(e) {
     if (!dragging) return;
     tx = dTx + (e.clientX - dStartX);
     ty = dTy + (e.clientY - dStartY);
-    clampPos();
-    applyTransform();
-    e.preventDefault();
+    clampPos(); applyTransform(); e.preventDefault();
   });
-
   window.addEventListener('mouseup', function() {
     if (dragging) { dragging = false; viewport.style.cursor = 'grab'; }
   });
@@ -279,21 +342,16 @@ function openCropModal(file, callback) {
   // 触摸
   viewport.addEventListener('touchstart', function(e) {
     var t = e.touches[0]; if (!t) return;
-    dragging = true;
-    dStartX = t.clientX; dStartY = t.clientY;
+    dragging = true; dStartX = t.clientX; dStartY = t.clientY;
     dTx = tx; dTy = ty;
   }, { passive: true });
-
   window.addEventListener('touchmove', function(e) {
     if (!dragging) return;
     var t = e.touches[0]; if (!t) return;
     tx = dTx + (t.clientX - dStartX);
     ty = dTy + (t.clientY - dStartY);
-    clampPos();
-    applyTransform();
-    e.preventDefault();
+    clampPos(); applyTransform(); e.preventDefault();
   }, { passive: false });
-
   window.addEventListener('touchend', function() { dragging = false; }, { passive: true });
 
   // 滚轮缩放
@@ -301,38 +359,28 @@ function openCropModal(file, callback) {
     e.preventDefault();
     var delta = e.deltaY > 0 ? -0.05 : 0.05;
     scale = Math.max(0.2, Math.min(3, scale + delta));
-    zoomSlider.value = scale;
-    clampPos();
-    applyTransform();
+    zoomSlider.value = scale; clampPos(); applyTransform();
   }, { passive: false });
 
-  // 缩放滑块
   zoomSlider.addEventListener('input', function() {
-    scale = parseFloat(this.value);
-    clampPos();
-    applyTransform();
+    scale = parseFloat(this.value); clampPos(); applyTransform();
   });
 
-  // 重置
   ov.querySelector('#cropReset').onclick = function() {
-    scale = 1; tx = 0; ty = 0;
-    zoomSlider.value = 1;
-    applyTransform();
+    scale = 1; tx = 0; ty = 0; zoomSlider.value = 1; applyTransform();
   };
 
-  // 确定：从视窗中心区域截取正方形
+  // 确定
   ov.querySelector('#cropConfirm').onclick = function() {
-    var vw = viewport.clientWidth, vh = viewport.clientHeight;
-    var size = Math.min(vw, vh);
-    var ox = (vw - size) / 2 - tx;
-    var oy = (vh - size) / 2 - ty;
-    var sx = ox / scale, sy = oy / scale;
-    var sw = size / scale;
-
+    var rect = getCropRect();
+    var r = activeRatio;
+    var outW, outH;
+    if (r.w === 0) { outW = rect.ow; outH = rect.oh; }
+    else { outW = r.size; outH = Math.round(r.size * r.h / r.w); }
     var canvas = document.createElement('canvas');
-    canvas.width = outputSize; canvas.height = outputSize;
+    canvas.width = outW; canvas.height = outH;
     var ctx = canvas.getContext('2d');
-    ctx.drawImage(img, sx, sy, sw, sw, 0, 0, outputSize, outputSize);
+    ctx.drawImage(img, rect.sx, rect.sy, rect.sw, rect.sh, 0, 0, outW, outH);
     canvas.toBlob(function(blob) {
       blob.name = file.name;
       document.body.removeChild(ov);
@@ -340,12 +388,9 @@ function openCropModal(file, callback) {
     }, 'image/jpeg', 92);
   };
 
-  // 取消
   ov.querySelector('#cropCancel').onclick = function() {
-    document.body.removeChild(ov);
-    if (callback) callback(null);
+    document.body.removeChild(ov); if (callback) callback(null);
   };
-
   ov.addEventListener('click', function(e) {
     if (e.target === ov) { document.body.removeChild(ov); if (callback) callback(null); }
   });
