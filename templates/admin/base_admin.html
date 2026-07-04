@@ -681,6 +681,8 @@ function bindCropUpload(inputId, uploadUrl, fieldSelector, previewSelector, onSu
   input.addEventListener('change', function() {
     var file = this.files[0];
     if (!file) return;
+    // 拿到文件引用后立即重置 value，允许下次重复选择同一文件
+    this.value = '';
     openCropModal(file, function(cropped) {
       if (!cropped) { showToast('裁剪已取消', 'error'); return; }
       var formData = new FormData();
@@ -713,8 +715,6 @@ function bindCropUpload(inputId, uploadUrl, fieldSelector, previewSelector, onSu
       .catch(function(err) { showToast(err.message || '上传失败', 'error'); });
     });
   });
-  // 允许重新选择同一文件
-  input.addEventListener('click', function() { this.value = ''; });
 }
 </script>
 
