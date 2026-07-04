@@ -104,8 +104,48 @@ function toggleDrawer(){
   document.getElementById('mobileDrawer').classList.toggle('open');
   document.getElementById('drawerOverlay').classList.toggle('show');
 }
-function toggleGlowSelect(t){var r=t.parentNode,u=r.classList.contains('is-open');document.querySelectorAll('.glow-select-wrap.is-open').forEach(function(w){w.classList.remove('is-open')});if(!u)r.classList.add('is-open')}
-document.addEventListener('click',function(e){var o=e.target.closest('.glow-select-option');if(o){var w=o.closest('.glow-select-wrap');if(!w)return;var v=o.getAttribute('data-value'),t=w.querySelector('.glow-select-trigger');if(t)t.querySelector('.glow-select-value').textContent=o.textContent;w.querySelectorAll('.glow-select-option').forEach(function(x){x.classList.toggle('is-selected',x===o)});w.classList.remove('is-open');var n=w.querySelector('select');if(n){n.value=v;n.dispatchEvent(new Event('change',{bubbles:true}))}}if(!e.target.closest('.glow-select-wrap')){document.querySelectorAll('.glow-select-wrap.is-open').forEach(function(w){w.classList.remove('is-open')})}});
+function toggleGlowSelect(t){
+  var r=t.parentNode,u=r.classList.contains('is-open');
+  if(u){r.classList.remove('is-open');return;}
+  if(!r.getAttribute('data-multiple')){
+    document.querySelectorAll('.glow-select-wrap.is-open').forEach(function(w){w.classList.remove('is-open')});
+  }
+  if(r.getAttribute('data-multiple')!==null){
+    var c=r.querySelectorAll('.glow-select-option.is-selected').length;
+    r.querySelector('.glow-select-value').textContent='已选 '+c+' 项';
+  }
+  r.classList.add('is-open');
+}
+document.addEventListener('click',function(e){
+  var o=e.target.closest('.glow-select-option');
+  if(o){
+    var w=o.closest('.glow-select-wrap');if(!w)return;
+    var v=o.getAttribute('data-value');
+    if(w.getAttribute('data-multiple')!==null){
+      o.classList.toggle('is-selected');
+      var sel=w.querySelector('select');
+      if(sel){
+        for(var i=0;i<sel.options.length;i++){
+          sel.options[i].selected=(sel.options[i].value===v)?!sel.options[i].selected:sel.options[i].selected;
+        }
+        sel.dispatchEvent(new Event('change',{bubbles:true}));
+      }
+      var c=w.querySelectorAll('.glow-select-option.is-selected').length;
+      w.querySelector('.glow-select-value').textContent='已选 '+c+' 项';
+    }else{
+      var t=w.querySelector('.glow-select-trigger');
+      if(t)t.querySelector('.glow-select-value').textContent=o.textContent;
+      w.querySelectorAll('.glow-select-option').forEach(function(x){x.classList.toggle('is-selected',x===o)});
+      w.classList.remove('is-open');
+      var n=w.querySelector('select');
+      if(n){n.value=v;n.dispatchEvent(new Event('change',{bubbles:true}))}
+    }
+    return;
+  }
+  if(!e.target.closest('.glow-select-wrap')){
+    document.querySelectorAll('.glow-select-wrap.is-open').forEach(function(w){w.classList.remove('is-open')});
+  }
+});
 
 // ── 全局弹窗（暗色粉紫风格，替换原生 alert/confirm/prompt）──
 (function() {

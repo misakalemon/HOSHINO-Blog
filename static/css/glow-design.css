@@ -473,6 +473,18 @@ ul { list-style: none; }
   color:#ff8aae; font-weight:500;
 }
 .tag-check-item input { display:none; }
+
+/* ── glow-select 多选 ──────────────────────── */
+.glow-select-wrap[data-multiple] .glow-select-option { padding-left:28px; position:relative; }
+.glow-select-wrap[data-multiple] .glow-select-option::before {
+  content:''; position:absolute; left:8px; top:50%; margin-top:-6px;
+  width:12px; height:12px; border:1.5px solid rgba(255,255,255,0.15);
+  border-radius:3px; background:transparent; transition:all 0.15s;
+}
+.glow-select-wrap[data-multiple] .glow-select-option.is-selected::before {
+  content:'✓'; font-size:10px; line-height:12px; text-align:center;
+  background:rgba(255,107,157,0.3); border-color:#ff6b9d; color:#fff;
+}
 .form-group textarea { resize: vertical; min-height: 80px; }
 
 /* ── 10. 按钮 ──────────────────────────────── */
