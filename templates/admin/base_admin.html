@@ -70,107 +70,8 @@
     {% endif %}
     {% endwith %}
 
-    <!-- admin_content 块：子模板填充 -->
-    {% block admin_content %}{% endblock %}
-    </div>
-</div>
-
-{% include 'admin/_cookie_banner.html' %}
-
-<!-- 自定义下拉框 (glow-select) 驱动 + 全局弹窗 -->
+<!-- 裁剪/上传函数定义（必须置于 admin_content 之前，供子模板脚本调用） -->
 <script>
-// 汉堡菜单：切换侧边栏和覆盖层
-function toggleAdminSidebar() {
-  document.getElementById('adminSidebar').classList.toggle('open');
-  document.getElementById('adminToggle').classList.toggle('open');
-  document.getElementById('adminOverlay').classList.toggle('show');
-}
-function toggleGlowSelect(t){var r=t.parentNode,u=r.classList.contains('is-open');document.querySelectorAll('.glow-select-wrap.is-open').forEach(function(w){w.classList.remove('is-open')});if(!u)r.classList.add('is-open')}
-document.addEventListener('click',function(e){var o=e.target.closest('.glow-select-option');if(o){var w=o.closest('.glow-select-wrap');if(!w)return;var v=o.getAttribute('data-value'),t=w.querySelector('.glow-select-trigger');if(t)t.querySelector('.glow-select-value').textContent=o.textContent;w.querySelectorAll('.glow-select-option').forEach(function(x){x.classList.toggle('is-selected',x===o)});w.classList.remove('is-open');var n=w.querySelector('select');if(n){n.value=v;n.dispatchEvent(new Event('change',{bubbles:true}))}}if(!e.target.closest('.glow-select-wrap')){document.querySelectorAll('.glow-select-wrap.is-open').forEach(function(w){w.classList.remove('is-open')})}});
-
-// ── 全局弹窗（暗色粉紫风格，替换原生 alert/confirm/prompt）──
-(function() {
-  // 创建遮罩层
-  var overlay = document.createElement('div');
-  overlay.className = 'glow-modal-overlay';
-  overlay.innerHTML =
-    '<div class="glow-modal">' +
-      '<h4 id="gmd-title"></h4>' +
-      '<p id="gmd-msg"></p>' +
-      '<input class="glow-modal-input" id="gmd-input" style="display:none">' +
-      '<div class="glow-modal-actions" id="gmd-actions"></div>' +
-    '</div>';
-  overlay.addEventListener('click', function(e) {
-    if (e.target === overlay) overlay.style.display = 'none';
-  });
-  document.body.appendChild(overlay);
-
-  var titleEl = document.getElementById('gmd-title');
-  var msgEl = document.getElementById('gmd-msg');
-  var inputEl = document.getElementById('gmd-input');
-  var actionsEl = document.getElementById('gmd-actions');
-
-  function hideOverlay() {
-    overlay.style.display = 'none';
-  }
-
-  // alert
-  window.alert = function(msg) {
-    titleEl.textContent = '提示';
-    msgEl.innerHTML = msg;
-    actionsEl.innerHTML = '<button class="btn btn-primary" style="flex:1;justify-content:center">确定</button>';
-    actionsEl.querySelector('button').onclick = hideOverlay;
-    overlay.style.display = 'flex';
-  };
-
-  // confirm（异步 callback 版，同步调用返回 true）
-  window.confirm = function(msg, cb) {
-    if (typeof cb !== 'function') return true;
-    titleEl.textContent = '确认操作';
-    msgEl.innerHTML = msg;
-    actionsEl.innerHTML =
-      '<button class="btn btn-ghost" style="flex:1;justify-content:center">取消</button>' +
-      '<button class="btn btn-primary" style="flex:1;justify-content:center">确定</button>';
-    var btns = actionsEl.querySelectorAll('button');
-    btns[0].onclick = function() { hideOverlay(); cb(false); };
-    btns[1].onclick = function() { hideOverlay(); cb(true); };
-    overlay.style.display = 'flex';
-  };
-
-  // prompt（保留原生同步行为）
-  window.prompt = function(msg, def) {
-    titleEl.textContent = '输入';
-    msgEl.innerHTML = msg;
-    inputEl.style.display = 'block';
-    inputEl.value = def || '';
-    actionsEl.innerHTML =
-      '<button class="btn btn-ghost" style="flex:1;justify-content:center">取消</button>' +
-      '<button class="btn btn-primary" style="flex:1;justify-content:center">确定</button>';
-    var btns = actionsEl.querySelectorAll('button');
-    btns[0].onclick = function() { hideOverlay(); inputEl.style.display = 'none'; };
-    btns[1].onclick = function() { inputEl.value = inputEl.value; hideOverlay(); inputEl.style.display = 'none'; };
-    overlay.style.display = 'flex';
-    return def || '';
-  };
-})();
-
-// showConfirm — 替换 onsubmit 中的 return confirm()
-function showConfirm(msg, cb) {
-  var overlay = document.querySelector('.glow-modal-overlay');
-  if (!overlay) { if (cb) cb(true); return; }
-  document.getElementById('gmd-input').style.display = 'none';
-  document.getElementById('gmd-title').textContent = '确认操作';
-  document.getElementById('gmd-msg').innerHTML = msg;
-  var actionsEl = document.getElementById('gmd-actions');
-  actionsEl.innerHTML =
-    '<button class="btn btn-ghost" style="flex:1;justify-content:center">取消</button>' +
-    '<button class="btn btn-primary" style="flex:1;justify-content:center">确定</button>';
-  var btns = actionsEl.querySelectorAll('button');
-  btns[0].onclick = function() { overlay.style.display = 'none'; if (cb) cb(false); };
-  btns[1].onclick = function() { overlay.style.display = 'none'; if (cb) cb(true); };
-  overlay.style.display = 'flex';
-}
-
 // ── Toast 提示 ─────────────────────────────────
 let _toastTimer = null;
 function showToast(msg, type) {
@@ -191,7 +92,6 @@ function showToast(msg, type) {
 // ── 图片裁剪工具（浮动裁剪框模式）─────────────
 // openCropModal(file, callback) — 打开裁剪弹窗
 // callback 接收裁剪后的 Blob 对象
-// 使用 getBoundingClientRect 计算裁剪区域，确保坐标精确
 function openCropModal(file, callback) {
   var RATIOS = [
     { label: '自由', w: 0, h: 0 },
@@ -268,10 +168,10 @@ function openCropModal(file, callback) {
   var st = {
     imgW: 0, imgH: 0,
     tx: 0, ty: 0, scale: 1,
-    cropMode: false, // 是否已激活裁剪（加载图片后自动激活）
-    ratio: null,     // 'free' 或 '1:1' 等
+    cropMode: false,
+    ratio: null,
     cropLeft: 0, cropTop: 0, cropW: 0, cropH: 0,
-    dragMode: null,  // 'image'|'crop'|'resize'
+    dragMode: null,
     resizeEdge: null,
     dragX: 0, dragY: 0,
     dragTx: 0, dragTy: 0,
@@ -284,7 +184,6 @@ function openCropModal(file, callback) {
     return { w: viewport.clientWidth, h: viewport.clientHeight };
   }
 
-  // 图片在视窗中的矩形（视窗坐标）
   function getImgRect() {
     var vp = getVp();
     var cx = vp.w / 2 + st.tx, cy = vp.h / 2 + st.ty;
@@ -292,7 +191,6 @@ function openCropModal(file, callback) {
     return { l: cx - sw/2, t: cy - sh/2, r: cx + sw/2, b: cy + sh/2, w: sw, h: sh };
   }
 
-  // 图片拖动边界（tx/ty 空间，参考工具的实现）
   function getImgBounds() {
     var vp = getVp();
     var sw = st.imgW * st.scale, sh = st.imgH * st.scale;
@@ -304,7 +202,6 @@ function openCropModal(file, callback) {
     return { minX: minX - relax, maxX: maxX + relax, minY: minY - relax, maxY: maxY + relax };
   }
 
-  // 检测指针在裁剪框边缘
   function getEdge(px, py) {
     if (!st.cropMode || !st.ratio) return null;
     var l = st.cropLeft, t = st.cropTop, r = l + st.cropW, b = t + st.cropH;
@@ -332,13 +229,11 @@ function openCropModal(file, callback) {
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   }
 
-  // --- 更新视图 ---
   function applyTransform() {
     img.style.transform = 'translate(calc(-50% + ' + st.tx + 'px), calc(-50% + ' + st.ty + 'px)) scale(' + st.scale + ')';
     zoomVal.textContent = Math.round(st.scale * 100) + '%';
   }
 
-  // 激活裁剪模式，设置裁剪框
   function activateCrop(ratioStr) {
     var ir = getImgRect();
     if (ratioStr === 'free') {
@@ -365,7 +260,6 @@ function openCropModal(file, callback) {
     renderCrop();
   }
 
-  // 约束裁剪框在图片内部
   function clampCrop() {
     if (!st.cropMode) return;
     var ir = getImgRect();
@@ -578,7 +472,6 @@ function openCropModal(file, callback) {
   var resizeTouchEnd = function() { resizeEnd(); };
   window.addEventListener('touchend', resizeTouchEnd, { passive: true });
 
-  // 清理 window 级事件监听，避免多次打开累积
   function teardown() {
     window.removeEventListener('mousemove', onMove);
     window.removeEventListener('mouseup', onUp);
@@ -607,7 +500,6 @@ function openCropModal(file, callback) {
       btn.disabled = false; btn.classList.remove('loading');
     }
 
-    // 使用 getBoundingClientRect 获取裁剪框实际像素位置（参考工具的做法）
     var vpRect = viewport.getBoundingClientRect();
     var boxRect = cropBox.getBoundingClientRect();
     var left = boxRect.left - vpRect.left;
@@ -641,7 +533,6 @@ function openCropModal(file, callback) {
 
     function onCropDone(blob) {
       if (blob) { teardown(); document.body.removeChild(ov); if (callback) callback(blob); return; }
-      // toBlob 失败 → 降级重试
       if (mime !== 'image/png') {
         canvas.toBlob(function(blob2) {
           if (blob2) { teardown(); document.body.removeChild(ov); if (callback) callback(blob2); return; }
@@ -672,18 +563,17 @@ function openCropModal(file, callback) {
   ov.style.display = 'flex';
 }
 
-// 通用裁剪上传辅助
-// onSuccess(data, input) — 上传成功后的回调，用于自定义处理（如更新额外元素）
+// ── 通用裁剪上传辅助 ──────────────────────────
+// onSuccess(data, input) — 上传成功后的回调，用于自定义处理
 function bindCropUpload(inputId, uploadUrl, fieldSelector, previewSelector, onSuccess) {
   var input = document.getElementById(inputId);
   if (!input) return;
   input.addEventListener('change', function() {
     var file = this.files[0];
     if (!file) return;
-    // 拿到文件引用后立即重置 value，允许下次重复选择同一文件
     this.value = '';
     openCropModal(file, function(cropped) {
-      if (!cropped) return;  // 用户取消裁剪，静默返回
+      if (!cropped) return;
       var formData = new FormData();
       formData.append('file', cropped, file.name);
       showToast('上传中…');
@@ -717,5 +607,106 @@ function bindCropUpload(inputId, uploadUrl, fieldSelector, previewSelector, onSu
 }
 </script>
 
-</body>
-</html>
+    <!-- admin_content 块：子模板填充 -->
+    {% block admin_content %}{% endblock %}
+    </div>
+</div>
+
+{% include 'admin/_cookie_banner.html' %}
+
+<!-- 自定义下拉框 (glow-select) 驱动 + 全局弹窗 -->
+<script>
+// 汉堡菜单：切换侧边栏和覆盖层
+function toggleAdminSidebar() {
+  document.getElementById('adminSidebar').classList.toggle('open');
+  document.getElementById('adminToggle').classList.toggle('open');
+  document.getElementById('adminOverlay').classList.toggle('show');
+}
+function toggleGlowSelect(t){var r=t.parentNode,u=r.classList.contains('is-open');document.querySelectorAll('.glow-select-wrap.is-open').forEach(function(w){w.classList.remove('is-open')});if(!u)r.classList.add('is-open')}
+document.addEventListener('click',function(e){var o=e.target.closest('.glow-select-option');if(o){var w=o.closest('.glow-select-wrap');if(!w)return;var v=o.getAttribute('data-value'),t=w.querySelector('.glow-select-trigger');if(t)t.querySelector('.glow-select-value').textContent=o.textContent;w.querySelectorAll('.glow-select-option').forEach(function(x){x.classList.toggle('is-selected',x===o)});w.classList.remove('is-open');var n=w.querySelector('select');if(n){n.value=v;n.dispatchEvent(new Event('change',{bubbles:true}))}}if(!e.target.closest('.glow-select-wrap')){document.querySelectorAll('.glow-select-wrap.is-open').forEach(function(w){w.classList.remove('is-open')})}});
+
+// ── 全局弹窗（暗色粉紫风格，替换原生 alert/confirm/prompt）──
+(function() {
+  // 创建遮罩层
+  var overlay = document.createElement('div');
+  overlay.className = 'glow-modal-overlay';
+  overlay.innerHTML =
+    '<div class="glow-modal">' +
+      '<h4 id="gmd-title"></h4>' +
+      '<p id="gmd-msg"></p>' +
+      '<input class="glow-modal-input" id="gmd-input" style="display:none">' +
+      '<div class="glow-modal-actions" id="gmd-actions"></div>' +
+    '</div>';
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) overlay.style.display = 'none';
+  });
+  document.body.appendChild(overlay);
+
+  var titleEl = document.getElementById('gmd-title');
+  var msgEl = document.getElementById('gmd-msg');
+  var inputEl = document.getElementById('gmd-input');
+  var actionsEl = document.getElementById('gmd-actions');
+
+  function hideOverlay() {
+    overlay.style.display = 'none';
+  }
+
+  // alert
+  window.alert = function(msg) {
+    titleEl.textContent = '提示';
+    msgEl.innerHTML = msg;
+    actionsEl.innerHTML = '<button class="btn btn-primary" style="flex:1;justify-content:center">确定</button>';
+    actionsEl.querySelector('button').onclick = hideOverlay;
+    overlay.style.display = 'flex';
+  };
+
+  // confirm（异步 callback 版，同步调用返回 true）
+  window.confirm = function(msg, cb) {
+    if (typeof cb !== 'function') return true;
+    titleEl.textContent = '确认操作';
+    msgEl.innerHTML = msg;
+    actionsEl.innerHTML =
+      '<button class="btn btn-ghost" style="flex:1;justify-content:center">取消</button>' +
+      '<button class="btn btn-primary" style="flex:1;justify-content:center">确定</button>';
+    var btns = actionsEl.querySelectorAll('button');
+    btns[0].onclick = function() { hideOverlay(); cb(false); };
+    btns[1].onclick = function() { hideOverlay(); cb(true); };
+    overlay.style.display = 'flex';
+  };
+
+  // prompt（保留原生同步行为）
+  window.prompt = function(msg, def) {
+    titleEl.textContent = '输入';
+    msgEl.innerHTML = msg;
+    inputEl.style.display = 'block';
+    inputEl.value = def || '';
+    actionsEl.innerHTML =
+      '<button class="btn btn-ghost" style="flex:1;justify-content:center">取消</button>' +
+      '<button class="btn btn-primary" style="flex:1;justify-content:center">确定</button>';
+    var btns = actionsEl.querySelectorAll('button');
+    btns[0].onclick = function() { hideOverlay(); inputEl.style.display = 'none'; };
+    btns[1].onclick = function() { inputEl.value = inputEl.value; hideOverlay(); inputEl.style.display = 'none'; };
+    overlay.style.display = 'flex';
+    return def || '';
+  };
+})();
+
+// showConfirm — 替换 onsubmit 中的 return confirm()
+function showConfirm(msg, cb) {
+  var overlay = document.querySelector('.glow-modal-overlay');
+  if (!overlay) { if (cb) cb(true); return; }
+  document.getElementById('gmd-input').style.display = 'none';
+  document.getElementById('gmd-title').textContent = '确认操作';
+  document.getElementById('gmd-msg').innerHTML = msg;
+  var actionsEl = document.getElementById('gmd-actions');
+  actionsEl.innerHTML =
+    '<button class="btn btn-ghost" style="flex:1;justify-content:center">取消</button>' +
+    '<button class="btn btn-primary" style="flex:1;justify-content:center">确定</button>';
+  var btns = actionsEl.querySelectorAll('button');
+  btns[0].onclick = function() { overlay.style.display = 'none'; if (cb) cb(false); };
+  btns[1].onclick = function() { overlay.style.display = 'none'; if (cb) cb(true); };
+  overlay.style.display = 'flex';
+}
+
+// ── 裁剪/上传函数已在顶部 script 中定义
+</script>
