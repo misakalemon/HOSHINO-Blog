@@ -167,31 +167,12 @@ document.getElementById('profileForm').addEventListener('submit', function() {
   var input = document.getElementById('avatarInput');
   var form = document.getElementById('profileForm');
   if (input && form) {
-    input.addEventListener('change', function() {
-      var file = this.files[0];
-      if (!file) return;
-      openCropModal(file, function(cropped) {
-        if (!cropped) return;
-        var formData = new FormData();
-        formData.append('file', cropped, file.name);
-        fetch('{{ url_for("admin.upload_image") }}', {
-          method:'POST',
-          headers: { 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content') },
-          body: formData
-        })
-        .then(function(r) {
-          if (!r.ok) return r.json().then(function(d) { throw new Error(d.error || '上传失败'); });
-          return r.json();
-        })
-        .then(function(data) {
-          var hidden = document.createElement('input');
-          hidden.type = 'hidden'; hidden.name = 'avatar_url';
-          hidden.value = data.url.replace('/static/', '');
-          form.appendChild(hidden);
-          document.querySelector('.admin-avatar').src = data.url + '?t=' + Date.now();
-        })
-        .catch(function(err) { window.alert(err.message || '上传失败'); });
-      });
+    bindCropUpload('avatarInput', '{{ url_for("admin.upload_image") }}', null, '.admin-avatar', function(data) {
+      var hidden = document.createElement('input');
+      hidden.type = 'hidden'; hidden.name = 'avatar_url';
+      hidden.value = data.url.replace('/static/', '');
+      form.appendChild(hidden);
+      document.querySelector('.admin-avatar').src = data.url + '?t=' + Date.now();
     });
   }
 })();

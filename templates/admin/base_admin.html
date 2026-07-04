@@ -171,6 +171,23 @@ function showConfirm(msg, cb) {
   overlay.style.display = 'flex';
 }
 
+// ── Toast 提示 ─────────────────────────────────
+let _toastTimer = null;
+function showToast(msg, type) {
+  var el = document.getElementById('globalToast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'globalToast';
+    el.className = 'color-toast';
+    document.body.appendChild(el);
+  }
+  if (_toastTimer) { clearTimeout(_toastTimer); _toastTimer = null; }
+  el.textContent = msg;
+  el.style.borderColor = type === 'error' ? 'rgba(255,80,80,0.3)' : 'rgba(108,66,209,0.3)';
+  el.classList.add('show');
+  _toastTimer = setTimeout(function() { el.classList.remove('show'); }, 2800);
+}
+
 // ── 图片裁剪工具（浮动裁剪框模式）─────────────
 // openCropModal(file, callback) — 打开裁剪弹窗
 // callback 接收裁剪后的 Blob 对象
@@ -657,16 +674,18 @@ function openCropModal(file, callback) {
 }
 
 // 通用裁剪上传辅助
-function bindCropUpload(inputId, uploadUrl, fieldSelector, previewSelector) {
+// onSuccess(data, input) — 上传成功后的回调，用于自定义处理（如更新额外元素）
+function bindCropUpload(inputId, uploadUrl, fieldSelector, previewSelector, onSuccess) {
   var input = document.getElementById(inputId);
   if (!input) return;
   input.addEventListener('change', function() {
     var file = this.files[0];
     if (!file) return;
     openCropModal(file, function(cropped) {
-      if (!cropped) return;
+      if (!cropped) { showToast('裁剪已取消', 'error'); return; }
       var formData = new FormData();
       formData.append('file', cropped, file.name);
+      showToast('上传中…');
       fetch(uploadUrl, {
         method:'POST',
         headers: { 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content') },
@@ -682,14 +701,20 @@ function bindCropUpload(inputId, uploadUrl, fieldSelector, previewSelector) {
         }
         if (previewSelector) {
           var el = document.querySelector(previewSelector);
-          if (el) el.innerHTML = '<img src="' + data.url + '" alt="crop">';
+          if (el) { el.innerHTML = '<img src="' + data.url + '" alt="crop">'; el.style.display = 'block'; }
           var upload = input.closest('[class*="-upload"]');
           if (upload) upload.classList.add('has-image');
+          var placeholder = input.closest('[class*="-upload"]') ? input.closest('[class*="-upload"]').querySelector('[class*="placeholder"]') : null;
+          if (placeholder) placeholder.style.display = 'none';
         }
+        if (onSuccess) onSuccess(data, input);
+        showToast('上传成功', 'success');
       })
-      .catch(function(err) { window.alert(err.message || '上传失败'); });
+      .catch(function(err) { showToast(err.message || '上传失败', 'error'); });
     });
   });
+  // 允许重新选择同一文件
+  input.addEventListener('click', function() { this.value = ''; });
 }
 </script>
 
