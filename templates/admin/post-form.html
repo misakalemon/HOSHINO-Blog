@@ -136,6 +136,15 @@
                             <span class="glow-select-value">段落</span>
                             <span class="glow-select-arrow">▼</span>
                         </div>
+                        <select onchange="onFormatChange(this.value);this.selectedIndex=0" style="display:none">
+                            <option value="">段落</option>
+                            <option value="h1">H1 标题</option>
+                            <option value="h2">H2 标题</option>
+                            <option value="h3">H3 标题</option>
+                            <option value="h4">H4 标题</option>
+                            <option value="pre">代码块</option>
+                            <option value="blockquote">引用</option>
+                        </select>
                         <div class="glow-select-menu">
                             <div class="glow-select-option is-selected" data-value="">段落</div>
                             <div class="glow-select-option" data-value="h1">H1 标题</div>
@@ -882,47 +891,5 @@ function removeCover(e) {
   });
 })();
 
-// ── 自定义下拉框 (glow-select) ─────────────
-function toggleGlowSelect(trigger) {
-  var wrap = trigger.parentNode;
-  var isOpen = wrap.classList.contains('is-open');
-  document.querySelectorAll('.glow-select-wrap.is-open').forEach(function(w) {
-    w.classList.remove('is-open');
-  });
-  if (!isOpen) wrap.classList.add('is-open');
-}
-
-// 通用 glow-select 选项点击处理
-document.addEventListener('click', function(e) {
-  var opt = e.target.closest('.glow-select-option');
-  if (opt) {
-    var wrap = opt.closest('.glow-select-wrap');
-    if (!wrap) return;
-    var val = opt.getAttribute('data-value');
-    // 更新 trigger 文字
-    var trigger = wrap.querySelector('.glow-select-trigger');
-    if (trigger) {
-      trigger.querySelector('.glow-select-value').textContent = opt.textContent;
-    }
-    // 更新选中态
-    wrap.querySelectorAll('.glow-select-option').forEach(function(o) {
-      o.classList.toggle('is-selected', o === opt);
-    });
-    // 关闭菜单
-    wrap.classList.remove('is-open');
-    // 同步隐藏的 native select 并触发 change
-    var native = wrap.querySelector('select');
-    if (native) {
-      native.value = val;
-      native.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-  }
-  // 点击外部关闭所有 glow-select
-  if (!e.target.closest('.glow-select-wrap')) {
-    document.querySelectorAll('.glow-select-wrap.is-open').forEach(function(w) {
-      w.classList.remove('is-open');
-    });
-  }
-});
 </script>
 {% endblock %}
