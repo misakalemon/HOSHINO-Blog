@@ -101,10 +101,13 @@
 
             <!-- 2. 取色器触发器 -->
             <div class="picker-trigger-section">
-                <div class="picker-trigger" id="colorTrigger">
+                <div class="picker-trigger" id="colorTrigger" onclick="toggleColorPicker()">
                     <div class="mini-swatch" id="triggerSwatch" style="background:#6C42D1"></div>
                     <span class="label">打开取色面板</span>
                     <span class="arrow" id="triggerArrow">▼</span>
+                </div>
+                <div class="color-picker-panel" id="colorPickerPanel">
+                    <input type="color" id="colorPickerInput" value="#6C42D1" oninput="updateColor(this.value.slice(1))">
                 </div>
             </div>
 
