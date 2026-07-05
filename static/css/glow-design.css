@@ -1077,7 +1077,8 @@ ul { list-style: none; }
   box-shadow:0 0 0 1px rgba(0,0,0,0.25);
   pointer-events:none;
 }
-.crop-box.dragging { border-color:#ff6b9d; }
+.crop-box.dragging { border-color:#ff6b9d; transition:none !important; }
+.crop-box:not(.dragging) { transition:left 0.12s ease,top 0.12s ease,width 0.12s ease,height 0.12s ease; }
 .crop-edge {
   position:absolute; pointer-events:auto; background:transparent; z-index:3;
 }
@@ -1160,6 +1161,27 @@ ul { list-style: none; }
   border-radius:50%; animation:crop-spin 0.6s linear infinite;
 }
 @keyframes crop-spin { to { transform:rotate(360deg); } }
+
+/* ── 裁剪加载指示 ──────────────────────────── */
+.crop-loading {
+  position:absolute; inset:0; z-index:10;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  background:rgba(0,0,0,0.3); backdrop-filter:blur(4px);
+  color:rgba(255,255,255,0.6); font-size:13px; gap:12px;
+  transition:opacity 0.3s;
+}
+.crop-loading.hidden { opacity:0; pointer-events:none; }
+.crop-loading-spinner {
+  width:32px; height:32px; border:3px solid rgba(255,255,255,0.15);
+  border-top-color:#ff6b9d; border-radius:50%;
+  animation:crop-spin 0.7s linear infinite;
+}
+/* ── 裁剪输出尺寸 ──────────────────────────── */
+.crop-output-size {
+  font-size:12px; color:rgba(255,255,255,0.4);
+  padding:0 8px; white-space:nowrap;
+  display:flex; align-items:center; gap:4px;
+}
 
 /* 管理后台响应式（≤768px） */
 @media (max-width: 768px) {
