@@ -129,12 +129,12 @@ function toggleColorPicker() {
 }
 
 // ── 4. JSON ──────────────────────────────────
-function formatJSON() {
+function jsonFormat() {
   var input = document.getElementById('json-input').value;
   try { document.getElementById('json-output').value = JSON.stringify(JSON.parse(input), null, 2); }
   catch(e) { alert('无效的 JSON: ' + e.message); }
 }
-function minifyJSON() {
+function jsonCompact() {
   var input = document.getElementById('json-input').value;
   try { document.getElementById('json-output').value = JSON.stringify(JSON.parse(input)); }
   catch(e) { alert('无效的 JSON: ' + e.message); }
@@ -147,16 +147,20 @@ function initTimestamp() {
   document.getElementById('ts-now-ms').textContent = now.getTime();
   document.getElementById('ts-now-local').textContent = now.toLocaleString();
 }
-function tsConvert() {
-  var v = document.getElementById('ts-input').value.trim();
-  if (!v) return;
-  var ms = v.length <= 10 ? parseInt(v) * 1000 : parseInt(v);
-  var d = new Date(ms);
-  document.getElementById('ts-output').value = isNaN(d.getTime()) ? '无效时间戳' : d.toLocaleString();
+function tsNow() { initTimestamp(); }
+function tsFromUnix(val) {
+  if (!val) return;
+  var d = new Date(parseInt(val) * 1000);
+  document.getElementById('ts-datetime').value = isNaN(d.getTime()) ? '' : d.toLocaleString();
+}
+function tsFromDatetime(val) {
+  if (!val) return;
+  var ms = Date.parse(val);
+  document.getElementById('ts-unix').value = ms ? Math.floor(ms / 1000) : '';
 }
 
 // ── 6. 哈希 ──────────────────────────────────
-async function hashString() {
+async function calcHash() {
   var input = document.getElementById('hash-input').value;
   if (!input) return;
   var enc = new TextEncoder().encode(input);
@@ -182,6 +186,19 @@ function pwGenerate() {
   }
   document.getElementById('pwOutput').textContent = result;
   document.getElementById('pwOutput').style.display = 'block';
+}
+function pwCopy() {
+  var el = document.getElementById('pwOutput');
+  if (el && el.textContent) {
+    navigator.clipboard.writeText(el.textContent).catch(function() {});
+    alert('已复制');
+  }
+}
+function keyGenerate() {
+  pwGenerate();
+}
+function keyCopy() {
+  pwCopy();
 }
 
 // ── 8. 图片压缩 ──────────────────────────────
@@ -210,11 +227,16 @@ function izUpdate() {
     var ctx = c.getContext('2d');
     ctx.drawImage(img, 0, 0, w, h);
     c.toBlob(function(blob) {
-      var url = URL.createObjectURL(blob);
-      document.getElementById('iz-preview').innerHTML = '<img src="' + url + '">';
-      document.getElementById('iz-size').textContent = (blob.size / 1024).toFixed(1) + ' KB (' + Math.round(blob.size / izFile.size * 100) + '%)';
-      document.getElementById('iz-dl').innerHTML = '<a href="' + url + '" download="compressed.' + fmt.split('/')[1] + '" class="btn btn-primary btn-sm">⬇ 下载</a>';
-    }, fmt, quality);
-  };
-  img.src = URL.createObjectURL(izFile);
+    var url = URL.createObjectURL(blob);
+    document.getElementById('iz-preview').innerHTML = '<img src="' + url + '">';
+    document.getElementById('iz-size').textContent = (blob.size / 1024).toFixed(1) + ' KB (' + Math.round(blob.size / izFile.size * 100) + '%)';
+    document.getElementById('iz-dl').innerHTML = '<a href="' + url + '" download="compressed.' + fmt.split('/')[1] + '" class="btn btn-primary btn-sm">⬇ 下载</a>';
+    document.getElementById('iz-dlbtn').disabled = false;
+  }, fmt, quality);
+};
+img.src = URL.createObjectURL(izFile);
+}
+function izDownload() {
+var dl = document.querySelector('#iz-dl a');
+if (dl) dl.click();
 }
