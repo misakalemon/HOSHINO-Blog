@@ -104,6 +104,13 @@ function toggleDrawer(){
   document.getElementById('mobileDrawer').classList.toggle('open');
   document.getElementById('drawerOverlay').classList.toggle('show');
 }
+function openLightbox(src) {
+  document.getElementById('lightboxImg').src = src;
+  document.getElementById('lightbox').style.display = 'flex';
+}
+function closeLightbox() {
+  document.getElementById('lightbox').style.display = 'none';
+}
 function toggleGlowSelect(t){
   var r=t.parentNode,u=r.classList.contains('is-open');
   if(u){r.classList.remove('is-open');return;}
