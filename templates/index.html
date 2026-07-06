@@ -51,13 +51,13 @@
 </section>
 {% else %}
 <section class="hero">
-    <h1>最喜欢<br><span class="highlight">小鸟游星野</span></h1>
+    <h1 class="hero-content">最喜欢<br><span class="highlight">小鸟游星野</span></h1>
     <p>{{ blog_subtitle }}</p>
 </section>
 {% endif %}
 
 <!-- 特色卡片网格：遍历所有特色卡片 -->
-<div class="featured-grid">
+<div class="featured-grid reveal">
     {% for card in featured_cards %}
     <div class="featured-card">
         <!-- 卡片图标区域：支持 emoji 图标或图片 URL -->
@@ -78,7 +78,7 @@
     {% endfor %}
 </div>
 
-<div class="content">
+<div class="content reveal">
     <div class="row">
         <div class="col-8">
             <div class="section-title">精选 <span>文章</span></div>
