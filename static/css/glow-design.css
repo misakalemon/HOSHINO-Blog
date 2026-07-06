@@ -1663,7 +1663,7 @@ ul { list-style: none; }
 .masonry-item:nth-child(8) { animation-delay: 0.54s; }
 
 /* ── 25. 布局系统 ──────────────────────────── */
-.container { max-width: 1200px; margin: 0 auto; padding: 0 clamp(16px, 3vw, 24px); }
+.container { max-width: 1320px; margin: 0 auto; padding: 0 clamp(16px, 3vw, 24px); }
 .row { display: flex; gap: clamp(20px, 3vw, 32px); flex-wrap: wrap; }
 .row .col-8 { flex: 1; min-width: 0; }
 .row .col-4 { width: 100%; }
