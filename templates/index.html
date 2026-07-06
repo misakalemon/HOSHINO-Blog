@@ -17,7 +17,30 @@
      ============================================================ -->
 {% extends 'base.html' %}
 {% block title %}{{ site_name|default('Hoshino') }}{% endblock %}
+
+{% block extra_head %}
+<style>
+/* 背景光晕 — 与 base.html 的 glow-bg 不冲突（已移除旧版） */
+.glow-bg { position:fixed; inset:0; z-index:0; pointer-events:none;
+  background:radial-gradient(ellipse at 50% 50%, #0b1a2e 0%, #1a0b2e 20%, #0e0b1a 45%, #06070a 70%);
+  background-size:200% 200%; animation:glowShift 30s ease-in-out infinite; }
+@keyframes glowShift { 0%{background-position:0% 50%} 25%{background-position:100% 0%} 50%{background-position:100% 100%} 75%{background-position:0% 100%} 100%{background-position:0% 50%} }
+
+/* 英雄区全屏 */
+.hero { position:relative; z-index:10; min-height:100vh; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:0 28px; }
+.hero-badge { display:inline-block; padding:6px 18px; border-radius:30px; font-size:0.8rem; font-weight:500; letter-spacing:0.06em; background:rgba(167,139,250,0.12); border:1px solid rgba(167,139,250,0.2); color:#c4b5fd; margin-bottom:20px; backdrop-filter:blur(8px); }
+.scroll-hint { display:inline-block; color:rgba(255,255,255,0.3); font-size:0.8rem; letter-spacing:0.15em; border:1px solid rgba(255,255,255,0.06); padding:0.4rem 1.4rem; border-radius:40px; backdrop-filter:blur(4px); margin-top:20px; }
+.scroll-hint span { display:inline-block; animation:bounceDown 2s infinite; }
+@keyframes bounceDown { 0%,100%{transform:translateY(0)} 50%{transform:translateY(6px)} }
+.scroll-progress { position:fixed; top:0; left:0; height:2.5px; background:linear-gradient(90deg,#7c5cfc,#a78bfa,#c4b5fd); z-index:999; width:0%; transition:width 0.1s linear; box-shadow:0 0 20px rgba(167,139,250,0.2); }
+</style>
+{% endblock %}
 {% block content %}
+
+<!-- 背景光晕 -->
+<div class="glow-bg"></div>
+<!-- 滚动进度条 -->
+<div class="scroll-progress" id="scrollProgress"></div>
 
 <!-- 英雄区域：如果存在搜索关键词则显示搜索结果标题，否则显示默认欢迎语 -->
 {% if search_query %}
@@ -27,9 +50,11 @@
     <p>找到 {{ posts.total if posts.total is defined else 0 }} 篇相关文章</p>
 </section>
 {% else %}
-<section class="hero">
+<section class="hero" id="heroSection">
+    <div class="hero-badge">✦ 个人博客</div>
     <h1>最喜欢<br><span class="highlight">小鸟游星野</span></h1>
     <p>{{ blog_subtitle }}</p>
+    <div class="scroll-hint"><span>↓ 向下滚动 ↓</span></div>
 </section>
 {% endif %}
 
@@ -178,3 +203,33 @@
 </div>
 
 {% endblock %}
+
+<script>
+(function(){
+'use strict';
+// 1. 滚动进度条
+var pb=document.getElementById('scrollProgress');
+function up(){var s=window.scrollY,d=document.documentElement.scrollHeight-window.innerHeight;pb.style.width=(d>0?Math.min(s/d*100,100):0)+'%';}
+window.addEventListener('scroll',up,{passive:true});window.addEventListener('resize',up);up();
+// 2. 卡片滚动驱动力
+var hero=document.getElementById('heroSection');
+var cards=document.querySelectorAll('.featured-card,.masonry-item');
+var cardData=[];
+cards.forEach(function(c,i){cardData.push({speed:0.2+i*0.05,delay:i*0.08});});
+function ease(t){return 1-Math.pow(1-t,3);}
+function update(){
+  var sy=window.scrollY,hh=hero.offsetHeight,st=hero.offsetTop+hh,ed=st+window.innerHeight*0.8;
+  var p=Math.max(0,Math.min(1,(sy-st)/(ed-st)));
+  cards.forEach(function(c,i){
+    var d=cardData[i],cp=Math.max(0,Math.min(1,(p-d.delay)*(1+d.speed*0.5)));
+    var e=ease(cp),ty=(1-e)*50,rot=(1-e)*3*(i%2===0?1:-1);
+    c.style.transform='translateY('+ty+'px) rotate('+rot+'deg)';c.style.opacity=e;
+  });
+}
+var tick=false;window.addEventListener('scroll',function(){if(!tick){window.requestAnimationFrame(function(){update();tick=false});tick=true;}},{passive:true});
+window.addEventListener('resize',update);update();
+// 3. 英雄区视差
+var ht=hero.querySelector('h1');
+if(ht){window.addEventListener('scroll',function(){var s=Math.min(window.scrollY/hero.offsetHeight,1);ht.style.transform='translateY('+(s*30)+'px)';ht.style.opacity=1-s*0.3;},{passive:true});}
+})();
+</script>
