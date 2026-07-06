@@ -112,13 +112,11 @@ function closeLightbox() {
   document.getElementById('lightbox').style.display = 'none';
 }
 
-// ── 导航栏渐显 ────────────────────────────
+// ── 导航栏渐显（仅首页有效）───────────────
 document.addEventListener('DOMContentLoaded', function() {
   var nav = document.querySelector('.navbar');
-  if (!nav) return;
-  function checkNav() {
-    nav.classList.toggle('visible', window.scrollY > window.innerHeight * 0.2);
-  }
+  if (!nav || !document.querySelector('.hero')) { if(nav) nav.classList.add('visible'); return; }
+  function checkNav() { nav.classList.toggle('visible', window.scrollY > window.innerHeight * 0.2); }
   window.addEventListener('scroll', checkNav, {passive:true});
   checkNav();
 });
