@@ -50,15 +50,11 @@ document.addEventListener('DOMContentLoaded',function(){
     <p>找到 {{ posts.total if posts.total is defined else 0 }} 篇相关文章</p>
 </section>
 {% else %}
-<section class="hero">
-    <div class="hero-badge">✦ 个人博客</div>
-    <h1 class="hero-content">最喜欢<br><span class="highlight">小鸟游星野</span></h1>
-    <p class="hero-desc">{{ blog_subtitle }}</p>
-    <div class="hero-actions">
-        <a href="{{ url_for('blog.category', slug='技术') }}" class="hero-btn primary">浏览文章</a>
-        <a href="{{ url_for('blog.tools') }}" class="hero-btn secondary">在线工具</a>
+<section class="hero" id="hero">
+    <div class="hero-content">
+        <h1>最喜欢<br><span class="highlight">小鸟游星野</span></h1>
+        <p>{{ blog_subtitle }}</p>
     </div>
-    <div class="scroll-hint"><span>↓ 向下滚动 ↓</span></div>
 </section>
 {% endif %}
 
