@@ -100,20 +100,11 @@
                 </div>
             </div>
 
-            <!-- 2. 取色器（glow-select 样式） -->
+            <!-- 2. 取色器 — 点击直接弹出取色面板 -->
             <div class="picker-trigger-section">
-                <div class="glow-select-wrap color-picker-wrap">
-                    <div class="glow-select-trigger" id="colorTrigger" onclick="toggleColorPicker()">
-                        <span style="display:flex;align-items:center;gap:8px">
-                            <span class="mini-swatch" id="triggerSwatch" style="background:#6C42D1"></span>
-                            <span class="glow-select-value">取色器</span>
-                        </span>
-                        <span class="glow-select-arrow" id="triggerArrow">▼</span>
-                    </div>
-                    <div class="glow-select-menu color-picker-menu" id="colorPickerPanel">
-                        <div style="padding:8px;text-align:center;color:rgba(255,255,255,0.5);font-size:12px;border-bottom:1px solid rgba(255,255,255,0.04);margin-bottom:6px">选择颜色</div>
-                        <input type="color" id="colorPickerInput" value="#6C42D1" oninput="updateColor(this.value.slice(1))">
-                    </div>
+                <div class="color-picker-trigger" id="colorTrigger" onclick="openColorPanel()">
+                    <span class="mini-swatch" id="triggerSwatch" style="background:#6C42D1"></span>
+                    <span class="label">取色器</span>
                 </div>
             </div>
 

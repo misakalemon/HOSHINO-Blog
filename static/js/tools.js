@@ -120,13 +120,136 @@ function copyColor(type) {
   }
 }
 
-// 取色面板（glow-select 样式）
-var colorPickerOpen = false;
-function toggleColorPicker() {
-  colorPickerOpen = !colorPickerOpen;
-  var wrap = document.querySelector('.color-picker-wrap');
-  if (wrap) wrap.classList.toggle('is-open', colorPickerOpen);
+// ── 取色面板（浮层）───────────────────────
+var cpState = { h: 258, s: 62, v: 82 };
+function openColorPanel() {
+  var ov = document.getElementById('colorPanelOverlay');
+  if (!ov) return;
+  ov.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  setTimeout(function() { initColorCanvases(); }, 50);
 }
+function closeColorPanel() {
+  var ov = document.getElementById('colorPanelOverlay');
+  if (!ov) return;
+  ov.classList.remove('open');
+  document.body.style.overflow = '';
+}
+// 初始化画布取色器
+function initColorCanvases() {
+  var sv = document.getElementById('svCanvas');
+  var hue = document.getElementById('hueCanvas');
+  if (!sv || !hue) return;
+  // 实际尺寸
+  sv.width = sv.clientWidth * 2 || 400;
+  sv.height = sv.clientHeight * 2 || 400;
+  hue.width = hue.clientWidth * 2 || 52;
+  hue.height = hue.clientHeight * 2 || 400;
+  drawHue(hue);
+  drawSV(sv, cpState.h);
+}
+function drawHue(canvas) {
+  var ctx = canvas.getContext('2d');
+  var w = canvas.width, h = canvas.height;
+  for (var y = 0; y < h; y++) {
+    var hue = (y / h) * 360;
+    ctx.fillStyle = 'hsl(' + hue + ', 100%, 50%)';
+    ctx.fillRect(0, y, w, 1);
+  }
+}
+function drawSV(canvas, hue) {
+  var ctx = canvas.getContext('2d');
+  var w = canvas.width, h = canvas.height;
+  // 水平: 饱和度, 垂直: 明度
+  var img = ctx.createImageData(w, h);
+  for (var x = 0; x < w; x++) {
+    for (var y = 0; y < h; y++) {
+      var sat = x / w;
+      var val = 1 - y / h;
+      var hsl = svToHsl(hue, sat, val);
+      var rgb = hslToRgb(hsl.h, hsl.s, hsl.l);
+      var idx = (y * w + x) * 4;
+      img.data[idx] = rgb.r;
+      img.data[idx + 1] = rgb.g;
+      img.data[idx + 2] = rgb.b;
+      img.data[idx + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+function svToHsl(hue, sat, val) {
+  var l = val * (1 - sat / 2);
+  var s = (l === 0 || l === 1) ? 0 : (val - l) / Math.min(l, 1 - l);
+  return { h: hue, s: Math.round(s * 100), l: Math.round(l * 100) };
+}
+function hslToRgb(h, s, l) {
+  s /= 100; l /= 100;
+  var c = (1 - Math.abs(2 * l - 1)) * s;
+  var x = c * (1 - Math.abs((h / 60) % 2 - 1));
+  var m = l - c / 2;
+  var r, g, b;
+  if (h < 60) { r = c; g = x; b = 0; }
+  else if (h < 120) { r = x; g = c; b = 0; }
+  else if (h < 180) { r = 0; g = c; b = x; }
+  else if (h < 240) { r = 0; g = x; b = c; }
+  else if (h < 300) { r = x; g = 0; b = c; }
+  else { r = c; g = 0; b = x; }
+  return { r: Math.round((r + m) * 255), g: Math.round((g + m) * 255), b: Math.round((b + m) * 255) };
+}
+function cpPickSV(e) {
+  var sv = document.getElementById('svCanvas');
+  var dot = document.getElementById('svCursor');
+  if (!sv || !dot) return;
+  var r = sv.getBoundingClientRect();
+  var x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+  var y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+  dot.style.left = (x * 100) + '%';
+  dot.style.top = (y * 100) + '%';
+  cpState.s = Math.round(x * 100);
+  cpState.v = Math.round((1 - y) * 100);
+  updateColorFromCp();
+}
+function cpPickHue(e) {
+  var hue = document.getElementById('hueCanvas');
+  if (!hue) return;
+  var r = hue.getBoundingClientRect();
+  var y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+  cpState.h = Math.round(y * 360);
+  var handle = document.getElementById('hueHandle');
+  if (handle) handle.style.top = (y * 100) + '%';
+  drawSV(document.getElementById('svCanvas'), cpState.h);
+  updateColorFromCp();
+}
+function updateColorFromCp() {
+  var rgb = hslToRgb(cpState.h, cpState.s, cpState.v);
+  var hex = ((rgb.r << 16) | (rgb.g << 8) | rgb.b).toString(16).padStart(6, '0');
+  updateColor(hex);
+}
+// 面板关闭按钮
+document.addEventListener('DOMContentLoaded', function() {
+  var ov = document.getElementById('colorPanelOverlay');
+  var closeBtn = document.getElementById('panelCloseBtn');
+  var confirmBtn = document.getElementById('confirmColorBtn');
+  if (closeBtn) closeBtn.onclick = closeColorPanel;
+  if (confirmBtn) confirmBtn.onclick = function() { closeColorPanel(); };
+  if (ov) ov.onclick = function(e) { if (e.target === ov) closeColorPanel(); };
+  // SV picker
+  var svCanvas = document.getElementById('svCanvas');
+  if (svCanvas) {
+    svCanvas.addEventListener('mousedown', function(e) { cpPickSV(e); });
+    svCanvas.addEventListener('mousemove', function(e) { if (e.buttons !== 1) return; cpPickSV(e); });
+    svCanvas.addEventListener('touchmove', function(e) { e.preventDefault(); var t = e.touches[0]; if (t) cpPickSV(t); }, { passive: false });
+    svCanvas.addEventListener('touchstart', function(e) { var t = e.touches[0]; if (t) cpPickSV(t); }, { passive: true });
+  }
+  // Hue picker
+  var hueCanvas = document.getElementById('hueCanvas');
+  if (hueCanvas) {
+    hueCanvas.addEventListener('mousedown', function(e) { cpPickHue(e); });
+    hueCanvas.addEventListener('mousemove', function(e) { if (e.buttons !== 1) return; cpPickHue(e); });
+    hueCanvas.addEventListener('touchmove', function(e) { e.preventDefault(); var t = e.touches[0]; if (t) cpPickHue(t); }, { passive: false });
+    hueCanvas.addEventListener('touchstart', function(e) { var t = e.touches[0]; if (t) cpPickHue(t); }, { passive: true });
+  }
+});
 
 // ── 4. JSON ──────────────────────────────────
 function jsonFormat() {
