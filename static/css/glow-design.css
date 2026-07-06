@@ -174,7 +174,9 @@ ul { list-style: none; }
   display: flex; align-items: center;
   justify-content: space-between;
   padding: 0 28px;
+  opacity:0; transform:translateY(-100%); transition:opacity 0.4s,transform 0.4s;
 }
+.navbar.visible { opacity:1; transform:translateY(0); }
 /* logo 使用渐变文字，纤细字重突出设计感 */
 .nav-logo {
   font-size: 1.2rem; font-weight: 300; letter-spacing: 0.04em;

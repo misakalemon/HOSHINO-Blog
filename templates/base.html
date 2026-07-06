@@ -111,6 +111,17 @@ function openLightbox(src) {
 function closeLightbox() {
   document.getElementById('lightbox').style.display = 'none';
 }
+
+// ── 导航栏渐显 ────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+  var nav = document.querySelector('.navbar');
+  if (!nav) return;
+  function checkNav() {
+    nav.classList.toggle('visible', window.scrollY > window.innerHeight * 0.2);
+  }
+  window.addEventListener('scroll', checkNav, {passive:true});
+  checkNav();
+});
 function toggleGlowSelect(t){
   var r=t.parentNode,u=r.classList.contains('is-open');
   if(u){r.classList.remove('is-open');return;}
