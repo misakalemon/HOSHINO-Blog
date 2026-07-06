@@ -100,6 +100,7 @@ class ProfileForm(FlaskForm):
     website = StringField('个人网站', validators=[Optional(), Length(max=256)])         # 个人网站链接，选填
     gitcode_url = StringField('GitCode', validators=[Optional(), Length(max=256)])     # GitCode 主页
     github_url = StringField('GitHub', validators=[Optional(), Length(max=256)])       # GitHub 主页
+    gitee_url = StringField('Gitee', validators=[Optional(), Length(max=256)])         # Gitee 主页
     bilibili_url = StringField('Bilibili', validators=[Optional(), Length(max=256)])   # B站主页
     email = StringField('邮箱', validators=[Optional(), Email(), Length(max=120)])     # 邮箱，选填
     current_password = PasswordField('当前密码', validators=[Optional()])                # 当前密码，改密码时需要

@@ -246,6 +246,7 @@ def _migrate_user_profile_fields(app):
     new_columns = {
         'gitcode_url': "VARCHAR(256) DEFAULT ''",
         'github_url': "VARCHAR(256) DEFAULT ''",
+        'gitee_url': "VARCHAR(256) DEFAULT ''",
         'bilibili_url': "VARCHAR(256) DEFAULT ''",
         'about_content': "MEDIUMTEXT",
     }

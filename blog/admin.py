@@ -807,6 +807,7 @@ def profile():
         current_user.website = form.website.data
         current_user.gitcode_url = form.gitcode_url.data
         current_user.github_url = form.github_url.data
+        current_user.gitee_url = form.gitee_url.data
         current_user.bilibili_url = form.bilibili_url.data
 
         # ── 头像上传 ──────────────────────────
