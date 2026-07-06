@@ -691,11 +691,14 @@ ul { list-style: none; }
 .post-detail { max-width: 1000px; margin: 0 auto; }
 .featured-image { border-radius: 20px; overflow: hidden; margin-bottom: 24px; }
 .post-content { font-size: 1rem; line-height: 1.8; color: rgba(255,255,255,0.8); }
-.post-content h1, .post-content h2, .post-content h3 {
-  margin-top: 1.5em; margin-bottom: 0.5em; font-weight: 500;
-  color: rgba(255,255,255,0.95);
-}
+.post-content h1 { font-size: 1.8rem; margin-top: 1.5em; margin-bottom: 0.5em; font-weight: 500; color: rgba(255,255,255,0.95); }
+.post-content h2 { font-size: 1.4rem; margin-top: 1.5em; margin-bottom: 0.5em; font-weight: 500; color: rgba(255,255,255,0.95); }
+.post-content h3 { font-size: 1.2rem; margin-top: 1.5em; margin-bottom: 0.5em; font-weight: 500; color: rgba(255,255,255,0.95); }
+.post-content h4, .post-content h5, .post-content h6 { margin-top: 1.2em; margin-bottom: 0.4em; font-weight: 500; color: rgba(255,255,255,0.9); }
 .post-content p { margin-bottom: 1em; }
+.post-content ul, .post-content ol { margin: 0.5em 0 1em; padding-left: 1.8em; }
+.post-content li { margin-bottom: 0.3em; }
+.post-content li > ul, .post-content li > ol { margin: 0.2em 0; }
 .post-content code:not([class*="language-"]) {
   background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 6px;
   font-size: 0.85rem;
@@ -714,7 +717,7 @@ ul { list-style: none; }
   padding-left: 20px; color: rgba(255,255,255,0.5);
   font-style: italic; margin: 1em 0;
 }
-.post-content table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+.post-content table { border-collapse: collapse; width: 100%; margin: 1em 0; overflow-x: auto; display: block; }
 .post-content th, .post-content td {
   border: 1px solid rgba(255,255,255,0.15);
   padding: 10px 14px; text-align: left;
