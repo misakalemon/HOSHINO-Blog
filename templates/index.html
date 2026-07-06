@@ -28,8 +28,13 @@
 </section>
 {% else %}
 <section class="hero">
+    <div class="hero-badge">✦ 个人博客</div>
     <h1>最喜欢<br><span class="highlight">小鸟游星野</span></h1>
-    <p>{{ blog_subtitle }}</p>
+    <p class="hero-desc">{{ blog_subtitle }}</p>
+    <div class="hero-actions">
+        <a href="{{ url_for('blog.category', slug='技术') }}" class="hero-btn primary">浏览文章</a>
+        <a href="{{ url_for('blog.tools') }}" class="hero-btn secondary">在线工具</a>
+    </div>
 </section>
 {% endif %}
 
