@@ -111,6 +111,16 @@ function openLightbox(src) {
 function closeLightbox() {
   document.getElementById('lightbox').style.display = 'none';
 }
+
+// ── 滚动渐入动画（Intersection Observer）──────
+document.addEventListener('DOMContentLoaded', function() {
+  var obs = new IntersectionObserver(function(entries) {
+    entries.forEach(function(e) {
+      if (e.isIntersecting) { e.target.classList.add('visible'); obs.unobserve(e.target); }
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+  document.querySelectorAll('.reveal').forEach(function(el) { obs.observe(el); });
+});
 function toggleGlowSelect(t){
   var r=t.parentNode,u=r.classList.contains('is-open');
   if(u){r.classList.remove('is-open');return;}
