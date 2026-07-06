@@ -26,7 +26,7 @@
 .scroll-progress { position:fixed; top:0; left:0; height:3px; background:linear-gradient(90deg,#7c5cfc,#a78bfa); z-index:999; width:0%; transition:width 0.1s linear; box-shadow:0 0 20px rgba(167,139,250,0.3); }
 </style>
 <script>
-(function(){
+document.addEventListener('DOMContentLoaded',function(){
   // 1. 滚动渐显
   var els=document.querySelectorAll('.reveal');
   if('IntersectionObserver'in window){var obs=new IntersectionObserver(function(e){e.forEach(function(n){if(n.isIntersecting){n.target.classList.add('visible');obs.unobserve(n.target);}});},{threshold:0.1});els.forEach(function(el){obs.observe(el);});}else{els.forEach(function(el){el.classList.add('visible');});}
@@ -37,7 +37,7 @@
   // 3. 英雄区视差
   var hero=document.querySelector('.hero');
   if(hero){var hc=hero.querySelector('h1')||hero;window.addEventListener('scroll',function(){var s=Math.min(window.scrollY/window.innerHeight*1.2,1);if(s>0){hc.style.transform='translateY('+(s*30)+'px)';hc.style.opacity=1-s*0.4;}else{hc.style.transform='';hc.style.opacity='';}},{passive:true});}
-})();
+});
 </script>
 {% endblock %}
 {% block content %}
