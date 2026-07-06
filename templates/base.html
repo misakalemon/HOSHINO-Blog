@@ -112,6 +112,9 @@ function closeLightbox() {
   document.getElementById('lightbox').style.display = 'none';
 }
 
+// ── 浏览器返回时恢复滚动位置 ──────────────
+if ('scrollRestoration' in history) history.scrollRestoration = 'auto';
+
 // ── 导航栏渐显（仅首页有效）───────────────
 document.addEventListener('DOMContentLoaded', function() {
   var nav = document.querySelector('.navbar');
