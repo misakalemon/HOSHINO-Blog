@@ -30,11 +30,11 @@
 .step-panel.active { display:block; }
 
 /* --- 封面图片上传 --- */
-.cover-upload { border:2px dashed var(--border-subtle); border-radius:16px; padding:40px; text-align:center; cursor:pointer; transition:all 0.3s; position:relative; min-height:200px; display:flex; align-items:center; justify-content:center; }
+.cover-upload { border:2px dashed var(--border-subtle); border-radius:16px; padding:40px; text-align:center; cursor:pointer; transition:all 0.3s; position:relative; min-height:200px; display:flex; align-items:center; justify-content:center; touch-action:manipulation; }
 .cover-upload:hover { border-color:var(--accent); background:rgba(108,66,209,0.03); }
 .cover-upload.has-image { padding:0; border-style:solid; }
 .cover-upload img { max-width:100%; max-height:260px; border-radius:14px; display:block; }
-.cover-upload input { display:none; }
+.cover-upload input { position:absolute;left:-9999px;opacity:0;width:1px;height:1px;pointer-events:none; }
 .cover-upload .placeholder { color:var(--text-muted); font-size:14px; }
 .cover-upload .placeholder svg { display:block; margin:0 auto 12px; width:40px; height:40px; opacity:0.4; }
 .cover-remove { position:absolute; top:8px; right:8px; background:rgba(255,45,120,0.8); color:#fff; border:none; border-radius:8px; padding:4px 12px; font-size:12px; cursor:pointer; display:none; }
@@ -871,7 +871,10 @@ function rteImageUpload(align) {
   var input = document.createElement('input');
   input.type = 'file';
   input.accept = 'image/*';
+  input.style.cssText = 'position:absolute;left:-9999px;opacity:0;width:1px;height:1px';
+  document.body.appendChild(input);
   input.onchange = function() {
+    document.body.removeChild(input);
     var file = input.files[0];
     if (!file) return;
     // 先裁剪，再上传

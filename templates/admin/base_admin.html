@@ -487,8 +487,10 @@ function openCropModal(file, callback) {
     if (!resizeState) return;
     var dx = e.clientX - resizeState.startX;
     var dy = e.clientY - resizeState.startY;
-    var newW = Math.max(480, Math.min(resizeState.startW + dx, window.innerWidth * 0.96));
-    var newH = Math.max(360, Math.min(resizeState.startH + dy, window.innerHeight * 0.96));
+    var minW = window.innerWidth < 600 ? Math.min(320, window.innerWidth * 0.94) : 480;
+    var minH = window.innerHeight < 600 ? 260 : 360;
+    var newW = Math.max(minW, Math.min(resizeState.startW + dx, window.innerWidth * 0.96));
+    var newH = Math.max(minH, Math.min(resizeState.startH + dy, window.innerHeight * 0.96));
     modalEl.style.width = newW + 'px';
     modalEl.style.height = newH + 'px';
     if (st.cropMode) renderCrop();

@@ -1067,6 +1067,7 @@ ul { list-style: none; }
               linear-gradient(90deg, rgba(200,212,224,0.06) 1px, transparent 1px);
   background-size:24px 24px; background-color:rgba(0,0,0,0.15);
   cursor:default; user-select:none; -webkit-user-select:none;
+  touch-action:none; -ms-touch-action:none;
 }
 .crop-viewport-area img {
   position:absolute; left:50%; top:50%;
