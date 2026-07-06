@@ -688,7 +688,7 @@ ul { list-style: none; }
 
 /* ── 13. 文章详情 ──────────────────────────────── */
 /* 居中窄列（720px）提高阅读体验 */
-.post-detail { max-width: 720px; margin: 0 auto; }
+.post-detail { max-width: 1000px; margin: 0 auto; }
 .featured-image { border-radius: 20px; overflow: hidden; margin-bottom: 24px; }
 .post-content { font-size: 1rem; line-height: 1.8; color: rgba(255,255,255,0.8); }
 .post-content h1, .post-content h2, .post-content h3 {
