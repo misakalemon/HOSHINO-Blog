@@ -216,19 +216,19 @@
             <div class="pw-layout">
                 <div class="pw-section">
                     <div class="pw-section-title">🔐 随机密码</div>
-                    <div class="pw-row"><span class="pw-label">长度</span><input type="range" id="pwLen" min="4" max="128" value="16" oninput="pwLenVal.textContent=this.value"><span class="pw-val" id="pwLenVal">16</span></div>
+                    <div class="pw-row"><span class="pw-label">长度</span><input type="range" id="pwLen" min="4" max="128" value="16" class="glow-range" oninput="pwLenVal.textContent=this.value"><span class="pw-val" id="pwLenVal">16</span></div>
                     <div class="pw-charset">
-                        <label class="pw-cb"><input type="checkbox" id="pwUpper" checked><span>大写 A-Z</span></label>
-                        <label class="pw-cb"><input type="checkbox" id="pwLower" checked><span>小写 a-z</span></label>
-                        <label class="pw-cb"><input type="checkbox" id="pwDigit" checked><span>数字 0-9</span></label>
-                        <label class="pw-cb"><input type="checkbox" id="pwSym" checked><span>符号 !@#$...</span></label>
+                        <label class="glow-checkbox"><input type="checkbox" id="pwUpper" checked><span class="cb-box"></span><span>大写 A-Z</span></label>
+                        <label class="glow-checkbox"><input type="checkbox" id="pwLower" checked><span class="cb-box"></span><span>小写 a-z</span></label>
+                        <label class="glow-checkbox"><input type="checkbox" id="pwDigit" checked><span class="cb-box"></span><span>数字 0-9</span></label>
+                        <label class="glow-checkbox"><input type="checkbox" id="pwSym" checked><span class="cb-box"></span><span>符号 !@#$...</span></label>
                     </div>
                     <div class="pw-row">
-                        <label class="pw-cb"><input type="checkbox" id="pwAmb"><span>排除易混淆字符 (0O1lI|)</span></label>
+                        <label class="glow-checkbox"><input type="checkbox" id="pwAmb"><span class="cb-box"></span><span>排除易混淆字符 (0O1lI|)</span></label>
                     </div>
                     <div class="pw-row">
                         <span class="pw-label">生成数量</span>
-                        <input type="number" id="pwCount" min="1" max="50" value="5" style="width:60px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;color:#e8edf5;padding:6px 8px;text-align:center;font-family:monospace">
+                        <input type="number" id="pwCount" min="1" max="50" value="5" class="pw-number-input">
                     </div>
                     <div class="pw-row" style="gap:8px">
                         <button class="btn btn-primary btn-sm" onclick="pwGenerate()">⚡ 生成</button>
@@ -263,12 +263,12 @@
                         </div>
                     </div>
                     <div class="pw-row"><span class="pw-label">格式</span>
-                        <label class="pw-cb"><input type="radio" name="keyFmt" value="hex" checked><span>HEX</span></label>
-                        <label class="pw-cb"><input type="radio" name="keyFmt" value="base64"><span>Base64</span></label>
-                        <label class="pw-cb"><input type="radio" name="keyFmt" value="base64url"><span>Base64 URL</span></label>
+                        <label class="glow-radio"><input type="radio" name="keyFmt" value="hex" checked><span class="rb-dot"></span><span>HEX</span></label>
+                        <label class="glow-radio"><input type="radio" name="keyFmt" value="base64"><span class="rb-dot"></span><span>Base64</span></label>
+                        <label class="glow-radio"><input type="radio" name="keyFmt" value="base64url"><span class="rb-dot"></span><span>Base64 URL</span></label>
                     </div>
                     <div class="pw-row"><span class="pw-label">数量</span>
-                        <input type="number" id="keyCount" min="1" max="20" value="3" style="width:60px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;color:#e8edf5;padding:6px 8px;text-align:center;font-family:monospace">
+                        <input type="number" id="keyCount" min="1" max="20" value="3" class="pw-number-input">
                     </div>
                     <div class="pw-row" style="gap:8px">
                         <button class="btn btn-primary btn-sm" onclick="keyGenerate()">⚡ 生成密钥</button>
@@ -284,7 +284,7 @@
             <div class="tool-heading">图片压缩</div>
             <div class="iz-controls">
                 <div class="tool-field"><label>质量 <span id="iz-q-val">80%</span></label>
-                    <input type="range" id="iz-quality" min="1" max="100" value="80" oninput="izUpdate()">
+                    <input type="range" id="iz-quality" min="1" max="100" value="80" class="glow-range" oninput="izUpdate()">
                 </div>
                 <div class="tool-field"><label>最大宽度</label>
                     <div class="glow-select-wrap" style="display:inline-flex;background:transparent;border:none;vertical-align:middle;width:100%">

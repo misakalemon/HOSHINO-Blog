@@ -406,6 +406,71 @@ ul { list-style: none; }
 .form-group input::placeholder, .form-group textarea::placeholder {
   color: rgba(255,255,255,0.2);
 }
+
+/* ── 自定义复选框 / 单选钮 ────────────── */
+.glow-checkbox, .glow-radio {
+  display:inline-flex; align-items:center; gap:8px; cursor:pointer;
+  font-size:0.85rem; color:rgba(255,255,255,0.6); user-select:none;
+  transition:color 0.2s;
+}
+.glow-checkbox:hover, .glow-radio:hover { color:rgba(255,255,255,0.85); }
+.glow-checkbox input, .glow-radio input {
+  position:absolute; opacity:0; width:0; height:0; pointer-events:none;
+}
+.glow-checkbox .cb-box {
+  width:18px; height:18px; border-radius:5px; flex-shrink:0;
+  border:2px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.03);
+  display:inline-flex; align-items:center; justify-content:center;
+  transition:all 0.2s; position:relative;
+}
+.glow-checkbox input:checked + .cb-box {
+  background:linear-gradient(135deg,#ff6b9d,#a78bfa);
+  border-color:transparent;
+}
+.glow-checkbox input:checked + .cb-box::after {
+  content:''; display:block; width:5px; height:9px;
+  border:solid #fff; border-width:0 2px 2px 0; transform:rotate(45deg);
+  margin-top:-2px;
+}
+.glow-checkbox input:focus-visible + .cb-box { box-shadow:0 0 0 3px rgba(167,139,250,0.3); }
+
+.glow-radio .rb-dot {
+  width:18px; height:18px; border-radius:50%; flex-shrink:0;
+  border:2px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.03);
+  display:inline-flex; align-items:center; justify-content:center;
+  transition:all 0.2s; position:relative;
+}
+.glow-radio input:checked + .rb-dot {
+  border-color:#a78bfa;
+}
+.glow-radio input:checked + .rb-dot::after {
+  content:''; display:block; width:8px; height:8px;
+  border-radius:50%; background:linear-gradient(135deg,#ff6b9d,#a78bfa);
+}
+.glow-radio input:focus-visible + .rb-dot { box-shadow:0 0 0 3px rgba(167,139,250,0.3); }
+
+/* ── 自定义滑块 ──────────────────────── */
+.glow-range {
+  -webkit-appearance:none; appearance:none;
+  width:100%; height:4px; border-radius:4px;
+  background:rgba(255,255,255,0.1); outline:none;
+  cursor:pointer; transition:background 0.2s;
+}
+.glow-range:hover { background:rgba(255,255,255,0.15); }
+.glow-range::-webkit-slider-thumb {
+  -webkit-appearance:none; appearance:none;
+  width:16px; height:16px; border-radius:50%;
+  background:linear-gradient(135deg,#ff6b9d,#a78bfa);
+  cursor:pointer; border:2px solid rgba(255,255,255,0.3);
+  box-shadow:0 2px 8px rgba(0,0,0,0.3);
+  transition:transform 0.15s, box-shadow 0.15s;
+}
+.glow-range::-webkit-slider-thumb:hover { transform:scale(1.15); }
+.glow-range::-moz-range-thumb {
+  width:16px; height:16px; border-radius:50%;
+  background:linear-gradient(135deg,#ff6b9d,#a78bfa);
+  cursor:pointer; border:2px solid rgba(255,255,255,0.3);
+}
 /* 原生 select 下拉选项的背景色适配深色主题 */
 .form-group select option {
   background: rgba(255,255,255,0.06);
@@ -588,16 +653,16 @@ ul { list-style: none; }
 /* search widget */
 /* 搜索框：左侧输入 + 右侧按钮无缝拼接 */
 .sidebar-search { display: flex; gap: 0; width: 100%; }
-.sidebar-search input {
+.sidebar-search-input {
   flex: 1; min-width: 0; padding: 10px 14px;
   background: rgba(255,255,255,0.03);
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 12px 0 0 12px;
   color: #e8edf5; font-size: 0.8rem; outline: none;
 }
-.sidebar-search input:focus { border-color: rgba(255,255,255,0.2); }
-.sidebar-search input::placeholder { color: rgba(255,255,255,0.2); }
-.sidebar-search button {
+.sidebar-search-input:focus { border-color: rgba(255,255,255,0.2); }
+.sidebar-search-input::placeholder { color: rgba(255,255,255,0.2); }
+.sidebar-search-btn {
   flex-shrink: 0; padding: 10px 14px;
   background: rgba(255,107,157,0.15);
   border: 1px solid rgba(255,107,157,0.25);
@@ -606,7 +671,7 @@ ul { list-style: none; }
   display: flex; align-items: center; gap: 4px;
   transition: all 0.3s;
 }
-.sidebar-search button:hover {
+.sidebar-search-btn:hover {
   background: rgba(255,107,157,0.25);
 }
 /* recent posts */
@@ -1593,15 +1658,19 @@ ul { list-style: none; }
 .pw-label { font-size:12px; color:rgba(255,255,255,0.4); min-width:52px; flex-shrink:0; }
 .pw-val { font-size:13px; color:#c8c0e8; font-weight:600; min-width:28px; text-align:center; font-family:monospace; }
 .pw-charset { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
-.pw-cb { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-size:12px; color:rgba(255,255,255,0.5); transition:color 0.2s; }
-.pw-cb:hover { color:rgba(255,255,255,0.8); }
-.pw-cb input[type=checkbox], .pw-cb input[type=radio] { accent-color:#a78bfa; width:14px; height:14px; cursor:pointer; }
 .pw-strength { font-size:12px; color:rgba(255,255,255,0.3); margin-bottom:10px; }
 .pw-strength span { font-weight:600; }
 .pw-output { font-family:'SF Mono','Fira Code',monospace; font-size:13px; }
 .pw-divider { width:1px; background:rgba(255,255,255,0.06); flex-shrink:0; }
 @media (max-width:700px) { .pw-divider { width:100%; height:1px; } }
-.pw-row input[type=range] { flex:1; min-width:80px; accent-color:#a78bfa; height:4px; cursor:pointer; background:rgba(255,255,255,0.1); border-radius:4px; }
+.pw-number-input {
+  width:60px; padding:6px 8px; border-radius:8px; border:1px solid rgba(255,255,255,0.08);
+  background:rgba(255,255,255,0.03); color:#e8edf5; font-size:13px; font-family:monospace;
+  text-align:center; outline:none; -moz-appearance:textfield;
+}
+.pw-number-input::-webkit-inner-spin-button,
+.pw-number-input::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+.pw-number-input:focus { border-color:rgba(255,255,255,0.2); }
 
 .iz-controls { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 16px; }
 .iz-controls .tool-field { flex: 1; min-width: 140px; margin-bottom: 0; }

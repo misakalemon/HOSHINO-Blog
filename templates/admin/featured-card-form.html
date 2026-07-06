@@ -75,8 +75,9 @@
         </div>
         <div class="form-group"><label>排序（数字越小越靠前）</label><input type="number" name="sort_order" value="{{ form.sort_order.data or 0 }}"></div>
         <div class="form-group">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-                <input type="checkbox" name="is_active" {% if form.is_active.data %}checked{% endif %} style="width:16px;height:16px;accent-color:#ff6b9d;cursor:pointer">
+            <label class="glow-checkbox">
+                <input type="checkbox" name="is_active" {% if form.is_active.data %}checked{% endif %}>
+                <span class="cb-box"></span>
                 <span>启用</span>
             </label>
         </div>
