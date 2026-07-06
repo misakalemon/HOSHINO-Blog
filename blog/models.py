@@ -78,6 +78,7 @@ class User(UserMixin, db.Model):
     website = db.Column(db.String(256), default='')        # 个人网站/社交媒体链接
     gitcode_url = db.Column(db.String(256), default='')    # GitCode 主页
     github_url = db.Column(db.String(256), default='')     # GitHub 主页
+    bilibili_url = db.Column(db.String(256), default='')   # Bilibili 主页
     about_content = db.Column(MEDIUMTEXT, default='')      # 关于页面内容（富文本 HTML）
 
     # ── 权限状态 ────────────────────────────────

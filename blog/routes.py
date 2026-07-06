@@ -581,7 +581,7 @@ def now():
 def admin_social():
     """获取管理员社交链接，供页脚显示。
 
-    返回 dict: { website, gitcode_url, github_url }
+    返回 dict: { website, gitcode_url, github_url, bilibili_url }
     """
     from .models import User
     admin = User.query.filter_by(role='admin').order_by(User.id).first()
@@ -590,5 +590,6 @@ def admin_social():
             'website': admin.website or '',
             'gitcode_url': admin.gitcode_url or '',
             'github_url': admin.github_url or '',
+            'bilibili_url': admin.bilibili_url or '',
         }
-    return {'website': '', 'gitcode_url': '', 'github_url': ''}
+    return {'website': '', 'gitcode_url': '', 'github_url': '', 'bilibili_url': ''}
