@@ -707,7 +707,7 @@ ul { list-style: none; }
 }
 .post-content a { color: #7abfff; }
 .post-content a:hover { color: #b8d6ff; text-decoration: underline; }
-.post-content img { border-radius: 14px; margin: 1em 0; }
+.post-content img { border-radius: 14px; margin: 1em auto; display: block; }
 /* 引用块：左侧蓝色竖线 + 斜体 */
 .post-content blockquote {
   border-left: 2px solid rgba(0, 102, 255, 0.3);
