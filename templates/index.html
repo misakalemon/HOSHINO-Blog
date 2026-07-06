@@ -208,9 +208,9 @@
 (function(){
 'use strict';
 // 1. 滚动进度条
-var pb=document.getElementById('scrollProgress');
-function up(){var s=window.scrollY,d=document.documentElement.scrollHeight-window.innerHeight;pb.style.width=(d>0?Math.min(s/d*100,100):0)+'%';}
-window.addEventListener('scroll',up,{passive:true});window.addEventListener('resize',up);up();
+var progressBar=document.getElementById('scrollProgress');
+function updateProgress(){var scrollTop=window.scrollY;var docHeight=document.documentElement.scrollHeight-window.innerHeight;var progress=docHeight>0?(scrollTop/docHeight)*100:0;progressBar.style.width=Math.min(progress,100)+'%';}
+window.addEventListener('scroll',updateProgress);window.addEventListener('resize',updateProgress);updateProgress();
 // 2. 卡片滚动驱动力
 var hero=document.getElementById('heroSection');
 var cards=document.querySelectorAll('.featured-card,.masonry-item');
