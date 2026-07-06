@@ -17,6 +17,7 @@
 {% block content %}
 
 <section class="hero">
+    <div style="margin-bottom:12px"><button onclick="history.back()" class="back-btn">← 返回</button></div>
     <h1><span class="highlight">{{ category.name }}</span></h1>
     <!-- 分类描述（可选字段） -->
     {% if category.description %}

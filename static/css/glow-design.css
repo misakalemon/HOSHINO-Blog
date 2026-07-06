@@ -232,6 +232,8 @@ ul { list-style: none; }
   transition: all 0.3s; backdrop-filter: blur(8px);
   cursor: pointer; font-family: inherit;
 }
+.back-btn { background:none; border:1px solid rgba(255,255,255,0.08); color:rgba(255,255,255,0.4); padding:6px 18px; border-radius:30px; cursor:pointer; font-size:0.8rem; font-family:inherit; transition:all 0.2s; }
+.back-btn:hover { color:#fff; border-color:rgba(255,255,255,0.2); }
 .hero .btn:hover, .btn-pill:hover {
   background: rgba(255,255,255,0.1);
   border-color: rgba(255,255,255,0.25);
