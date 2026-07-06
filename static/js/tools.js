@@ -120,12 +120,12 @@ function copyColor(type) {
   }
 }
 
-// 取色面板
+// 取色面板（glow-select 样式）
 var colorPickerOpen = false;
 function toggleColorPicker() {
   colorPickerOpen = !colorPickerOpen;
-  document.getElementById('colorPickerPanel').classList.toggle('open', colorPickerOpen);
-  document.getElementById('triggerArrow').textContent = colorPickerOpen ? '▲' : '▼';
+  var wrap = document.querySelector('.color-picker-wrap');
+  if (wrap) wrap.classList.toggle('is-open', colorPickerOpen);
 }
 
 // ── 4. JSON ──────────────────────────────────
