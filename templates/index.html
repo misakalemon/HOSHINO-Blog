@@ -54,7 +54,7 @@
     <div class="hero-badge">✦ 个人博客</div>
     <h1>最喜欢<br><span class="highlight">小鸟游星野</span></h1>
     <p>{{ blog_subtitle }}</p>
-    <div class="scroll-hint"><span>↓ 向下滚动 ↓</span></div>
+    <div class="scroll-hint" onclick="document.querySelector('.content,.cards-section,.featured-grid').scrollIntoView({behavior:'smooth'})"><span>↓ 向下滚动 ↓</span></div>
 </section>
 {% endif %}
 
