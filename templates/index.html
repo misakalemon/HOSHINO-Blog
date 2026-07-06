@@ -17,6 +17,20 @@
      ============================================================ -->
 {% extends 'base.html' %}
 {% block title %}{{ site_name|default('Hoshino') }}{% endblock %}
+{% block extra_head %}
+<style>
+.hero-content { animation:fadeUp 0.8s cubic-bezier(0.16,1,0.3,1) forwards; }
+@keyframes fadeUp { 0%{opacity:0;transform:translateY(30px)} 100%{opacity:1;transform:translateY(0)} }
+.reveal { opacity:0; transform:translateY(30px); transition:opacity 0.6s cubic-bezier(0.16,1,0.3,1),transform 0.6s cubic-bezier(0.16,1,0.3,1); }
+.reveal.visible { opacity:1; transform:translateY(0); }
+</style>
+<script>
+(function(){
+  var els=document.querySelectorAll('.reveal');
+  if('IntersectionObserver'in window){var obs=new IntersectionObserver(function(e){e.forEach(function(n){if(n.isIntersecting){n.target.classList.add('visible');obs.unobserve(n.target);}});},{threshold:0.1});els.forEach(function(el){obs.observe(el);});}else{els.forEach(function(el){el.classList.add('visible');});}
+})();
+</script>
+{% endblock %}
 {% block content %}
 
 <!-- 英雄区域：如果存在搜索关键词则显示搜索结果标题，否则显示默认欢迎语 -->
@@ -28,18 +42,13 @@
 </section>
 {% else %}
 <section class="hero">
-    <div class="hero-badge">✦ 个人博客</div>
     <h1>最喜欢<br><span class="highlight">小鸟游星野</span></h1>
-    <p class="hero-desc">{{ blog_subtitle }}</p>
-    <div class="hero-actions">
-        <a href="{{ url_for('blog.category', slug='技术') }}" class="hero-btn primary">浏览文章</a>
-        <a href="{{ url_for('blog.tools') }}" class="hero-btn secondary">在线工具</a>
-    </div>
+    <p>{{ blog_subtitle }}</p>
 </section>
 {% endif %}
 
 <!-- 特色卡片网格：遍历所有特色卡片 -->
-<div class="featured-grid reveal">
+<div class="featured-grid">
     {% for card in featured_cards %}
     <div class="featured-card">
         <!-- 卡片图标区域：支持 emoji 图标或图片 URL -->
@@ -60,7 +69,7 @@
     {% endfor %}
 </div>
 
-<div class="content reveal">
+<div class="content">
     <div class="row">
         <div class="col-8">
             <div class="section-title">精选 <span>文章</span></div>
@@ -182,25 +191,4 @@
     </div>
 </div>
 
-{% endblock %}
-
-{% block extra_head %}
-<style>
-.hero-content { animation:fadeUp 0.8s cubic-bezier(0.16,1,0.3,1) forwards; }
-@keyframes fadeUp { 0%{opacity:0;transform:translateY(30px)} 100%{opacity:1;transform:translateY(0)} }
-.scroll-progress { position:fixed; top:0; left:0; height:3px; background:linear-gradient(90deg,#7c5cfc,#a78bfa); z-index:999; width:0%; transition:width 0.1s linear; }
-.reveal { opacity:0; transform:translateY(30px); transition:opacity 0.6s cubic-bezier(0.16,1,0.3,1),transform 0.6s cubic-bezier(0.16,1,0.3,1); }
-.reveal.visible { opacity:1; transform:translateY(0); }
-</style>
-<script>
-(function(){
- var bar=document.createElement('div');bar.className='scroll-progress';bar.id='scrollProgress';document.body.prepend(bar);
- function pb(){var s=window.scrollY,d=document.documentElement.scrollHeight-window.innerHeight;bar.style.width=(d>0?Math.min(s/d*100,100):0)+'%';}
- window.addEventListener('scroll',pb,{passive:true});window.addEventListener('resize',pb);pb();
- var els=document.querySelectorAll('.reveal');
- if('IntersectionObserver'in window){var obs=new IntersectionObserver(function(e){e.forEach(function(n){if(n.isIntersecting){n.target.classList.add('visible');obs.unobserve(n.target);}});},{threshold:0.1});els.forEach(function(el){obs.observe(el);});}else{els.forEach(function(el){el.classList.add('visible');});}
- var hero=document.querySelector('.hero');
- if(hero){window.addEventListener('scroll',function(){var s=Math.min(window.scrollY/hero.offsetHeight,1);hero.querySelector('h1').style.transform='translateY('+(s*30)+'px)';hero.querySelector('h1').style.opacity=1-s*0.3;},{passive:true});}
-})();
-</script>
 {% endblock %}
