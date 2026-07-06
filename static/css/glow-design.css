@@ -192,7 +192,35 @@ ul { list-style: none; }
   color: #ff8aae !important; font-weight: 500;
 }
 
-
+/* ── 4. 英雄区 ──────────────────────────────── */
+/* 首页顶部大标题区域，超大字号 + 渐变色强调词 */
+.hero {
+  position: relative; z-index: 10;
+  padding: 120px 28px 60px;
+  max-width: 1100px; margin: 0 auto; text-align: center;
+}
+.hero h1 {
+  font-size: 4rem; font-weight: 250; letter-spacing: -0.02em;
+  line-height: 1.1; margin-bottom: 16px;
+}
+/* 高亮文字使用与 logo 同风格的渐变 */
+.hero h1 .highlight {
+  background: linear-gradient(135deg, #ff8aae, #ff6b9d, #c084fc, #ff8aae);
+  background-size: 300% 300%;
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: hueFlow 8s ease-in-out infinite;
+}
+@keyframes hueFlow {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.hero p {
+  font-size: 1.1rem; color: rgba(255,255,255,0.35);
+  max-width: 500px; margin: 0 auto 32px;
+  font-weight: 300; line-height: 1.6;
+}
 /* 药丸按钮：低透明度玻璃底、悬停上移 + 发光阴影 */
 .hero .btn, .btn-pill {
   display: inline-block; padding: 12px 36px; border-radius: 40px;
