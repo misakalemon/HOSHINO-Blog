@@ -115,13 +115,18 @@ function closeLightbox() {
 // ── 浏览器返回时恢复滚动位置 ──────────────
 if ('scrollRestoration' in history) history.scrollRestoration = 'auto';
 
-// ── 导航栏渐显（仅首页有效）───────────────
+// ── 导航栏渐显（仅首页生效）───────────────
 document.addEventListener('DOMContentLoaded', function() {
   var nav = document.querySelector('.navbar');
-  if (!nav || !document.querySelector('.hero')) { if(nav) nav.classList.add('visible'); return; }
+  if (!nav) return;
+  {% if request.endpoint == 'blog.index' %}
+  if (!document.querySelector('.hero')) { nav.classList.add('visible'); return; }
   function checkNav() { nav.classList.toggle('visible', window.scrollY > window.innerHeight * 0.2); }
   window.addEventListener('scroll', checkNav, {passive:true});
   checkNav();
+  {% else %}
+  nav.classList.add('visible');
+  {% endif %}
 });
 function toggleGlowSelect(t){
   var r=t.parentNode,u=r.classList.contains('is-open');
