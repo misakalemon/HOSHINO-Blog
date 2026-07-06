@@ -702,48 +702,124 @@ function loadMammoth() {
   });
 }
 function simpleMDtoHTML(md) {
-  // 简单的 Markdown → HTML 转换
+  // Markdown → HTML（支持 GFM 语法）
+  if (!md) return '';
+
+  // 1. 行内格式（必须在 split 前处理，但需要在分段后应用）
+  function inline(text) {
+    return text
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/__(.+?)__/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/_(.+?)_/g, '<em>$1</em>')
+      .replace(/~~(.+?)~~/g, '<del>$1</del>')
+      .replace(/\$\$(.+?)\$\$/g, '<code>$1</code>')
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+      .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">');
+  }
+
   var lines = md.split('\n');
   var html = '';
   var inCode = false;
+  var codeLang = '';
+  var inUl = false;  // 无序列表状态
+  var inOl = false;  // 有序列表状态
+  var olIndex = 1;   // 有序列表序号
+
   for (var i = 0; i < lines.length; i++) {
     var line = lines[i];
-    // 代码块 ``` 或 ~~~
-    if (/^```/.test(line) || /^~~~/.test(line)) {
+
+    // 代码块
+    var codeMatch = line.match(/^(`{3,}|~{3,})\s*(\w*)/);
+    if (codeMatch) {
       if (inCode) { html += '</code></pre>\n'; inCode = false; }
-      else { html += '<pre><code>'; inCode = true; }
+      else { codeLang = codeMatch[2]; html += '<pre><code' + (codeLang ? ' class="language-' + codeLang + '"' : '') + '>'; inCode = true; }
+      if (inUl) { html += '</ul>\n'; inUl = false; }
+      if (inOl) { html += '</ol>\n'; inOl = false; }
       continue;
     }
     if (inCode) { html += line + '\n'; continue; }
+
+    // 关闭列表（遇到非列表项时）
+    if (inUl && !/^[\s]*[-*+]\s+/.test(line) && !/^[\s]*$/.test(line)) { html += '</ul>\n'; inUl = false; }
+    if (inOl && !/^[\s]*\d+\.\s+/.test(line) && !/^[\s]*$/.test(line)) { html += '</ol>\n'; inOl = false; }
+
     // 标题
     var hMatch = line.match(/^(#{1,6})\s+(.+)/);
-    if (hMatch) { html += '<h' + hMatch[1].length + '>' + inlineMD(hMatch[2]) + '</h' + hMatch[1].length + '>\n'; continue; }
+    if (hMatch) { html += '<h' + hMatch[1].length + '>' + inline(hMatch[2]) + '</h' + hMatch[1].length + '>\n'; continue; }
+
     // 分割线
-    if (/^---+\s*$/.test(line) || /^\*\*\*+\s*$/.test(line)) { html += '<hr>\n'; continue; }
+    if (/^(-{3,}|\*{3,})[\s]*$/.test(line)) { html += '<hr>\n'; continue; }
+
     // 空行
-    if (!line.trim()) { html += '<p>\n'; continue; }
+    if (!line.trim()) { html += '\n'; continue; }
+
     // 引用
     var qMatch = line.match(/^>\s*(.*)/);
-    if (qMatch) { html += '<blockquote>' + inlineMD(qMatch[1]) + '</blockquote>\n'; continue; }
+    if (qMatch) { html += '<blockquote>' + inline(qMatch[1]) + '</blockquote>\n'; continue; }
+
     // 无序列表
     var ulMatch = line.match(/^[\s]*[-*+]\s+(.+)/);
-    if (ulMatch) { html += '<li>' + inlineMD(ulMatch[1]) + '</li>\n'; continue; }
+    if (ulMatch) {
+      if (!inUl) { html += '<ul>\n'; inUl = true; }
+      // 检查是否是任务列表
+      var taskMatch = ulMatch[1].match(/^\[([ xX])\]\s*(.+)/);
+      if (taskMatch) {
+        var checked = taskMatch[1].toLowerCase() === 'x';
+        html += '<li' + (checked ? ' class="task-done"' : '') + '><input type="checkbox" disabled' + (checked ? ' checked' : '') + '> ' + inline(taskMatch[2]) + '</li>\n';
+      } else {
+        html += '<li>' + inline(ulMatch[1]) + '</li>\n';
+      }
+      continue;
+    }
+
     // 有序列表
-    var olMatch = line.match(/^[\s]*\d+\.\s+(.+)/);
-    if (olMatch) { html += '<li>' + inlineMD(olMatch[1]) + '</li>\n'; continue; }
+    var olMatch = line.match(/^[\s]*(\d+)\.\s+(.+)/);
+    if (olMatch) {
+      if (!inOl) { html += '<ol start="' + olMatch[1] + '">\n'; inOl = true; }
+      html += '<li>' + inline(olMatch[2]) + '</li>\n';
+      continue;
+    }
+
+    // 表格（简单支持）
+    if (line.includes('|') && i + 1 < lines.length && /^[\s]*\|[\s]*[-:]+\|/.test(lines[i + 1])) {
+      var tableHtml = '<table>\n';
+      // 表头
+      var headers = line.split('|').filter(function(c) { return c.trim(); });
+      tableHtml += '<thead><tr>';
+      for (var h = 0; h < headers.length; h++) tableHtml += '<th>' + inline(headers[h].trim()) + '</th>';
+      tableHtml += '</tr></thead>\n<tbody>\n';
+      i += 2; // 跳过分隔行和第一行数据
+      while (i < lines.length && lines[i].includes('|')) {
+        var cells = lines[i].split('|').filter(function(c) { return c.trim(); });
+        tableHtml += '<tr>';
+        for (var c = 0; c < cells.length; c++) tableHtml += '<td>' + inline(cells[c].trim()) + '</td>';
+        tableHtml += '</tr>\n';
+        i++;
+      }
+      i--;
+      tableHtml += '</tbody>\n</table>\n';
+      html += tableHtml;
+      continue;
+    }
+
     // 普通段落
-    html += '<p>' + inlineMD(line) + '</p>\n';
+    // 合并连续的行（非空行）
+    var paragraph = line;
+    while (i + 1 < lines.length && lines[i + 1].trim() && !/^(#{1,6}\s|```|>|---|\*{3,}|[\s]*[-*+]\s|[\s]*\d+\.\s)/.test(lines[i + 1])) {
+      i++;
+      paragraph += '\n' + lines[i];
+    }
+    html += '<p>' + inline(paragraph) + '</p>\n';
   }
+
+  // 关闭未闭合的标签
   if (inCode) html += '</code></pre>\n';
+  if (inUl) html += '</ul>\n';
+  if (inOl) html += '</ol>\n';
+
   return html;
-}
-function inlineMD(text) {
-  return text
-    .replace(/`([^`]+)`/g, '<code>$1</code>')         // 行内代码
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')   // **粗体**
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')               // *斜体*
-    .replace(/~~(.+?)~~/g, '<del>$1</del>')             // ~~删除线~~
-    .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2">$1</a>'); // [链接](url)
 }
 function rteInsertTable() {
   saveSelection();
