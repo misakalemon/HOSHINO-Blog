@@ -222,9 +222,9 @@ function ease(t){return 1-Math.pow(1-t,3);}
 function update(){
   var sy=window.scrollY,st=0,ed=hero.offsetTop+hero.offsetHeight+window.innerHeight*0.6;
   var p=Math.max(0,Math.min(1,(sy-st)/(ed-st)));
-  // 间距：hero padding-bottom 60px→0 + grid margin 80px→0 = 总间距140px→0
-  hero.style.paddingBottom=((1-ease(p))*60)+'px';
-  if(featuredGrid)featuredGrid.style.marginTop=((1-ease(p))*80)+'px';
+  // 间距：hero padding-bottom 120px→0 + grid margin 120px→0 = 总间距240px→0
+  hero.style.paddingBottom=((1-ease(p))*120)+'px';
+  if(featuredGrid)featuredGrid.style.marginTop=((1-ease(p))*120)+'px';
   // 卡片视差
   cards.forEach(function(c,i){
     var d=cardData[i],cp=Math.max(0,Math.min(1,(p-d.delay)*(1+d.speed*0.5)));
