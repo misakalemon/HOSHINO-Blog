@@ -220,7 +220,7 @@ cards.forEach(function(c,i){cardData.push({speed:0.2+i*0.05,delay:i*0.08});});
 var featuredGrid=document.querySelector('.featured-grid');
 function ease(t){return 1-Math.pow(1-t,3);}
 function update(){
-  var sy=window.scrollY,st=0,ed=hero.offsetTop+hero.offsetHeight+window.innerHeight*0.6;
+  var sy=window.scrollY,st=0,ed=hero.offsetHeight*0.6;
   var p=Math.max(0,Math.min(1,(sy-st)/(ed-st)));
   // 间距：hero padding-bottom 120px→0 + grid margin 120px→0 = 总间距240px→0
   hero.style.paddingBottom=((1-ease(p))*120)+'px';
