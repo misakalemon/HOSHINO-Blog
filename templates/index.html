@@ -216,17 +216,14 @@ var hero=document.getElementById('heroSection');
 var cards=document.querySelectorAll('.featured-card,.masonry-item');
 var cardData=[];
 cards.forEach(function(c,i){cardData.push({speed:0.2+i*0.05,delay:i*0.08});});
-// 容器（动态间距）
+// 容器（动态间距）— 仅 featured-grid 跟随滚动缩小间距
 var featuredGrid=document.querySelector('.featured-grid');
-var contentSection=document.querySelector('.content');
 function ease(t){return 1-Math.pow(1-t,3);}
 function update(){
-  var sy=window.scrollY,hh=hero.offsetHeight,st=hero.offsetTop+hh,ed=st+window.innerHeight*0.8;
+  var sy=window.scrollY,hh=hero.offsetHeight,st=hero.offsetTop+hh,ed=st+window.innerHeight*0.6;
   var p=Math.max(0,Math.min(1,(sy-st)/(ed-st)));
-  // 容器间距：60px → 0px
-  var mt=(1-ease(p))*60;
-  if(featuredGrid)featuredGrid.style.marginTop=mt+'px';
-  if(contentSection)contentSection.style.marginTop=mt+'px';
+  // 间距：80px → 0px（英雄区与特色卡片逐渐贴合）
+  if(featuredGrid)featuredGrid.style.marginTop=((1-ease(p))*80)+'px';
   // 卡片视差
   cards.forEach(function(c,i){
     var d=cardData[i],cp=Math.max(0,Math.min(1,(p-d.delay)*(1+d.speed*0.5)));
