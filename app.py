@@ -213,8 +213,17 @@ def _init_scheduler(app):
             id='rotate_secret_key',
             replace_existing=True,
         )
+        # 每天 02:00 重新爬取所有 B站 UP 主视频
+        scheduler.add_job(
+            func=lambda: _run_daily_bili_refresh(app),
+            trigger='cron',
+            hour=2,
+            minute=0,
+            id='daily_bili_refresh',
+            replace_existing=True,
+        )
         scheduler.start()
-        app.logger.info('定时任务已启动: 每天 09:00 价格爬取 / 每天 03:00 SECRET_KEY 轮换')
+        app.logger.info('定时任务已启动: 每天 09:00 价格爬取 / 每天 03:00 SECRET_KEY 轮换 / 每天 02:00 B站数据刷新')
     except Exception as e:
         app.logger.warning('定时任务启动失败（不影响运行）: %s', e)
 
@@ -225,6 +234,25 @@ def _run_daily_crawl(app):
         from blog.crawler import crawl_all_active_sources
         count = crawl_all_active_sources()
         app.logger.info('每日价格爬取完成: %d 条记录', count)
+
+
+def _run_daily_bili_refresh(app):
+    """每日刷新所有 B站 UP 主视频数据（在应用上下文中运行）。"""
+    with app.app_context():
+        import logging
+        logger = logging.getLogger(__name__)
+        from blog.models import BiliUp
+        from blog.bili_routes import _run_scrape as _bili_scrape
+
+        ups = BiliUp.query.all()
+        logger.info('B站 每日刷新启动: 共 %d 个 UP 主', len(ups))
+        for up in ups:
+            try:
+                _bili_scrape(up.mid, up.space_url, app)
+                logger.info('B站 刷新完成: %s (mid=%d)', up.name or '?', up.mid)
+            except Exception as e:
+                logger.error('B站 刷新失败: mid=%d, %s', up.mid, e)
+        logger.info('B站 每日刷新完成')
 
 
 if __name__ == '__main__':
