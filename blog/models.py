@@ -372,3 +372,61 @@ class ExchangeRate(db.Model):
     currency = db.Column(db.String(10), nullable=False, index=True)  # USD / EUR / GBP
     rate = db.Column(db.Float, nullable=False)                       # → CNY
     recorded_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, index=True)
+
+
+# ── Bilibili 数据 ────────────────────────────────
+
+class BiliUp(db.Model):
+    """B站 UP 主"""
+    __tablename__ = 'bili_ups'
+
+    id = db.Column(db.Integer, primary_key=True)
+    mid = db.Column(db.BigInteger, unique=True, nullable=False, index=True, comment='B站 mid')
+    name = db.Column(db.String(128), default='', comment='UP主名称')
+    avatar = db.Column(db.String(256), default='', comment='头像 URL')
+    space_url = db.Column(db.String(256), default='', comment='空间链接')
+    video_count = db.Column(db.Integer, default=0, comment='视频数')
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    videos = db.relationship('BiliVideo', backref='up', lazy='dynamic', cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f'<BiliUp {self.name or self.mid}>'
+
+
+class BiliVideo(db.Model):
+    """B站视频数据"""
+    __tablename__ = 'bili_videos'
+
+    id = db.Column(db.Integer, primary_key=True)
+    up_id = db.Column(db.Integer, db.ForeignKey('bili_ups.id'), nullable=False, index=True)
+    bvid = db.Column(db.String(64), unique=True, nullable=False, index=True, comment='BV 号')
+    aid = db.Column(db.BigInteger, unique=True, nullable=False, comment='稿件 ID')
+    title = db.Column(db.Text, nullable=True, comment='视频标题')
+    description = db.Column(db.Text, nullable=True, comment='视频简介')
+    duration = db.Column(db.Integer, default=0, comment='时长（秒）')
+    pubdate = db.Column(db.Integer, nullable=True, comment='发布时间戳')
+    pub_date = db.Column(db.Date, nullable=True, comment='发布日期')
+    view_count = db.Column(db.Integer, default=0, comment='播放数')
+    like_count = db.Column(db.Integer, default=0, comment='点赞数')
+    coin_count = db.Column(db.Integer, default=0, comment='投币数')
+    favorite_count = db.Column(db.Integer, default=0, comment='收藏数')
+    share_count = db.Column(db.Integer, default=0, comment='转发数')
+    comment_count = db.Column(db.Integer, default=0, comment='评论数')
+    danmaku_count = db.Column(db.Integer, default=0, comment='弹幕数')
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    def __repr__(self):
+        return f'<BiliVideo {self.bvid} {self.title[:20]!r}>'
+
+    def to_dict(self):
+        return {
+            'bvid': self.bvid, 'aid': self.aid, 'title': self.title,
+            'duration': self.duration, 'pub_date': self.pub_date.isoformat() if self.pub_date else None,
+            'view_count': self.view_count, 'like_count': self.like_count,
+            'coin_count': self.coin_count, 'favorite_count': self.favorite_count,
+            'share_count': self.share_count, 'comment_count': self.comment_count,
+            'danmaku_count': self.danmaku_count,
+        }

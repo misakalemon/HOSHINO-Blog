@@ -26,7 +26,16 @@ price_bp = Blueprint('price', __name__, url_prefix='/prices')
 # 先导入模型，确保 admin 和 routes 中的 from .models import ... 可用
 # 这种 "先声明蓝图、再导入模型、最后导入路由" 的顺序是关键，
 # 可以避免 Flask 常见的循环导入问题。
-from .models import Category, Comment, ExchangeRate, FeaturedCard, Post, PriceRecord, Product, ProductSource, User, db
+from .models import (BiliUp, BiliVideo, Category, Comment, ExchangeRate,
+                     FeaturedCard, Post, PriceRecord, Product, ProductSource,
+                     User, db)
+
+# ── 蓝图集合 ──────────────────────────────────────
+blueprints = {
+    'blog_bp': blog_bp,
+    'admin_bp': admin_bp,
+    'price_bp': price_bp,
+}
 
 
 def init_db(app):

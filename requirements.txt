@@ -54,5 +54,8 @@ lxml==4.9.3
 # --- Docker 浏览器爬虫 ---
 selenium==4.29.0
 
+# --- Bilibili API ---
+bilibili-api-python>=18.0.0
+
 # --- 生产服务器 ---
 waitress==3.0.2

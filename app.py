@@ -152,6 +152,9 @@ def create_app():
     # 价格追踪 blueprint（所有价格路由自动添加 /prices 前缀）
     from blog import price_bp
     app.register_blueprint(price_bp)
+    # Bilibili 管理 blueprint
+    from blog.bili_routes import bili_bp
+    app.register_blueprint(bili_bp)
     logger.info('蓝图注册完成')
 
     # ── Gzip 压缩 ────────────────────────────────

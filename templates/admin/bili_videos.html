@@ -1,0 +1,75 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}{{ up.name or 'UP主' }} 视频列表{% endblock %}
+{% block admin_content %}
+<div class="admin-header">
+    <h3>
+        <a href="{{ url_for('bili.index') }}" style="color:rgba(255,255,255,0.3);text-decoration:none">📺 Bilibili</a>
+        / {{ up.name or 'UP主 #' + up.mid|string }}
+    </h3>
+</div>
+
+<div class="admin-card" style="padding:20px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <h5 style="margin:0">共 {{ pagination.total }} 个视频</h5>
+        <a href="{{ url_for('bili.index') }}" class="btn-ghost-sm">← 返回</a>
+    </div>
+
+    {% if pagination.items %}
+    <div class="admin-table-wrapper">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>BV 号</th>
+                    <th>标题</th>
+                    <th>时长</th>
+                    <th>发布日期</th>
+                    <th>播放</th>
+                    <th>点赞</th>
+                    <th>投币</th>
+                    <th>收藏</th>
+                    <th>转发</th>
+                    <th>评论</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for v in pagination.items %}
+                <tr>
+                    <td data-label="BV"><code>{{ v.bvid }}</code></td>
+                    <td data-label="标题" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ v.title }}">{{ v.title }}</td>
+                    <td data-label="时长">{{ '%d:%02d'|format(v.duration//60, v.duration%60) if v.duration else '-' }}</td>
+                    <td data-label="日期">{{ v.pub_date.strftime('%m/%d') if v.pub_date else '-' }}</td>
+                    <td data-label="播放">{{ '{:,}'.format(v.view_count) if v.view_count else '0' }}</td>
+                    <td data-label="点赞">{{ '{:,}'.format(v.like_count) if v.like_count else '0' }}</td>
+                    <td data-label="投币">{{ '{:,}'.format(v.coin_count) if v.coin_count else '0' }}</td>
+                    <td data-label="收藏">{{ '{:,}'.format(v.favorite_count) if v.favorite_count else '0' }}</td>
+                    <td data-label="转发">{{ '{:,}'.format(v.share_count) if v.share_count else '0' }}</td>
+                    <td data-label="评论">{{ '{:,}'.format(v.comment_count) if v.comment_count else '0' }}</td>
+                    <td data-label="操作">
+                        <form method="POST" action="{{ url_for('bili.delete_video', video_id=v.id) }}" style="display:inline" onsubmit="return confirm('删除此条记录？')">
+                            <button type="submit" style="background:none;border:none;color:#f25a5a;cursor:pointer;font-size:0.75rem;padding:2px 6px">删除</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 分页 -->
+    {% if pagination.pages > 1 %}
+    <div style="display:flex;justify-content:center;gap:6px;margin-top:16px;flex-wrap:wrap">
+        {% for p in range(1, pagination.pages + 1) %}
+        <a href="{{ url_for('bili.up_detail', up_id=up.id, page=p) }}"
+           style="padding:4px 10px;border-radius:6px;background:{% if p == pagination.page %}rgba(255,107,157,0.15){% else %}rgba(255,255,255,0.03){% endif %};color:{% if p == pagination.page %}#ff8aae{% else %}rgba(255,255,255,0.4){% endif %};text-decoration:none;font-size:0.75rem">
+            {{ p }}
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div style="padding:40px;text-align:center;color:rgba(255,255,255,0.3)">暂无视频数据</div>
+    {% endif %}
+</div>
+{% endblock %}
