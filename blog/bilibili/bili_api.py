@@ -30,6 +30,7 @@ def set_cookies(cookie_str: str):
         bili_jct=cookies.get("bili_jct", ""),
         buvid3=cookies.get("buvid3", ""),
         dedeuserid=cookies.get("DedeUserID", ""),
+        ac_time_value=cookies.get("ac_time_value", ""),
     )
 
 
