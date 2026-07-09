@@ -25,6 +25,7 @@ def generate_qr_v2() -> dict:
     # 从内部属性获取二维码数据
     qrcode_key = qr._QrCodeLogin__qr_key
     qr_url = qr._QrCodeLogin__qr_link
+    logger.info("V2 二维码已生成, key=%s", qrcode_key)
     # 生成 base64 PNG 图片
     img = qrcode_lib.make(qr_url)
     buf = io.BytesIO()
@@ -43,6 +44,7 @@ def poll_qr_v2(qrcode_key: str) -> dict:
         return {'ok': False, 'error': str(e)}
 
     if status == QrCodeLoginEvents.DONE:
+        logger.info("V2 扫码登录成功")
         cred = qr.get_credential()
         # 直接设置全局 Credential，保留完整状态（含 refresh_token 等）
         from .bili_api import set_credential
