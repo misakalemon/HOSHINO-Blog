@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block title %}B站 UP 主数据 - Hoshino{% endblock %}
+{% block content %}
+<div class="content" style="padding-top:100px;max-width:1200px">
+    <div style="text-align:center;margin-bottom:40px">
+        <h1 style="font-size:2rem;font-weight:250;color:rgba(255,255,255,0.9);margin-bottom:8px">📺 B站 UP 主数据</h1>
+        <p style="color:rgba(255,255,255,0.35);font-size:0.9rem">共 {{ total }} 个 UP 主</p>
+    </div>
+
+    {% if ups %}
+    <div style="display:grid;gap:12px">
+        {% for up in ups %}
+        <a href="{{ url_for('bili_public.up_videos', up_id=up.id) }}"
+           style="display:flex;align-items:center;gap:16px;padding:16px 20px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:16px;text-decoration:none;transition:all 0.2s"
+           onmouseover="this.style.borderColor='rgba(255,255,255,0.12)';this.style.background='rgba(255,255,255,0.04)'"
+           onmouseout="this.style.borderColor='rgba(255,255,255,0.04)';this.style.background='rgba(255,255,255,0.02)'">
+            <div style="flex-shrink:0">
+                {% if up.avatar %}
+                <img src="{{ up.avatar }}" alt="" style="width:52px;height:52px;border-radius:50%;border:2px solid rgba(255,255,255,0.06);object-fit:cover">
+                {% else %}
+                <div style="width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:center;font-size:22px">📺</div>
+                {% endif %}
+            </div>
+            <div style="flex:1;min-width:0">
+                <div style="color:#d0c8f0;font-weight:500;font-size:0.95rem">{{ up.name or 'UP主 #' + up.mid|string }}</div>
+                <div style="display:flex;flex-wrap:wrap;gap:16px;font-size:0.8rem;color:rgba(255,255,255,0.35);margin-top:4px">
+                    <span>mid: {{ up.mid }}</span>
+                    <span>📹 {{ up.video_count }} 视频</span>
+                    <span>👥 {{ '{:,}'.format(up.follower_count) if up.follower_count else '?' }} 粉丝</span>
+                </div>
+            </div>
+            <span style="color:rgba(255,255,255,0.2);font-size:0.8rem">查看视频 →</span>
+        </a>
+        {% endfor %}
+    </div>
+
+    <!-- 分页 -->
+    {% if pages > 1 %}
+    <div style="display:flex;justify-content:center;gap:8px;margin-top:24px">
+        {% for p in range(1, pages + 1) %}
+        <a href="{{ url_for('bili_public.index', page=p) }}"
+           style="padding:6px 12px;border-radius:8px;background:{% if p == page %}rgba(255,107,157,0.15){% else %}rgba(255,255,255,0.03){% endif %};color:{% if p == page %}#ff8aae{% else %}rgba(255,255,255,0.4){% endif %};text-decoration:none;font-size:0.8rem">
+            {{ p }}
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div style="padding:60px;text-align:center;color:rgba(255,255,255,0.25)">
+        <div style="font-size:48px;margin-bottom:16px;opacity:0.3">📺</div>
+        <p>暂无 UP 主数据，管理员请从后台添加</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

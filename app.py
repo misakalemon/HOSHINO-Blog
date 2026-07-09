@@ -155,6 +155,9 @@ def create_app():
     # Bilibili 管理 blueprint
     from blog.bili_routes import bili_bp
     app.register_blueprint(bili_bp)
+    # Bilibili 公开页面 blueprint
+    from blog.bili_public_routes import bili_public_bp
+    app.register_blueprint(bili_public_bp)
     logger.info('蓝图注册完成')
 
     # ── Gzip 压缩 ────────────────────────────────
