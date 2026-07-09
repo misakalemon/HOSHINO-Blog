@@ -49,10 +49,13 @@ def poll_qr_v2(qrcode_key: str) -> dict:
         # 直接设置全局 Credential，保留完整状态（含 refresh_token 等）
         from .bili_api import set_credential
         set_credential(cred)
-        # 同时保存 Cookie 字符串到文件（用于持久化）
+        # 获取 Cookie 并解码所有值，确保保存原始格式
         cookie_dict = cred.get_cookies()
-        cookie_str = "; ".join([f"{k}={v}" for k, v in cookie_dict.items()])
+        from urllib.parse import unquote
+        decoded = {k: unquote(v) for k, v in cookie_dict.items()}
+        cookie_str = "; ".join([f"{k}={v}" for k, v in decoded.items()])
         save_cookies(cookie_str)
+        logger.info("✅ B站登录成功，Credential 已设置，Cookie 已保存")
         return {'ok': True, 'status': 'success', 'msg': '登录成功'}
     elif status == QrCodeLoginEvents.CONF:
         return {'ok': True, 'status': 'scanned', 'msg': '已扫码，请在手机上确认'}
@@ -150,13 +153,18 @@ def load_cookies() -> str | None:
 
 def apply_cookies():
     """尝试从文件加载 Cookie 并设置到 API 模块"""
+    from .bili_api import _credential, is_logged_in, set_cookies
+    # 优先检查当前全局 Credential 是否有效
+    if _credential is not None and is_logged_in():
+        logger.info("✅ 已存在有效的 B站 登录态（无需加载文件）")
+        return True
+    # 从文件加载
     cookie_str = load_cookies()
     if cookie_str:
         logger.debug("读取到的 Cookie 原始字符串 (前100字符): %s ...", cookie_str[:100])
         set_cookies(cookie_str)
-        from .bili_api import is_logged_in
         if is_logged_in():
-            logger.info("✅ 已加载 B站 登录态 Cookie")
+            logger.info("✅ 已从文件加载 B站 登录态 Cookie")
             return True
         else:
             logger.warning("Cookie 已过期，请重新登录")
