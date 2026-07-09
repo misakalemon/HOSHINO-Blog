@@ -58,11 +58,11 @@ def parse_cookies_from_url(redirect_url: str) -> str:
 
 
 def fetch_cookies_via_redirect(redirect_url: str) -> str:
-    """请求重定向 URL 获取 Set-Cookie"""
+    """请求重定向 URL 获取完整 Set-Cookie（跟随重定向以接收 SESSDATA）"""
     try:
         s = requests.Session()
         s.headers.update(HEADERS)
-        resp = s.get(redirect_url, timeout=TIMEOUT, allow_redirects=False)
+        resp = s.get(redirect_url, timeout=TIMEOUT, allow_redirects=True)
         cookie_parts = []
         for key, value in s.cookies.items():
             cookie_parts.append(f"{key}={value}")
