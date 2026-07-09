@@ -69,13 +69,12 @@ def qr_poll():
         if code == 0:  # 登录成功
             redirect_url = data.get('url', '')
             refresh_token = data.get('refresh_token', '')
-            cookie_str = parse_cookies_from_url(redirect_url)
+            # 优先用 HTTP 重定向获取完整 Cookie（含 SESSDATA）
+            cookie_str = fetch_cookies_via_redirect(redirect_url)
+            if not cookie_str:
+                cookie_str = parse_cookies_from_url(redirect_url)
             if refresh_token:
                 cookie_str = cookie_str + '; ac_time_value=' + refresh_token if cookie_str else 'ac_time_value=' + refresh_token
-            if not cookie_str:
-                cookie_str = fetch_cookies_via_redirect(redirect_url)
-                if refresh_token:
-                    cookie_str = cookie_str + '; ac_time_value=' + refresh_token if cookie_str else 'ac_time_value=' + refresh_token
             if cookie_str:
                 set_cookies(cookie_str)
                 save_cookies(cookie_str)

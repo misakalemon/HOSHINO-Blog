@@ -102,6 +102,7 @@ def apply_cookies():
     """尝试从文件加载 Cookie 并设置到 API 模块"""
     cookie_str = load_cookies()
     if cookie_str:
+        logger.debug("读取到的 Cookie 原始字符串 (前100字符): %s ...", cookie_str[:100])
         set_cookies(cookie_str)
         from .bili_api import is_logged_in
         if is_logged_in():
