@@ -36,7 +36,7 @@
     <div style="display:grid;gap:10px">
         {% for v in pagination.items %}
         {% set up = up_map.get(v.up_id) %}
-        <a href="{{ url_for('bili_public.video_detail', video_id=v.id) }}"
+        <a id="video-{{ v.id }}" href="{{ url_for('bili_public.video_detail', video_id=v.id) }}#video-{{ v.id }}"
            style="display:flex;align-items:center;gap:14px;padding:14px 18px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:14px;text-decoration:none;transition:all 0.2s"
            onmouseover="this.style.borderColor='rgba(255,255,255,0.12)';this.style.background='rgba(255,255,255,0.04)'"
            onmouseout="this.style.borderColor='rgba(255,255,255,0.04)';this.style.background='rgba(255,255,255,0.02)'">
@@ -56,7 +56,7 @@
     <!-- UP 主列表 -->
     <div style="display:grid;gap:12px">
         {% for up in pagination.items %}
-        <a href="{{ url_for('bili_public.up_videos', up_id=up.id) }}"
+        <a id="up-{{ up.id }}" href="{{ url_for('bili_public.up_videos', up_id=up.id) }}#up-{{ up.id }}"
            style="display:flex;align-items:center;gap:16px;padding:16px 20px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:16px;text-decoration:none;transition:all 0.2s"
            onmouseover="this.style.borderColor='rgba(255,255,255,0.12)';this.style.background='rgba(255,255,255,0.04)'"
            onmouseout="this.style.borderColor='rgba(255,255,255,0.04)';this.style.background='rgba(255,255,255,0.02)'">
