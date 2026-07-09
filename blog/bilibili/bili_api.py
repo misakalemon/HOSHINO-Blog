@@ -29,9 +29,16 @@ def set_cookies(cookie_str: str):
         sessdata=cookies.get("SESSDATA", ""),
         bili_jct=cookies.get("bili_jct", ""),
         buvid3=cookies.get("buvid3", ""),
+        buvid4=cookies.get("buvid4", ""),
         dedeuserid=cookies.get("DedeUserID", ""),
         ac_time_value=cookies.get("ac_time_value", ""),
     )
+
+
+def set_credential(cred: Credential):
+    """直接设置全局 Credential 对象（用于官方库登录，保留完整状态）"""
+    global _credential
+    _credential = cred
 
 
 def is_logged_in() -> bool:

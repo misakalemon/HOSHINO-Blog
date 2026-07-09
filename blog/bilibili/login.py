@@ -44,11 +44,13 @@ def poll_qr_v2(qrcode_key: str) -> dict:
 
     if status == QrCodeLoginEvents.DONE:
         cred = qr.get_credential()
+        # 直接设置全局 Credential，保留完整状态（含 refresh_token 等）
+        from .bili_api import set_credential
+        set_credential(cred)
+        # 同时保存 Cookie 字符串到文件（用于持久化）
         cookie_dict = cred.get_cookies()
         cookie_str = "; ".join([f"{k}={v}" for k, v in cookie_dict.items()])
-        if cookie_str:
-            set_cookies(cookie_str)
-            save_cookies(cookie_str)
+        save_cookies(cookie_str)
         return {'ok': True, 'status': 'success', 'msg': '登录成功'}
     elif status == QrCodeLoginEvents.CONF:
         return {'ok': True, 'status': 'scanned', 'msg': '已扫码，请在手机上确认'}
