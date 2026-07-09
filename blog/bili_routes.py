@@ -6,8 +6,7 @@ from flask import (Blueprint, flash, redirect, render_template, request,
                    url_for)
 from flask_login import login_required
 
-from .. import db
-from ..models import BiliUp, BiliVideo
+from blog.models import BiliUp, BiliVideo, db
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +70,7 @@ def scrape():
         return redirect(url_for('bili.index'))
 
     try:
-        from ..bilibili.bili_api import extract_mid
+        from blog.bilibili.bili_api import extract_mid
         mid = extract_mid(space_url)
     except ValueError as e:
         flash(str(e), 'error')
@@ -88,7 +87,7 @@ def _run_scrape(mid: int, space_url: str):
     """后台爬取线程"""
     with _scrape_lock:
         try:
-            from ..bilibili.bili_api import get_video_list, get_video_stat
+            from blog.bilibili.bili_api import get_video_list, get_video_stat
             import time
 
             # 确保 UP 主存在
