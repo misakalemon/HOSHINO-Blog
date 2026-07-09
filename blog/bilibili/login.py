@@ -64,12 +64,11 @@ def fetch_cookies_via_redirect(redirect_url: str) -> str:
         s = requests.Session()
         s.headers.update(HEADERS)
         resp = s.get(redirect_url, timeout=TIMEOUT, allow_redirects=True)
-        # 调试日志：打印重定向链路中的 Cookie
-        for i, r in enumerate(resp.history):
-            logger.debug("重定向第 %d 步: url=%s, cookies=%s", i + 1, r.url, dict(r.cookies))
-        logger.debug("最终 URL: %s, cookies: %s", resp.url, dict(s.cookies))
-        # get_dict() 自动去重（避免同名 Cookie 异常），unquote 解码 URL 编码的值
-        cookie_parts = [f"{k}={unquote(v)}" for k, v in s.cookies.get_dict().items()]
+        # get_dict() 安全获取合并后的 Cookie（避免同名键异常）
+        cookie_dict = s.cookies.get_dict()
+        logger.debug("重定向目标: %s, 合并后 Cookie: %s", resp.url, cookie_dict)
+        # unquote 解码 URL 编码的值（%2C→, %2A→*），还原原始格式
+        cookie_parts = [f"{k}={unquote(v)}" for k, v in cookie_dict.items()]
         return "; ".join(cookie_parts)
     except Exception as e:
         logger.warning("通过重定向获取 Cookie 失败: %s", e)
