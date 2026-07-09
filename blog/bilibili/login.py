@@ -3,6 +3,7 @@ import logging
 import os
 import time
 import urllib.parse
+from urllib.parse import unquote
 
 import requests
 
@@ -67,9 +68,8 @@ def fetch_cookies_via_redirect(redirect_url: str) -> str:
         for i, r in enumerate(resp.history):
             logger.debug("重定向第 %d 步: url=%s, cookies=%s", i + 1, r.url, dict(r.cookies))
         logger.debug("最终 URL: %s, cookies: %s", resp.url, dict(s.cookies))
-        cookie_parts = []
-        for key, value in s.cookies.items():
-            cookie_parts.append(f"{key}={value}")
+        # get_dict() 自动去重（避免同名 Cookie 异常），unquote 解码 URL 编码的值
+        cookie_parts = [f"{k}={unquote(v)}" for k, v in s.cookies.get_dict().items()]
         return "; ".join(cookie_parts)
     except Exception as e:
         logger.warning("通过重定向获取 Cookie 失败: %s", e)
