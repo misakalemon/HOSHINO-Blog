@@ -269,13 +269,14 @@ def _run_scrape(mid: int, space_url: str, app):
                     if exists:
                         continue
 
-                    # 获取详细统计
+                    # 获取详细统计（带随机延迟防封）
                     try:
                         stat = get_video_stat(bvid)
                         video_info.update(stat)
-                        time.sleep(1.0)
+                        import random
+                        time.sleep(2.0 + random.random() * 2.0)
                     except Exception:
-                        time.sleep(2.0)
+                        time.sleep(4.0)
 
                     video = BiliVideo(up_id=up.id, **video_info)
                     db.session.add(video)

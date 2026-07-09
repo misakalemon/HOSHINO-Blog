@@ -106,7 +106,8 @@ def get_video_list(mid: int) -> Generator[dict, None, None]:
         if pn >= total_pages:
             break
         pn += 1
-        time.sleep(REQUEST_INTERVAL * 2)
+        import random
+        time.sleep(REQUEST_INTERVAL * 2 + random.random() * 3.0)
 
 
 def get_video_stat(bvid: str) -> dict:
