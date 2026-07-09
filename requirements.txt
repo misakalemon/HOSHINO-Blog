@@ -55,7 +55,7 @@ lxml==4.9.3
 selenium==4.29.0
 
 # --- Bilibili API ---
-bilibili-api-python>=18.0.0
+bilibili-api-python>=17.0.0
 qrcode[pil]>=7.4
 
 # --- 生产服务器 ---
