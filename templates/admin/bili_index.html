@@ -7,6 +7,7 @@
 <div class="admin-card" style="padding:20px;margin-bottom:20px">
     <h5 style="margin-bottom:12px">添加 UP 主</h5>
     <form method="POST" action="{{ url_for('bili.scrape') }}" style="display:flex;gap:10px;flex-wrap:wrap">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="text" name="space_url" placeholder="https://space.bilibili.com/2" required
                style="flex:1;min-width:240px;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;color:#e8edf5;font-size:0.85rem;outline:none">
         <button type="submit" class="btn btn-primary">🚀 开始爬取</button>
@@ -32,6 +33,7 @@
             </div>
             <a href="{{ url_for('bili.up_detail', up_id=up.id) }}" class="btn-ghost-sm">查看视频</a>
             <form method="POST" action="{{ url_for('bili.delete_up', up_id=up.id) }}" style="display:inline" onsubmit="return confirm('删除后不可恢复，确定？')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn-ghost-sm" style="color:#f25a5a">删除</button>
             </form>
         </div>

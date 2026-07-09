@@ -47,6 +47,7 @@
                     <td data-label="评论">{{ '{:,}'.format(v.comment_count) if v.comment_count else '0' }}</td>
                     <td data-label="操作">
                         <form method="POST" action="{{ url_for('bili.delete_video', video_id=v.id) }}" style="display:inline" onsubmit="return confirm('删除此条记录？')">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" style="background:none;border:none;color:#f25a5a;cursor:pointer;font-size:0.75rem;padding:2px 6px">删除</button>
                         </form>
                     </td>
