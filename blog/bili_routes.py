@@ -137,6 +137,23 @@ def delete_video(video_id):
 
 # ── 爬取任务（后台线程）────────────────────────
 _scrape_lock = threading.Lock()
+# 爬取进度存储 { mid: [line, line, ...] }
+_scrape_progress: dict[int, list[str]] = {}
+
+
+@bili_bp.route('/scrape-status')
+@login_required
+def scrape_status():
+    """返回爬取进度（JSON）"""
+    mid = request.args.get('mid', type=int)
+    if not mid:
+        return {'running': False, 'lines': []}
+    from copy import deepcopy
+    lines = deepcopy(_scrape_progress.get(mid, []))
+    # 检查是否还在运行
+    running = any('爬取完成' not in l and '爬取中断' not in l for l in lines[-3:]) if lines else False
+    return {'running': running, 'lines': lines}
+
 
 @bili_bp.route('/scrape', methods=['POST'])
 @login_required
@@ -154,32 +171,53 @@ def scrape():
         flash(str(e), 'error')
         return redirect(url_for('bili.index'))
 
+    # 初始化进度存储
+    _scrape_progress[mid] = []
+
     # 在后台线程中执行爬取（传入 app 实例以建立应用上下文）
     app = current_app._get_current_object()
     t = threading.Thread(target=_run_scrape, args=(mid, space_url, app), daemon=True)
     t.start()
-    flash(f'已开始爬取 mid={mid} 的视频数据，请稍后刷新查看', 'success')
+    return {'ok': True, 'mid': mid}
+
+
+@bili_bp.route('/scrape', methods=['GET'])
+@login_required
+def scrape_page():
+    """爬取管理页面（原 index 也保留本页，但此处用于 Ajax 调试）"""
     return redirect(url_for('bili.index'))
 
 
 def _run_scrape(mid: int, space_url: str, app):
     """后台爬取线程"""
+    prog = _scrape_progress.get(mid, [])
+    def emit(line: str):
+        prog.append(f'[{time.strftime("%H:%M:%S")}] {line}')
+        logger.info('%s', line)
+
     with app.app_context():
         with _scrape_lock:
             try:
                 from blog.bilibili.bili_api import get_video_list, get_video_stat
                 import time
 
+                emit('初始化数据库...')
                 # 确保 UP 主存在
                 up = BiliUp.query.filter_by(mid=mid).first()
                 if not up:
                     up = BiliUp(mid=mid, space_url=space_url)
                     db.session.add(up)
                     db.session.commit()
+                    emit(f'新建 UP 主记录: mid={mid}')
+                else:
+                    emit(f'UP 主已存在: {up.name or "mid=" + str(mid)}')
+
+                emit(f'mid: {mid}')
+                emit('数据库初始化完成')
 
                 # 爬取视频列表
                 count = 0
-                for video_info in get_video_list(mid):
+                for idx, video_info in enumerate(get_video_list(mid), start=1):
                     bvid = video_info['bvid']
                     exists = BiliVideo.query.filter_by(bvid=bvid).first()
                     if exists:
@@ -198,9 +236,21 @@ def _run_scrape(mid: int, space_url: str, app):
                     db.session.commit()
                     count += 1
 
+                    title = (video_info.get('title') or '')[:30]
+                    emit(
+                        f'[{idx}] {title} | '
+                        f'播放: {video_info.get("view_count", "?"):,} | '
+                        f'点赞: {video_info.get("like_count", "?"):,} | '
+                        f'投币: {video_info.get("coin_count", "?"):,} | '
+                        f'收藏: {video_info.get("favorite_count", "?"):,} | '
+                        f'转发: {video_info.get("share_count", "?"):,} | '
+                        f'评论: {video_info.get("comment_count", "?"):,}'
+                    )
+
                 up.video_count = BiliVideo.query.filter_by(up_id=up.id).count()
                 db.session.commit()
-                logger.info('爬取完成：mid=%d, 新增 %d 个视频', mid, count)
+                emit(f'爬取完成，共获取 {count} 个视频数据')
 
             except Exception as e:
+                emit(f'爬取失败: {e}')
                 logger.error('爬取失败: %s', e)

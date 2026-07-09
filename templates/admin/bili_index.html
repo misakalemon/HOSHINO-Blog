@@ -38,13 +38,22 @@
 <!-- 添加 UP 主 -->
 <div class="admin-card" style="padding:20px;margin-bottom:20px">
     <h5 style="margin-bottom:12px">添加 UP 主</h5>
-    <form method="POST" action="{{ url_for('bili.scrape') }}" style="display:flex;gap:10px;flex-wrap:wrap">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="text" name="space_url" placeholder="https://space.bilibili.com/2" required
-               style="flex:1;min-width:240px;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;color:#e8edf5;font-size:0.85rem;outline:none">
-        <button type="submit" class="btn btn-primary">🚀 开始爬取</button>
-    </form>
-    <div style="font-size:0.75rem;color:rgba(255,255,255,0.3);margin-top:8px">爬取将后台执行，完成后刷新页面查看</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <input type="text" id="scrapeUrl" placeholder="https://space.bilibili.com/2" required
+               style="flex:1;min-width:240px;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;color:#e8edf5;font-size:0.85rem;outline:none"
+               onkeydown="if(event.key==='Enter')startScrape()">
+        <button type="button" class="btn btn-primary" onclick="startScrape()">🚀 开始爬取</button>
+    </div>
+    <div style="font-size:0.75rem;color:rgba(255,255,255,0.3);margin-top:8px">爬取将后台执行，实时显示进度</div>
+</div>
+
+<!-- 爬取进度日志 -->
+<div id="scrapeLog" class="admin-card" style="padding:16px;margin-bottom:20px;display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <h5 style="margin:0">📋 爬取日志</h5>
+        <button class="btn-ghost-sm" onclick="document.getElementById('scrapeLog').style.display='none';document.getElementById('scrapeLogContent').innerHTML=''">✕ 关闭</button>
+    </div>
+    <pre id="scrapeLogContent" style="max-height:400px;overflow-y:auto;background:rgba(0,0,0,0.3);border-radius:10px;padding:12px;font-size:0.75rem;line-height:1.5;color:#b0b8d0;font-family:'SF Mono','Fira Code',monospace;margin:0;white-space:pre-wrap;word-break:break-all"></pre>
 </div>
 
 <!-- UP 主列表 -->
@@ -116,6 +125,40 @@ function pollBiliQr(key) {
 function closeBiliQr() {
     if (biliQrTimer) clearTimeout(biliQrTimer);
     document.getElementById('biliQrOverlay').style.display = 'none';
+}
+
+// ── 爬取进度 ────────────────────────────────
+var scrapeTimer = null;
+function startScrape() {
+    var url = document.getElementById('scrapeUrl').value.trim();
+    if (!url) return;
+    fetch('{{ url_for("bili.scrape") }}', {
+        method: 'POST',
+        headers: {'Content-Type':'application/x-www-form-urlencoded', 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')},
+        body: 'space_url=' + encodeURIComponent(url)
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (!d.ok) { alert(d.error || '启动失败'); return; }
+        document.getElementById('scrapeLog').style.display = 'block';
+        document.getElementById('scrapeLogContent').textContent = '';
+        pollScrapeLog(d.mid);
+    });
+}
+function pollScrapeLog(mid) {
+    if (scrapeTimer) clearTimeout(scrapeTimer);
+    fetch('{{ url_for("bili.scrape_status") }}?mid=' + mid)
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            var el = document.getElementById('scrapeLogContent');
+            if (d.lines && d.lines.length) el.textContent = d.lines.join('\n');
+            el.scrollTop = el.scrollHeight;
+            if (d.running) {
+                scrapeTimer = setTimeout(function() { pollScrapeLog(mid); }, 1000);
+            } else {
+                scrapeTimer = setTimeout(function() { location.reload(); }, 2000);
+            }
+        });
 }
 </script>
 {% endblock %}
