@@ -2,8 +2,8 @@
 import logging
 import threading
 
-from flask import (Blueprint, flash, redirect, render_template, request,
-                   url_for)
+from flask import (Blueprint, current_app, flash, redirect, render_template,
+                   request, url_for)
 from flask_login import login_required
 
 from blog.models import BiliUp, BiliVideo, db
@@ -76,51 +76,53 @@ def scrape():
         flash(str(e), 'error')
         return redirect(url_for('bili.index'))
 
-    # 在后台线程中执行爬取
-    t = threading.Thread(target=_run_scrape, args=(mid, space_url), daemon=True)
+    # 在后台线程中执行爬取（传入 app 实例以建立应用上下文）
+    app = current_app._get_current_object()
+    t = threading.Thread(target=_run_scrape, args=(mid, space_url, app), daemon=True)
     t.start()
     flash(f'已开始爬取 mid={mid} 的视频数据，请稍后刷新查看', 'success')
     return redirect(url_for('bili.index'))
 
 
-def _run_scrape(mid: int, space_url: str):
+def _run_scrape(mid: int, space_url: str, app):
     """后台爬取线程"""
-    with _scrape_lock:
-        try:
-            from blog.bilibili.bili_api import get_video_list, get_video_stat
-            import time
+    with app.app_context():
+        with _scrape_lock:
+            try:
+                from blog.bilibili.bili_api import get_video_list, get_video_stat
+                import time
 
-            # 确保 UP 主存在
-            up = BiliUp.query.filter_by(mid=mid).first()
-            if not up:
-                up = BiliUp(mid=mid, space_url=space_url)
-                db.session.add(up)
+                # 确保 UP 主存在
+                up = BiliUp.query.filter_by(mid=mid).first()
+                if not up:
+                    up = BiliUp(mid=mid, space_url=space_url)
+                    db.session.add(up)
+                    db.session.commit()
+
+                # 爬取视频列表
+                count = 0
+                for video_info in get_video_list(mid):
+                    bvid = video_info['bvid']
+                    exists = BiliVideo.query.filter_by(bvid=bvid).first()
+                    if exists:
+                        continue
+
+                    # 获取详细统计
+                    try:
+                        stat = get_video_stat(bvid)
+                        video_info.update(stat)
+                        time.sleep(1.0)
+                    except Exception:
+                        time.sleep(2.0)
+
+                    video = BiliVideo(up_id=up.id, **video_info)
+                    db.session.add(video)
+                    db.session.commit()
+                    count += 1
+
+                up.video_count = BiliVideo.query.filter_by(up_id=up.id).count()
                 db.session.commit()
+                logger.info('爬取完成：mid=%d, 新增 %d 个视频', mid, count)
 
-            # 爬取视频列表
-            count = 0
-            for video_info in get_video_list(mid):
-                bvid = video_info['bvid']
-                exists = BiliVideo.query.filter_by(bvid=bvid).first()
-                if exists:
-                    continue
-
-                # 获取详细统计
-                try:
-                    stat = get_video_stat(bvid)
-                    video_info.update(stat)
-                    time.sleep(1.0)
-                except Exception:
-                    time.sleep(2.0)
-
-                video = BiliVideo(up_id=up.id, **video_info)
-                db.session.add(video)
-                db.session.commit()
-                count += 1
-
-            up.video_count = BiliVideo.query.filter_by(up_id=up.id).count()
-            db.session.commit()
-            logger.info('爬取完成：mid=%d, 新增 %d 个视频', mid, count)
-
-        except Exception as e:
-            logger.error('爬取失败: %s', e)
+            except Exception as e:
+                logger.error('爬取失败: %s', e)
