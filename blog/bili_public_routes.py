@@ -3,7 +3,7 @@ import logging
 
 from flask import Blueprint, render_template, request, abort
 
-from blog.models import BiliUp, BiliUpHistory, BiliVideo, BiliVideoHistory
+from blog.models import BiliUp, BiliUpHistory, BiliVideo, BiliVideoHistory, db
 
 logger = logging.getLogger(__name__)
 
@@ -12,16 +12,19 @@ bili_public_bp = Blueprint('bili_public', __name__, url_prefix='/bilibili')
 
 @bili_public_bp.route('/')
 def index():
-    """公开的 UP 主列表页"""
-    ups = BiliUp.query.order_by(BiliUp.follower_count.desc()).all()
+    """公开的 UP 主列表页（支持搜索）"""
     page = request.args.get('page', 1, type=int)
     per_page = 20
-    total = len(ups)
-    start = (page - 1) * per_page
-    end = start + per_page
-    page_ups = ups[start:end]
-    pages = (total + per_page - 1) // per_page
-    return render_template('bilibili.html', ups=page_ups, page=page, pages=pages, total=total)
+    q = request.args.get('q', '').strip()
+
+    query = BiliUp.query
+    if q:
+        query = query.filter(
+            db.or_(BiliUp.name.contains(q), BiliUp.mid.cast(db.String).contains(q))
+        )
+    pagination = query.order_by(BiliUp.follower_count.desc())\
+        .paginate(page=page, per_page=per_page, error_out=False)
+    return render_template('bilibili.html', pagination=pagination, q=q)
 
 
 @bili_public_bp.route('/up/<int:up_id>')
