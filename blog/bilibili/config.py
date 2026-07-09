@@ -1,11 +1,16 @@
 """Bilibili 模块配置"""
 import os
 
+BILI_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # 请求间隔（秒）
 REQUEST_INTERVAL = 1.0
 PAGE_SIZE = 30
 MAX_RETRIES = 3
 TIMEOUT = 15
+
+# Cookie 保存路径
+COOKIE_FILE = os.path.join(BILI_DIR, "cookies.txt")
 
 HEADERS = {
     "User-Agent": (

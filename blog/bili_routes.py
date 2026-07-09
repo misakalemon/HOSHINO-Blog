@@ -18,7 +18,85 @@ bili_bp = Blueprint('bili', __name__, url_prefix='/admin/bilibili')
 def index():
     """UP 主管理列表"""
     ups = BiliUp.query.order_by(BiliUp.updated_at.desc()).all()
-    return render_template('admin/bili_index.html', ups=ups)
+    # 检查 B站 登录状态
+    from blog.bilibili.login import load_cookies
+    from blog.bilibili.bili_api import is_logged_in
+    cookie_str = load_cookies()
+    logged_in = bool(cookie_str) and is_logged_in() if cookie_str else False
+    return render_template('admin/bili_index.html', ups=ups, bili_logged_in=logged_in)
+
+
+# ── B站 扫码登录 ────────────────────────────────
+
+@bili_bp.route('/qr-gen')
+@login_required
+def qr_generate():
+    """生成登录二维码（含 base64 图片）"""
+    import io, base64
+    from blog.bilibili.login import generate_qr
+    try:
+        data = generate_qr()
+        # 用 qrcode 库生成 base64 PNG
+        import qrcode
+        img = qrcode.make(data['url'])
+        buf = io.BytesIO()
+        img.save(buf, format='PNG')
+        b64 = base64.b64encode(buf.getvalue()).decode()
+        return {'ok': True, 'qrcode_key': data['qrcode_key'], 'img': 'data:image/png;base64,' + b64}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
+@bili_bp.route('/qr-poll')
+@login_required
+def qr_poll():
+    """轮询扫码状态"""
+    import json
+    qrcode_key = request.args.get('key', '')
+    if not qrcode_key:
+        return {'ok': False, 'error': 'missing key'}
+
+    from blog.bilibili.login import poll_qr, parse_cookies_from_url, fetch_cookies_via_redirect, save_cookies
+    from blog.bilibili.bili_api import set_cookies
+    try:
+        result = poll_qr(qrcode_key)
+        data = result.get('data', {})
+        code = data.get('code', -1)
+
+        if code == 0:  # 登录成功
+            redirect_url = data.get('url', '')
+            cookie_str = parse_cookies_from_url(redirect_url)
+            if not cookie_str:
+                cookie_str = fetch_cookies_via_redirect(redirect_url)
+            if cookie_str:
+                set_cookies(cookie_str)
+                save_cookies(cookie_str)
+                return {'ok': True, 'status': 'success', 'msg': '登录成功'}
+            return {'ok': True, 'status': 'success', 'msg': '登录成功但无法获取Cookie'}
+        elif code == 86090:
+            return {'ok': True, 'status': 'scanned', 'msg': '已扫码，请在手机上确认'}
+        elif code == 86101:
+            return {'ok': True, 'status': 'waiting', 'msg': '等待扫码'}
+        elif code == 86038:
+            return {'ok': True, 'status': 'expired', 'msg': '二维码已过期'}
+        return {'ok': True, 'status': 'unknown', 'code': code}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
+@bili_bp.route('/logout-bili', methods=['POST'])
+@login_required
+def logout_bili():
+    """清除 B站 Cookie"""
+    import os
+    from blog.bilibili.config import COOKIE_FILE
+    try:
+        if os.path.exists(COOKIE_FILE):
+            os.remove(COOKIE_FILE)
+        flash('已退出 B站 登录', 'success')
+    except Exception as e:
+        flash(f'退出失败: {e}', 'error')
+    return redirect(url_for('bili.index'))
 
 
 @bili_bp.route('/up/<int:up_id>')
