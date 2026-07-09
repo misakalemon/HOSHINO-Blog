@@ -29,12 +29,16 @@ def index():
 
 @bili_public_bp.route('/up/<int:up_id>')
 def up_videos(up_id):
-    """公开的 UP 主视频列表"""
+    """公开的 UP 主视频列表（支持搜索）"""
     up = BiliUp.query.get_or_404(up_id)
     page = request.args.get('page', 1, type=int)
     per_page = 30
-    pagination = BiliVideo.query.filter_by(up_id=up_id)\
-        .order_by(BiliVideo.pubdate.desc())\
+    q = request.args.get('q', '').strip()
+
+    query = BiliVideo.query.filter_by(up_id=up_id)
+    if q:
+        query = query.filter(BiliVideo.title.contains(q))
+    pagination = query.order_by(BiliVideo.pubdate.desc())\
         .paginate(page=page, per_page=per_page, error_out=False)
     # 粉丝数变化历史（最近 10 条 + JSON 供图表）
     import json
@@ -45,7 +49,7 @@ def up_videos(up_id):
         {'t': h.recorded_at.strftime('%m/%d %H:%M'), 'v': h.follower_count}
         for h in follower_history
     ])
-    return render_template('bilibili_up.html', up=up, pagination=pagination,
+    return render_template('bilibili_up.html', up=up, pagination=pagination, q=q,
                            follower_history=follower_history,
                            follower_chart_data=follower_chart_data)
 

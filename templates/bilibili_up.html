@@ -37,6 +37,21 @@
     </div>
     {% endif %}
 
+    <!-- 搜索视频 -->
+    <div style="margin-bottom:16px">
+        <form method="GET" action="{{ url_for('bili_public.up_videos', up_id=up.id) }}" style="display:flex;gap:0;max-width:400px">
+            <input type="text" name="q" value="{{ q or '' }}" placeholder="搜索视频标题..." required
+                   style="flex:1;padding:8px 12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px 0 0 10px;color:#e8edf5;font-size:0.8rem;outline:none">
+            <button type="submit" style="padding:8px 14px;background:rgba(255,107,157,0.15);border:1px solid rgba(255,107,157,0.25);border-radius:0 10px 10px 0;color:#ff8aae;font-size:0.75rem;cursor:pointer">搜索</button>
+        </form>
+        {% if q %}
+        <div style="margin-top:6px;font-size:0.75rem;color:rgba(255,255,255,0.3)">
+            搜索「{{ q }}」共 {{ pagination.total }} 条结果
+            <a href="{{ url_for('bili_public.up_videos', up_id=up.id) }}" style="margin-left:6px;color:#ff8aae;text-decoration:none">清除</a>
+        </div>
+        {% endif %}
+    </div>
+
     <!-- 视频列表 -->
     <div class="admin-table-wrapper">
         <table class="admin-table">
