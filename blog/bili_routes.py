@@ -24,9 +24,7 @@ def index():
     ups = BiliUp.query.order_by(BiliUp.updated_at.desc()).all()
     # 检查 B站 登录状态
     from blog.bilibili.login import apply_cookies
-    from blog.bilibili.bili_api import is_logged_in
-    apply_cookies()
-    logged_in = is_logged_in()
+    logged_in = apply_cookies()
     return render_template('admin/bili_index.html', ups=ups, bili_logged_in=logged_in)
 
 

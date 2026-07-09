@@ -153,9 +153,9 @@ def load_cookies() -> str | None:
 
 def apply_cookies():
     """尝试从文件加载 Cookie 并设置到 API 模块"""
-    from .bili_api import _credential, set_cookies, is_logged_in
-    # 如果全局 _credential 已存在，直接使用（不再验证，避免网络波动导致覆盖）
-    if _credential is not None:
+    from .bili_api import set_cookies, is_logged_in
+    # 如果已登录，直接返回（避免文件加载覆盖 V2 设置的 Credential）
+    if is_logged_in():
         logger.info("✅ 全局 Credential 已存在，直接使用")
         return True
 
