@@ -232,9 +232,9 @@ def _run_scrape(mid: int, space_url: str, app):
                     try:
                         stat = get_video_stat(bvid)
                         video_info.update(stat)
-                        time.sleep(2.0 + random.random() * 2.0)
+                        time.sleep(8.0 + random.random() * 4.0)
                     except Exception:
-                        time.sleep(4.0)
+                        time.sleep(12.0)
 
                     video = BiliVideo(up_id=up.id, **video_info)
                     db.session.add(video)

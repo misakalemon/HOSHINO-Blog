@@ -4,8 +4,8 @@ import os
 BILI_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # 请求间隔（秒）— 爬慢一点防止被 B站 风控
-REQUEST_INTERVAL = 2.5
-PAGE_SIZE = 20
+REQUEST_INTERVAL = 5.0
+PAGE_SIZE = 15
 MAX_RETRIES = 3
 TIMEOUT = 15
 
