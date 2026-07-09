@@ -332,7 +332,6 @@ function openCropModal(file, callback) {
       st.tx = 0; st.ty = 0;
       applyTransform();
       activateCrop('free');
-      updateOutputSize();
     };
     img.onerror = function() {
       loadingEl.classList.add('hidden');
@@ -358,7 +357,6 @@ function openCropModal(file, callback) {
         var ratioStr = r.w + ':' + r.h;
         activateCrop(ratioStr);
       }
-      renderCrop();
     };
     ratiosEl.appendChild(btn);
   });
@@ -468,8 +466,6 @@ function openCropModal(file, callback) {
     applyTransform();
     if (st.cropMode) renderCrop();
   });
-
-  // --- 弹窗拖拽调整大小 ---
   var modalEl = ov.querySelector('.crop-modal');
   var resizeHandle = ov.querySelector('#cropResizeHandle');
   var resizeState = null;
@@ -481,6 +477,7 @@ function openCropModal(file, callback) {
       startW: modalEl.offsetWidth, startH: modalEl.offsetHeight,
     };
     resizeHandle.classList.add('dragging');
+    if (st.cropMode) cropBox.classList.add('resizing');
     e.preventDefault();
   }
 
@@ -501,7 +498,7 @@ function openCropModal(file, callback) {
   function resizeEnd() {
     if (resizeState) {
       resizeHandle.classList.remove('dragging');
-      if (st.cropMode) renderCrop();
+      if (st.cropMode) { cropBox.classList.remove('resizing'); renderCrop(); }
       resizeState = null;
     }
   }
@@ -524,6 +521,7 @@ function openCropModal(file, callback) {
 
   function teardown() {
     document.body.style.overflow = '';
+    img.onload = null; img.onerror = null;
     window.removeEventListener('mousemove', onMove);
     window.removeEventListener('mouseup', onUp);
     window.removeEventListener('touchmove', touchMoveH);
@@ -540,7 +538,6 @@ function openCropModal(file, callback) {
     st.scale = 1; st.tx = 0; st.ty = 0; zoomSlider.value = 1;
     applyTransform();
     activateCrop('free');
-    renderCrop();
   };
 
   ov.querySelector('#cropConfirm').onclick = function() {

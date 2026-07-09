@@ -1151,7 +1151,8 @@ ul { list-style: none; }
   pointer-events:none;
 }
 .crop-box.dragging { border-color:#ff6b9d; transition:none !important; }
-.crop-box:not(.dragging) { transition:left 0.12s ease,top 0.12s ease,width 0.12s ease,height 0.12s ease; }
+.crop-box.resizing { transition:none !important; }
+.crop-box:not(.dragging):not(.resizing) { transition:left 0.12s ease,top 0.12s ease,width 0.12s ease,height 0.12s ease; }
 .crop-edge {
   position:absolute; pointer-events:auto; background:transparent; z-index:3;
 }
