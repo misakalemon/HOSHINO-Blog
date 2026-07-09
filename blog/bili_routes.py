@@ -35,18 +35,11 @@ def index():
 @bili_bp.route('/qr-gen')
 @login_required
 def qr_generate():
-    """生成登录二维码（含 base64 图片）"""
-    import io, base64
-    from blog.bilibili.login import generate_qr
+    """生成登录二维码（使用官方库，含 base64 图片）"""
+    from blog.bilibili.login import generate_qr_v2
     try:
-        data = generate_qr()
-        # 用 qrcode 库生成 base64 PNG
-        import qrcode
-        img = qrcode.make(data['url'])
-        buf = io.BytesIO()
-        img.save(buf, format='PNG')
-        b64 = base64.b64encode(buf.getvalue()).decode()
-        return {'ok': True, 'qrcode_key': data['qrcode_key'], 'img': 'data:image/png;base64,' + b64}
+        data = generate_qr_v2()
+        return {'ok': True, 'qrcode_key': data['qrcode_key'], 'img': data['img']}
     except Exception as e:
         return {'ok': False, 'error': str(e)}
 
@@ -54,41 +47,13 @@ def qr_generate():
 @bili_bp.route('/qr-poll')
 @login_required
 def qr_poll():
-    """轮询扫码状态"""
+    """轮询扫码状态（使用官方库）"""
     qrcode_key = request.args.get('key', '')
     if not qrcode_key:
         return {'ok': False, 'error': 'missing key'}
 
-    from blog.bilibili.login import poll_qr, parse_cookies_from_url, fetch_cookies_via_redirect, save_cookies
-    from blog.bilibili.bili_api import set_cookies
-    try:
-        result = poll_qr(qrcode_key)
-        data = result.get('data', {})
-        code = data.get('code', -1)
-
-        if code == 0:  # 登录成功
-            redirect_url = data.get('url', '')
-            refresh_token = data.get('refresh_token', '')
-            # 优先用 HTTP 重定向获取完整 Cookie（含 SESSDATA）
-            cookie_str = fetch_cookies_via_redirect(redirect_url)
-            if not cookie_str:
-                cookie_str = parse_cookies_from_url(redirect_url)
-            if refresh_token:
-                cookie_str = cookie_str + '; ac_time_value=' + refresh_token if cookie_str else 'ac_time_value=' + refresh_token
-            if cookie_str:
-                set_cookies(cookie_str)
-                save_cookies(cookie_str)
-                return {'ok': True, 'status': 'success', 'msg': '登录成功'}
-            return {'ok': True, 'status': 'success', 'msg': '登录成功但无法获取Cookie'}
-        elif code == 86090:
-            return {'ok': True, 'status': 'scanned', 'msg': '已扫码，请在手机上确认'}
-        elif code == 86101:
-            return {'ok': True, 'status': 'waiting', 'msg': '等待扫码'}
-        elif code == 86038:
-            return {'ok': True, 'status': 'expired', 'msg': '二维码已过期'}
-        return {'ok': True, 'status': 'unknown', 'code': code}
-    except Exception as e:
-        return {'ok': False, 'error': str(e)}
+    from blog.bilibili.login import poll_qr_v2
+    return poll_qr_v2(qrcode_key)
 
 
 @bili_bp.route('/logout-bili', methods=['POST'])

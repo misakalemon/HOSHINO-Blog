@@ -6,11 +6,58 @@ import urllib.parse
 from urllib.parse import unquote
 
 import requests
+from bilibili_api import sync
+from bilibili_api.login_v2 import QrCodeLogin, QrCodeLoginEvents
 
 from .bili_api import set_cookies
 from .config import COOKIE_FILE, HEADERS, TIMEOUT
 
 logger = logging.getLogger(__name__)
+
+# ── V2：基于官方库的二维码登录 ──────────────
+# 使用 bilibili-api-python 的 QrCodeLogin，自动处理 token 交换和字段填充
+
+def generate_qr_v2() -> dict:
+    """使用官方库生成二维码，返回 { qrcode_key, img }"""
+    import io, base64, qrcode as qrcode_lib
+    qr = QrCodeLogin()
+    sync(qr.generate_qrcode())
+    # 从内部属性获取二维码数据
+    qrcode_key = qr._QrCodeLogin__qr_key
+    qr_url = qr._QrCodeLogin__qr_link
+    # 生成 base64 PNG 图片
+    img = qrcode_lib.make(qr_url)
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    b64 = base64.b64encode(buf.getvalue()).decode()
+    return {'qrcode_key': qrcode_key, 'img': 'data:image/png;base64,' + b64}
+
+
+def poll_qr_v2(qrcode_key: str) -> dict:
+    """轮询扫码状态，使用官方库"""
+    qr = QrCodeLogin()
+    qr._QrCodeLogin__qr_key = qrcode_key
+    try:
+        status = sync(qr.check_state())
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+    if status == QrCodeLoginEvents.DONE:
+        cred = qr.get_credential()
+        cookie_dict = cred.get_cookies()
+        cookie_str = "; ".join([f"{k}={v}" for k, v in cookie_dict.items()])
+        if cookie_str:
+            set_cookies(cookie_str)
+            save_cookies(cookie_str)
+        return {'ok': True, 'status': 'success', 'msg': '登录成功'}
+    elif status == QrCodeLoginEvents.CONF:
+        return {'ok': True, 'status': 'scanned', 'msg': '已扫码，请在手机上确认'}
+    elif status == QrCodeLoginEvents.SCAN:
+        return {'ok': True, 'status': 'waiting', 'msg': '等待扫码'}
+    elif status == QrCodeLoginEvents.TIMEOUT:
+        return {'ok': True, 'status': 'expired', 'msg': '二维码已过期'}
+    return {'ok': True, 'status': 'unknown'}
+
 
 _NOT_SCANNED = 86101
 _SCANNED = 86090
