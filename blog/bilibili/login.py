@@ -63,6 +63,10 @@ def fetch_cookies_via_redirect(redirect_url: str) -> str:
         s = requests.Session()
         s.headers.update(HEADERS)
         resp = s.get(redirect_url, timeout=TIMEOUT, allow_redirects=True)
+        # 调试日志：打印重定向链路中的 Cookie
+        for i, r in enumerate(resp.history):
+            logger.debug("重定向第 %d 步: url=%s, cookies=%s", i + 1, r.url, dict(r.cookies))
+        logger.debug("最终 URL: %s, cookies: %s", resp.url, dict(s.cookies))
         cookie_parts = []
         for key, value in s.cookies.items():
             cookie_parts.append(f"{key}={value}")
