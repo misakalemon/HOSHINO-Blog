@@ -99,6 +99,9 @@ def init_db(app):
         # ── 迁移 Post.content 从 TEXT 到 MEDIUMTEXT ────
         _migrate_post_content(app)
 
+        # ── 迁移 BiliUp 表新增字段 ────────────────
+        _migrate_bili_up_fields(app)
+
         # ── 添加示例价格追踪商品（首次启动） ─────
         from .crawler import init_sample_products
         init_sample_products()
@@ -268,6 +271,25 @@ def _migrate_user_profile_fields(app):
             except Exception as e:
                 db.session.rollback()
                 app.logger.warning('迁移: 添加 users.%s 列失败: %s', col, e)
+
+
+def _migrate_bili_up_fields(app):
+    """迁移：为 BiliUp 表添加 follower_count 字段。"""
+    engine = db.get_engine()
+    inspector = db.inspect(engine)
+    cols = {c['name'] for c in inspector.get_columns('bili_ups')}
+    dialect = engine.dialect.name
+    if dialect != 'mysql':
+        return
+    from sqlalchemy import text
+    if 'follower_count' not in cols:
+        try:
+            db.session.execute(text('ALTER TABLE bili_ups ADD COLUMN follower_count INTEGER DEFAULT 0'))
+            db.session.commit()
+            app.logger.info('迁移: 已添加 bili_ups.follower_count 列')
+        except Exception as e:
+            db.session.rollback()
+            app.logger.warning('迁移: 添加 bili_ups.follower_count 列失败: %s', e)
 
 
 # ── 后导入路由（延迟导入） ─────────────────────
