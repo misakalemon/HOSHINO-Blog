@@ -409,6 +409,7 @@ class BiliVideo(db.Model):
     duration = db.Column(db.Integer, default=0, comment='时长（秒）')
     pubdate = db.Column(db.Integer, nullable=True, comment='发布时间戳')
     pub_date = db.Column(db.Date, nullable=True, comment='发布日期')
+    pub_datetime = db.Column(db.DateTime, nullable=True, comment='发布日期时间')
     view_count = db.Column(db.Integer, default=0, comment='播放数')
     like_count = db.Column(db.Integer, default=0, comment='点赞数')
     coin_count = db.Column(db.Integer, default=0, comment='投币数')

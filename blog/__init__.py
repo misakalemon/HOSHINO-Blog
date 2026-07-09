@@ -102,6 +102,9 @@ def init_db(app):
         # ── 迁移 BiliUp 表新增字段 ────────────────
         _migrate_bili_up_fields(app)
 
+        # ── 迁移 BiliVideo 表新增字段 ──────────────
+        _migrate_bili_video_fields(app)
+
         # ── 添加示例价格追踪商品（首次启动） ─────
         from .crawler import init_sample_products
         init_sample_products()
@@ -290,6 +293,27 @@ def _migrate_bili_up_fields(app):
         except Exception as e:
             db.session.rollback()
             app.logger.warning('迁移: 添加 bili_ups.follower_count 列失败: %s', e)
+
+
+def _migrate_bili_video_fields(app):
+    """迁移：为 BiliVideo 表添加 pub_datetime 字段。"""
+    engine = db.get_engine()
+    inspector = db.inspect(engine)
+    cols = {c['name'] for c in inspector.get_columns('bili_videos')}
+    dialect = engine.dialect.name
+    if dialect != 'mysql':
+        return
+    from sqlalchemy import text
+    if 'pub_datetime' not in cols:
+        try:
+            db.session.execute(text('ALTER TABLE bili_videos ADD COLUMN pub_datetime DATETIME'))
+            # 用已有 pubdate 时间戳回填 pub_datetime
+            db.session.execute(text('UPDATE bili_videos SET pub_datetime = FROM_UNIXTIME(pubdate) WHERE pubdate IS NOT NULL AND pub_datetime IS NULL'))
+            db.session.commit()
+            app.logger.info('迁移: 已添加 bili_videos.pub_datetime 列')
+        except Exception as e:
+            db.session.rollback()
+            app.logger.warning('迁移: 添加 bili_videos.pub_datetime 列失败: %s', e)
 
 
 # ── 后导入路由（延迟导入） ─────────────────────

@@ -75,7 +75,7 @@
                         <a href="{{ url_for('bili_public.video_detail', video_id=v.id) }}#video-{{ v.id }}" style="color:#d0c8f0;text-decoration:none;transition:color 0.2s" onmouseover="this.style.color='#ff8aae'" onmouseout="this.style.color='#d0c8f0'">{{ v.title }}</a>
                     </td>
                     <td data-label="时长">{{ '%d:%02d'|format(v.duration//60, v.duration%60) if v.duration else '-' }}</td>
-                    <td data-label="日期">{{ v.pub_date.strftime('%Y/%m/%d %H:%M') if v.pub_date else '-' }}</td>
+                    <td data-label="日期">{{ v.pub_datetime.strftime('%Y/%m/%d %H:%M') if v.pub_datetime else v.pub_datetime.strftime('%Y/%m/%d %H:%M') if v.pub_datetime else v.pub_date.strftime('%Y/%m/%d') if v.pub_date else '-' }}</td>
                     <td data-label="播放">{{ '{:,}'.format(v.view_count) if v.view_count else '0' }}</td>
                     <td data-label="点赞">{{ '{:,}'.format(v.like_count) if v.like_count else '0' }}</td>
                     <td data-label="投币">{{ '{:,}'.format(v.coin_count) if v.coin_count else '0' }}</td>

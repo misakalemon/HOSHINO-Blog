@@ -92,6 +92,10 @@ def get_video_list(mid: int) -> Generator[dict, None, None]:
                     datetime.fromtimestamp(pubdate_ts, tz=timezone.utc).date()
                     if pubdate_ts else None
                 ),
+                "pub_datetime": (
+                    datetime.fromtimestamp(pubdate_ts, tz=timezone.utc)
+                    if pubdate_ts else None
+                ),
                 "view_count": item.get("play", 0),
                 "comment_count": item.get("comment", 0),
                 "danmaku_count": item.get("video_review", 0),
