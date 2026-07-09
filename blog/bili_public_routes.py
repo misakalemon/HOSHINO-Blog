@@ -12,31 +12,27 @@ bili_public_bp = Blueprint('bili_public', __name__, url_prefix='/bilibili')
 
 @bili_public_bp.route('/')
 def index():
-    """公开的 UP 主列表页 / 全局视频搜索"""
+    """公开的 UP 主列表页 / 全局搜索"""
     page = request.args.get('page', 1, type=int)
     per_page = 20
     q = request.args.get('q', '').strip()
-    t = request.args.get('t', 'up')  # 'up' 或 'video'
 
-    if t == 'video' and q:
-        # 全局视频搜索
-        query = BiliVideo.query.filter(BiliVideo.title.contains(q))
-        pagination = query.order_by(BiliVideo.pubdate.desc())\
-            .paginate(page=page, per_page=per_page, error_out=False)
-        # 补充 UP 主信息
-        up_ids = {v.up_id for v in pagination.items}
+    if q:
+        # 统一搜索：同时匹配 UP 主和视频
+        ups = BiliUp.query.filter(
+            db.or_(BiliUp.name.contains(q), BiliUp.mid.cast(db.String).contains(q))
+        ).all()
+        videos = BiliVideo.query.filter(BiliVideo.title.contains(q))\
+            .order_by(BiliVideo.pubdate.desc()).all()
+        up_ids = {v.up_id for v in videos}
         up_map = {u.id: u for u in BiliUp.query.filter(BiliUp.id.in_(up_ids)).all()}
-        return render_template('bilibili.html', pagination=pagination, q=q, t=t, up_map=up_map)
+        return render_template('bilibili.html', ups=ups, videos=videos,
+                               q=q, total=len(ups) + len(videos), up_map=up_map)
     else:
-        # UP 主搜索
-        query = BiliUp.query
-        if q:
-            query = query.filter(
-                db.or_(BiliUp.name.contains(q), BiliUp.mid.cast(db.String).contains(q))
-            )
-        pagination = query.order_by(BiliUp.follower_count.desc())\
+        # 无搜索：显示所有 UP 主
+        pagination = BiliUp.query.order_by(BiliUp.follower_count.desc())\
             .paginate(page=page, per_page=per_page, error_out=False)
-        return render_template('bilibili.html', pagination=pagination, q=q, t='up')
+        return render_template('bilibili.html', pagination=pagination, q='')
 
 
 @bili_public_bp.route('/up/<int:up_id>')

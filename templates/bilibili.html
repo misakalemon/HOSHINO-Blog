@@ -5,54 +5,85 @@
     <div style="text-align:center;margin-bottom:32px">
         <h1 style="font-size:2rem;font-weight:250;color:rgba(255,255,255,0.9);margin-bottom:8px">📺 B站数据</h1>
         <p style="color:rgba(255,255,255,0.35);font-size:0.9rem">
-            {% if t == 'video' and q %}视频搜索结果{% else %}共 {{ pagination.total }} 个 UP 主{% endif %}
+            {% if q %}搜索结果{% else %}共 {{ pagination.total }} 个 UP 主{% endif %}
         </p>
     </div>
 
-    <!-- 搜索模式切换 + 搜索框 -->
+    <!-- 搜索框 -->
     <div style="max-width:520px;margin:0 auto 28px">
-        <div style="display:flex;gap:0;margin-bottom:8px;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,0.06);background:rgba(0,0,0,0.15)">
-            <a href="{{ url_for('bili_public.index', q=q, t='up') }}" style="flex:1;padding:7px 0;text-align:center;font-size:0.8rem;text-decoration:none;color:{% if t != 'video' %}#ff8aae{% else %}rgba(255,255,255,0.35){% endif %};background:{% if t != 'video' %}rgba(255,107,157,0.1){% else %}transparent{% endif %};transition:all 0.2s">UP 主</a>
-            <a href="{{ url_for('bili_public.index', q=q, t='video') }}" style="flex:1;padding:7px 0;text-align:center;font-size:0.8rem;text-decoration:none;color:{% if t == 'video' %}#ff8aae{% else %}rgba(255,255,255,0.35){% endif %};background:{% if t == 'video' %}rgba(255,107,157,0.1){% else %}transparent{% endif %};transition:all 0.2s">视频</a>
-        </div>
         <form method="GET" action="{{ url_for('bili_public.index') }}" style="display:flex;gap:0">
-            <input type="hidden" name="t" value="{{ t or 'up' }}">
-            <input type="text" name="q" value="{{ q or '' }}" placeholder="{% if t == 'video' %}搜索视频标题...{% else %}搜索 UP 主名称或 mid...{% endif %}" required
+            <input type="text" name="q" value="{{ q or '' }}" placeholder="搜索 UP 主名称或视频标题..." required
                    style="flex:1;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px 0 0 12px;color:#e8edf5;font-size:0.85rem;outline:none">
             <button type="submit" style="padding:10px 16px;background:rgba(255,107,157,0.15);border:1px solid rgba(255,107,157,0.25);border-radius:0 12px 12px 0;color:#ff8aae;font-size:0.8rem;cursor:pointer;transition:all 0.3s" onmouseover="this.style.background='rgba(255,107,157,0.25)'" onmouseout="this.style.background='rgba(255,107,157,0.15)'">搜索</button>
         </form>
         {% if q %}
         <div style="text-align:center;margin-top:8px">
-            <span style="font-size:0.8rem;color:rgba(255,255,255,0.3)">搜索「{{ q }}」共 {{ pagination.total }} 条结果</span>
+            <span style="font-size:0.8rem;color:rgba(255,255,255,0.3)">搜索「{{ q }}」— UP 主 {{ ups|length }} 个，视频 {{ videos|length }} 个</span>
             <a href="{{ url_for('bili_public.index') }}" style="margin-left:8px;font-size:0.75rem;color:#ff8aae;text-decoration:none">清除</a>
         </div>
         {% endif %}
     </div>
 
-    {% if pagination.items %}
+    {% if q %}
+    <!-- 搜索结果 -->
+    <div style="display:grid;gap:12px">
+        {% if ups %}
+        <div style="font-size:0.8rem;color:rgba(255,255,255,0.4);margin-bottom:4px">UP 主（{{ ups|length }}）</div>
+        {% for up in ups %}
+        <a id="up-{{ up.id }}" href="{{ url_for('bili_public.up_videos', up_id=up.id) }}#up-{{ up.id }}"
+           style="display:flex;align-items:center;gap:16px;padding:14px 18px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:14px;text-decoration:none;transition:all 0.2s"
+           onmouseover="this.style.borderColor='rgba(255,255,255,0.12)';this.style.background='rgba(255,255,255,0.04)'"
+           onmouseout="this.style.borderColor='rgba(255,255,255,0.04)';this.style.background='rgba(255,255,255,0.02)'">
+            <div style="flex-shrink:0">
+                {% if up.avatar %}
+                <img src="{{ up.avatar }}" alt="" style="width:44px;height:44px;border-radius:50%;border:2px solid rgba(255,255,255,0.06);object-fit:cover">
+                {% else %}
+                <div style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:center;font-size:20px">📺</div>
+                {% endif %}
+            </div>
+            <div style="flex:1;min-width:0">
+                <div style="color:#d0c8f0;font-weight:500;font-size:0.9rem">{{ up.name or 'UP主 #' + up.mid|string }}</div>
+                <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:0.75rem;color:rgba(255,255,255,0.35);margin-top:3px">
+                    <span>mid: {{ up.mid }}</span>
+                    <span>📹 {{ up.video_count }} 视频</span>
+                    <span>👥 {{ '{:,}'.format(up.follower_count) if up.follower_count else '?' }} 粉丝</span>
+                </div>
+            </div>
+            <span style="color:rgba(255,255,255,0.2);font-size:0.75rem">查看视频 →</span>
+        </a>
+        {% endfor %}
+        {% endif %}
 
-    {% if t == 'video' %}
-    <!-- 视频搜索结果 -->
-    <div style="display:grid;gap:10px">
-        {% for v in pagination.items %}
+        {% if videos %}
+        <div style="font-size:0.8rem;color:rgba(255,255,255,0.4);margin-top:{% if ups %}8px{% endif %};margin-bottom:4px">视频（{{ videos|length }}）</div>
+        {% for v in videos %}
         {% set up = up_map.get(v.up_id) %}
         <a id="video-{{ v.id }}" href="{{ url_for('bili_public.video_detail', video_id=v.id) }}#video-{{ v.id }}"
-           style="display:flex;align-items:center;gap:14px;padding:14px 18px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:14px;text-decoration:none;transition:all 0.2s"
+           style="display:flex;align-items:center;gap:14px;padding:12px 16px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:12px;text-decoration:none;transition:all 0.2s"
            onmouseover="this.style.borderColor='rgba(255,255,255,0.12)';this.style.background='rgba(255,255,255,0.04)'"
            onmouseout="this.style.borderColor='rgba(255,255,255,0.04)';this.style.background='rgba(255,255,255,0.02)'">
             <div style="flex:1;min-width:0">
-                <div style="color:#d0c8f0;font-weight:500;font-size:0.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ v.title }}</div>
-                <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:0.75rem;color:rgba(255,255,255,0.3);margin-top:4px">
+                <div style="color:#d0c8f0;font-weight:500;font-size:0.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ v.title }}</div>
+                <div style="display:flex;flex-wrap:wrap;gap:10px;font-size:0.7rem;color:rgba(255,255,255,0.3);margin-top:3px">
                     <span>{{ up.name if up else 'UP主 #' + v.up_id|string }}</span>
                     <span>播放 {{ '{:,}'.format(v.view_count) if v.view_count else '0' }}</span>
                     <span>{{ v.pub_datetime.strftime('%Y/%m/%d %H:%M') if v.pub_datetime else v.pub_date.strftime('%Y/%m/%d') if v.pub_date else '-' }}</span>
                 </div>
             </div>
-            <span style="color:rgba(255,255,255,0.2);font-size:0.75rem">详情 →</span>
+            <span style="color:rgba(255,255,255,0.2);font-size:0.7rem">详情 →</span>
         </a>
         {% endfor %}
+        {% endif %}
+
+        {% if not ups and not videos %}
+        <div style="padding:40px;text-align:center;color:rgba(255,255,255,0.25)">
+            <div style="font-size:40px;margin-bottom:12px;opacity:0.3">🔍</div>
+            <p>未找到与「{{ q }}」相关的内容</p>
+        </div>
+        {% endif %}
     </div>
-    {% else %}
+
+    {% elif pagination %}
     <!-- UP 主列表 -->
     <div style="display:grid;gap:12px">
         {% for up in pagination.items %}
@@ -79,31 +110,30 @@
         </a>
         {% endfor %}
     </div>
-    {% endif %}
 
-    <!-- 分页（首页样式） -->
+    <!-- 分页 -->
     {% if pagination.pages > 1 %}
     <div class="pagination-wrap" style="margin-top:28px">
         <ul class="pagination">
             {% if pagination.has_prev %}
-            <li><a href="{{ url_for('bili_public.index', page=pagination.prev_num, q=q, t=t) }}">←</a></li>
+            <li><a href="{{ url_for('bili_public.index', page=pagination.prev_num, q=q) }}">←</a></li>
             {% endif %}
             {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                 {% if page_num %}
                 <li {% if page_num == pagination.page %}class="active"{% endif %}>
-                    <a href="{{ url_for('bili_public.index', page=page_num, q=q, t=t) }}">{{ page_num }}</a>
+                    <a href="{{ url_for('bili_public.index', page=page_num, q=q) }}">{{ page_num }}</a>
                 </li>
                 {% else %}
                 <li><span>···</span></li>
                 {% endif %}
             {% endfor %}
             {% if pagination.has_next %}
-            <li><a href="{{ url_for('bili_public.index', page=pagination.next_num, q=q, t=t) }}">→</a></li>
+            <li><a href="{{ url_for('bili_public.index', page=pagination.next_num, q=q) }}">→</a></li>
             {% endif %}
         </ul>
         <div class="page-jump">
             <span style="color:rgba(255,255,255,0.25);font-size:0.7rem">共 {{ pagination.pages }} 页</span>
-            <input type="number" min="1" max="{{ pagination.pages }}" placeholder="跳转" onkeydown="if(event.key=='Enter'){var p=parseInt(this.value);if(p>=1&&p<={{ pagination.pages }})window.location='{{ url_for('bili_public.index', q=q, t=t) }}?page='+p;}">
+            <input type="number" min="1" max="{{ pagination.pages }}" placeholder="跳转" onkeydown="if(event.key=='Enter'){var p=parseInt(this.value);if(p>=1&&p<={{ pagination.pages }})window.location='{{ url_for('bili_public.index', q=q) }}?page='+p;}">
         </div>
     </div>
     {% endif %}
@@ -111,7 +141,7 @@
     {% else %}
     <div style="padding:60px;text-align:center;color:rgba(255,255,255,0.25)">
         <div style="font-size:48px;margin-bottom:16px;opacity:0.3">📺</div>
-        <p>{% if q %}未找到与「{{ q }}」相关的{% if t == 'video' %}视频{% else %}UP 主{% endif %}{% else %}暂无数据{% endif %}</p>
+        <p>暂无数据</p>
     </div>
     {% endif %}
 </div>
