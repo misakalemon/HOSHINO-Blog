@@ -19,10 +19,10 @@ def index():
     """UP 主管理列表"""
     ups = BiliUp.query.order_by(BiliUp.updated_at.desc()).all()
     # 检查 B站 登录状态
-    from blog.bilibili.login import load_cookies
+    from blog.bilibili.login import apply_cookies
     from blog.bilibili.bili_api import is_logged_in
-    cookie_str = load_cookies()
-    logged_in = bool(cookie_str) and is_logged_in() if cookie_str else False
+    apply_cookies()
+    logged_in = is_logged_in()
     return render_template('admin/bili_index.html', ups=ups, bili_logged_in=logged_in)
 
 
@@ -202,18 +202,33 @@ def _run_scrape(mid: int, space_url: str, app):
                 import time
 
                 emit('初始化数据库...')
-                # 确保 UP 主存在
-                up = BiliUp.query.filter_by(mid=mid).first()
-                if not up:
-                    up = BiliUp(mid=mid, space_url=space_url)
-                    db.session.add(up)
-                    db.session.commit()
-                    emit(f'新建 UP 主记录: mid={mid}')
-                else:
-                    emit(f'UP 主已存在: {up.name or "mid=" + str(mid)}')
+                # 确保 UP 主存在 + 获取 UP 主信息
+                from blog.bilibili.bili_api import get_video_list, get_video_stat, get_user_info
+                import time
 
-                emit(f'mid: {mid}')
-                emit('数据库初始化完成')
+                up = BiliUp.query.filter_by(mid=mid).first()
+                try:
+                    ui = get_user_info(mid)
+                    if up:
+                        up.name = ui.get('name', up.name)
+                        up.avatar = ui.get('avatar', up.avatar)
+                        up.follower_count = ui.get('follower_count', 0)
+                    else:
+                        up = BiliUp(
+                            mid=mid, space_url=space_url,
+                            name=ui.get('name', ''),
+                            avatar=ui.get('avatar', ''),
+                            follower_count=ui.get('follower_count', 0),
+                        )
+                        db.session.add(up)
+                    db.session.commit()
+                    emit(f'UP 主: {ui.get("name", "?")}  |  粉丝: {ui.get("follower_count", 0):,}  |  视频: {ui.get("video_count", 0)}')
+                except Exception as e:
+                    emit(f'获取 UP 主信息失败: {e}')
+                    if not up:
+                        up = BiliUp(mid=mid, space_url=space_url)
+                        db.session.add(up)
+                        db.session.commit()
 
                 # 爬取视频列表
                 count = 0

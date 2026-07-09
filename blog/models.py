@@ -386,6 +386,7 @@ class BiliUp(db.Model):
     avatar = db.Column(db.String(256), default='', comment='头像 URL')
     space_url = db.Column(db.String(256), default='', comment='空间链接')
     video_count = db.Column(db.Integer, default=0, comment='视频数')
+    follower_count = db.Column(db.Integer, default=0, comment='粉丝数')
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 

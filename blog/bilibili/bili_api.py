@@ -50,6 +50,18 @@ def extract_mid(space_url: str) -> int:
     return int(m.group(1))
 
 
+def get_user_info(mid: int) -> dict:
+    """获取 UP 主信息（名称、头像、粉丝数、视频数）"""
+    u = _user_mod.User(mid, credential=_credential)
+    info = sync(u.get_user_info())
+    return {
+        'name': info.get('name', ''),
+        'avatar': info.get('face', ''),
+        'follower_count': info.get('follower', 0),
+        'video_count': info.get('video', 0),
+    }
+
+
 def get_video_list(mid: int) -> Generator[dict, None, None]:
     """获取指定 mid 的所有视频基本信息（分页迭代）"""
     u = _user_mod.User(mid, credential=_credential)

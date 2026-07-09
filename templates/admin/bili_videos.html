@@ -38,7 +38,7 @@
                     <td data-label="BV"><code>{{ v.bvid }}</code></td>
                     <td data-label="标题" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ v.title }}">{{ v.title }}</td>
                     <td data-label="时长">{{ '%d:%02d'|format(v.duration//60, v.duration%60) if v.duration else '-' }}</td>
-                    <td data-label="日期">{{ v.pub_date.strftime('%m/%d') if v.pub_date else '-' }}</td>
+                    <td data-label="日期">{{ v.pub_date.strftime('%Y/%m/%d %H:%M') if v.pub_date else '-' }}</td>
                     <td data-label="播放">{{ '{:,}'.format(v.view_count) if v.view_count else '0' }}</td>
                     <td data-label="点赞">{{ '{:,}'.format(v.like_count) if v.like_count else '0' }}</td>
                     <td data-label="投币">{{ '{:,}'.format(v.coin_count) if v.coin_count else '0' }}</td>
