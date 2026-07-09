@@ -222,18 +222,27 @@ def _run_scrape(mid: int, space_url: str, app):
 
             # 爬取视频列表
             count = 0
+            retry_delay = 30  # 指数退避起始值（秒）
+            from blog.bilibili.bili_api import _is_risk_control
             for idx, video_info in enumerate(get_video_list(mid), start=1):
                     bvid = video_info['bvid']
                     exists = BiliVideo.query.filter_by(bvid=bvid).first()
                     if exists:
                         continue
 
-                    # 获取详细统计（带随机延迟防封）
+                    # 获取详细统计（带指数退避防封）
                     try:
                         stat = get_video_stat(bvid)
                         video_info.update(stat)
+                        retry_delay = 30  # 成功后重置退避
                         time.sleep(7.0 + random.random() * 3.0)
-                    except Exception:
+                    except Exception as e:
+                        if _is_risk_control(e):
+                            logger.warning("⚠️ 触发风控，等待 %ds 后重试...", retry_delay)
+                            time.sleep(retry_delay)
+                            retry_delay = min(retry_delay * 2, 600)
+                            continue  # 重试当前视频
+                        logger.warning("视频 %s 统计获取失败: %s", bvid, e)
                         time.sleep(12.0)
 
                     video = BiliVideo(up_id=up.id, **video_info)

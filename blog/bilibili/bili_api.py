@@ -16,6 +16,13 @@ logger = logging.getLogger(__name__)
 _credential: Credential | None = None
 
 
+def _is_risk_control(e: Exception) -> bool:
+    """判断异常是否为 B站 风控/限流"""
+    err_str = str(e).lower()
+    codes = ['429', '-509', '-352', '412', 'too many requests', 'ratelimit', '被拒绝']
+    return any(c in err_str for c in codes)
+
+
 def set_cookies(cookie_str: str):
     """设置登录态 Cookie（SESSDATA=abc; bili_jct=def; buvid3=ghi）"""
     global _credential
@@ -71,9 +78,10 @@ def get_user_info(mid: int) -> dict:
 
 
 def get_video_list(mid: int) -> Generator[dict, None, None]:
-    """获取指定 mid 的所有视频基本信息（分页迭代）"""
+    """获取指定 mid 的所有视频基本信息（分页迭代，含风控指数退避）"""
     u = _user_mod.User(mid, credential=_credential)
     pn = 1
+    retry_delay = 30
 
     while True:
         logger.info("正在获取第 %d 页视频列表 ...", pn)
@@ -81,6 +89,11 @@ def get_video_list(mid: int) -> Generator[dict, None, None]:
             data = sync(u.get_videos(ps=PAGE_SIZE, pn=pn))
         except Exception as e:
             logger.error("获取第 %d 页视频列表失败: %s", pn, e)
+            if _is_risk_control(e):
+                logger.warning("⚠️ 触发风控，等待 %ds 后重试...", retry_delay)
+                time.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, 600)
+                continue  # 重试当前页
             break
 
         vlist = data.get("list", {}).get("vlist", [])
