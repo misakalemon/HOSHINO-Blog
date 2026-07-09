@@ -35,3 +35,6 @@ static/uploads/*
 # Thumbnail cache (缩略图磁盘缓存)
 static/.thumb_cache/
 
+# Bilibili login cookie (B站登录凭证，不提交)
+blog/bilibili/cookies.txt
+
