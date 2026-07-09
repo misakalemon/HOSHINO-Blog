@@ -64,3 +64,5 @@ dependencies:
   - pip
   - pip:
     - selenium==4.29.0
+    - bilibili-api-python>=17.0.0
+    - qrcode[pil]>=7.4
