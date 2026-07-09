@@ -136,7 +136,8 @@ def delete_video(video_id):
 
 
 # ── 爬取任务（后台线程）────────────────────────
-_scrape_lock = threading.Lock()
+# 正在爬取中的 mid 集合（防止重复爬同一个 UP 主）
+_scrape_running: set[int] = set()
 # 爬取进度存储 { mid: [line, line, ...] }
 _scrape_progress: dict[int, list[str]] = {}
 
@@ -174,6 +175,11 @@ def scrape():
     # 初始化进度存储
     _scrape_progress[mid] = []
 
+    # 检查是否已在爬取
+    if mid in _scrape_running:
+        return {'ok': False, 'error': '该 UP 主正在爬取中，请等待完成'}
+    _scrape_running.add(mid)
+
     # 在后台线程中执行爬取（传入 app 实例以建立应用上下文）
     app = current_app._get_current_object()
     t = threading.Thread(target=_run_scrape, args=(mid, space_url, app), daemon=True)
@@ -196,49 +202,48 @@ def _run_scrape(mid: int, space_url: str, app):
         logger.info('%s', line)
 
     with app.app_context():
-        with _scrape_lock:
+        try:
+            from blog.bilibili.bili_api import get_video_list, get_video_stat
+            import time
+
+            emit('初始化数据库...')
+            # 确保 UP 主存在 + 获取 UP 主信息
+            from blog.bilibili.bili_api import get_video_list, get_video_stat, get_user_info
+            import time
+
+            up = BiliUp.query.filter_by(mid=mid).first()
             try:
-                from blog.bilibili.bili_api import get_video_list, get_video_stat
-                import time
-
-                emit('初始化数据库...')
-                # 确保 UP 主存在 + 获取 UP 主信息
-                from blog.bilibili.bili_api import get_video_list, get_video_stat, get_user_info
-                import time
-
-                up = BiliUp.query.filter_by(mid=mid).first()
+                ui = get_user_info(mid)
+                if up:
+                    up.name = ui.get('name', up.name)
+                    up.avatar = ui.get('avatar', up.avatar)
+                    up.follower_count = ui.get('follower_count', 0)
+                else:
+                    up = BiliUp(
+                        mid=mid, space_url=space_url,
+                        name=ui.get('name', ''),
+                        avatar=ui.get('avatar', ''),
+                        follower_count=ui.get('follower_count', 0),
+                    )
+                    db.session.add(up)
+                db.session.commit()
+                # 记录粉丝数历史快照
                 try:
-                    ui = get_user_info(mid)
-                    if up:
-                        up.name = ui.get('name', up.name)
-                        up.avatar = ui.get('avatar', up.avatar)
-                        up.follower_count = ui.get('follower_count', 0)
-                    else:
-                        up = BiliUp(
-                            mid=mid, space_url=space_url,
-                            name=ui.get('name', ''),
-                            avatar=ui.get('avatar', ''),
-                            follower_count=ui.get('follower_count', 0),
-                        )
-                        db.session.add(up)
+                    db.session.add(BiliUpHistory(up_id=up.id, follower_count=up.follower_count))
                     db.session.commit()
-                    # 记录粉丝数历史快照
-                    try:
-                        db.session.add(BiliUpHistory(up_id=up.id, follower_count=up.follower_count))
-                        db.session.commit()
-                    except Exception:
-                        db.session.rollback()
-                    emit(f'UP 主: {ui.get("name", "?")}  |  粉丝: {ui.get("follower_count", 0):,}  |  视频: {ui.get("video_count", 0)}')
-                except Exception as e:
-                    emit(f'获取 UP 主信息失败: {e}')
-                    if not up:
-                        up = BiliUp(mid=mid, space_url=space_url)
-                        db.session.add(up)
-                        db.session.commit()
+                except Exception:
+                    db.session.rollback()
+                emit(f'UP 主: {ui.get("name", "?")}  |  粉丝: {ui.get("follower_count", 0):,}  |  视频: {ui.get("video_count", 0)}')
+            except Exception as e:
+                emit(f'获取 UP 主信息失败: {e}')
+                if not up:
+                    up = BiliUp(mid=mid, space_url=space_url)
+                    db.session.add(up)
+                    db.session.commit()
 
-                # 爬取视频列表
-                count = 0
-                for idx, video_info in enumerate(get_video_list(mid), start=1):
+            # 爬取视频列表
+            count = 0
+            for idx, video_info in enumerate(get_video_list(mid), start=1):
                     bvid = video_info['bvid']
                     exists = BiliVideo.query.filter_by(bvid=bvid).first()
                     if exists:
@@ -283,10 +288,12 @@ def _run_scrape(mid: int, space_url: str, app):
                         f'评论: {video_info.get("comment_count", "?"):,}'
                     )
 
-                up.video_count = BiliVideo.query.filter_by(up_id=up.id).count()
-                db.session.commit()
-                emit(f'爬取完成，共获取 {count} 个视频数据')
+            up.video_count = BiliVideo.query.filter_by(up_id=up.id).count()
+            db.session.commit()
+            emit(f'爬取完成，共获取 {count} 个视频数据')
 
-            except Exception as e:
+        except Exception as e:
                 emit(f'爬取失败: {e}')
                 logger.error('爬取失败: %s', e)
+        finally:
+            _scrape_running.discard(mid)
