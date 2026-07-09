@@ -14,6 +14,9 @@ from .config import COOKIE_FILE, HEADERS, TIMEOUT
 
 logger = logging.getLogger(__name__)
 
+# 登录状态标志（set_credential 后设置，避免模块间 _credential 引用不一致）
+_BILI_LOGGED_IN = False
+
 # ── V2：基于官方库的二维码登录 ──────────────
 # 使用 bilibili-api-python 的 QrCodeLogin，自动处理 token 交换和字段填充
 
@@ -45,6 +48,8 @@ def poll_qr_v2(qrcode_key: str) -> dict:
 
     if status == QrCodeLoginEvents.DONE:
         logger.info("V2 扫码登录成功")
+        global _BILI_LOGGED_IN
+        _BILI_LOGGED_IN = True
         cred = qr.get_credential()
         # 直接设置全局 Credential，保留完整状态（含 refresh_token 等）
         from .bili_api import set_credential
@@ -153,6 +158,12 @@ def load_cookies() -> str | None:
 
 def apply_cookies():
     """尝试从文件加载 Cookie 并设置到 API 模块"""
+    global _BILI_LOGGED_IN
+    # 如果 V2 登录成功过，直接信任
+    if _BILI_LOGGED_IN:
+        logger.info("✅ 已通过 V2 登录，直接使用")
+        return True
+
     from .bili_api import set_cookies, is_logged_in
     # 如果已登录，直接返回（避免文件加载覆盖 V2 设置的 Credential）
     if is_logged_in():
