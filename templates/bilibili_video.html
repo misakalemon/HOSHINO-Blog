@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% block title %}{{ video.title[:30] }} - Hoshino{% endblock %}
+{% block content %}
+<div class="content" style="padding-top:100px;max-width:1000px">
+    <div style="margin-bottom:20px">
+        <a href="{{ url_for('bili_public.up_videos', up_id=up.id) }}" style="color:rgba(255,255,255,0.3);text-decoration:none;font-size:0.85rem">← {{ up.name or 'UP主' }}</a>
+    </div>
+
+    <!-- 视频信息 -->
+    <div style="padding:24px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:20px;margin-bottom:24px">
+        <h1 style="font-size:1.3rem;font-weight:500;color:rgba(255,255,255,0.9);margin:0 0 12px;line-height:1.4">{{ video.title }}</h1>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:0.8rem;color:rgba(255,255,255,0.35)">
+            <span>BV: {{ video.bvid }}</span>
+            <span>时长: {{ '%d:%02d'|format(video.duration//60, video.duration%60) if video.duration else '-' }}</span>
+            <span>发布: {{ video.pub_date.strftime('%Y/%m/%d %H:%M') if video.pub_date else '-' }}</span>
+        </div>
+
+        {% if video.description %}
+        <div style="margin-top:16px;padding:16px;background:rgba(0,0,0,0.2);border-radius:12px;font-size:0.85rem;color:rgba(255,255,255,0.5);line-height:1.6;white-space:pre-wrap">{{ video.description }}</div>
+        {% endif %}
+    </div>
+
+    <!-- 统计数据 -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px;margin-bottom:24px">
+        <div style="padding:14px;text-align:center;background:rgba(255,255,255,0.02);border-radius:12px;border:1px solid rgba(255,255,255,0.04)">
+            <div style="font-size:0.6rem;color:rgba(255,255,255,0.3);margin-bottom:4px">播放</div>
+            <div style="font-size:1.1rem;font-weight:600;color:#e0daff">{{ '{:,}'.format(video.view_count) if video.view_count else '0' }}</div>
+        </div>
+        <div style="padding:14px;text-align:center;background:rgba(255,255,255,0.02);border-radius:12px;border:1px solid rgba(255,255,255,0.04)">
+            <div style="font-size:0.6rem;color:rgba(255,255,255,0.3);margin-bottom:4px">点赞</div>
+            <div style="font-size:1.1rem;font-weight:600;color:#f87171">{{ '{:,}'.format(video.like_count) if video.like_count else '0' }}</div>
+        </div>
+        <div style="padding:14px;text-align:center;background:rgba(255,255,255,0.02);border-radius:12px;border:1px solid rgba(255,255,255,0.04)">
+            <div style="font-size:0.6rem;color:rgba(255,255,255,0.3);margin-bottom:4px">投币</div>
+            <div style="font-size:1.1rem;font-weight:600;color:#fbbf24">{{ '{:,}'.format(video.coin_count) if video.coin_count else '0' }}</div>
+        </div>
+        <div style="padding:14px;text-align:center;background:rgba(255,255,255,0.02);border-radius:12px;border:1px solid rgba(255,255,255,0.04)">
+            <div style="font-size:0.6rem;color:rgba(255,255,255,0.3);margin-bottom:4px">收藏</div>
+            <div style="font-size:1.1rem;font-weight:600;color:#34d399">{{ '{:,}'.format(video.favorite_count) if video.favorite_count else '0' }}</div>
+        </div>
+        <div style="padding:14px;text-align:center;background:rgba(255,255,255,0.02);border-radius:12px;border:1px solid rgba(255,255,255,0.04)">
+            <div style="font-size:0.6rem;color:rgba(255,255,255,0.3);margin-bottom:4px">转发</div>
+            <div style="font-size:1.1rem;font-weight:600;color:#60a5fa">{{ '{:,}'.format(video.share_count) if video.share_count else '0' }}</div>
+        </div>
+        <div style="padding:14px;text-align:center;background:rgba(255,255,255,0.02);border-radius:12px;border:1px solid rgba(255,255,255,0.04)">
+            <div style="font-size:0.6rem;color:rgba(255,255,255,0.3);margin-bottom:4px">评论</div>
+            <div style="font-size:1.1rem;font-weight:600;color:#a78bfa">{{ '{:,}'.format(video.comment_count) if video.comment_count else '0' }}</div>
+        </div>
+    </div>
+
+    <!-- 播放量变化历史 -->
+    {% if view_history and view_history|length > 1 %}
+    <div style="padding:20px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:16px">
+        <div style="font-size:0.85rem;color:rgba(255,255,255,0.5);margin-bottom:12px">📈 播放量变化</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+            {% for h in view_history %}
+            <div style="padding:10px 14px;border-radius:10px;background:rgba(255,255,255,0.03);text-align:center;min-width:80px;flex:1">
+                <div style="font-size:0.9rem;font-weight:600;color:#e0daff">{{ '{:,}'.format(h.view_count) }}</div>
+                <div style="font-size:0.65rem;color:rgba(255,255,255,0.3);margin-top:2px">{{ h.recorded_at.strftime('%m/%d %H:%M') }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% set delta = view_history[-1].view_count - view_history[0].view_count %}
+        <div style="margin-top:8px;font-size:0.8rem;color:{% if delta >= 0 %}#3dd68c{% else %}#f25a5a{% endif %}">
+            {% if delta >= 0 %}▲{% else %}▼{% endif %} 累计变化: {{ '%+d'|format(delta) }}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

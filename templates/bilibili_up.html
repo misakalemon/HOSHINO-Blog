@@ -25,6 +25,25 @@
         </div>
     </div>
 
+    <!-- 粉丝数变化 -->
+    {% if follower_history and follower_history|length > 1 %}
+    <div style="margin-bottom:24px;padding:16px 20px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:16px">
+        <div style="font-size:0.85rem;color:rgba(255,255,255,0.5);margin-bottom:10px">📈 粉丝数变化</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+            {% for h in follower_history %}
+            <div style="padding:8px 12px;border-radius:8px;background:rgba(255,255,255,0.03);text-align:center;min-width:70px">
+                <div style="font-size:0.9rem;font-weight:600;color:#d0c8f0">{{ '{:,}'.format(h.follower_count) }}</div>
+                <div style="font-size:0.6rem;color:rgba(255,255,255,0.3);margin-top:2px">{{ h.recorded_at.strftime('%m/%d') }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% set delta = follower_history[-1].follower_count - follower_history[0].follower_count %}
+        <div style="margin-top:8px;font-size:0.8rem;color:{% if delta >= 0 %}#3dd68c{% else %}#f25a5a{% endif %}">
+            {% if delta >= 0 %}▲{% else %}▼{% endif %} 累计变化: {{ '%+d'|format(delta) }}
+        </div>
+    </div>
+    {% endif %}
+
     <!-- 视频列表 -->
     <div class="admin-table-wrapper">
         <table class="admin-table">
@@ -44,7 +63,9 @@
             <tbody>
                 {% for v in pagination.items %}
                 <tr>
-                    <td data-label="标题" style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ v.title }}">{{ v.title }}</td>
+                    <td data-label="标题" style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ v.title }}">
+                        <a href="{{ url_for('bili_public.video_detail', video_id=v.id) }}" style="color:#d0c8f0;text-decoration:none;transition:color 0.2s" onmouseover="this.style.color='#ff8aae'" onmouseout="this.style.color='#d0c8f0'">{{ v.title }}</a>
+                    </td>
                     <td data-label="时长">{{ '%d:%02d'|format(v.duration//60, v.duration%60) if v.duration else '-' }}</td>
                     <td data-label="日期">{{ v.pub_date.strftime('%Y/%m/%d %H:%M') if v.pub_date else '-' }}</td>
                     <td data-label="播放">{{ '{:,}'.format(v.view_count) if v.view_count else '0' }}</td>

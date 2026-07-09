@@ -431,3 +431,33 @@ class BiliVideo(db.Model):
             'share_count': self.share_count, 'comment_count': self.comment_count,
             'danmaku_count': self.danmaku_count,
         }
+
+
+class BiliUpHistory(db.Model):
+    """UP 主粉丝数历史快照"""
+    __tablename__ = 'bili_up_history'
+
+    id = db.Column(db.Integer, primary_key=True)
+    up_id = db.Column(db.Integer, db.ForeignKey('bili_ups.id'), nullable=False, index=True)
+    follower_count = db.Column(db.Integer, default=0, comment='粉丝数')
+    recorded_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, index=True)
+
+    up = db.relationship('BiliUp', backref='history_records', lazy='joined')
+
+
+class BiliVideoHistory(db.Model):
+    """视频统计数据历史快照"""
+    __tablename__ = 'bili_video_history'
+
+    id = db.Column(db.Integer, primary_key=True)
+    video_id = db.Column(db.Integer, db.ForeignKey('bili_videos.id'), nullable=False, index=True)
+    view_count = db.Column(db.Integer, default=0, comment='播放数')
+    like_count = db.Column(db.Integer, default=0, comment='点赞数')
+    coin_count = db.Column(db.Integer, default=0, comment='投币数')
+    favorite_count = db.Column(db.Integer, default=0, comment='收藏数')
+    share_count = db.Column(db.Integer, default=0, comment='转发数')
+    comment_count = db.Column(db.Integer, default=0, comment='评论数')
+    danmaku_count = db.Column(db.Integer, default=0, comment='弹幕数')
+    recorded_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, index=True)
+
+    video = db.relationship('BiliVideo', backref='history_records', lazy='joined')

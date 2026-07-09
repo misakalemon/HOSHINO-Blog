@@ -6,7 +6,7 @@ from flask import (Blueprint, current_app, flash, redirect, render_template,
                    request, url_for)
 from flask_login import login_required
 
-from blog.models import BiliUp, BiliVideo, db
+from blog.models import BiliUp, BiliUpHistory, BiliVideo, BiliVideoHistory, db
 
 logger = logging.getLogger(__name__)
 
@@ -222,6 +222,12 @@ def _run_scrape(mid: int, space_url: str, app):
                         )
                         db.session.add(up)
                     db.session.commit()
+                    # 记录粉丝数历史快照
+                    try:
+                        db.session.add(BiliUpHistory(up_id=up.id, follower_count=up.follower_count))
+                        db.session.commit()
+                    except Exception:
+                        db.session.rollback()
                     emit(f'UP 主: {ui.get("name", "?")}  |  粉丝: {ui.get("follower_count", 0):,}  |  视频: {ui.get("video_count", 0)}')
                 except Exception as e:
                     emit(f'获取 UP 主信息失败: {e}')
@@ -249,6 +255,21 @@ def _run_scrape(mid: int, space_url: str, app):
                     video = BiliVideo(up_id=up.id, **video_info)
                     db.session.add(video)
                     db.session.commit()
+                    # 记录视频数据历史快照
+                    try:
+                        db.session.add(BiliVideoHistory(
+                            video_id=video.id,
+                            view_count=video_info.get('view_count', 0),
+                            like_count=video_info.get('like_count', 0),
+                            coin_count=video_info.get('coin_count', 0),
+                            favorite_count=video_info.get('favorite_count', 0),
+                            share_count=video_info.get('share_count', 0),
+                            comment_count=video_info.get('comment_count', 0),
+                            danmaku_count=video_info.get('danmaku_count', 0),
+                        ))
+                        db.session.commit()
+                    except Exception:
+                        db.session.rollback()
                     count += 1
 
                     title = (video_info.get('title') or '')[:30]
