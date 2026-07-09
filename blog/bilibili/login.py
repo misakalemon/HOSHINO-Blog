@@ -153,19 +153,22 @@ def load_cookies() -> str | None:
 
 def apply_cookies():
     """尝试从文件加载 Cookie 并设置到 API 模块"""
-    from .bili_api import _credential, is_logged_in, set_cookies
-    # 优先检查当前全局 Credential 是否有效
-    if _credential is not None and is_logged_in():
-        logger.info("✅ 已存在有效的 B站 登录态（无需加载文件）")
+    from .bili_api import _credential, set_cookies, is_logged_in
+    # 如果全局 _credential 已存在，直接使用（不再验证，避免网络波动导致覆盖）
+    if _credential is not None:
+        logger.info("✅ 全局 Credential 已存在，直接使用")
         return True
-    # 从文件加载
+
+    # 从文件加载（兼容旧流程）
     cookie_str = load_cookies()
-    if cookie_str:
-        logger.debug("读取到的 Cookie 原始字符串 (前100字符): %s ...", cookie_str[:100])
-        set_cookies(cookie_str)
-        if is_logged_in():
-            logger.info("✅ 已从文件加载 B站 登录态 Cookie")
-            return True
-        else:
-            logger.warning("Cookie 已过期，请重新登录")
+    if not cookie_str:
+        return False
+
+    logger.debug("读取到的 Cookie 原始字符串 (前100字符): %s ...", cookie_str[:100])
+    set_cookies(cookie_str)
+    if is_logged_in():
+        logger.info("✅ 已从文件加载 B站 登录态 Cookie")
+        return True
+    else:
+        logger.warning("Cookie 已过期，请重新登录")
     return False
