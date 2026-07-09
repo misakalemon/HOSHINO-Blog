@@ -11,7 +11,13 @@
 <div class="admin-card" style="padding:20px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
         <h5 style="margin:0">共 {{ pagination.total }} 个视频</h5>
-        <a href="{{ url_for('bili.index') }}" class="btn-ghost-sm">← 返回</a>
+        <div style="display:flex;gap:8px">
+            <form method="POST" action="{{ url_for('bili.refresh_up', up_id=up.id) }}" style="display:inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-primary btn-sm">🔄 刷新数据</button>
+            </form>
+            <a href="{{ url_for('bili.index') }}" class="btn-ghost-sm">← 返回</a>
+        </div>
     </div>
 
     {% if pagination.items %}
@@ -46,7 +52,7 @@
                     <td data-label="转发">{{ '{:,}'.format(v.share_count) if v.share_count else '0' }}</td>
                     <td data-label="评论">{{ '{:,}'.format(v.comment_count) if v.comment_count else '0' }}</td>
                     <td data-label="操作">
-                        <form method="POST" action="{{ url_for('bili.delete_video', video_id=v.id) }}" style="display:inline" onsubmit="return confirm('删除此条记录？')">
+                        <form method="POST" action="{{ url_for('bili.delete_video', video_id=v.id) }}" style="display:inline" onsubmit="return confirm('⚠️ 确定要永久删除此条视频记录吗？\n\nBV: {{ v.bvid }}\n标题: {{ v.title[:30] if v.title else '-' }}\n\n此操作不可恢复！')">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" style="background:none;border:none;color:#f25a5a;cursor:pointer;font-size:0.75rem;padding:2px 6px">删除</button>
                         </form>

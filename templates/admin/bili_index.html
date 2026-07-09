@@ -82,7 +82,7 @@
                 </div>
             </div>
             <a href="{{ url_for('bili.up_detail', up_id=up.id) }}" class="btn-ghost-sm">查看视频</a>
-            <form method="POST" action="{{ url_for('bili.delete_up', up_id=up.id) }}" style="display:inline" onsubmit="return confirm('删除后不可恢复，确定？')">
+            <form method="POST" action="{{ url_for('bili.delete_up', up_id=up.id) }}" style="display:inline" onsubmit="return confirm('⚠️ 确定要删除 UP 主「{{ up.name or up.mid }}」吗？\n\n包括该 UP 主的所有视频数据（共 {{ up.video_count }} 个）\n\n此操作不可恢复！')">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn-ghost-sm" style="color:#f25a5a">删除</button>
             </form>
