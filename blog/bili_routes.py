@@ -1,6 +1,10 @@
 """Bilibili 后台管理路由"""
+import json
 import logging
+import os
+import random
 import threading
+import time
 
 from flask import (Blueprint, current_app, flash, redirect, render_template,
                    request, url_for)
@@ -51,7 +55,6 @@ def qr_generate():
 @login_required
 def qr_poll():
     """轮询扫码状态"""
-    import json
     qrcode_key = request.args.get('key', '')
     if not qrcode_key:
         return {'ok': False, 'error': 'missing key'}
@@ -88,7 +91,6 @@ def qr_poll():
 @login_required
 def logout_bili():
     """清除 B站 Cookie"""
-    import os
     from blog.bilibili.config import COOKIE_FILE
     try:
         if os.path.exists(COOKIE_FILE):
@@ -207,13 +209,6 @@ def scrape():
     return {'ok': True, 'mid': mid}
 
 
-@bili_bp.route('/scrape', methods=['GET'])
-@login_required
-def scrape_page():
-    """爬取管理页面（原 index 也保留本页，但此处用于 Ajax 调试）"""
-    return redirect(url_for('bili.index'))
-
-
 def _run_scrape(mid: int, space_url: str, app):
     """后台爬取线程"""
     prog = _scrape_progress.get(mid, [])
@@ -223,13 +218,10 @@ def _run_scrape(mid: int, space_url: str, app):
 
     with app.app_context():
         try:
-            from blog.bilibili.bili_api import get_video_list, get_video_stat
-            import time
+            from blog.bilibili.bili_api import get_video_list, get_video_stat, get_user_info
 
             emit('初始化数据库...')
             # 确保 UP 主存在 + 获取 UP 主信息
-            from blog.bilibili.bili_api import get_video_list, get_video_stat, get_user_info
-            import time
 
             up = BiliUp.query.filter_by(mid=mid).first()
             try:
@@ -273,7 +265,6 @@ def _run_scrape(mid: int, space_url: str, app):
                     try:
                         stat = get_video_stat(bvid)
                         video_info.update(stat)
-                        import random
                         time.sleep(2.0 + random.random() * 2.0)
                     except Exception:
                         time.sleep(4.0)
