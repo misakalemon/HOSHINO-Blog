@@ -12,19 +12,31 @@ bili_public_bp = Blueprint('bili_public', __name__, url_prefix='/bilibili')
 
 @bili_public_bp.route('/')
 def index():
-    """公开的 UP 主列表页（支持搜索）"""
+    """公开的 UP 主列表页 / 全局视频搜索"""
     page = request.args.get('page', 1, type=int)
     per_page = 20
     q = request.args.get('q', '').strip()
+    t = request.args.get('t', 'up')  # 'up' 或 'video'
 
-    query = BiliUp.query
-    if q:
-        query = query.filter(
-            db.or_(BiliUp.name.contains(q), BiliUp.mid.cast(db.String).contains(q))
-        )
-    pagination = query.order_by(BiliUp.follower_count.desc())\
-        .paginate(page=page, per_page=per_page, error_out=False)
-    return render_template('bilibili.html', pagination=pagination, q=q)
+    if t == 'video' and q:
+        # 全局视频搜索
+        query = BiliVideo.query.filter(BiliVideo.title.contains(q))
+        pagination = query.order_by(BiliVideo.pubdate.desc())\
+            .paginate(page=page, per_page=per_page, error_out=False)
+        # 补充 UP 主信息
+        up_ids = {v.up_id for v in pagination.items}
+        up_map = {u.id: u for u in BiliUp.query.filter(BiliUp.id.in_(up_ids)).all()}
+        return render_template('bilibili.html', pagination=pagination, q=q, t=t, up_map=up_map)
+    else:
+        # UP 主搜索
+        query = BiliUp.query
+        if q:
+            query = query.filter(
+                db.or_(BiliUp.name.contains(q), BiliUp.mid.cast(db.String).contains(q))
+            )
+        pagination = query.order_by(BiliUp.follower_count.desc())\
+            .paginate(page=page, per_page=per_page, error_out=False)
+        return render_template('bilibili.html', pagination=pagination, q=q, t='up')
 
 
 @bili_public_bp.route('/up/<int:up_id>')
