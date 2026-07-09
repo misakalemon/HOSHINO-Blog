@@ -52,14 +52,7 @@
     {% if view_history and view_history|length > 1 %}
     <div style="padding:20px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:16px">
         <div style="font-size:0.85rem;color:rgba(255,255,255,0.5);margin-bottom:12px">📈 播放量变化</div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px">
-            {% for h in view_history %}
-            <div style="padding:10px 14px;border-radius:10px;background:rgba(255,255,255,0.03);text-align:center;min-width:80px;flex:1">
-                <div style="font-size:0.9rem;font-weight:600;color:#e0daff">{{ '{:,}'.format(h.view_count) }}</div>
-                <div style="font-size:0.65rem;color:rgba(255,255,255,0.3);margin-top:2px">{{ h.recorded_at.strftime('%m/%d %H:%M') }}</div>
-            </div>
-            {% endfor %}
-        </div>
+        <div id="viewChart" style="width:100%;height:260px"></div>
         {% set delta = view_history[-1].view_count - view_history[0].view_count %}
         <div style="margin-top:8px;font-size:0.8rem;color:{% if delta >= 0 %}#3dd68c{% else %}#f25a5a{% endif %}">
             {% if delta >= 0 %}▲{% else %}▼{% endif %} 累计变化: {{ '%+d'|format(delta) }}
@@ -67,4 +60,27 @@
     </div>
     {% endif %}
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<script>
+(function() {
+    var data = {{ view_chart_data|safe }};
+    if (!data || data.length < 2) return;
+    var chart = echarts.init(document.getElementById('viewChart'));
+    chart.setOption({
+        tooltip: { trigger: 'axis', backgroundColor: 'rgba(18,16,34,0.95)', borderColor: 'rgba(255,255,255,0.06)', textStyle: { color: '#e0daff', fontSize: 12 } },
+        grid: { left: 60, right: 20, top: 20, bottom: 30 },
+        xAxis: { type: 'category', data: data.map(function(d){return d.t;}), axisLabel: { color: 'rgba(255,255,255,0.3)', fontSize: 11 }, axisLine: { lineStyle: { color: 'rgba(255,255,255,0.06)' } } },
+        yAxis: { type: 'value', axisLabel: { color: 'rgba(255,255,255,0.3)', fontSize: 11, formatter: function(v){return v>=10000?(v/10000).toFixed(1)+'万':v;} }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.04)' } } },
+        series: [{
+            type: 'line', data: data.map(function(d){return d.v;}), smooth: true,
+            lineStyle: { color: '#a78bfa', width: 2 },
+            areaStyle: { color: { type:'linear', x:0, y:0, x2:0, y2:1, colorStops:[{offset:0,color:'rgba(167,139,250,0.3)'},{offset:1,color:'rgba(167,139,250,0.02)'}] } },
+            itemStyle: { color: '#c4b5fd' },
+            showSymbol: true, symbolSize: 6
+        }]
+    });
+    window.addEventListener('resize', function(){ chart.resize(); });
+})();
+</script>
 {% endblock %}
