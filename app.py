@@ -248,7 +248,7 @@ def _run_daily_bili_refresh(app):
         logger.info('B站 每日刷新启动: 共 %d 个 UP 主', len(ups))
         for up in ups:
             try:
-                _bili_scrape(up.mid, up.space_url, app)
+                _bili_scrape(up.mid, up.space_url, app, max_videos=20)
                 logger.info('B站 刷新完成: %s (mid=%d)', up.name or '?', up.mid)
             except Exception as e:
                 logger.error('B站 刷新失败: mid=%d, %s', up.mid, e)

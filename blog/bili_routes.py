@@ -95,7 +95,7 @@ def refresh_up(up_id):
     _scrape_progress[up.mid] = []
     _scrape_running.add(up.mid)
     app = current_app._get_current_object()
-    t = threading.Thread(target=_run_scrape, args=(up.mid, up.space_url, app), daemon=True)
+    t = threading.Thread(target=_run_scrape, args=(up.mid, up.space_url, app), kwargs={'max_videos': 20}, daemon=True)
     t.start()
     flash(f'已开始刷新「{up.name or up.mid}」的数据', 'success')
     return redirect(url_for('bili.up_detail', up_id=up_id))
@@ -176,8 +176,15 @@ def scrape():
     return {'ok': True, 'mid': mid}
 
 
-def _run_scrape(mid: int, space_url: str, app):
-    """后台爬取线程"""
+def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
+    """后台爬取线程
+    
+    Args:
+        mid: B站 mid
+        space_url: UP 主空间链接
+        app: Flask 应用实例
+        max_videos: 最多爬取视频数，None 表示全部
+    """
     prog = _scrape_progress.get(mid, [])
     def emit(line: str):
         prog.append(f'[{time.strftime("%H:%M:%S")}] {line}')
@@ -225,6 +232,9 @@ def _run_scrape(mid: int, space_url: str, app):
             retry_delay = 30  # 指数退避起始值（秒）
             from blog.bilibili.bili_api import _is_risk_control
             for idx, video_info in enumerate(get_video_list(mid), start=1):
+                    if max_videos is not None and count >= max_videos:
+                        emit(f'已达限制，仅爬取最新 {max_videos} 个视频')
+                        break
                     bvid = video_info['bvid']
                     exists = BiliVideo.query.filter_by(bvid=bvid).first()
 
