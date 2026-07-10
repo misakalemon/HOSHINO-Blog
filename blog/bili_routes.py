@@ -338,6 +338,54 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
                     db.session.add(up)
                     db.session.commit()
 
+            # 检查是否有视频未入库，从 API 补全
+            import time
+            total_in_db = BiliVideo.query.filter_by(up_id=up.id).count()
+            try:
+                total_in_api = ui.get('video_count', 0)
+            except NameError:
+                total_in_api = 0
+            if 0 < total_in_db < total_in_api:
+                from blog.bilibili.bili_api import get_video_list as _get_video_list
+                existing_bvids = {r[0] for r in BiliVideo.query.with_entities(BiliVideo.bvid).filter_by(up_id=up.id).all()}
+                fill_count = 0
+                need = total_in_api - total_in_db
+                for video_info in _get_video_list(mid):
+                    bvid = video_info['bvid']
+                    if bvid in existing_bvids:
+                        continue
+                    try:
+                        stat = get_video_stat(bvid)
+                        video_info.update(stat)
+                        time.sleep(7.0 + random.random() * 3.0)
+                    except Exception:
+                        logger.warning("视频 %s 补全时统计获取失败", bvid)
+                        time.sleep(12.0)
+                        continue
+                    video = BiliVideo(up_id=up.id, **video_info)
+                    db.session.add(video)
+                    db.session.commit()
+                    try:
+                        db.session.add(BiliVideoHistory(
+                            video_id=video.id,
+                            view_count=video_info.get('view_count', 0),
+                            like_count=video_info.get('like_count', 0),
+                            coin_count=video_info.get('coin_count', 0),
+                            favorite_count=video_info.get('favorite_count', 0),
+                            share_count=video_info.get('share_count', 0),
+                            comment_count=video_info.get('comment_count', 0),
+                            danmaku_count=video_info.get('danmaku_count', 0),
+                        ))
+                        db.session.commit()
+                    except Exception:
+                        db.session.rollback()
+                    fill_count += 1
+                    existing_bvids.add(bvid)
+                    title = (video_info.get('title') or '')[:30]
+                    emit(f'[补全] {fill_count}/{need} {title}')
+                if fill_count:
+                    emit(f'补全完成，新增 {fill_count} 个视频')
+
             # 从 DB 按发布时间查视频 → 调 API 更新统计
             import datetime
             count = 0
