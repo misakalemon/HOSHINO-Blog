@@ -15,6 +15,35 @@
 {% block extra_head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/prism-okaidia.min.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/prism-line-numbers.min.css') }}">
+<style>
+@media print {
+  /* 隐藏导航栏、页脚、侧栏、按钮、评论区等非正文元素 */
+  nav.navbar, footer, .sidebar, .back-btn, .author-box,
+  .comments-section, .drawer-overlay, .mobile-drawer,
+  #adminToggle, .admin-sidebar, .glow-bg, .glow-orb,
+  .featured-image, .post-detail > div:first-child button:last-child {
+    display: none !important;
+  }
+  /* 正文区域：白底黑字，清晰字体 */
+  body { background: #fff !important; color: #000 !important; }
+  .content, .post-detail, .post-content, .col-8, .row { 
+    max-width: 100% !important; width: 100% !important; 
+    margin: 0 !important; padding: 0 !important; 
+    background: #fff !important; box-shadow: none !important; 
+  }
+  .post-detail h1 { color: #000 !important; font-size: 24pt !important; font-weight: bold !important; margin-top: 0 !important; }
+  .post-content { font-size: 12pt !important; line-height: 1.8 !important; color: #000 !important; }
+  .post-content p { margin: 0 0 8pt !important; }
+  .post-content img { max-width: 100% !important; page-break-inside: avoid; }
+  .pill-light { background: #eee !important; color: #333 !important; border: 1px solid #ccc !important; }
+  /* 避免标题被分页断开 */
+  h1, h2, h3, h4 { page-break-after: avoid; }
+  p, li { orphans: 3; widows: 3; }
+  /* 页眉页脚通过 @page 设置 */
+  @page { margin: 2cm 2.5cm; }
+  @page :first { margin-top: 3cm; }
+}
+</style>
 {% endblock %}
 {% block content %}
 
