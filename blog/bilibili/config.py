@@ -2,6 +2,7 @@
 import os
 
 BILI_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(BILI_DIR, '..', '..'))
 
 # 请求间隔（秒）— 爬慢一点防止被 B站 风控
 REQUEST_INTERVAL = 5.0
@@ -9,8 +10,8 @@ PAGE_SIZE = 15
 MAX_RETRIES = 3
 TIMEOUT = 15
 
-# Cookie 保存路径
-COOKIE_FILE = os.path.join(BILI_DIR, "cookies.txt")
+# Cookie 保存路径（在项目根目录，不随部署覆盖）
+COOKIE_FILE = os.path.join(PROJECT_ROOT, ".bili_cookies.txt")
 
 HEADERS = {
     "User-Agent": (

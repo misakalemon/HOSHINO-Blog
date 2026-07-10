@@ -106,6 +106,9 @@ def refresh_up(up_id):
 def delete_up(up_id):
     """删除 UP 主及其所有视频数据"""
     up = BiliUp.query.get_or_404(up_id)
+    if up.mid in _scrape_running:
+        flash('该 UP 主正在爬取中，请等待完成后再删除', 'error')
+        return redirect(url_for('bili.index'))
     db.session.delete(up)
     db.session.commit()
     flash(f'已删除 UP 主「{up.name or up.mid}」及其视频数据', 'success')
@@ -221,8 +224,7 @@ def scrape_status():
         return {'running': False, 'lines': []}
     from copy import deepcopy
     lines = deepcopy(_scrape_progress.get(mid, []))
-    # 检查是否还在运行
-    running = any('爬取完成' not in l and '爬取中断' not in l for l in lines[-3:]) if lines else False
+    running = mid in _scrape_running
     return {'running': running, 'lines': lines}
 
 
@@ -372,12 +374,13 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
                 pubdate_ts = video_info.get('pubdate', 0)
                 pub_dt = datetime.datetime.fromtimestamp(pubdate_ts, tz=datetime.timezone.utc).replace(tzinfo=None) if pubdate_ts else None
                 if max_videos is not None:
-                    if pub_dt and pub_dt >= cutoff_p0:
-                        if count >= max_videos:
-                            break
-                        ok = _process_video(video_info, 'P0 ')
-                        if ok is False:
-                            continue
+                    if pub_dt and pub_dt < cutoff_p0:
+                        break
+                    if count >= max_videos:
+                        break
+                    ok = _process_video(video_info, 'P0 ')
+                    if ok is False:
+                        continue
                 else:
                     ok = _process_video(video_info)
                     if ok is False:

@@ -261,18 +261,31 @@ def _run_daily_bili_refresh(app):
     """每日刷新所有 B站 UP 主视频数据（在应用上下文中运行）。"""
     with app.app_context():
         import logging
+        import threading
         logger = logging.getLogger(__name__)
         from blog.models import BiliUp
-        from blog.bili_routes import _run_scrape as _bili_scrape
+        from blog.bili_routes import _run_scrape, _scrape_progress, _scrape_running
 
         ups = BiliUp.query.all()
         logger.info('B站 每日刷新启动: 共 %d 个 UP 主', len(ups))
+
+        threads = []
         for up in ups:
-            try:
-                _bili_scrape(up.mid, up.space_url, app, max_videos=30)
-                logger.info('B站 刷新完成: %s (mid=%d)', up.name or '?', up.mid)
-            except Exception as e:
-                logger.error('B站 刷新失败: mid=%d, %s', up.mid, e)
+            mid = up.mid
+            _scrape_progress[mid] = []
+            _scrape_running.add(mid)
+            t = threading.Thread(
+                target=_run_scrape,
+                args=(mid, up.space_url, app),
+                kwargs={'max_videos': 30},
+                daemon=True,
+            )
+            t.start()
+            threads.append(t)
+
+        for t in threads:
+            t.join()
+
         logger.info('B站 每日刷新完成')
 
 
