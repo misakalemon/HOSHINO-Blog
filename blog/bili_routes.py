@@ -147,14 +147,20 @@ def _check_new_videos(mid: int, app):
             if not up:
                 return
 
-            # 取数据库已有的 bvid 集合
-            existing = {r[0] for r in BiliVideo.query.with_entities(BiliVideo.bvid).filter_by(up_id=up.id).all()}
+            # 取数据库已有的 bvid 和 aid 集合
+            existing_bvids = {r[0] for r in BiliVideo.query.with_entities(BiliVideo.bvid).filter_by(up_id=up.id).all()}
+            existing_aids = {r[0] for r in BiliVideo.query.with_entities(BiliVideo.aid).filter_by(up_id=up.id).all()}
 
             count = 0
             for idx, video_info in enumerate(get_video_list(mid), start=1):
                 bvid = video_info['bvid']
-                if bvid in existing:
+                aid = video_info['aid']
+                if bvid in existing_bvids or aid in existing_aids:
                     continue  # 已有则跳过
+                # 仅处理第一页（前 15 条），新视频永远在最前面
+                if idx > 15:
+                    emit('增量检查完成（仅检测最新 15 条）')
+                    break
 
                 # 新视频：获取详细统计
                 try:
@@ -191,7 +197,8 @@ def _check_new_videos(mid: int, app):
                     db.session.rollback()
 
                 count += 1
-                existing.add(bvid)
+                existing_bvids.add(bvid)
+                existing_aids.add(aid)
                 emit(f'发现新视频 [{count}] {video_info.get("title", "")[:30]}')
 
             up.video_count = BiliVideo.query.filter_by(up_id=up.id).count()
