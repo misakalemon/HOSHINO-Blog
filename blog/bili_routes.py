@@ -95,7 +95,7 @@ def refresh_up(up_id):
     _scrape_progress[up.mid] = []
     _scrape_running.add(up.mid)
     app = current_app._get_current_object()
-    t = threading.Thread(target=_run_scrape, args=(up.mid, up.space_url, app), kwargs={'max_videos': 20}, daemon=True)
+    t = threading.Thread(target=_run_scrape, args=(up.mid, up.space_url, app), kwargs={'max_videos': 30}, daemon=True)
     t.start()
     flash(f'已开始刷新「{up.name or up.mid}」的数据', 'success')
     return redirect(url_for('bili.up_detail', up_id=up_id))
