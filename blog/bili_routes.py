@@ -161,12 +161,19 @@ def _check_new_videos(mid: int, app):
                     stat = get_video_stat(bvid)
                     video_info.update(stat)
                     time.sleep(7.0 + random.random() * 3.0)
-                except Exception:
+                except Exception as e:
+                    logger.warning("视频 %s 统计获取失败: %s", bvid, e)
                     time.sleep(12.0)
+                    continue
 
-                video = BiliVideo(up_id=up.id, **video_info)
-                db.session.add(video)
-                db.session.commit()
+                try:
+                    video = BiliVideo(up_id=up.id, **video_info)
+                    db.session.add(video)
+                    db.session.commit()
+                except Exception as e:
+                    db.session.rollback()
+                    logger.warning("视频 %s 入库失败（可能重复）: %s", bvid, e)
+                    continue
 
                 try:
                     db.session.add(BiliVideoHistory(
@@ -195,6 +202,7 @@ def _check_new_videos(mid: int, app):
             logger.error('增量检查失败 mid=%d: %s', mid, e)
         finally:
             _scrape_running.discard(mid)
+            db.session.remove()
 
 
 @bili_bp.route('/scrape-status')
@@ -427,3 +435,4 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
                 logger.error('爬取失败: %s', e)
         finally:
             _scrape_running.discard(mid)
+            db.session.remove()

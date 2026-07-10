@@ -62,6 +62,11 @@ def create_app():
     os.environ['MAX_CONTENT_LENGTH'] = str(200 * 1024 * 1024)
     # 静态文件缓存 — 7 天（文件内容变更时手动清浏览器缓存即可）
     app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 604800
+    # 数据库连接池配置
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'pool_recycle': 280,
+        'pool_timeout': 30,
+    }
 
     # ── CSRF 保护（全局，影响所有 POST/PUT/DELETE）──
     csrf = CSRFProtect(app)
@@ -178,6 +183,12 @@ def create_app():
     # 每次 HTTP 响应返回到客户端之前执行 log_request()
     app.after_request(log_request)
 
+    # ── 请求结束时清理数据库 session ────────────
+    from blog import db
+    @app.teardown_appcontext
+    def shutdown_session(exception=None):
+        db.session.remove()
+
     elapsed = time.time() - _startup_time
     logger.info('应用就绪 (%.2fs)  MAX_CONTENT_LENGTH=%dMB', elapsed, app.config['MAX_CONTENT_LENGTH'] / 1024 / 1024)
     return app
@@ -229,6 +240,8 @@ def _init_scheduler(app):
             minutes=30,
             id='bili_incremental_check',
             replace_existing=True,
+            misfire_grace_time=600,
+            coalesce=True,
         )
         scheduler.start()
         app.logger.info('定时任务: 09:00价格 / 03:00密钥 / 02:00B站全量 / 每30minB站增量')
