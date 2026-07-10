@@ -293,71 +293,130 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
                     db.session.add(up)
                     db.session.commit()
 
-            # 爬取视频列表
+            # 爬取视频列表（优先级分层：P0新视频→P1轮转）
+            import datetime
             count = 0
+            processed_bvids = set()
             retry_delay = 30  # 指数退避起始值（秒）
             from blog.bilibili.bili_api import _is_risk_control
-            for idx, video_info in enumerate(get_video_list(mid), start=1):
-                    if max_videos is not None and count >= max_videos:
-                        emit(f'已达限制，仅爬取最新 {max_videos} 个视频')
-                        break
-                    bvid = video_info['bvid']
-                    exists = BiliVideo.query.filter_by(bvid=bvid).first()
+            now = datetime.datetime.utcnow()
+            cutoff_p0 = now - datetime.timedelta(days=3)
+            cutoff_p1 = now - datetime.timedelta(days=30)
 
-                    # 获取详细统计（带指数退避防封）
+            def _process_video(video_info, api_label=''):
+                nonlocal count, retry_delay
+                bvid = video_info['bvid']
+                if bvid in processed_bvids:
+                    return True
+                processed_bvids.add(bvid)
+                try:
+                    stat = get_video_stat(bvid)
+                    video_info.update(stat)
+                    retry_delay = 30
+                    time.sleep(7.0 + random.random() * 3.0)
+                except Exception as e:
+                    if _is_risk_control(e):
+                        logger.warning("触发风控，等待 %ds 后重试...", retry_delay)
+                        time.sleep(retry_delay)
+                        retry_delay = min(retry_delay * 2, 600)
+                        return False
+                    logger.warning("视频 %s 统计获取失败: %s", bvid, e)
+                    time.sleep(12.0)
+                    return True
+                exists = BiliVideo.query.filter_by(bvid=bvid).first()
+                if exists:
+                    for key, value in video_info.items():
+                        setattr(exists, key, value)
+                    video = exists
+                    db.session.commit()
+                else:
+                    video = BiliVideo(up_id=up.id, **video_info)
+                    db.session.add(video)
+                    db.session.commit()
+                count += 1
+                try:
+                    db.session.add(BiliVideoHistory(
+                        video_id=video.id,
+                        view_count=video_info.get('view_count', 0),
+                        like_count=video_info.get('like_count', 0),
+                        coin_count=video_info.get('coin_count', 0),
+                        favorite_count=video_info.get('favorite_count', 0),
+                        share_count=video_info.get('share_count', 0),
+                        comment_count=video_info.get('comment_count', 0),
+                        danmaku_count=video_info.get('danmaku_count', 0),
+                    ))
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+                title = (video_info.get('title') or '')[:30]
+                emit(f'[{count}] {api_label}{title} | 播放: {video_info.get("view_count", "?"):,}')
+                return True
+
+            # Phase 1: API 新视频（P0 ≤3天优先）
+            for video_info in get_video_list(mid):
+                pubdate_ts = video_info.get('pubdate', 0)
+                pub_dt = datetime.datetime.fromtimestamp(pubdate_ts, tz=datetime.timezone.utc).replace(tzinfo=None) if pubdate_ts else None
+                if max_videos is not None:
+                    if pub_dt and pub_dt >= cutoff_p0:
+                        if count >= max_videos:
+                            break
+                        ok = _process_video(video_info, 'P0 ')
+                        if ok is False:
+                            continue
+                else:
+                    ok = _process_video(video_info)
+                    if ok is False:
+                        continue
+
+            # Phase 2: 配额未满时补 P1（3~30天，最久未更新优先）
+            if max_videos is not None and count < max_videos:
+                remaining = max_videos - count
+                stale_videos = BiliVideo.query.filter(
+                    BiliVideo.up_id == up.id,
+                    BiliVideo.pub_datetime >= cutoff_p1,
+                    BiliVideo.pub_datetime < cutoff_p0,
+                ).order_by(BiliVideo.updated_at.asc()).limit(remaining).all()
+                for v in stale_videos:
+                    api_info = {'bvid': v.bvid, 'aid': v.aid, 'title': v.title,
+                                'description': v.description, 'duration': v.duration,
+                                'pubdate': v.pubdate, 'pub_date': v.pub_date, 'pub_datetime': v.pub_datetime}
                     try:
-                        stat = get_video_stat(bvid)
-                        video_info.update(stat)
-                        retry_delay = 30  # 成功后重置退避
+                        stat = get_video_stat(v.bvid)
+                        api_info.update(stat)
+                        retry_delay = 30
                         time.sleep(7.0 + random.random() * 3.0)
                     except Exception as e:
                         if _is_risk_control(e):
-                            logger.warning("⚠️ 触发风控，等待 %ds 后重试...", retry_delay)
+                            logger.warning("触发风控，等待 %ds 后重试...", retry_delay)
                             time.sleep(retry_delay)
                             retry_delay = min(retry_delay * 2, 600)
-                            continue  # 重试当前视频
-                        logger.warning("视频 %s 统计获取失败: %s", bvid, e)
+                            continue
+                        logger.warning("视频 %s 统计获取失败: %s", v.bvid, e)
                         time.sleep(12.0)
-
-                    if exists:
-                        # 已有视频：更新统计数据 + 追加历史快照
-                        for key, value in video_info.items():
-                            setattr(exists, key, value)
-                        video = exists
-                        db.session.commit()
-                    else:
-                        # 新视频：创建记录
-                        video = BiliVideo(up_id=up.id, **video_info)
-                        db.session.add(video)
-                        db.session.commit()
+                        continue
+                    for key, value in api_info.items():
+                        setattr(v, key, value)
+                    db.session.commit()
                     count += 1
-
-                    # 记录视频数据历史快照
+                    processed_bvids.add(v.bvid)
                     try:
-                        db.session.add(BiliVideoHistory(
-                            video_id=video.id,
-                            view_count=video_info.get('view_count', 0),
-                            like_count=video_info.get('like_count', 0),
-                            coin_count=video_info.get('coin_count', 0),
-                            favorite_count=video_info.get('favorite_count', 0),
-                            share_count=video_info.get('share_count', 0),
-                            comment_count=video_info.get('comment_count', 0),
-                            danmaku_count=video_info.get('danmaku_count', 0),
+                        db.session.add(BiliVideoHistory(video_id=v.id,
+                            view_count=api_info.get('view_count', 0),
+                            like_count=api_info.get('like_count', 0),
+                            coin_count=api_info.get('coin_count', 0),
+                            favorite_count=api_info.get('favorite_count', 0),
+                            share_count=api_info.get('share_count', 0),
+                            comment_count=api_info.get('comment_count', 0),
+                            danmaku_count=api_info.get('danmaku_count', 0),
                         ))
                         db.session.commit()
                     except Exception:
                         db.session.rollback()
+                    title = (api_info.get('title') or '')[:30]
+                    emit(f'[{count}] P1 {title} | 播放: {api_info.get("view_count", "?"):,}')
 
-                    title = (video_info.get('title') or '')[:30]
-                    emit(
-                        f'[{idx}] {title} | '
-                        f'播放: {video_info.get("view_count", "?"):,} | '
-                        f'点赞: {video_info.get("like_count", "?"):,} | '
-                        f'投币: {video_info.get("coin_count", "?"):,} | '
-                        f'收藏: {video_info.get("favorite_count", "?"):,} | '
-                        f'转发: {video_info.get("share_count", "?"):,} | '
-                        f'评论: {video_info.get("comment_count", "?"):,}'
-                    )
+            if max_videos is not None:
+                emit(f'本轮刷新完成，共处理 {count} 个视频')
 
             up.video_count = BiliVideo.query.filter_by(up_id=up.id).count()
             db.session.commit()
