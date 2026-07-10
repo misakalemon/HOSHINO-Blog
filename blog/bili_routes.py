@@ -304,6 +304,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
     with app.app_context():
         try:
             from blog.bilibili.bili_api import get_video_stat, get_user_info
+            import time
 
             emit('初始化数据库...')
             # 确保 UP 主存在 + 获取 UP 主信息
@@ -339,7 +340,6 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
                     db.session.commit()
 
             # 检查是否有视频未入库，从 API 补全
-            import time
             total_in_db = BiliVideo.query.filter_by(up_id=up.id).count()
             try:
                 total_in_api = ui.get('video_count', 0)
