@@ -264,7 +264,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
                         video = BiliVideo(up_id=up.id, **video_info)
                         db.session.add(video)
                         db.session.commit()
-                        count += 1
+                    count += 1
 
                     # 记录视频数据历史快照
                     try:
