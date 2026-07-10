@@ -328,8 +328,6 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
             import time
             from blog.bilibili.bili_api import _is_risk_control, get_video_stat, get_user_info
 
-            emit('初始化数据库...')
-
             up = BiliUp.query.filter_by(mid=mid).first()
             try:
                 ui = get_user_info(mid)
@@ -361,13 +359,15 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
                     db.session.commit()
                 _up_name[0] = up.name or str(mid)
 
+            emit('初始化数据库...')
+
             # 检查是否有视频未入库，从 API 补全
             total_in_db = BiliVideo.query.filter_by(up_id=up.id).count()
             try:
                 total_in_api = ui.get('video_count', 0)
             except NameError:
                 total_in_api = 0
-            if 0 < total_in_db < total_in_api:
+            if total_in_db == 0 or (total_in_db < total_in_api):
                 from blog.bilibili.bili_api import get_video_list as _get_video_list
                 existing_bvids = {r[0] for r in BiliVideo.query.with_entities(BiliVideo.bvid).filter_by(up_id=up.id).all()}
                 fill_count = 0
