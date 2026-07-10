@@ -295,10 +295,12 @@ def _run_bili_incremental_check(app):
         import logging
         logger = logging.getLogger(__name__)
         from blog.models import BiliUp
-        from blog.bili_routes import _check_new_videos
+        from blog.bili_routes import _check_new_videos, _scrape_progress, _scrape_running
 
         ups = BiliUp.query.all()
         for up in ups:
+            _scrape_progress[up.mid] = []
+            _scrape_running.add(up.mid)
             try:
                 _check_new_videos(up.mid, app)
             except Exception as e:

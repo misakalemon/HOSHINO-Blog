@@ -137,19 +137,22 @@ _scrape_progress: dict[int, list[str]] = {}
 def _check_new_videos(mid: int, app):
     """轻量增量检查：只爬取数据库中还不存在的新视频"""
     prog = _scrape_progress.get(mid, [])
+    _up_name = ['?']
     def emit(line: str):
-        prog.append(f'[{time.strftime("%H:%M:%S")}] {line}')
-        logger.info('[增量] %s', line)
+        prog.append(f'[{time.strftime("%H:%M:%S")}] [{_up_name[0]}] {line}')
+        logger.info('[%s] %s', _up_name[0], line)
 
     with app.app_context():
         try:
-            from blog.bilibili.bili_api import get_video_list, get_video_stat
             import datetime
             import time
+            from blog.bilibili.bili_api import get_video_list, get_video_stat
 
             up = BiliUp.query.filter_by(mid=mid).first()
             if not up:
+                _scrape_running.discard(mid)
                 return
+            _up_name[0] = up.name or str(mid)
 
             # 取数据库已有的 bvid 和 aid 集合
             existing_bvids = {r[0] for r in BiliVideo.query.with_entities(BiliVideo.bvid).filter_by(up_id=up.id).all()}
@@ -160,13 +163,10 @@ def _check_new_videos(mid: int, app):
                 bvid = video_info['bvid']
                 aid = video_info['aid']
                 if bvid in existing_bvids or aid in existing_aids:
-                    continue  # 已有则跳过
-                # 仅处理第一页（前 15 条），新视频永远在最前面
+                    continue
                 if idx > 15:
-                    emit('增量检查完成（仅检测最新 15 条）')
                     break
 
-                # 新视频：获取详细统计
                 try:
                     stat = get_video_stat(bvid)
                     video_info.update(stat)
@@ -203,7 +203,8 @@ def _check_new_videos(mid: int, app):
                 count += 1
                 existing_bvids.add(bvid)
                 existing_aids.add(aid)
-                emit(f'发现新视频 [{count}] {video_info.get("title", "")[:30]}')
+                title_short = (video_info.get('title') or '')[:30]
+                emit(f'发现新视频 [{count}] {title_short}')
 
             up.video_count = BiliVideo.query.filter_by(up_id=up.id).count()
             db.session.commit()
@@ -214,7 +215,17 @@ def _check_new_videos(mid: int, app):
             try:
                 latest = BiliVideo.query.filter_by(up_id=up.id)\
                     .order_by(BiliVideo.pubdate.desc()).limit(2).all()
+                if latest:
+                    emit(f'追踪最新 {len(latest)} 个视频统计')
                 for v in latest:
+                    old_view = v.view_count or 0
+                    old_like = v.like_count or 0
+                    old_coin = v.coin_count or 0
+                    old_fav = v.favorite_count or 0
+                    old_share = v.share_count or 0
+                    old_comment = v.comment_count or 0
+                    old_danmaku = v.danmaku_count or 0
+
                     stat = get_video_stat(v.bvid)
                     for key, val in stat.items():
                         setattr(v, key, val)
@@ -231,8 +242,17 @@ def _check_new_videos(mid: int, app):
                         danmaku_count=stat.get('danmaku_count', 0),
                     ))
                     db.session.commit()
-                    title = (v.title or '')[:30]
-                    emit(f'[跟踪] {title} | 播放: {stat.get("view_count", 0):,}')
+                    title_short = (v.title or '')[:30]
+                    nv = stat.get('view_count', 0)
+                    nl = stat.get('like_count', 0)
+                    nc = stat.get('coin_count', 0)
+                    nf = stat.get('favorite_count', 0)
+                    ns = stat.get('share_count', 0)
+                    ncm = stat.get('comment_count', 0)
+                    nd = stat.get('danmaku_count', 0)
+                    emit(f'[跟踪] 「{title_short}」')
+                    emit(f'  播放:{nv:,}(+{nv-old_view:,})  点赞:{nl:,}(+{nl-old_like:,})  投币:{nc:,}(+{nc-old_coin:,})  收藏:{nf:,}(+{nf-old_fav:,})')
+                    emit(f'  转发:{ns:,}(+{ns-old_share:,})  评论:{ncm:,}(+{ncm-old_comment:,})  弹幕:{nd:,}(+{nd-old_danmaku:,})')
                     time.sleep(7.0 + random.random() * 3.0)
             except Exception as e:
                 logger.error('最新视频追踪失败 mid=%d: %s', mid, e)
@@ -297,17 +317,18 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
         max_videos: 最多爬取视频数，None 表示全部
     """
     prog = _scrape_progress.get(mid, [])
+    _up_name = ['?']
     def emit(line: str):
-        prog.append(f'[{time.strftime("%H:%M:%S")}] {line}')
-        logger.info('%s', line)
+        prog.append(f'[{time.strftime("%H:%M:%S")}] [{_up_name[0]}] {line}')
+        logger.info('[%s] %s', _up_name[0], line)
 
     with app.app_context():
         try:
-            from blog.bilibili.bili_api import get_video_stat, get_user_info
+            import datetime
             import time
+            from blog.bilibili.bili_api import _is_risk_control, get_video_stat, get_user_info
 
             emit('初始化数据库...')
-            # 确保 UP 主存在 + 获取 UP 主信息
 
             up = BiliUp.query.filter_by(mid=mid).first()
             try:
@@ -325,19 +346,20 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
                     )
                     db.session.add(up)
                 db.session.commit()
-                # 记录粉丝数历史快照
                 try:
                     db.session.add(BiliUpHistory(up_id=up.id, follower_count=up.follower_count))
                     db.session.commit()
                 except Exception:
                     db.session.rollback()
-                emit(f'UP 主: {ui.get("name", "?")}  |  粉丝: {ui.get("follower_count", 0):,}  |  视频: {ui.get("video_count", 0)}')
+                _up_name[0] = ui.get('name', str(mid))
+                emit(f'UP主信息  |  粉丝: {ui.get("follower_count", 0):,}  |  视频总数: {ui.get("video_count", 0)}')
             except Exception as e:
                 emit(f'获取 UP 主信息失败: {e}')
                 if not up:
                     up = BiliUp(mid=mid, space_url=space_url)
                     db.session.add(up)
                     db.session.commit()
+                _up_name[0] = up.name or str(mid)
 
             # 检查是否有视频未入库，从 API 补全
             total_in_db = BiliVideo.query.filter_by(up_id=up.id).count()
@@ -350,6 +372,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
                 existing_bvids = {r[0] for r in BiliVideo.query.with_entities(BiliVideo.bvid).filter_by(up_id=up.id).all()}
                 fill_count = 0
                 need = total_in_api - total_in_db
+                emit(f'[补全] 发现 {need} 个缺失视频，开始补全...')
                 for video_info in _get_video_list(mid):
                     bvid = video_info['bvid']
                     if bvid in existing_bvids:
@@ -381,23 +404,32 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
                         db.session.rollback()
                     fill_count += 1
                     existing_bvids.add(bvid)
-                    title = (video_info.get('title') or '')[:30]
-                    emit(f'[补全] {fill_count}/{need} {title}')
+                    title_short = (video_info.get('title') or '')[:30]
+                    emit(f'[补全] ({fill_count}/{need}) 「{title_short}」')
                 if fill_count:
-                    emit(f'补全完成，新增 {fill_count} 个视频')
+                    emit(f'[补全] 完成，新增 {fill_count} 个视频')
 
             # 从 DB 按发布时间查视频 → 调 API 更新统计
-            import datetime
             count = 0
+            p0_done = 0
+            p1_done = 0
             retry_delay = 30
-            from blog.bilibili.bili_api import _is_risk_control
             now = datetime.datetime.utcnow()
             cutoff_p0 = now - datetime.timedelta(days=10)
             cutoff_p1 = now - datetime.timedelta(days=40)
 
             def _update_video(v, label=''):
-                nonlocal count, retry_delay
+                nonlocal count, retry_delay, p0_done, p1_done
                 bvid = v.bvid
+
+                old_view = v.view_count or 0
+                old_like = v.like_count or 0
+                old_coin = v.coin_count or 0
+                old_fav = v.favorite_count or 0
+                old_share = v.share_count or 0
+                old_comment = v.comment_count or 0
+                old_danmaku = v.danmaku_count or 0
+
                 try:
                     stat = get_video_stat(bvid)
                     retry_delay = 30
@@ -411,11 +443,17 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
                     logger.warning("视频 %s 统计获取失败: %s", bvid, e)
                     time.sleep(12.0)
                     return True
+
                 for key, val in stat.items():
                     setattr(v, key, val)
                 v.updated_at = datetime.datetime.utcnow()
                 db.session.commit()
                 count += 1
+                if label.startswith('P0'):
+                    p0_done += 1
+                elif label.startswith('P1'):
+                    p1_done += 1
+
                 try:
                     db.session.add(BiliVideoHistory(
                         video_id=v.id,
@@ -430,8 +468,18 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
                     db.session.commit()
                 except Exception:
                     db.session.rollback()
-                title = (v.title or '')[:30]
-                emit(f'[{count}] {label}{title} | 播放: {stat.get("view_count", 0):,}')
+
+                title_short = (v.title or '')[:30]
+                nv = stat.get('view_count', 0)
+                nl = stat.get('like_count', 0)
+                nc = stat.get('coin_count', 0)
+                nf = stat.get('favorite_count', 0)
+                ns = stat.get('share_count', 0)
+                ncm = stat.get('comment_count', 0)
+                nd = stat.get('danmaku_count', 0)
+                emit(f'[{count}] {label}「{title_short}」')
+                emit(f'  播放:{nv:,}(+{nv-old_view:,})  点赞:{nl:,}(+{nl-old_like:,})  投币:{nc:,}(+{nc-old_coin:,})  收藏:{nf:,}(+{nf-old_fav:,})')
+                emit(f'  转发:{ns:,}(+{ns-old_share:,})  评论:{ncm:,}(+{ncm-old_comment:,})  弹幕:{nd:,}(+{nd-old_danmaku:,})')
                 return True
 
             # P0: ≤10天（从 DB 查，全部处理）
@@ -439,6 +487,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
                 BiliVideo.up_id == up.id,
                 BiliVideo.pub_datetime >= cutoff_p0,
             ).order_by(BiliVideo.pubdate.desc()).all()
+            emit(f'P0 阶段: ≤10天视频共 {len(p0_videos)} 个')
             for v in p0_videos:
                 if max_videos is not None and count >= max_videos:
                     break
@@ -456,19 +505,18 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
                 ).order_by(BiliVideo.updated_at.asc())
                 if remaining is not None:
                     q = q.limit(remaining)
-                for v in q.all():
+                p1_videos = q.all()
+                emit(f'P1 阶段: 10~40天视频配额 {remaining} 个（DB中共 {len(p1_videos)} 个待更新）')
+                for v in p1_videos:
                     if remaining is not None and count >= max_videos:
                         break
                     ok = _update_video(v, 'P1 ')
                     if ok is False:
                         continue
 
-            if max_videos is not None:
-                emit(f'本轮刷新完成，共处理 {count} 个视频')
-
             up.video_count = BiliVideo.query.filter_by(up_id=up.id).count()
             db.session.commit()
-            emit(f'爬取完成，共获取 {count} 个视频数据')
+            emit(f'刷新完成  P0={p0_done}  P1={p1_done}  共 {count} 个  |  DB 总视频数: {up.video_count}')
 
         except Exception as e:
                 emit(f'爬取失败: {e}')
