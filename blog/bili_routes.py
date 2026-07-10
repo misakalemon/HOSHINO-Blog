@@ -131,6 +131,72 @@ _scrape_running: set[int] = set()
 _scrape_progress: dict[int, list[str]] = {}
 
 
+def _check_new_videos(mid: int, app):
+    """轻量增量检查：只爬取数据库中还不存在的新视频"""
+    prog = _scrape_progress.get(mid, [])
+    def emit(line: str):
+        prog.append(f'[{time.strftime("%H:%M:%S")}] {line}')
+        logger.info('[增量] %s', line)
+
+    with app.app_context():
+        try:
+            from blog.bilibili.bili_api import get_video_list, get_video_stat
+            import time
+
+            up = BiliUp.query.filter_by(mid=mid).first()
+            if not up:
+                return
+
+            # 取数据库已有的 bvid 集合
+            existing = {r[0] for r in BiliVideo.query.with_entities(BiliVideo.bvid).filter_by(up_id=up.id).all()}
+
+            count = 0
+            for idx, video_info in enumerate(get_video_list(mid), start=1):
+                bvid = video_info['bvid']
+                if bvid in existing:
+                    continue  # 已有则跳过
+
+                # 新视频：获取详细统计
+                try:
+                    stat = get_video_stat(bvid)
+                    video_info.update(stat)
+                    time.sleep(7.0 + random.random() * 3.0)
+                except Exception:
+                    time.sleep(12.0)
+
+                video = BiliVideo(up_id=up.id, **video_info)
+                db.session.add(video)
+                db.session.commit()
+
+                try:
+                    db.session.add(BiliVideoHistory(
+                        video_id=video.id,
+                        view_count=video_info.get('view_count', 0),
+                        like_count=video_info.get('like_count', 0),
+                        coin_count=video_info.get('coin_count', 0),
+                        favorite_count=video_info.get('favorite_count', 0),
+                        share_count=video_info.get('share_count', 0),
+                        comment_count=video_info.get('comment_count', 0),
+                        danmaku_count=video_info.get('danmaku_count', 0),
+                    ))
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+
+                count += 1
+                existing.add(bvid)
+                emit(f'发现新视频 [{count}] {video_info.get("title", "")[:30]}')
+
+            up.video_count = BiliVideo.query.filter_by(up_id=up.id).count()
+            db.session.commit()
+            if count:
+                emit(f'增量完成，新增 {count} 个视频')
+        except Exception as e:
+            logger.error('增量检查失败 mid=%d: %s', mid, e)
+        finally:
+            _scrape_running.discard(mid)
+
+
 @bili_bp.route('/scrape-status')
 @login_required
 def scrape_status():

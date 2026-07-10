@@ -48,10 +48,10 @@ def up_videos(up_id):
         query = query.filter(BiliVideo.title.contains(q))
     pagination = query.order_by(BiliVideo.pubdate.desc())\
         .paginate(page=page, per_page=per_page, error_out=False)
-    # 粉丝数变化历史（最近 10 条 + JSON 供图表）
+    # 粉丝数变化历史（最近 40 条 + JSON 供图表）
     import json
     follower_history = BiliUpHistory.query.filter_by(up_id=up_id)\
-        .order_by(BiliUpHistory.recorded_at.desc()).limit(10).all()
+        .order_by(BiliUpHistory.recorded_at.desc()).limit(300).all()
     follower_history.reverse()
     follower_chart_data = json.dumps([
         {'t': h.recorded_at.strftime('%m/%d %H:%M'), 'v': h.follower_count}
@@ -67,10 +67,10 @@ def video_detail(video_id):
     """视频详情页"""
     video = BiliVideo.query.get_or_404(video_id)
     up = BiliUp.query.get(video.up_id)
-    # 播放量变化历史（最近 10 条 + JSON 供图表）
+    # 播放量变化历史（最近 300 条 + JSON 供图表）
     import json
     view_history = BiliVideoHistory.query.filter_by(video_id=video_id)\
-        .order_by(BiliVideoHistory.recorded_at.desc()).limit(10).all()
+        .order_by(BiliVideoHistory.recorded_at.desc()).limit(300).all()
     view_history.reverse()
     view_chart_data = json.dumps([
         {'t': h.recorded_at.strftime('%m/%d %H:%M'), 'v': h.view_count}

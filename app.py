@@ -222,8 +222,16 @@ def _init_scheduler(app):
             id='daily_bili_refresh',
             replace_existing=True,
         )
+        # 每 30 分钟增量检查 B站 新视频
+        scheduler.add_job(
+            func=lambda: _run_bili_incremental_check(app),
+            trigger='interval',
+            minutes=30,
+            id='bili_incremental_check',
+            replace_existing=True,
+        )
         scheduler.start()
-        app.logger.info('定时任务已启动: 每天 09:00 价格爬取 / 每天 03:00 SECRET_KEY 轮换 / 每天 02:00 B站数据刷新')
+        app.logger.info('定时任务: 09:00价格 / 03:00密钥 / 02:00B站全量 / 每30minB站增量')
     except Exception as e:
         app.logger.warning('定时任务启动失败（不影响运行）: %s', e)
 
@@ -253,6 +261,22 @@ def _run_daily_bili_refresh(app):
             except Exception as e:
                 logger.error('B站 刷新失败: mid=%d, %s', up.mid, e)
         logger.info('B站 每日刷新完成')
+
+
+def _run_bili_incremental_check(app):
+    """每 30 分钟增量检查所有 UP 主是否有新视频"""
+    with app.app_context():
+        import logging
+        logger = logging.getLogger(__name__)
+        from blog.models import BiliUp
+        from blog.bili_routes import _check_new_videos
+
+        ups = BiliUp.query.all()
+        for up in ups:
+            try:
+                _check_new_videos(up.mid, app)
+            except Exception as e:
+                logger.error('B站 增量检查失败: mid=%d, %s', up.mid, e)
 
 
 if __name__ == '__main__':
