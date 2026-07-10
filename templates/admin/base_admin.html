@@ -118,7 +118,6 @@ function openCropModal(file, callback) {
     { label: '9:16', w: 9, h: 16 },
     { label: '1.91:1', w: 1.91, h: 1 },
   ];
-  var activeRatio = RATIOS[0];
   var filename = file.name || 'image.png';
 
   // --- 构建 DOM ---
@@ -348,7 +347,6 @@ function openCropModal(file, callback) {
     btn.className = 'crop-ratio-btn' + (idx === 0 ? ' active' : '');
     btn.textContent = r.label;
     btn.onclick = function() {
-      activeRatio = r;
       ratiosEl.querySelectorAll('.crop-ratio-btn').forEach(function(b) { b.classList.remove('active'); });
       btn.classList.add('active');
       if (r.w === 0) {
@@ -549,16 +547,11 @@ function openCropModal(file, callback) {
       btn.disabled = false; btn.classList.remove('loading');
     }
 
-    var vpRect = viewport.getBoundingClientRect();
-    var boxRect = cropBox.getBoundingClientRect();
-    var left = boxRect.left - vpRect.left;
-    var top = boxRect.top - vpRect.top;
-    var right = boxRect.right - vpRect.left;
-    var bottom = boxRect.bottom - vpRect.top;
-    var boxW = right - left, boxH = bottom - top;
+    var vp = getVp();
+    var left = st.cropLeft, top = st.cropTop;
+    var boxW = st.cropW, boxH = st.cropH;
     if (boxW < 2 || boxH < 2) { restoreBtn(); showToast('裁剪区域过小', 'error'); return; }
 
-    var vp = getVp();
     var W = st.imgW, H = st.imgH;
     var scale = st.scale, tx = st.tx, ty = st.ty;
     var imgLeft = vp.w / 2 + tx - W * scale / 2;
