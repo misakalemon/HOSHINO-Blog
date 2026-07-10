@@ -144,6 +144,7 @@ def _check_new_videos(mid: int, app):
     with app.app_context():
         try:
             from blog.bilibili.bili_api import get_video_list, get_video_stat
+            import datetime
             import time
 
             up = BiliUp.query.filter_by(mid=mid).first()
@@ -208,6 +209,33 @@ def _check_new_videos(mid: int, app):
             db.session.commit()
             if count:
                 emit(f'增量完成，新增 {count} 个视频')
+
+            # ── 追踪最新 2 个视频的统计（每 30 分钟快照）──
+            try:
+                latest = BiliVideo.query.filter_by(up_id=up.id)\
+                    .order_by(BiliVideo.pubdate.desc()).limit(2).all()
+                for v in latest:
+                    stat = get_video_stat(v.bvid)
+                    for key, val in stat.items():
+                        setattr(v, key, val)
+                    v.updated_at = datetime.datetime.utcnow()
+                    db.session.commit()
+                    db.session.add(BiliVideoHistory(
+                        video_id=v.id,
+                        view_count=stat.get('view_count', 0),
+                        like_count=stat.get('like_count', 0),
+                        coin_count=stat.get('coin_count', 0),
+                        favorite_count=stat.get('favorite_count', 0),
+                        share_count=stat.get('share_count', 0),
+                        comment_count=stat.get('comment_count', 0),
+                        danmaku_count=stat.get('danmaku_count', 0),
+                    ))
+                    db.session.commit()
+                    title = (v.title or '')[:30]
+                    emit(f'[跟踪] {title} | 播放: {stat.get("view_count", 0):,}')
+                    time.sleep(7.0 + random.random() * 3.0)
+            except Exception as e:
+                logger.error('最新视频追踪失败 mid=%d: %s', mid, e)
         except Exception as e:
             logger.error('增量检查失败 mid=%d: %s', mid, e)
         finally:
