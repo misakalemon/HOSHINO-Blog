@@ -227,8 +227,6 @@ def _run_scrape(mid: int, space_url: str, app):
             for idx, video_info in enumerate(get_video_list(mid), start=1):
                     bvid = video_info['bvid']
                     exists = BiliVideo.query.filter_by(bvid=bvid).first()
-                    if exists:
-                        continue
 
                     # 获取详细统计（带指数退避防封）
                     try:
@@ -245,9 +243,19 @@ def _run_scrape(mid: int, space_url: str, app):
                         logger.warning("视频 %s 统计获取失败: %s", bvid, e)
                         time.sleep(12.0)
 
-                    video = BiliVideo(up_id=up.id, **video_info)
-                    db.session.add(video)
-                    db.session.commit()
+                    if exists:
+                        # 已有视频：更新统计数据 + 追加历史快照
+                        for key, value in video_info.items():
+                            setattr(exists, key, value)
+                        video = exists
+                        db.session.commit()
+                    else:
+                        # 新视频：创建记录
+                        video = BiliVideo(up_id=up.id, **video_info)
+                        db.session.add(video)
+                        db.session.commit()
+                        count += 1
+
                     # 记录视频数据历史快照
                     try:
                         db.session.add(BiliVideoHistory(
@@ -263,7 +271,6 @@ def _run_scrape(mid: int, space_url: str, app):
                         db.session.commit()
                     except Exception:
                         db.session.rollback()
-                    count += 1
 
                     title = (video_info.get('title') or '')[:30]
                     emit(
