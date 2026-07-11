@@ -159,13 +159,11 @@ def _check_new_videos(mid: int, app):
             existing_aids = {r[0] for r in BiliVideo.query.with_entities(BiliVideo.aid).filter_by(up_id=up.id).all()}
 
             count = 0
-            for idx, video_info in enumerate(get_video_list(mid), start=1):
+            for video_info in get_video_list(mid):
                 bvid = video_info['bvid']
                 aid = video_info['aid']
-                if idx > 15:
-                    break
                 if bvid in existing_bvids or aid in existing_aids:
-                    continue
+                    break
 
                 try:
                     stat = get_video_stat(bvid)
