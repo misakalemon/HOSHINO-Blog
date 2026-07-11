@@ -162,10 +162,10 @@ def _check_new_videos(mid: int, app):
             for idx, video_info in enumerate(get_video_list(mid), start=1):
                 bvid = video_info['bvid']
                 aid = video_info['aid']
-                if bvid in existing_bvids or aid in existing_aids:
-                    continue
                 if idx > 15:
                     break
+                if bvid in existing_bvids or aid in existing_aids:
+                    continue
 
                 try:
                     stat = get_video_stat(bvid)
