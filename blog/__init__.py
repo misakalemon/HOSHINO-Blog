@@ -105,6 +105,9 @@ def init_db(app):
         # ── 迁移 BiliVideo 表新增字段 ──────────────
         _migrate_bili_video_fields(app)
 
+        # ── 迁移 BiliVideo/BiliVideoHistory 复合索引 ─
+        _migrate_bili_indexes(app)
+
         # ── 添加示例价格追踪商品（首次启动） ─────
         from .crawler import init_sample_products
         init_sample_products()
@@ -314,6 +317,36 @@ def _migrate_bili_video_fields(app):
         except Exception as e:
             db.session.rollback()
             app.logger.warning('迁移: 添加 bili_videos.pub_datetime 列失败: %s', e)
+
+
+def _migrate_bili_indexes(app):
+    """迁移：为 BiliVideo/BiliVideoHistory 表添加复合索引。"""
+    engine = db.get_engine()
+    inspector = db.inspect(engine)
+    dialect = engine.dialect.name
+    if dialect != 'mysql':
+        return
+    from sqlalchemy import text
+
+    existing = {ix['name'] for ix in inspector.get_indexes('bili_videos')}
+    existing.update(ix['name'] for ix in inspector.get_indexes('bili_video_history'))
+
+    index_defs = {
+        'ix_bili_video_up_pubdatetime': 'CREATE INDEX ix_bili_video_up_pubdatetime ON bili_videos (up_id, pub_datetime)',
+        'ix_bili_video_up_updated': 'CREATE INDEX ix_bili_video_up_updated ON bili_videos (up_id, updated_at)',
+        'ix_bili_video_history_video_recorded': 'CREATE INDEX ix_bili_video_history_video_recorded ON bili_video_history (video_id, recorded_at)',
+    }
+
+    for name, ddl in index_defs.items():
+        if name in existing:
+            continue
+        try:
+            db.session.execute(text(ddl))
+            db.session.commit()
+            app.logger.info('迁移: 已添加 %s 索引', name)
+        except Exception as e:
+            db.session.rollback()
+            app.logger.warning('迁移: 添加 %s 索引失败: %s', name, e)
 
 
 # ── 后导入路由（延迟导入） ─────────────────────

@@ -399,6 +399,10 @@ class BiliUp(db.Model):
 class BiliVideo(db.Model):
     """B站视频数据"""
     __tablename__ = 'bili_videos'
+    __table_args__ = (
+        db.Index('ix_bili_video_up_pubdatetime', 'up_id', 'pub_datetime'),
+        db.Index('ix_bili_video_up_updated', 'up_id', 'updated_at'),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     up_id = db.Column(db.Integer, db.ForeignKey('bili_ups.id'), nullable=False, index=True)
@@ -449,6 +453,9 @@ class BiliUpHistory(db.Model):
 class BiliVideoHistory(db.Model):
     """视频统计数据历史快照"""
     __tablename__ = 'bili_video_history'
+    __table_args__ = (
+        db.Index('ix_bili_video_history_video_recorded', 'video_id', 'recorded_at'),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     video_id = db.Column(db.Integer, db.ForeignKey('bili_videos.id'), nullable=False, index=True)
