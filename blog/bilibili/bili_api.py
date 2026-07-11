@@ -97,13 +97,20 @@ def get_user_info(mid: int) -> dict:
     }
 
 
-def get_video_list(mid: int) -> Generator[dict, None, None]:
-    """获取指定 mid 的所有视频基本信息（分页迭代，含风控指数退避）"""
+def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, None, None]:
+    """获取指定 mid 的所有视频基本信息（分页迭代，含风控指数退避）
+    
+    Args:
+        mid: B站 mid
+        max_pages: 最多翻页数，None 表示全部
+    """
     u = _user_mod.User(mid, credential=_credential)
     pn = 1
     retry_delay = 30
 
     while True:
+        if max_pages is not None and pn > max_pages:
+            break
         logger.info("正在获取第 %d 页视频列表 ...", pn)
         try:
             data = _sync(u.get_videos(ps=PAGE_SIZE, pn=pn))

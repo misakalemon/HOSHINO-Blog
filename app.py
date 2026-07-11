@@ -226,7 +226,7 @@ def _init_scheduler(app):
             id='rotate_secret_key',
             replace_existing=True,
         )
-        # 每天 02:00 重新爬取所有 B站 UP 主视频
+        # 每天 02:00 深扫所有 UP 主 Hot/Warm/Cold 三层数据
         scheduler.add_job(
             func=lambda: _run_daily_bili_refresh(app),
             trigger='cron',
@@ -245,8 +245,17 @@ def _init_scheduler(app):
             misfire_grace_time=600,
             coalesce=True,
         )
+        # 每天 04:00 清理 90 天前的 B站 视频历史
+        scheduler.add_job(
+            func=lambda: _clean_bili_history(app),
+            trigger='cron',
+            hour=4,
+            minute=0,
+            id='clean_bili_history',
+            replace_existing=True,
+        )
         scheduler.start()
-        app.logger.info('定时任务: 09:00价格 / 03:00密钥 / 02:00B站全量 / 每30minB站增量')
+        app.logger.info('定时任务: 09:00价格 / 03:00密钥 / 每30minB站增量 / 02:00B站深扫 / 04:00清理历史')
     except Exception as e:
         app.logger.warning('定时任务启动失败（不影响运行）: %s', e)
 
@@ -327,6 +336,19 @@ def _run_bili_incremental_check(app):
 
         for t in threads:
             t.join()
+
+
+def _clean_bili_history(app):
+    """清理 90 天前的 B站 视频历史快照"""
+    with app.app_context():
+        from blog import db
+        from blog.models import BiliVideoHistory
+        from datetime import datetime, timedelta
+        cutoff = datetime.utcnow() - timedelta(days=90)
+        deleted = BiliVideoHistory.query.filter(BiliVideoHistory.recorded_at < cutoff).delete()
+        db.session.commit()
+        if deleted:
+            app.logger.info('清理 B站 视频历史: 删除 %d 条 90 天前的记录', deleted)
 
 
 if __name__ == '__main__':
