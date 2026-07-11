@@ -215,10 +215,15 @@ def _check_new_videos(mid: int, app):
             existing_aids = {r[0] for r in BiliVideo.query.with_entities(BiliVideo.aid).filter_by(up_id=up.id).all()}
 
             count = 0
+            page_count = 0
             for video_info in get_video_list(mid):
                 bvid = video_info['bvid']
                 aid = video_info['aid']
                 if bvid in existing_bvids or aid in existing_aids:
+                    break
+                # 限制最多 2 页，防止大 UP 主第一页全为新视频时遍历过多
+                page_count += 1
+                if page_count > 30:
                     break
 
                 try:
@@ -452,9 +457,14 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                         logger.warning("视频 %s 补全时统计获取失败", bvid)
                         time.sleep(12.0)
                         continue
-                    video = BiliVideo(up_id=up.id, **video_info)
-                    db.session.add(video)
-                    db.session.commit()
+                    try:
+                        video = BiliVideo(up_id=up.id, **video_info)
+                        db.session.add(video)
+                        db.session.commit()
+                    except Exception as e:
+                        db.session.rollback()
+                        logger.warning("视频 %s 入库失败（可能重复）: %s", bvid, e)
+                        continue
                     try:
                         db.session.add(BiliVideoHistory(
                             video_id=video.id,
@@ -480,6 +490,8 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                     emit(f'[补全] 完成，新增 {fill_count} 个视频')
 
             # 从 DB 按发布时间查视频 → 调 API 更新统计
+            # 记录补全阶段已处理的视频，避免 P0/P1 重复
+            filled_bvids = set(existing_ids) if fill_count else set()
             count = 0
             p0_done = 0
             p1_done = 0
@@ -557,11 +569,14 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                 emit(f'  转发:{ns:,}(+{ns-old_share:,})  评论:{ncm:,}(+{ncm-old_comment:,})  弹幕:{nd:,}(+{nd-old_danmaku:,})')
                 return True
 
-            # P0: ≤10天（从 DB 查，全部处理）
-            p0_videos = BiliVideo.query.filter(
+            # P0: ≤10天（从 DB 查，全部处理，排除补全阶段已处理的）
+            p0_query = BiliVideo.query.filter(
                 BiliVideo.up_id == up.id,
                 BiliVideo.pub_datetime >= cutoff_p0,
-            ).order_by(BiliVideo.pubdate.desc()).all()
+            )
+            if filled_bvids:
+                p0_query = p0_query.filter(~BiliVideo.bvid.in_(filled_bvids))
+            p0_videos = p0_query.order_by(BiliVideo.pubdate.desc()).all()
             emit(f'P0 阶段: ≤10天视频共 {len(p0_videos)} 个')
             for v in p0_videos:
                 if max_videos is not None and count >= max_videos:
