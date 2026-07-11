@@ -30,14 +30,19 @@ ERROR_LOG_FILE = os.path.join(LOG_DIR, 'error.log')
 
 # 日志格式
 #   DETAILED_FORMAT — 文件日志：包含时间、级别、模块名、函数名、行号
-#   CONSOLE_FORMAT  — 终端日志：仅时间、级别、消息（更简洁）
+#   CONSOLE_FORMAT  — 终端日志：带颜色，更易读
 DETAILED_FORMAT = (
     '[%(asctime)s] %(levelname)-8s '
     '[%(name)s:%(funcName)s:%(lineno)d] '
     '%(message)s'
 )
-CONSOLE_FORMAT = '[%(asctime)s] %(levelname)-8s %(message)s'
-DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
+# 终端日志：带颜色区分级别，更紧凑
+CONSOLE_FORMAT = (
+    '%(asctime)s  '
+    '%(levelname)-7s  '
+    '%(message)s'
+)
+DATE_FORMAT = '%m/%d %H:%M:%S'
 
 
 def setup_logging(app):
@@ -192,10 +197,8 @@ def log_request(response):
 
     # 格式化的日志消息
     msg = (
-        f"{extra['ip']:>15} "
-        f"{extra['method']:<7} "
-        f"{extra['status']} "
-        f"{extra['path']:<40} "
+        f"{extra['ip']:>15} {extra['method']:<7} "
+        f"{extra['status']}  {extra['path']:<40} "
         f"{extra['user_agent']}"
     )
 
