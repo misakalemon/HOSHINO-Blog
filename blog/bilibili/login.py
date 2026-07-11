@@ -20,14 +20,48 @@ _BILI_LOGGED_IN = False
 # ── V2：基于官方库的二维码登录 ──────────────
 # 使用 bilibili-api-python 的 QrCodeLogin，自动处理 token 交换和字段填充
 
+def _get_qr_key(qr):
+    """兼容获取 QR 内部属性（库版本不同时属性名可能变化）"""
+    try:
+        return qr.get_qrcode_key()
+    except AttributeError:
+        pass
+    for attr in ('_QrCodeLogin__qr_key', '_QrLogin__qr_key', '_qr_key'):
+        val = getattr(qr, attr, None)
+        if val is not None:
+            return val
+    raise RuntimeError('无法获取二维码 key（库版本不兼容）')
+
+
+def _get_qr_link(qr):
+    """兼容获取 QR 链接"""
+    try:
+        return qr.get_qrcode_link()
+    except AttributeError:
+        pass
+    for attr in ('_QrCodeLogin__qr_link', '_QrLogin__qr_link', '_qr_link'):
+        val = getattr(qr, attr, None)
+        if val is not None:
+            return val
+    raise RuntimeError('无法获取二维码链接（库版本不兼容）')
+
+
+def _set_qr_key(qr, key):
+    """兼容设置 QR key"""
+    for attr in ('_QrCodeLogin__qr_key', '_QrLogin__qr_key', '_qr_key'):
+        if hasattr(qr, attr):
+            setattr(qr, attr, key)
+            return
+    raise RuntimeError('无法设置二维码 key（库版本不兼容）')
+
+
 def generate_qr_v2() -> dict:
     """使用官方库生成二维码，返回 { qrcode_key, img }"""
     import io, base64, qrcode as qrcode_lib
     qr = QrCodeLogin()
     sync(qr.generate_qrcode())
-    # 从内部属性获取二维码数据
-    qrcode_key = qr._QrCodeLogin__qr_key
-    qr_url = qr._QrCodeLogin__qr_link
+    qrcode_key = _get_qr_key(qr)
+    qr_url = _get_qr_link(qr)
     logger.info("V2 二维码已生成, key=%s", qrcode_key)
     # 生成 base64 PNG 图片
     img = qrcode_lib.make(qr_url)
@@ -40,7 +74,7 @@ def generate_qr_v2() -> dict:
 def poll_qr_v2(qrcode_key: str) -> dict:
     """轮询扫码状态，使用官方库"""
     qr = QrCodeLogin()
-    qr._QrCodeLogin__qr_key = qrcode_key
+    _set_qr_key(qr, qrcode_key)
     try:
         status = sync(qr.check_state())
     except Exception as e:

@@ -193,6 +193,9 @@ class Post(db.Model):
     slug 用于 URL 友好访问，必须唯一。
     """
     __tablename__ = 'posts'
+    __table_args__ = (
+        db.Index('ix_post_fulltext', 'title', 'content', mysql_prefix='FULLTEXT'),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(256), nullable=False)      # 文章标题
@@ -203,10 +206,10 @@ class Post(db.Model):
     author_id = db.Column(                                  # 作者（外键 → users.id）
         db.Integer, db.ForeignKey('users.id'), nullable=False
     )
-    is_published = db.Column(db.Boolean, default=False)    # 是否已发布
+    is_published = db.Column(db.Boolean, default=False, index=True)    # 是否已发布
 
     # ── 时间戳 ──────────────────────────────────
-    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, index=True)
     updated_at = db.Column(
         db.DateTime,
         default=datetime.datetime.utcnow,

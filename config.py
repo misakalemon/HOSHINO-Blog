@@ -35,17 +35,23 @@ SECRET_KEY_MAX_HISTORY = 10  # 最多保留 10 个历史密钥
 def _load_secret_keys():
     """从文件加载所有历史密钥，返回列表（最新在前）。"""
     if os.path.exists(SECRET_KEYS_FILE):
-        with open(SECRET_KEYS_FILE) as f:
-            keys = json.load(f)
-            if isinstance(keys, list) and all(isinstance(k, str) for k in keys):
-                return keys
+        try:
+            with open(SECRET_KEYS_FILE) as f:
+                keys = json.load(f)
+                if isinstance(keys, list) and all(isinstance(k, str) for k in keys):
+                    return keys
+        except (json.JSONDecodeError, OSError):
+            pass
     return []
 
 
 def _save_secret_keys(keys):
     """将密钥列表持久化到文件。"""
-    with open(SECRET_KEYS_FILE, 'w') as f:
-        json.dump(keys, f)
+    try:
+        with open(SECRET_KEYS_FILE, 'w') as f:
+            json.dump(keys, f)
+    except OSError:
+        pass
 
 
 def _ensure_initial_key():

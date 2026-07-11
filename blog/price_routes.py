@@ -134,12 +134,18 @@ def api_history(id):
     since = datetime.datetime.utcnow() - datetime.timedelta(days=days)
 
     sources_data = []
-    for source in product.sources:
-        records = PriceRecord.query.filter(
-            PriceRecord.source_id == source.id,
+    source_ids = [s.id for s in product.sources]
+    records_by_source = {sid: [] for sid in source_ids}
+    if source_ids:
+        all_records = PriceRecord.query.filter(
+            PriceRecord.source_id.in_(source_ids),
             PriceRecord.recorded_at >= since
         ).order_by(PriceRecord.recorded_at.asc()).all()
+        for r in all_records:
+            records_by_source.setdefault(r.source_id, []).append(r)
 
+    for source in product.sources:
+        records = records_by_source.get(source.id, [])
         prices = [
             {
                 'date': r.recorded_at.strftime('%Y-%m-%d %H:%M'),
@@ -198,6 +204,9 @@ def manual_price():
 
     if not product_id or not price:
         flash('请填写完整信息', 'error')
+        return redirect(url_for('price.index'))
+    if price <= 0 or price > 1_000_000_000:
+        flash('价格超出有效范围（0 ~ 10亿）', 'error')
         return redirect(url_for('price.index'))
 
     product = Product.query.get_or_404(product_id)

@@ -46,6 +46,7 @@ HOSHINO Blog — 管理后台路由
 import datetime
 import logging
 import os
+import threading
 import time
 import uuid
 from collections import defaultdict
@@ -153,6 +154,7 @@ def debug_info():
 
 # 登录频率限制（简易内存实现：每 IP 每分钟最多 10 次）
 _login_attempts = defaultdict(list)
+_login_attempts_lock = threading.Lock()
 LOGIN_RATE_LIMIT = 10
 LOGIN_RATE_WINDOW = 60
 
@@ -176,10 +178,11 @@ def login():
 
     ip = request.remote_addr or 'unknown'
     now = time.time()
-    _login_attempts[ip] = [t for t in _login_attempts[ip] if now - t < LOGIN_RATE_WINDOW]
-    if len(_login_attempts[ip]) >= LOGIN_RATE_LIMIT:
-        flash('登录尝试过于频繁，请稍后再试', 'error')
-        return render_template('admin/login.html', form=LoginForm())
+    with _login_attempts_lock:
+        _login_attempts[ip] = [t for t in _login_attempts[ip] if now - t < LOGIN_RATE_WINDOW]
+        if len(_login_attempts[ip]) >= LOGIN_RATE_LIMIT:
+            flash('登录尝试过于频繁，请稍后再试', 'error')
+            return render_template('admin/login.html', form=LoginForm())
 
     form = LoginForm()
     if form.validate_on_submit():
@@ -188,17 +191,20 @@ def login():
             if not user.is_active:
                 flash('账号已被禁用，请联系管理员', 'error')
                 return render_template('admin/login.html', form=form)
-            _login_attempts[ip] = []
+            with _login_attempts_lock:
+                _login_attempts[ip] = []
             user.last_login_at = datetime.datetime.utcnow()
             user.last_login_ip = ip
             user.login_count = (user.login_count or 0) + 1
             db.session.commit()
             session.permanent = True
+            session.regenerate()
             login_user(user)
             if user.is_editor:
                 return redirect(url_for('admin.dashboard'))
             return redirect(url_for('admin.profile'))
-        _login_attempts[ip].append(now)
+        with _login_attempts_lock:
+            _login_attempts[ip].append(now)
         flash('用户名或密码错误', 'error')
     return render_template('admin/login.html', form=form)
 
@@ -594,7 +600,8 @@ def delete_category(id):
     """
     cat = Category.query.get_or_404(id)
     # 遍历所有包含此分类的文章，解除关联
-    for post in Post.query.filter(Post.categories.any(id=id)).all():
+    from sqlalchemy.orm import joinedload
+    for post in Post.query.options(joinedload(Post.categories)).filter(Post.categories.any(id=id)).all():
         post.categories = [c for c in post.categories if c.id != id]
     db.session.delete(cat)
     db.session.commit()
@@ -903,14 +910,34 @@ def upload_image():
     ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'png'
     if ext not in ('png', 'jpg', 'jpeg', 'gif', 'webp'):
         return jsonify({'error': '不支持的格式'}), 400
-    # 使用 PIL 重新编码图片（统一质量控制）
+    # 校验 Magic Bytes（防止改名绕过）
     import io as _io
-
-    from PIL import Image
-    img = Image.open(file)
-    buf = _io.BytesIO()
-    img.save(buf, 'JPEG' if ext in ('jpg', 'jpeg') else 'PNG', quality=85, optimize=True)
-    buf.seek(0)
+    magic = file.read(8)
+    file.seek(0)
+    is_valid_magic = (
+        magic.startswith(b'\x89PNG') or
+        magic.startswith(b'\xff\xd8') or
+        magic.startswith(b'GIF87a') or
+        magic.startswith(b'GIF89a') or
+        magic.startswith(b'RIFF')
+    )
+    if not is_valid_magic:
+        return jsonify({'error': '文件内容不是有效的图片'}), 400
+    # 使用 PIL 重新编码图片（统一质量控制）
+    try:
+        from PIL import Image
+        img = Image.open(file)
+        img.verify()
+        file.seek(0)
+        img = Image.open(file)
+    except Exception:
+        return jsonify({'error': '无法解析图片文件'}), 400
+    try:
+        buf = _io.BytesIO()
+        img.save(buf, 'JPEG' if ext in ('jpg', 'jpeg') else 'PNG', quality=85, optimize=True)
+        buf.seek(0)
+    except Exception:
+        return jsonify({'error': '图片处理失败'}), 400
     # 生成 UUID 文件名，避免路径冲突
     filename = str(uuid.uuid4()) + '.' + ext
     from flask import current_app

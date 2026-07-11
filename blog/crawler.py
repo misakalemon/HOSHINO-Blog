@@ -20,6 +20,7 @@ HOSHINO Blog — 价格数据模块
 import datetime
 import logging
 import os
+import threading
 from concurrent.futures import ThreadPoolExecutor
 
 from .models import ExchangeRate, PriceRecord, Product, ProductSource, db
@@ -27,6 +28,7 @@ from .models import ExchangeRate, PriceRecord, Product, ProductSource, db
 logger = logging.getLogger(__name__)
 
 _exa_client = None
+_exa_client_lock = threading.Lock()
 
 
 def _try_source(source_fn, source_label, product_name, product_id):
@@ -42,7 +44,8 @@ def _try_source(source_fn, source_label, product_name, product_id):
 def _fetch_price(product):
     from .apify_client import scraper
 
-    exa_client = _exa_client
+    with _exa_client_lock:
+        exa_client = _exa_client
 
     source_label = None
     price = None
@@ -83,15 +86,15 @@ def crawl_all_active_sources():
     fetched_by_source = {}
 
     global _exa_client
-    _exa_client = getattr(current_app, 'exa_client', None)
+    with _exa_client_lock:
+        _exa_client = getattr(current_app, 'exa_client', None)
 
     products = Product.query.all()
     total = len(products)
 
     cpu_count = os.cpu_count() or 4
     max_workers = min(total, cpu_count * 4)
-    ready_sources = []
-    if True:                   ready_sources.append('Amazon直爬')
+    ready_sources = ['Amazon直爬']
     if _exa_client and _exa_client._ready: ready_sources.append('Exa')
     logger.info(
         '━ 开始爬取全部 %d 个商品 ━━━━━━━━━━━━━━━━━━━━━━\n'
@@ -103,13 +106,18 @@ def crawl_all_active_sources():
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         results = list(pool.map(_fetch_price, products))
 
+    # 批量预取所有 ProductSource，避免 N+1
+    product_ids = [p.id for p in products]
+    all_sources = ProductSource.query.filter(
+        ProductSource.product_id.in_(product_ids)
+    ).all()
+    source_lookup = {(s.product_id, s.site): s for s in all_sources}
+
     for product, r in zip(products, results):
         if r is not None:
             price, label, site = r
             fetched_by_source[label] = fetched_by_source.get(label, 0) + 1
-            source = ProductSource.query.filter_by(
-                product_id=product.id, site=site
-            ).first()
+            source = source_lookup.get((product.id, site))
             if not source:
                 source = ProductSource(
                     product_id=product.id, site=site,
@@ -117,6 +125,7 @@ def crawl_all_active_sources():
                 )
                 db.session.add(source)
                 db.session.flush()
+                source_lookup[(product.id, site)] = source
             source.latest_price = price
             pending_records.append(
                 PriceRecord(source_id=source.id, product_id=product.id, price=price)

@@ -62,11 +62,13 @@ def create_app():
     os.environ['MAX_CONTENT_LENGTH'] = str(200 * 1024 * 1024)
     # 静态文件缓存 — 7 天（文件内容变更时手动清浏览器缓存即可）
     app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 604800
-    # 数据库连接池配置
+    # 数据库连接池配置（B站爬取并发高，池子设大些）
+    # 保留 config.py 中的 pool_pre_ping 设置
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'pool_pre_ping': True,
         'pool_recycle': 280,
         'pool_timeout': 30,
-        'pool_size': 10,
+        'pool_size': 20,
         'max_overflow': 20,
     }
 
@@ -283,17 +285,19 @@ def _run_daily_bili_refresh(app):
         from blog.models import BiliUp
         from blog.bili_routes import _run_scrape, _scrape_progress, _scrape_running
 
+        from blog.bili_routes import _scrape_lock
         ups = BiliUp.query.all()
         logger.info('B站 每日刷新启动: 共 %d 个 UP 主', len(ups))
 
         threads = []
         for up in ups:
             mid = up.mid
-            if mid in _scrape_running:
-                logger.warning('B站 每日刷新跳过 mid=%d（正在爬取中）', mid)
-                continue
-            _scrape_progress[mid] = []
-            _scrape_running.add(mid)
+            with _scrape_lock:
+                if mid in _scrape_running:
+                    logger.warning('B站 每日刷新跳过 mid=%d（正在爬取中）', mid)
+                    continue
+                _scrape_progress[mid] = []
+                _scrape_running.add(mid)
             t = threading.Thread(
                 target=_run_scrape,
                 args=(mid, up.space_url, app),
@@ -320,16 +324,17 @@ def _run_bili_incremental_check(app):
         logger = logging.getLogger(__name__)
         from blog.models import BiliUp
         from blog.bili_routes import (_check_new_videos, _scrape_progress,
-                                       _incremental_running)
+                                       _incremental_running, _scrape_lock)
 
         ups = BiliUp.query.all()
         threads = []
         for up in ups:
             mid = up.mid
-            if mid in _incremental_running:
-                continue
-            _scrape_progress[mid] = []
-            _incremental_running.add(mid)
+            with _scrape_lock:
+                if mid in _incremental_running:
+                    continue
+                _scrape_progress[mid] = []
+                _incremental_running.add(mid)
             t = threading.Thread(
                 target=_check_new_videos,
                 args=(mid, app),
@@ -344,7 +349,7 @@ def _run_bili_incremental_check(app):
 
 
 def _clean_bili_history(app):
-    """清理 90 天前的 B站 视频历史快照"""
+    """清理 365 天前的 B站 视频历史快照"""
     with app.app_context():
         from blog import db
         from blog.models import BiliVideoHistory

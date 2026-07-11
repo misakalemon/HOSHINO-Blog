@@ -18,22 +18,37 @@ logger = logging.getLogger(__name__)
 
 _credential: Credential | None = None
 
-# 共享事件循环 — 避免每次 async 调用都创建新循环
-_shared_loop: asyncio.AbstractEventLoop | None = None
-_loop_lock = threading.Lock()
+# 按线程隔离的事件循环（每个线程独立，不互相干扰）
+_loop_local = threading.local()
 
 # 并发信号量 — 限制同时发往 B 站 API 的请求数，防风控
 _api_semaphore = threading.Semaphore(5)
 
 
 def _sync(coro):
-    """使用共享事件循环执行异步协程，受并发信号量保护"""
-    global _shared_loop
+    """使用线程本地事件循环执行异步协程，受并发信号量保护"""
     with _api_semaphore:
-        with _loop_lock:
-            if _shared_loop is None or _shared_loop.is_closed():
-                _shared_loop = asyncio.new_event_loop()
-        return _shared_loop.run_until_complete(coro)
+        loop = getattr(_loop_local, 'loop', None)
+        if loop is None or loop.is_closed():
+            if loop is not None and loop.is_closed():
+                try:
+                    loop.close()
+                except Exception:
+                    pass
+            loop = asyncio.new_event_loop()
+            _loop_local.loop = loop
+        try:
+            return loop.run_until_complete(coro)
+        except Exception:
+            # 协程失败后关闭旧循环，下次调用创建新循环
+            try:
+                if not loop.is_closed():
+                    loop.run_until_complete(loop.shutdown_asyncgens())
+                    loop.close()
+            except Exception:
+                pass
+            _loop_local.loop = None
+            raise
 
 
 def _is_risk_control(e: Exception) -> bool:
@@ -151,8 +166,8 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
         for item in vlist:
             pubdate_ts = item.get("created", 0)
             yield {
-                "aid": item["aid"],
-                "bvid": item["bvid"],
+                "aid": item.get("aid", 0),
+                "bvid": item.get("bvid", ""),
                 "title": item["title"],
                 "description": item.get("description", ""),
                 "duration": _parse_duration(item.get("length", "00:00")),
@@ -204,6 +219,8 @@ def get_video_stat(bvid: str) -> dict:
 
 
 def _parse_duration(length_str: str) -> int:
+    if not length_str or not length_str.strip():
+        return 0
     parts = list(map(int, length_str.split(":")))
     if len(parts) == 2:
         return parts[0] * 60 + parts[1]

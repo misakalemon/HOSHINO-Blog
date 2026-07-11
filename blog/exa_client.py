@@ -163,11 +163,11 @@ class ExaClient:
                 'useAutoprompt': False,
                 'contents': {'text': {'maxCharacters': 3000}},
             }
-            resp = self._session.post(_EXA_SEARCH, json=payload)
+            resp = self._session.post(_EXA_SEARCH, json=payload, timeout=20)
             if resp.status_code == 429:
                 logger.warning('Exa %s 限频，等待 1s 重试', domain)
                 time.sleep(1)
-                resp = self._session.post(_EXA_SEARCH, json=payload)
+                resp = self._session.post(_EXA_SEARCH, json=payload, timeout=20)
             if resp.status_code != 200:
                 logger.warning('Exa 搜索 %s %d', domain, resp.status_code)
                 return None

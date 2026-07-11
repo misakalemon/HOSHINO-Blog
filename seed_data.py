@@ -12,7 +12,7 @@ import datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # 必须先设置环境变量再导入 app
-os.environ['DATABASE_URL'] = 'mysql+pymysql://hoshino:hoshino_pass@127.0.0.1:3306/hoshino_blog?charset=utf8mb4'
+os.environ.setdefault('DATABASE_URL', 'mysql+pymysql://hoshino:hoshino_pass@127.0.0.1:3306/hoshino_blog?charset=utf8mb4')
 
 from app import create_app
 from blog import db
@@ -208,6 +208,11 @@ COMMENTERS = [
 
 
 def seed():
+    confirm = input('此操作将清空现有测试数据并重新生成，是否继续？(y/N): ').strip().lower()
+    if confirm != 'y':
+        print('已取消')
+        return
+
     app = create_app()
     with app.app_context():
         print('开始写入测试数据...')

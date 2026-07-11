@@ -11,6 +11,7 @@ from flask import (Blueprint, current_app, flash, redirect, render_template,
 from flask_login import login_required
 
 from blog.models import BiliUp, BiliUpHistory, BiliVideo, BiliVideoHistory, db
+from .admin import editor_required
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +19,7 @@ bili_bp = Blueprint('bili', __name__, url_prefix='/admin/bilibili')
 
 
 @bili_bp.route('/')
-@login_required
+@editor_required
 def index():
     """UP 主管理列表"""
     ups = BiliUp.query.order_by(BiliUp.updated_at.desc()).all()
@@ -31,7 +32,7 @@ def index():
 # ── B站 扫码登录 ────────────────────────────────
 
 @bili_bp.route('/qr-gen')
-@login_required
+@editor_required
 def qr_generate():
     """生成登录二维码（使用官方库，含 base64 图片）"""
     from blog.bilibili.login import generate_qr_v2
@@ -43,7 +44,7 @@ def qr_generate():
 
 
 @bili_bp.route('/qr-poll')
-@login_required
+@editor_required
 def qr_poll():
     """轮询扫码状态（使用官方库）"""
     qrcode_key = request.args.get('key', '')
@@ -55,7 +56,7 @@ def qr_poll():
 
 
 @bili_bp.route('/logout-bili', methods=['POST'])
-@login_required
+@editor_required
 def logout_bili():
     """清除 B站 Cookie"""
     from blog.bilibili.config import COOKIE_FILE
@@ -69,7 +70,7 @@ def logout_bili():
 
 
 @bili_bp.route('/up/<int:up_id>')
-@login_required
+@editor_required
 def up_detail(up_id):
     """查看单个 UP 主的视频列表"""
     page = request.args.get('page', 1, type=int)
@@ -82,18 +83,17 @@ def up_detail(up_id):
 
 
 @bili_bp.route('/refresh/<int:up_id>', methods=['POST'])
-@login_required
+@editor_required
 def refresh_up(up_id):
     """重新爬取单个 UP 主的数据"""
     up = BiliUp.query.get_or_404(up_id)
     # 检查是否正在爬取
-    if up.mid in _scrape_running:
-        flash('该 UP 主正在爬取中', 'error')
-        return redirect(url_for('bili.up_detail', up_id=up_id))
-    # 启动爬取
-    from blog.bilibili.bili_api import extract_mid
-    _scrape_progress[up.mid] = []
-    _scrape_running.add(up.mid)
+    with _scrape_lock:
+        if up.mid in _scrape_running:
+            flash('该 UP 主正在爬取中', 'error')
+            return redirect(url_for('bili.up_detail', up_id=up_id))
+        _scrape_progress[up.mid] = []
+        _scrape_running.add(up.mid)
     app = current_app._get_current_object()
     t = threading.Thread(target=_run_scrape, args=(up.mid, up.space_url, app), kwargs={'max_videos': 30}, daemon=True)
     t.start()
@@ -102,16 +102,16 @@ def refresh_up(up_id):
 
 
 @bili_bp.route('/refresh-all/<int:up_id>', methods=['POST'])
-@login_required
+@editor_required
 def refresh_up_all(up_id):
     """重新爬取单个 UP 主的所有视频数据（无配额限制）"""
     up = BiliUp.query.get_or_404(up_id)
-    if up.mid in _scrape_running:
-        flash('该 UP 主正在爬取中', 'error')
-        return redirect(url_for('bili.up_detail', up_id=up_id))
-    from blog.bilibili.bili_api import extract_mid
-    _scrape_progress[up.mid] = []
-    _scrape_running.add(up.mid)
+    with _scrape_lock:
+        if up.mid in _scrape_running:
+            flash('该 UP 主正在爬取中', 'error')
+            return redirect(url_for('bili.up_detail', up_id=up_id))
+        _scrape_progress[up.mid] = []
+        _scrape_running.add(up.mid)
     app = current_app._get_current_object()
     t = threading.Thread(target=_run_scrape, args=(up.mid, up.space_url, app), kwargs={'force': True}, daemon=True)
     t.start()
@@ -120,7 +120,7 @@ def refresh_up_all(up_id):
 
 
 @bili_bp.route('/delete/<int:up_id>', methods=['POST'])
-@login_required
+@editor_required
 def delete_up(up_id):
     """删除 UP 主及其所有视频数据"""
     up = BiliUp.query.get_or_404(up_id)
@@ -134,7 +134,7 @@ def delete_up(up_id):
 
 
 @bili_bp.route('/delete-video/<int:video_id>', methods=['POST'])
-@login_required
+@editor_required
 def delete_video(video_id):
     """删除单条视频记录"""
     video = BiliVideo.query.get_or_404(video_id)
@@ -146,7 +146,7 @@ def delete_video(video_id):
 
 
 @bili_bp.route('/check-missing')
-@login_required
+@editor_required
 def check_missing():
     """检查所有 UP 主视频是否有遗漏（对比 API video_count 与 DB 实际数）"""
     from blog.bilibili.login import apply_cookies
@@ -190,11 +190,14 @@ _scrape_running: set[int] = set()
 _incremental_running: set[int] = set()
 # 爬取进度存储 { mid: [line, line, ...] }
 _scrape_progress: dict[int, list[str]] = {}
+# 以上三个共享状态的操作锁
+_scrape_lock = threading.Lock()
 
 
 def _check_new_videos(mid: int, app):
     """轻量增量检查：只爬取数据库中还不存在的新视频"""
-    prog = _scrape_progress.get(mid, [])
+    with _scrape_lock:
+        prog = _scrape_progress.get(mid, [])
     _up_name = ['?']
     def emit(line: str):
         prog.append(f'[{time.strftime("%H:%M:%S")}] [{_up_name[0]}] {line}')
@@ -319,25 +322,27 @@ def _check_new_videos(mid: int, app):
         except Exception as e:
             logger.error('增量检查失败 mid=%d: %s', mid, e)
         finally:
-            _incremental_running.discard(mid)
+            with _scrape_lock:
+                _incremental_running.discard(mid)
             db.session.remove()
 
 
 @bili_bp.route('/scrape-status')
-@login_required
+@editor_required
 def scrape_status():
     """返回爬取进度（JSON）"""
     mid = request.args.get('mid', type=int)
     if not mid:
         return {'running': False, 'lines': []}
     from copy import deepcopy
-    lines = deepcopy(_scrape_progress.get(mid, []))
-    running = (mid in _scrape_running) or (mid in _incremental_running)
+    with _scrape_lock:
+        lines = deepcopy(_scrape_progress.get(mid, []))
+        running = (mid in _scrape_running) or (mid in _incremental_running)
     return {'running': running, 'lines': lines}
 
 
 @bili_bp.route('/scrape', methods=['POST'])
-@login_required
+@editor_required
 def scrape():
     """启动爬取任务"""
     space_url = request.form.get('space_url', '').strip()
@@ -352,13 +357,11 @@ def scrape():
         flash(str(e), 'error')
         return redirect(url_for('bili.index'))
 
-    # 初始化进度存储
-    _scrape_progress[mid] = []
-
-    # 检查是否已在爬取
-    if mid in _scrape_running:
-        return {'ok': False, 'error': '该 UP 主正在爬取中，请等待完成'}
-    _scrape_running.add(mid)
+    with _scrape_lock:
+        if mid in _scrape_running:
+            return {'ok': False, 'error': '该 UP 主正在爬取中，请等待完成'}
+        _scrape_progress[mid] = []
+        _scrape_running.add(mid)
 
     # 在后台线程中执行爬取（传入 app 实例以建立应用上下文）
     app = current_app._get_current_object()
@@ -431,6 +434,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                 or (total_in_api and total_in_db < total_in_api)
                 or (force and total_in_api is not None)
             )
+            fill_count = 0
             if should_fill:
                 from blog.bilibili.bili_api import get_video_list as _get_video_list
                 existing_ids = {
@@ -440,7 +444,6 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                     r[0] for r in BiliVideo.query.with_entities(BiliVideo.aid).filter_by(up_id=up.id).all()
                 }
                 need = (total_in_api - total_in_db) if total_in_api > 0 else -1
-                fill_count = 0
                 if need > 0:
                     emit(f'[补全] 发现 {need} 个缺失视频，开始补齐...')
                 else:
@@ -658,7 +661,8 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
 
         except Exception as e:
                 emit(f'爬取失败: {e}')
-                logger.error('爬取失败: %s', e)
+                logger.exception('爬取失败 mid=%d', mid)
         finally:
-            _scrape_running.discard(mid)
+            with _scrape_lock:
+                _scrape_running.discard(mid)
             db.session.remove()

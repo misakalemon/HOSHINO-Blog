@@ -25,6 +25,7 @@ HOSHINO Blog — 前台路由
 import datetime
 import logging
 import os
+import threading
 import time
 
 import bleach
@@ -44,6 +45,9 @@ THUMB_CACHE_VER = 'v3'
 
 
 # ── 侧边栏数据缓存（Redis，降级友好） ─────────
+# 共享线程池，避免每次请求创建/销毁
+_sidebar_executor = None
+
 def _get_sidebar_data():
     """获取侧边栏数据（分类列表 + 最新文章），带 Redis 缓存。
 
@@ -62,6 +66,10 @@ def _get_sidebar_data():
     from flask import current_app
 
     from .cache import cache_get, cache_set
+
+    global _sidebar_executor
+    if _sidebar_executor is None:
+        _sidebar_executor = ThreadPoolExecutor(max_workers=3)
 
     ttl = current_app.config.get('CACHE_TTL_SIDEBAR', 300)
     app = current_app._get_current_object()
@@ -98,13 +106,12 @@ def _get_sidebar_data():
             cache_set('sidebar:recent_posts', result, ttl)
             return result
 
-    with ThreadPoolExecutor(max_workers=3) as pool:
-        fut_cat = pool.submit(_fetch_categories)
-        fut_counts = pool.submit(_fetch_cat_post_counts)
-        fut_recent = pool.submit(_fetch_recent_posts)
-        categories = fut_cat.result()
-        cat_post_counts = fut_counts.result()
-        recent_posts = fut_recent.result()
+    fut_cat = _sidebar_executor.submit(_fetch_categories)
+    fut_counts = _sidebar_executor.submit(_fetch_cat_post_counts)
+    fut_recent = _sidebar_executor.submit(_fetch_recent_posts)
+    categories = fut_cat.result()
+    cat_post_counts = fut_counts.result()
+    recent_posts = fut_recent.result()
 
     return categories, recent_posts, cat_post_counts
 
@@ -216,14 +223,14 @@ def single_post(slug):
         'abbr': ['title'],
     }
     from markdown import markdown
-    post.content = bleach.clean(
+    rendered_content = bleach.clean(
         markdown(post.content, extensions=['fenced_code', 'codehilite', 'tables']),
         tags=ALLOWED_TAGS,
         attributes=ALLOWED_ATTRS,
     )
 
     return render_template('single-post.html',
-        post=post, categories=categories,
+        post=post, rendered_content=rendered_content, categories=categories,
         recent_posts=recent_posts, cat_post_counts=cat_post_counts, form=form
     )
 
@@ -277,6 +284,25 @@ def about():
     from .models import User
     admin = User.query.filter_by(role='admin').order_by(User.id).first()
     about_content = admin.about_content if admin and admin.about_content else '<p>欢迎来到 Hoshino Blog</p>'
+    ALLOWED_TAGS = [
+        'p', 'br', 'strong', 'em', 'a', 'code', 'pre', 'span', 'div',
+        'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li',
+        'blockquote', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+        'img', 'hr', 'sup', 'sub', 'del', 'ins', 'kbd', 'samp', 'var',
+        'abbr', 'dfn', 'u', 's',
+    ]
+    ALLOWED_ATTRS = {
+        'a': ['href', 'title', 'rel'],
+        'img': ['src', 'alt', 'title', 'style'],
+        'th': ['align'],
+        'td': ['align'],
+        'code': ['class'],
+        'span': ['class', 'style'],
+        'div': ['class'],
+        'pre': ['class'],
+        'abbr': ['title'],
+    }
+    about_content = bleach.clean(about_content, tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS)
     return render_template('about.html', about_content=about_content,
                            categories=categories, recent_posts=recent_posts,
                            cat_post_counts=cat_post_counts)
@@ -507,6 +533,7 @@ def thumbnail():
 # ── 缓存清理辅助函数 ──────────────────────────
 # 记录上次清理时间，避免每次请求都遍历磁盘
 _last_cache_cleanup = 0
+_cache_cleanup_lock = threading.Lock()
 
 
 def _cleanup_old_cache(cache_dir, current_ver):
@@ -517,22 +544,23 @@ def _cleanup_old_cache(cache_dir, current_ver):
         current_ver: 当前版本号（如 'v2'），以此判断哪些文件是旧的
     """
     global _last_cache_cleanup
-    now = time.time()
-    # 频率限制：每小时最多清理一次
-    if now - _last_cache_cleanup < 3600:
-        return
-    _last_cache_cleanup = now
-    if not os.path.isdir(cache_dir):
-        return
-    for fname in os.listdir(cache_dir):
-        # 保留当前版本和未知版本，只删除 v0_ / v1_ 开头的老文件
-        if fname.startswith(current_ver + '_'):
-            continue  # 当前版本保留
-        if fname.startswith('v1_') or fname.startswith('v0_'):
-            try:
-                os.remove(os.path.join(cache_dir, fname))
-            except Exception:
-                pass  # 忽略删除失败（如权限问题）
+    with _cache_cleanup_lock:
+        now = time.time()
+        # 频率限制：每小时最多清理一次
+        if now - _last_cache_cleanup < 3600:
+            return
+        _last_cache_cleanup = now
+        if not os.path.isdir(cache_dir):
+            return
+        for fname in os.listdir(cache_dir):
+            # 保留当前版本和未知版本，只删除 v0_ / v1_ 开头的老文件
+            if fname.startswith(current_ver + '_'):
+                continue
+            if fname.startswith('v1_') or fname.startswith('v0_'):
+                try:
+                    os.remove(os.path.join(cache_dir, fname))
+                except Exception:
+                    pass
 
 
 # ── 模板全局函数 ──────────────────────────────
@@ -560,6 +588,7 @@ def format_date(dt, fmt='%Y/%m/%d'):
             return dt[:10]  # 取前 10 个字符作为日期
     if hasattr(dt, 'strftime'):
         return dt.strftime(fmt)
+    logger.warning('format_date 收到意外类型: %s', type(dt).__name__)
     return ''
 
 
@@ -573,7 +602,6 @@ def now():
     Returns:
         datetime: 当前 UTC 时间
     """
-    import datetime
     return datetime.datetime.utcnow()
 
 

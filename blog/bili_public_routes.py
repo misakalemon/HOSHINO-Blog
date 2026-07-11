@@ -66,7 +66,7 @@ def up_videos(up_id):
 def video_detail(video_id):
     """视频详情页"""
     video = BiliVideo.query.get_or_404(video_id)
-    up = BiliUp.query.get(video.up_id)
+    up = BiliUp.query.get_or_404(video.up_id)
     # 播放量变化历史（最近 300 条 + JSON 供图表）
     import json
     view_history = BiliVideoHistory.query.filter_by(video_id=video_id)\
