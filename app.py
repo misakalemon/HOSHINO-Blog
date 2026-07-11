@@ -344,11 +344,11 @@ def _clean_bili_history(app):
         from blog import db
         from blog.models import BiliVideoHistory
         from datetime import datetime, timedelta
-        cutoff = datetime.utcnow() - timedelta(days=90)
+        cutoff = datetime.utcnow() - timedelta(days=365)
         deleted = BiliVideoHistory.query.filter(BiliVideoHistory.recorded_at < cutoff).delete()
         db.session.commit()
         if deleted:
-            app.logger.info('清理 B站 视频历史: 删除 %d 条 90 天前的记录', deleted)
+            app.logger.info('清理 B站 视频历史: 删除 %d 条 365 天前的记录', deleted)
 
 
 if __name__ == '__main__':
