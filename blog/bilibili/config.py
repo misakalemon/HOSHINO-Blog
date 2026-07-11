@@ -12,6 +12,8 @@ TIMEOUT = 15
 
 # Cookie 保存路径（在项目根目录，不随部署覆盖）
 COOKIE_FILE = os.path.join(PROJECT_ROOT, ".bili_cookies.txt")
+# Credential 完整状态（含 refresh_token，支持自动续期）
+CREDENTIAL_FILE = os.path.join(PROJECT_ROOT, ".bili_credential.json")
 
 HEADERS = {
     "User-Agent": (

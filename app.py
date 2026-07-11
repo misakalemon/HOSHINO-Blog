@@ -132,6 +132,10 @@ def create_app():
     else:
         logger.info('Exa 未配置（EXA_API_KEY 为空），跳过')
 
+    # ── 加载 B站 持久化登录凭证 ──
+    from blog.bilibili.login import apply_cookies as _bili_apply_cookies
+    _bili_apply_cookies()
+
     # ── 定时任务（价格爬虫 + SECRET_KEY 轮换） ──
     _init_scheduler(app)
 
@@ -315,16 +319,17 @@ def _run_bili_incremental_check(app):
         import time
         logger = logging.getLogger(__name__)
         from blog.models import BiliUp
-        from blog.bili_routes import _check_new_videos, _scrape_progress, _scrape_running
+        from blog.bili_routes import (_check_new_videos, _scrape_progress,
+                                       _incremental_running)
 
         ups = BiliUp.query.all()
         threads = []
         for up in ups:
             mid = up.mid
-            if mid in _scrape_running:
+            if mid in _incremental_running:
                 continue
             _scrape_progress[mid] = []
-            _scrape_running.add(mid)
+            _incremental_running.add(mid)
             t = threading.Thread(
                 target=_check_new_videos,
                 args=(mid, app),

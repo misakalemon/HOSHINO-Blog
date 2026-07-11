@@ -186,6 +186,8 @@ def check_missing():
 # ── 爬取任务（后台线程）────────────────────────
 # 正在爬取中的 mid 集合（防止重复爬同一个 UP 主）
 _scrape_running: set[int] = set()
+# 增量检查中的 mid 集合（与 _scrape_running 独立，不互相阻塞）
+_incremental_running: set[int] = set()
 # 爬取进度存储 { mid: [line, line, ...] }
 _scrape_progress: dict[int, list[str]] = {}
 
@@ -206,7 +208,7 @@ def _check_new_videos(mid: int, app):
 
             up = BiliUp.query.filter_by(mid=mid).first()
             if not up:
-                _scrape_running.discard(mid)
+                _incremental_running.discard(mid)
                 return
             _up_name[0] = up.name or str(mid)
 
@@ -270,10 +272,10 @@ def _check_new_videos(mid: int, app):
             if count:
                 emit(f'增量完成，新增 {count} 个视频')
 
-            # ── 追踪最新 2 个视频的统计（每 30 分钟快照）──
+            # ── 追踪最新 3 个视频的统计（每 30 分钟快照）──
             try:
                 latest = BiliVideo.query.filter_by(up_id=up.id)\
-                    .order_by(BiliVideo.pubdate.desc()).limit(2).all()
+                    .order_by(BiliVideo.pubdate.desc()).limit(3).all()
                 if latest:
                     emit(f'追踪最新 {len(latest)} 个视频统计')
                 for v in latest:
@@ -317,7 +319,7 @@ def _check_new_videos(mid: int, app):
         except Exception as e:
             logger.error('增量检查失败 mid=%d: %s', mid, e)
         finally:
-            _scrape_running.discard(mid)
+            _incremental_running.discard(mid)
             db.session.remove()
 
 
@@ -330,7 +332,7 @@ def scrape_status():
         return {'running': False, 'lines': []}
     from copy import deepcopy
     lines = deepcopy(_scrape_progress.get(mid, []))
-    running = mid in _scrape_running
+    running = (mid in _scrape_running) or (mid in _incremental_running)
     return {'running': running, 'lines': lines}
 
 
@@ -642,18 +644,6 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                         ok = _update_video(v, 'Cold', min_age_hours=24)
                         if ok is False:
                             continue
-                if remaining is not None:
-                    q = q.limit(remaining)
-                p1_videos = q.all()
-                quota_str = '无限制' if remaining is None else str(remaining)
-                emit(f'P1 阶段: 10~40天视频配额 {quota_str}（DB中共 {len(p1_videos)} 个待更新）')
-                for v in p1_videos:
-                    if remaining is not None and count >= max_videos:
-                        break
-                    ok = _update_video(v, 'P1 ')
-                    if ok is False:
-                        continue
-
             up.video_count = BiliVideo.query.filter_by(up_id=up.id).count()
             db.session.commit()
             emit(f'刷新完成  Hot={hot_done}  Warm={warm_done}  Cold={cold_done}  共 {count} 个  |  DB 总视频数: {up.video_count}')

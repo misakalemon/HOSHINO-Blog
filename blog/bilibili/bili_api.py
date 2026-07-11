@@ -43,6 +43,13 @@ def _is_risk_control(e: Exception) -> bool:
     return any(c in err_str for c in codes)
 
 
+def _is_auth_error(e: Exception) -> bool:
+    """判断异常是否为登录凭证过期/未登录"""
+    err_str = str(e).lower()
+    codes = ['-401', '未登录', '请先登录', 'credential', 'session expired']
+    return any(c in err_str for c in codes)
+
+
 def set_cookies(cookie_str: str):
     """设置登录态 Cookie（SESSDATA=abc; bili_jct=def; buvid3=ghi）"""
     global _credential
@@ -86,9 +93,17 @@ def extract_mid(space_url: str) -> int:
 
 
 def get_user_info(mid: int) -> dict:
-    """获取 UP 主信息（名称、头像、粉丝数、视频数）"""
-    u = _user_mod.User(mid, credential=_credential)
-    info = _sync(u.get_user_info())
+    """获取 UP 主信息（名称、头像、粉丝数、视频数），Cookie 过期时自动降级为匿名"""
+    try:
+        u = _user_mod.User(mid, credential=_credential)
+        info = _sync(u.get_user_info())
+    except Exception as e:
+        if _credential and _is_auth_error(e):
+            logger.warning("UP主信息获取凭证过期，使用匿名: %s", e)
+            u = _user_mod.User(mid)
+            info = _sync(u.get_user_info())
+        else:
+            raise
     return {
         'name': info.get('name', ''),
         'avatar': info.get('face', ''),
@@ -98,7 +113,7 @@ def get_user_info(mid: int) -> dict:
 
 
 def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, None, None]:
-    """获取指定 mid 的所有视频基本信息（分页迭代，含风控指数退避）
+    """获取指定 mid 的所有视频基本信息（分页迭代，含风控指数退避 + Cookie过期自动降级）
     
     Args:
         mid: B站 mid
@@ -107,6 +122,7 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
     u = _user_mod.User(mid, credential=_credential)
     pn = 1
     retry_delay = 30
+    auth_retried = False
 
     while True:
         if max_pages is not None and pn > max_pages:
@@ -116,6 +132,11 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
             data = _sync(u.get_videos(ps=PAGE_SIZE, pn=pn))
         except Exception as e:
             logger.error("获取第 %d 页视频列表失败: %s", pn, e)
+            if _credential and _is_auth_error(e) and not auth_retried:
+                logger.warning("凭证过期，切换为匿名访问后重试第 %d 页", pn)
+                auth_retried = True
+                u = _user_mod.User(mid)
+                continue
             if _is_risk_control(e):
                 logger.warning("⚠️ 触发风控，等待 %ds 后重试...", retry_delay)
                 time.sleep(retry_delay)
@@ -159,9 +180,17 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
 
 
 def get_video_stat(bvid: str) -> dict:
-    """获取单个视频的详细统计数据"""
-    v = _video_mod.Video(bvid=bvid, credential=_credential)
-    info = _sync(v.get_info())
+    """获取单个视频的详细统计数据，Cookie 过期时自动降级为匿名"""
+    try:
+        v = _video_mod.Video(bvid=bvid, credential=_credential)
+        info = _sync(v.get_info())
+    except Exception as e:
+        if _credential and _is_auth_error(e):
+            logger.warning("视频统计获取凭证过期，使用匿名: %s", e)
+            v = _video_mod.Video(bvid=bvid)
+            info = _sync(v.get_info())
+        else:
+            raise
     stat = info.get("stat", {})
     return {
         "view_count": stat.get("view", 0),

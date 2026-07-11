@@ -9,8 +9,8 @@ import requests
 from bilibili_api import sync
 from bilibili_api.login_v2 import QrCodeLogin, QrCodeLoginEvents
 
-from .bili_api import set_cookies
-from .config import COOKIE_FILE, HEADERS, TIMEOUT
+from .bili_api import set_cookies, set_credential as _set_api_credential
+from .config import COOKIE_FILE, CREDENTIAL_FILE, HEADERS, TIMEOUT
 
 logger = logging.getLogger(__name__)
 
@@ -52,9 +52,10 @@ def poll_qr_v2(qrcode_key: str) -> dict:
         _BILI_LOGGED_IN = True
         cred = qr.get_credential()
         # 直接设置全局 Credential，保留完整状态（含 refresh_token 等）
-        from .bili_api import set_credential
-        set_credential(cred)
-        # 获取 Cookie 并解码所有值，确保保存原始格式
+        _set_api_credential(cred)
+        # 保存完整 Credential JSON（含 refresh_token，支持自动续期）
+        save_credential(cred)
+        # 同时保存 Cookie 字符串（向后兼容）
         cookie_dict = cred.get_cookies()
         from urllib.parse import unquote
         decoded = {k: unquote(v) for k, v in cookie_dict.items()}
@@ -156,21 +157,61 @@ def load_cookies() -> str | None:
         return None
 
 
+def save_credential(cred):
+    """保存完整 Credential（含 refresh_token，支持自动续期）"""
+    import json
+    path = CREDENTIAL_FILE
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    try:
+        data = cred.get_json_data()
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        logger.info("✅ B站 Credential 已保存到: %s", path)
+    except Exception as e:
+        logger.warning("保存 Credential 失败: %s", e)
+
+
+def load_credential():
+    """从文件加载 Credential（含 refresh_token），失败返回 None"""
+    from bilibili_api import Credential
+    import json
+    path = CREDENTIAL_FILE
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        cred = Credential.from_json_data(data)
+        logger.info("✅ 已从文件加载 B站 Credential（含 refresh_token）")
+        return cred
+    except Exception as e:
+        logger.warning("加载 Credential 失败: %s", e)
+        return None
+
+
 def apply_cookies():
-    """尝试从文件加载 Cookie 并设置到 API 模块"""
+    """尝试从文件加载 Credential 或 Cookie 并设置到 API 模块"""
     global _BILI_LOGGED_IN
-    # 如果 V2 登录成功过，直接信任
     if _BILI_LOGGED_IN:
         logger.info("✅ 已通过 V2 登录，直接使用")
         return True
 
-    from .bili_api import set_cookies, is_logged_in
-    # 如果已登录，直接返回（避免文件加载覆盖 V2 设置的 Credential）
+    from .bili_api import set_cookies, set_credential, is_logged_in
     if is_logged_in():
         logger.info("✅ 全局 Credential 已存在，直接使用")
         return True
 
-    # 从文件加载（兼容旧流程）
+    # 优先加载完整 Credential（含 refresh_token，支持自动续期）
+    cred = load_credential()
+    if cred is not None:
+        set_credential(cred)
+        if is_logged_in():
+            logger.info("✅ 已从文件加载 B站 Credential（含 refresh_token）")
+            return True
+        else:
+            logger.warning("Credential 已过期，继续尝试 Cookie...")
+
+    # 回退：从 Cookie 文件加载（兼容旧流程，无 refresh_token）
     cookie_str = load_cookies()
     if not cookie_str:
         return False
