@@ -36,10 +36,10 @@ DETAILED_FORMAT = (
     '[%(name)s:%(funcName)s:%(lineno)d] '
     '%(message)s'
 )
-# 终端日志：带颜色区分级别，更紧凑
+# 终端日志：带模块名、函数名，与文件日志一致
 CONSOLE_FORMAT = (
-    '%(asctime)s  '
-    '%(levelname)-7s  '
+    '%(asctime)s  %(levelname)-7s  '
+    '[%(name)s:%(funcName)s:%(lineno)d] '
     '%(message)s'
 )
 DATE_FORMAT = '%m/%d %H:%M:%S'
