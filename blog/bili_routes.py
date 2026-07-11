@@ -101,6 +101,24 @@ def refresh_up(up_id):
     return redirect(url_for('bili.up_detail', up_id=up_id))
 
 
+@bili_bp.route('/refresh-all/<int:up_id>', methods=['POST'])
+@login_required
+def refresh_up_all(up_id):
+    """重新爬取单个 UP 主的所有视频数据（无配额限制）"""
+    up = BiliUp.query.get_or_404(up_id)
+    if up.mid in _scrape_running:
+        flash('该 UP 主正在爬取中', 'error')
+        return redirect(url_for('bili.up_detail', up_id=up_id))
+    from blog.bilibili.bili_api import extract_mid
+    _scrape_progress[up.mid] = []
+    _scrape_running.add(up.mid)
+    app = current_app._get_current_object()
+    t = threading.Thread(target=_run_scrape, args=(up.mid, up.space_url, app), daemon=True)
+    t.start()
+    flash(f'已开始全量刷新「{up.name or up.mid}」的所有视频', 'success')
+    return redirect(url_for('bili.up_detail', up_id=up_id))
+
+
 @bili_bp.route('/delete/<int:up_id>', methods=['POST'])
 @login_required
 def delete_up(up_id):
