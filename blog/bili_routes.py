@@ -367,14 +367,19 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
                 total_in_api = 0
             if total_in_db == 0 or (total_in_db < total_in_api):
                 from blog.bilibili.bili_api import get_video_list as _get_video_list
-                existing_bvids = {r[0] for r in BiliVideo.query.with_entities(BiliVideo.bvid).filter_by(up_id=up.id).all()}
+                existing_ids = {
+                    r[0] for r in BiliVideo.query.with_entities(BiliVideo.bvid).filter_by(up_id=up.id).all()
+                }
+                existing_aids = {
+                    r[0] for r in BiliVideo.query.with_entities(BiliVideo.aid).filter_by(up_id=up.id).all()
+                }
                 fill_count = 0
-                need = total_in_api - total_in_db
-                emit(f'[补全] 发现 {need} 个缺失视频，开始补全...')
+                emit(f'[补全] DB 有 {total_in_db} 个视频，开始从 API 补齐...')
                 for video_info in _get_video_list(mid):
                     bvid = video_info['bvid']
-                    if bvid in existing_bvids:
-                        continue
+                    aid = video_info['aid']
+                    if bvid in existing_ids or aid in existing_aids:
+                        break
                     try:
                         stat = get_video_stat(bvid)
                         video_info.update(stat)
@@ -401,9 +406,10 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
                     except Exception:
                         db.session.rollback()
                     fill_count += 1
-                    existing_bvids.add(bvid)
+                    existing_ids.add(bvid)
+                    existing_aids.add(aid)
                     title_short = (video_info.get('title') or '')[:30]
-                    emit(f'[补全] ({fill_count}/{need}) 「{title_short}」')
+                    emit(f'[补全] ({fill_count}) 「{title_short}」')
                 if fill_count:
                     emit(f'[补全] 完成，新增 {fill_count} 个视频')
 
@@ -504,7 +510,8 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
                 if remaining is not None:
                     q = q.limit(remaining)
                 p1_videos = q.all()
-                emit(f'P1 阶段: 10~40天视频配额 {remaining} 个（DB中共 {len(p1_videos)} 个待更新）')
+                quota_str = '无限制' if remaining is None else str(remaining)
+                emit(f'P1 阶段: 10~40天视频配额 {quota_str}（DB中共 {len(p1_videos)} 个待更新）')
                 for v in p1_videos:
                     if remaining is not None and count >= max_videos:
                         break
