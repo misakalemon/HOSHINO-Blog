@@ -113,9 +113,9 @@ def refresh_up_all(up_id):
     _scrape_progress[up.mid] = []
     _scrape_running.add(up.mid)
     app = current_app._get_current_object()
-    t = threading.Thread(target=_run_scrape, args=(up.mid, up.space_url, app), daemon=True)
+    t = threading.Thread(target=_run_scrape, args=(up.mid, up.space_url, app), kwargs={'force': True}, daemon=True)
     t.start()
-    flash(f'已开始全量刷新「{up.name or up.mid}」的所有视频', 'success')
+    flash(f'已开始强制刷新「{up.name or up.mid}」的所有视频', 'success')
     return redirect(url_for('bili.up_detail', up_id=up_id))
 
 
@@ -361,7 +361,7 @@ def scrape():
     return {'ok': True, 'mid': mid}
 
 
-def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
+def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, force: bool = False):
     """后台爬取线程
     
     Args:
@@ -369,6 +369,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
         space_url: UP 主空间链接
         app: Flask 应用实例
         max_videos: 最多爬取视频数，None 表示全部
+        force: 是否强制刷新（跳过 1h 检查，忽略 Cookie 过期）
     """
     prog = _scrape_progress.get(mid, [])
     _up_name = ['?']
@@ -422,6 +423,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
             should_fill = (
                 total_in_db == 0
                 or (total_in_api and total_in_db < total_in_api)
+                or (force and total_in_api is not None)
             )
             if should_fill:
                 from blog.bilibili.bili_api import get_video_list as _get_video_list
@@ -490,7 +492,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
                 nonlocal count, retry_delay, p0_done, p1_done
                 bvid = v.bvid
 
-                if v.updated_at and (datetime.datetime.utcnow() - v.updated_at).total_seconds() < 3600:
+                if not force and v.updated_at and (datetime.datetime.utcnow() - v.updated_at).total_seconds() < 3600:
                     title_short = (v.title or '')[:30]
                     emit(f'  跳过「{title_short}」— 最近 1 小时内已更新')
                     return True
