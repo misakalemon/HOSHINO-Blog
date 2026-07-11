@@ -470,6 +470,11 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
                 nonlocal count, retry_delay, p0_done, p1_done
                 bvid = v.bvid
 
+                if v.updated_at and (datetime.datetime.utcnow() - v.updated_at).total_seconds() < 3600:
+                    title_short = (v.title or '')[:30]
+                    emit(f'  跳过「{title_short}」— 最近 1 小时内已更新')
+                    return True
+
                 old_view = v.view_count or 0
                 old_like = v.like_count or 0
                 old_coin = v.coin_count or 0
