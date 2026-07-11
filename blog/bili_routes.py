@@ -373,13 +373,17 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
                 existing_aids = {
                     r[0] for r in BiliVideo.query.with_entities(BiliVideo.aid).filter_by(up_id=up.id).all()
                 }
+                need = (total_in_api - total_in_db) if total_in_api > 0 else -1
                 fill_count = 0
-                emit(f'[补全] DB 有 {total_in_db} 个视频，开始从 API 补齐...')
+                if need > 0:
+                    emit(f'[补全] 发现 {need} 个缺失视频，开始补齐...')
+                else:
+                    emit(f'[补全] DB 有 {total_in_db} 个视频，开始从 API 补齐...')
                 for video_info in _get_video_list(mid):
                     bvid = video_info['bvid']
                     aid = video_info['aid']
                     if bvid in existing_ids or aid in existing_aids:
-                        break
+                        continue
                     try:
                         stat = get_video_stat(bvid)
                         video_info.update(stat)
@@ -410,6 +414,8 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
                     existing_aids.add(aid)
                     title_short = (video_info.get('title') or '')[:30]
                     emit(f'[补全] ({fill_count}) 「{title_short}」')
+                    if need > 0 and fill_count >= need:
+                        break
                 if fill_count:
                     emit(f'[补全] 完成，新增 {fill_count} 个视频')
 
