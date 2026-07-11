@@ -127,6 +127,44 @@ def delete_video(video_id):
     return redirect(url_for('bili.up_detail', up_id=up_id))
 
 
+@bili_bp.route('/check-missing')
+@login_required
+def check_missing():
+    """检查所有 UP 主视频是否有遗漏（对比 API video_count 与 DB 实际数）"""
+    from blog.bilibili.login import apply_cookies
+    from blog.bilibili.bili_api import get_user_info
+    apply_cookies()
+
+    results = []
+    ups = BiliUp.query.order_by(BiliUp.updated_at.desc()).all()
+    for up in ups:
+        db_count = BiliVideo.query.filter_by(up_id=up.id).count()
+        try:
+            ui = get_user_info(up.mid)
+            api_count = ui.get('video_count', 0)
+        except Exception as e:
+            results.append(dict(
+                name=up.name, mid=up.mid, up_id=up.id,
+                db=db_count, api='?', missing='?',
+                percent='-', error=str(e),
+            ))
+            continue
+
+        if api_count > 0:
+            missing = max(0, api_count - db_count)
+            pct = f'{db_count / api_count * 100:.1f}%'
+        else:
+            missing = '?'
+            pct = '-'
+        results.append(dict(
+            name=up.name, mid=up.mid, up_id=up.id,
+            db=db_count, api=api_count,
+            missing=missing, percent=pct, error=None,
+        ))
+
+    return {'ok': True, 'results': results, 'total': len(results)}
+
+
 # ── 爬取任务（后台线程）────────────────────────
 # 正在爬取中的 mid 集合（防止重复爬同一个 UP 主）
 _scrape_running: set[int] = set()

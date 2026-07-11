@@ -43,6 +43,7 @@
                style="flex:1;min-width:240px;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;color:#e8edf5;font-size:0.85rem;outline:none"
                onkeydown="if(event.key==='Enter')startScrape()">
         <button type="button" class="btn btn-primary" onclick="startScrape()">🚀 开始爬取</button>
+        <button type="button" id="checkMissingBtn" class="btn btn-ghost" onclick="checkMissing()">🔍 检查遗漏</button>
     </div>
     <div style="font-size:0.75rem;color:rgba(255,255,255,0.3);margin-top:8px">爬取将后台执行，实时显示进度</div>
 </div>
@@ -54,6 +55,18 @@
         <button class="btn-ghost-sm" onclick="document.getElementById('scrapeLog').style.display='none';document.getElementById('scrapeLogContent').innerHTML=''">✕ 关闭</button>
     </div>
     <pre id="scrapeLogContent" style="max-height:400px;overflow-y:auto;background:rgba(0,0,0,0.3);border-radius:10px;padding:12px;font-size:0.75rem;line-height:1.5;color:#b0b8d0;font-family:'SF Mono','Fira Code',monospace;margin:0;white-space:pre-wrap;word-break:break-all"></pre>
+</div>
+
+<!-- 遗漏检查结果 -->
+<div id="missingResult" class="admin-card" style="padding:16px;margin-bottom:20px;display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <h5 style="margin:0">🔍 遗漏检查结果</h5>
+        <div style="display:flex;gap:8px;align-items:center">
+            <span id="missingSummary" style="font-size:0.8rem;color:rgba(255,255,255,0.5)"></span>
+            <button class="btn-ghost-sm" onclick="document.getElementById('missingResult').style.display='none'">✕ 关闭</button>
+        </div>
+    </div>
+    <div id="missingContent"></div>
 </div>
 
 <!-- UP 主列表 -->
@@ -167,6 +180,54 @@ function pollScrapeLog(mid) {
             } else {
                 scrapeTimer = setTimeout(function() { location.reload(); }, 2000);
             }
+        });
+}
+
+// ── 遗漏检查 ────────────────────────────────
+function checkMissing() {
+    var btn = document.getElementById('checkMissingBtn');
+    if (!btn) return;
+    btn.disabled = true;
+    btn.textContent = '⏳ 检查中...';
+    document.getElementById('missingResult').style.display = 'block';
+    document.getElementById('missingContent').innerHTML = '<div style="text-align:center;padding:20px;color:rgba(255,255,255,0.4)">正在检查，请稍候...</div>';
+    fetch('{{ url_for("bili.check_missing") }}')
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            var html = '', missingCount = 0, errCount = 0;
+            if (d.results) {
+                html += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.8rem">';
+                html += '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.06);color:rgba(255,255,255,0.4)">';
+                html += '<th style="padding:8px 10px;text-align:left">UP主</th>';
+                html += '<th style="padding:8px 10px;text-align:right">DB 数</th>';
+                html += '<th style="padding:8px 10px;text-align:right">API 数</th>';
+                html += '<th style="padding:8px 10px;text-align:right">缺失</th>';
+                html += '<th style="padding:8px 10px;text-align:right">完整度</th>';
+                html += '<th style="padding:8px 10px"></th></tr></thead><tbody>';
+                d.results.forEach(function(r) {
+                    var cls = '';
+                    if (r.error) { cls = ' style="color:#f25a5a"'; errCount++; }
+                    else if (r.missing > 0) { cls = ' style="color:#f0a030"'; missingCount++; }
+                    var missingStr = r.error ? 'ERR' : (r.missing === '?' ? '?' : r.missing);
+                    html += '<tr' + cls + ' style="border-bottom:1px solid rgba(255,255,255,0.03)">';
+                    html += '<td style="padding:8px 10px;text-align:left">' + (r.name || 'UP#' + r.mid) + '</td>';
+                    html += '<td style="padding:8px 10px;text-align:right">' + r.db + '</td>';
+                    html += '<td style="padding:8px 10px;text-align:right">' + r.api + '</td>';
+                    html += '<td style="padding:8px 10px;text-align:right;font-weight:600">' + missingStr + '</td>';
+                    html += '<td style="padding:8px 10px;text-align:right">' + r.percent + '</td>';
+                    if (r.missing > 0) {
+                        html += '<td style="padding:8px 10px"><a href="/admin/bilibili/up/' + r.up_id + '" class="btn-ghost-sm" style="font-size:0.75rem">补充爬取</a></td>';
+                    } else {
+                        html += '<td></td>';
+                    }
+                    html += '</tr>';
+                });
+                html += '</tbody></table></div>';
+                document.getElementById('missingSummary').textContent = '共 ' + d.total + ' 个 UP 主，' + missingCount + ' 个有遗漏' + (errCount ? '，' + errCount + ' 个查询失败' : '');
+            }
+            document.getElementById('missingContent').innerHTML = html;
+            btn.disabled = false;
+            btn.textContent = '🔍 检查遗漏';
         });
 }
 </script>
