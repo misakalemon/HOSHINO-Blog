@@ -365,8 +365,10 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
             from blog.bilibili.bili_api import _is_risk_control, get_video_stat, get_user_info
 
             up = BiliUp.query.filter_by(mid=mid).first()
+            total_in_api = None
             try:
                 ui = get_user_info(mid)
+                total_in_api = ui.get('video_count', 0)
                 if up:
                     up.name = ui.get('name', up.name)
                     up.avatar = ui.get('avatar', up.avatar)
@@ -399,11 +401,11 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
 
             # 检查是否有视频未入库，从 API 补全
             total_in_db = BiliVideo.query.filter_by(up_id=up.id).count()
-            try:
-                total_in_api = ui.get('video_count', 0)
-            except NameError:
-                total_in_api = 0
-            if total_in_db == 0 or (total_in_db < total_in_api):
+            should_fill = (
+                total_in_db == 0
+                or (total_in_api and total_in_db < total_in_api)
+            )
+            if should_fill:
                 from blog.bilibili.bili_api import get_video_list as _get_video_list
                 existing_ids = {
                     r[0] for r in BiliVideo.query.with_entities(BiliVideo.bvid).filter_by(up_id=up.id).all()
@@ -571,6 +573,14 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None):
             up.video_count = BiliVideo.query.filter_by(up_id=up.id).count()
             db.session.commit()
             emit(f'刷新完成  P0={p0_done}  P1={p1_done}  共 {count} 个  |  DB 总视频数: {up.video_count}')
+            if total_in_api:
+                db_total = up.video_count
+                if db_total >= total_in_api:
+                    emit(f'完整性检查: {db_total}/{total_in_api} ✅ 全部视频已入库')
+                else:
+                    emit(f'完整性检查: {db_total}/{total_in_api} ⚠️ 缺失 {total_in_api - db_total} 个视频）')
+            elif total_in_api is not None and total_in_api == 0 and total_in_db > 0:
+                emit(f'完整性检查: Cookie 可能过期，API 返回 video_count=0')
 
         except Exception as e:
                 emit(f'爬取失败: {e}')

@@ -272,6 +272,9 @@ def _run_daily_bili_refresh(app):
         threads = []
         for up in ups:
             mid = up.mid
+            if mid in _scrape_running:
+                logger.warning('B站 每日刷新跳过 mid=%d（正在爬取中）', mid)
+                continue
             _scrape_progress[mid] = []
             _scrape_running.add(mid)
             t = threading.Thread(
@@ -293,18 +296,29 @@ def _run_bili_incremental_check(app):
     """每 30 分钟增量检查所有 UP 主是否有新视频"""
     with app.app_context():
         import logging
+        import threading
         logger = logging.getLogger(__name__)
         from blog.models import BiliUp
         from blog.bili_routes import _check_new_videos, _scrape_progress, _scrape_running
 
         ups = BiliUp.query.all()
+        threads = []
         for up in ups:
-            _scrape_progress[up.mid] = []
-            _scrape_running.add(up.mid)
-            try:
-                _check_new_videos(up.mid, app)
-            except Exception as e:
-                logger.error('B站 增量检查失败: mid=%d, %s', up.mid, e)
+            mid = up.mid
+            if mid in _scrape_running:
+                continue
+            _scrape_progress[mid] = []
+            _scrape_running.add(mid)
+            t = threading.Thread(
+                target=_check_new_videos,
+                args=(mid, app),
+                daemon=True,
+            )
+            t.start()
+            threads.append(t)
+
+        for t in threads:
+            t.join()
 
 
 if __name__ == '__main__':
