@@ -1,11 +1,14 @@
 """B 站 API 封装（基于 bilibili-api-python）"""
+import asyncio
 import logging
 import re
+import threading
 import time
 from datetime import datetime, timezone
 from typing import Generator
 
-from bilibili_api import sync, Credential
+from bilibili_api import Credential
+from bilibili_api import sync as _bili_sync
 from bilibili_api import user as _user_mod
 from bilibili_api import video as _video_mod
 
@@ -14,6 +17,23 @@ from .config import PAGE_SIZE, REQUEST_INTERVAL
 logger = logging.getLogger(__name__)
 
 _credential: Credential | None = None
+
+# 共享事件循环 — 避免每次 async 调用都创建新循环
+_shared_loop: asyncio.AbstractEventLoop | None = None
+_loop_lock = threading.Lock()
+
+# 并发信号量 — 限制同时发往 B 站 API 的请求数，防风控
+_api_semaphore = threading.Semaphore(5)
+
+
+def _sync(coro):
+    """使用共享事件循环执行异步协程，受并发信号量保护"""
+    global _shared_loop
+    with _api_semaphore:
+        with _loop_lock:
+            if _shared_loop is None or _shared_loop.is_closed():
+                _shared_loop = asyncio.new_event_loop()
+        return _shared_loop.run_until_complete(coro)
 
 
 def _is_risk_control(e: Exception) -> bool:
@@ -52,7 +72,7 @@ def is_logged_in() -> bool:
     if _credential is None:
         return False
     try:
-        return sync(_credential.verify())
+        return _sync(_credential.verify())
     except Exception:
         return False
 
@@ -68,7 +88,7 @@ def extract_mid(space_url: str) -> int:
 def get_user_info(mid: int) -> dict:
     """获取 UP 主信息（名称、头像、粉丝数、视频数）"""
     u = _user_mod.User(mid, credential=_credential)
-    info = sync(u.get_user_info())
+    info = _sync(u.get_user_info())
     return {
         'name': info.get('name', ''),
         'avatar': info.get('face', ''),
@@ -86,7 +106,7 @@ def get_video_list(mid: int) -> Generator[dict, None, None]:
     while True:
         logger.info("正在获取第 %d 页视频列表 ...", pn)
         try:
-            data = sync(u.get_videos(ps=PAGE_SIZE, pn=pn))
+            data = _sync(u.get_videos(ps=PAGE_SIZE, pn=pn))
         except Exception as e:
             logger.error("获取第 %d 页视频列表失败: %s", pn, e)
             if _is_risk_control(e):
@@ -134,7 +154,7 @@ def get_video_list(mid: int) -> Generator[dict, None, None]:
 def get_video_stat(bvid: str) -> dict:
     """获取单个视频的详细统计数据"""
     v = _video_mod.Video(bvid=bvid, credential=_credential)
-    info = sync(v.get_info())
+    info = _sync(v.get_info())
     stat = info.get("stat", {})
     return {
         "view_count": stat.get("view", 0),

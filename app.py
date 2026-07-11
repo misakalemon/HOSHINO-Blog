@@ -66,6 +66,8 @@ def create_app():
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
         'pool_recycle': 280,
         'pool_timeout': 30,
+        'pool_size': 10,
+        'max_overflow': 20,
     }
 
     # ── CSRF 保护（全局，影响所有 POST/PUT/DELETE）──
@@ -261,7 +263,9 @@ def _run_daily_bili_refresh(app):
     """每日刷新所有 B站 UP 主视频数据（在应用上下文中运行）。"""
     with app.app_context():
         import logging
+        import random
         import threading
+        import time
         logger = logging.getLogger(__name__)
         from blog.models import BiliUp
         from blog.bili_routes import _run_scrape, _scrape_progress, _scrape_running
@@ -285,6 +289,7 @@ def _run_daily_bili_refresh(app):
             )
             t.start()
             threads.append(t)
+            time.sleep(random.uniform(1.0, 4.0))
 
         for t in threads:
             t.join()
@@ -296,7 +301,9 @@ def _run_bili_incremental_check(app):
     """每 30 分钟增量检查所有 UP 主是否有新视频"""
     with app.app_context():
         import logging
+        import random
         import threading
+        import time
         logger = logging.getLogger(__name__)
         from blog.models import BiliUp
         from blog.bili_routes import _check_new_videos, _scrape_progress, _scrape_running
@@ -316,6 +323,7 @@ def _run_bili_incremental_check(app):
             )
             t.start()
             threads.append(t)
+            time.sleep(random.uniform(0.5, 2.0))
 
         for t in threads:
             t.join()
