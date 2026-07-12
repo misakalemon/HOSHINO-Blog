@@ -467,14 +467,17 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                     for video_info in _get_video_list(mid):
                         bvid = video_info['bvid']
                         aid = video_info['aid']
-                        if bvid in existing_ids or aid in existing_aids:
+                        title_short = (video_info.get('title') or '')[:30]
+                        is_known = bvid in existing_ids or aid in existing_aids
+                        logger.info("补全循环: bvid=%s title=%s known=%s", bvid, title_short, is_known)
+                        if is_known:
                             continue
                         try:
                             stat = get_video_stat(bvid)
                             video_info.update(stat)
                             time.sleep(7.0 + random.random() * 3.0)
                         except Exception:
-                            logger.warning("视频 %s 补全时统计获取失败", bvid)
+                            logger.warning("视频 %s 「%s」补全时统计获取失败", bvid, title_short)
                             time.sleep(12.0)
                             continue
                         try:
@@ -483,7 +486,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                             db.session.commit()
                         except Exception as e:
                             db.session.rollback()
-                            logger.warning("视频 %s 入库失败（可能重复）: %s", bvid, e)
+                            logger.warning("视频 %s 「%s」入库失败: %s", bvid, title_short, e)
                             continue
                         try:
                             db.session.add(BiliVideoHistory(
@@ -502,7 +505,6 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                         fill_count += 1
                         existing_ids.add(bvid)
                         existing_aids.add(aid)
-                        title_short = (video_info.get('title') or '')[:30]
                         emit(f'[补全] ({fill_count}) 「{title_short}」')
                         if need > 0 and fill_count >= need:
                             break

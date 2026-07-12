@@ -122,6 +122,40 @@ def author_required(f):
 # 诊断
 # ═══════════════════════════════════════════════
 
+@admin_bp.route('/_bili_debug/<int:mid>')
+@admin_required
+def bili_debug(mid):
+    """诊断端点：查看 B站 API 对指定 mid 的返回数据"""
+    from flask import jsonify
+    from blog.bilibili.bili_api import get_user_info, get_video_list
+    import traceback
+    result = {}
+    try:
+        ui = get_user_info(mid)
+        result['user_info'] = {
+            'name': ui.get('name'),
+            'video_count': ui.get('video_count'),
+            'follower_count': ui.get('follower_count'),
+        }
+    except Exception as e:
+        result['user_info'] = {'error': str(e), 'traceback': traceback.format_exc()}
+    try:
+        first10 = []
+        for i, v in enumerate(get_video_list(mid, max_pages=2)):
+            first10.append({
+                'bvid': v['bvid'],
+                'aid': v['aid'],
+                'title': v['title'][:40],
+                'pubdate': v['pubdate'],
+            })
+            if i >= 9:
+                break
+        result['videos_sample'] = first10
+    except Exception as e:
+        result['videos_sample'] = {'error': str(e), 'traceback': traceback.format_exc()}
+    return jsonify(result)
+
+
 @admin_bp.route('/_debug')
 def debug_info():
     """诊断端点：查看当前请求的 session、cookie、请求头等信息。

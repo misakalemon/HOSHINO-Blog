@@ -25,8 +25,11 @@ _loop_local = threading.local()
 _api_semaphore = threading.Semaphore(5)
 
 
+_API_TIMEOUT = 30.0
+
+
 def _sync(coro):
-    """使用线程本地事件循环执行异步协程，受并发信号量保护"""
+    """使用线程本地事件循环执行异步协程，受并发信号量保护，带 30s 超时"""
     with _api_semaphore:
         loop = getattr(_loop_local, 'loop', None)
         if loop is None or loop.is_closed():
@@ -38,9 +41,12 @@ def _sync(coro):
             loop = asyncio.new_event_loop()
             _loop_local.loop = loop
         try:
-            return loop.run_until_complete(coro)
+            return loop.run_until_complete(asyncio.wait_for(coro, timeout=_API_TIMEOUT))
+        except asyncio.TimeoutError:
+            logger.error("B站 API 请求超时 (%ds)", _API_TIMEOUT)
+            _loop_local.loop = None
+            raise TimeoutError(f"B站 API 请求超时 ({_API_TIMEOUT}s)")
         except Exception:
-            # 协程失败后关闭旧循环，下次调用创建新循环
             try:
                 if not loop.is_closed():
                     loop.run_until_complete(loop.shutdown_asyncgens())
@@ -161,7 +167,13 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
 
         vlist = data.get("list", {}).get("vlist", [])
         if not vlist:
+            logger.info("第 %d 页 vlist 为空，结束迭代", pn)
             break
+
+        page_info = data.get("page", {})
+        logger.info("第 %d 页返回 %d 个视频 (total=%s), 首 bvid=%s 末 bvid=%s",
+                    pn, len(vlist), page_info.get("count"),
+                    vlist[0].get("bvid", "?"), vlist[-1].get("bvid", "?"))
 
         for item in vlist:
             pubdate_ts = item.get("created", 0)
