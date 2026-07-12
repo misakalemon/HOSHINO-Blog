@@ -283,18 +283,22 @@ def _run_daily_bili_refresh(app):
         import time
         logger = logging.getLogger(__name__)
         from blog.models import BiliUp
-        from blog.bili_routes import _run_scrape, _scrape_progress, _scrape_running
+        from blog.bili_routes import (_run_scrape, _scrape_progress,
+                                       _scrape_running, _incremental_running,
+                                       _scrape_lock)
 
-        from blog.bili_routes import _scrape_lock
         ups = BiliUp.query.all()
         logger.info('B站 每日刷新启动: 共 %d 个 UP 主', len(ups))
+
+        THREAD_TIMEOUT = 15 * 60  # 每个 UP 主最多允许 15 分钟
 
         threads = []
         for up in ups:
             mid = up.mid
             with _scrape_lock:
-                if mid in _scrape_running:
-                    logger.warning('B站 每日刷新跳过 mid=%d（正在爬取中）', mid)
+                if mid in _scrape_running or mid in _incremental_running:
+                    logger.warning('B站 每日刷新跳过 mid=%d（正在 %s）', mid,
+                                   '爬取' if mid in _scrape_running else '增量检查')
                     continue
                 _scrape_progress[mid] = []
                 _scrape_running.add(mid)
@@ -309,7 +313,9 @@ def _run_daily_bili_refresh(app):
             time.sleep(random.uniform(1.0, 4.0))
 
         for t in threads:
-            t.join()
+            t.join(timeout=THREAD_TIMEOUT)
+            if t.is_alive():
+                logger.warning('B站 每日刷新: 线程 %s 超时 (>%ds)，跳过', t.name, THREAD_TIMEOUT)
 
         logger.info('B站 每日刷新完成')
 
@@ -324,14 +330,17 @@ def _run_bili_incremental_check(app):
         logger = logging.getLogger(__name__)
         from blog.models import BiliUp
         from blog.bili_routes import (_check_new_videos, _scrape_progress,
-                                       _incremental_running, _scrape_lock)
+                                       _incremental_running, _scrape_running,
+                                       _scrape_lock)
+
+        THREAD_TIMEOUT = 10 * 60  # 每个 UP 主最多允许 10 分钟
 
         ups = BiliUp.query.all()
         threads = []
         for up in ups:
             mid = up.mid
             with _scrape_lock:
-                if mid in _incremental_running:
+                if mid in _incremental_running or mid in _scrape_running:
                     continue
                 _scrape_progress[mid] = []
                 _incremental_running.add(mid)
@@ -345,7 +354,9 @@ def _run_bili_incremental_check(app):
             time.sleep(random.uniform(0.5, 2.0))
 
         for t in threads:
-            t.join()
+            t.join(timeout=THREAD_TIMEOUT)
+            if t.is_alive():
+                logger.warning('B站 增量检查: 线程 %s 超时 (>%ds)，跳过', t.name, THREAD_TIMEOUT)
 
 
 def _clean_bili_history(app):

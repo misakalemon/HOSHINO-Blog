@@ -85,6 +85,9 @@ def poll_qr_v2(qrcode_key: str) -> dict:
         global _BILI_LOGGED_IN
         _BILI_LOGGED_IN = True
         cred = qr.get_credential()
+        if cred is None:
+            logger.error("V2 扫码登录失败: get_credential() 返回 None")
+            return {'ok': False, 'error': '无法获取登录凭证，请重试'}
         # 直接设置全局 Credential，保留完整状态（含 refresh_token 等）
         _set_api_credential(cred)
         # 保存完整 Credential JSON（含 refresh_token，支持自动续期）

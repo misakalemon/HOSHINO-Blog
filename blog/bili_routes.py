@@ -192,6 +192,9 @@ _incremental_running: set[int] = set()
 _scrape_progress: dict[int, list[str]] = {}
 # 以上三个共享状态的操作锁
 _scrape_lock = threading.Lock()
+# 每个视频统计查询后的睡眠间隔（秒）
+_VIDEO_SLEEP_BASE = 7.0
+_VIDEO_SLEEP_JITTER = 3.0
 
 
 def _check_new_videos(mid: int, app):
@@ -211,7 +214,6 @@ def _check_new_videos(mid: int, app):
 
             up = BiliUp.query.filter_by(mid=mid).first()
             if not up:
-                _incremental_running.discard(mid)
                 return
             _up_name[0] = up.name or str(mid)
 
@@ -233,7 +235,7 @@ def _check_new_videos(mid: int, app):
                 try:
                     stat = get_video_stat(bvid)
                     video_info.update(stat)
-                    time.sleep(7.0 + random.random() * 3.0)
+                    time.sleep(_VIDEO_SLEEP_BASE + random.random() * _VIDEO_SLEEP_JITTER)
                 except Exception as e:
                     logger.warning("视频 %s 统计获取失败: %s", bvid, e)
                     time.sleep(12.0)
@@ -268,6 +270,48 @@ def _check_new_videos(mid: int, app):
                 existing_aids.add(aid)
                 title_short = (video_info.get('title') or '')[:30]
                 emit(f'发现新视频 [{count}] {title_short}')
+
+            # 动态发现兜底：arc/search 可能遗漏 shorts/新视频
+            from blog.bilibili.bili_api import get_video_list_from_dynamics
+            try:
+                dyn_videos = get_video_list_from_dynamics(mid)
+            except Exception as e:
+                logger.warning("动态发现失败 mid=%d: %s", mid, e)
+                dyn_videos = []
+            for video_info in dyn_videos:
+                bvid = video_info['bvid']
+                aid = video_info['aid']
+                title_short = (video_info.get('title') or '')[:30]
+                if bvid in existing_bvids or aid in existing_aids:
+                    continue
+                try:
+                    video = BiliVideo(up_id=up.id, **video_info)
+                    db.session.add(video)
+                    db.session.commit()
+                except Exception as e:
+                    db.session.rollback()
+                    logger.warning("动态视频 %s 入库失败: %s", bvid, e)
+                    continue
+                try:
+                    db.session.add(BiliVideoHistory(
+                        video_id=video.id,
+                        view_count=video_info.get('view_count', 0),
+                        like_count=video_info.get('like_count', 0),
+                        coin_count=video_info.get('coin_count', 0),
+                        favorite_count=video_info.get('favorite_count', 0),
+                        share_count=video_info.get('share_count', 0),
+                        comment_count=video_info.get('comment_count', 0),
+                        danmaku_count=video_info.get('danmaku_count', 0),
+                    ))
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+                count += 1
+                existing_bvids.add(bvid)
+                existing_aids.add(aid)
+                emit(f'[动态发现] 新视频 [{count}] {title_short}')
+            if dyn_videos:
+                emit(f'动态发现完成，共扫描 {len(dyn_videos)} 个视频')
 
             up.video_count = BiliVideo.query.filter_by(up_id=up.id).count()
             db.session.commit()
@@ -315,7 +359,7 @@ def _check_new_videos(mid: int, app):
                     emit(f'[跟踪] 「{title_short}」')
                     emit(f'  播放:{nv:,}(+{nv-old_view:,})  点赞:{nl:,}(+{nl-old_like:,})  投币:{nc:,}(+{nc-old_coin:,})  收藏:{nf:,}(+{nf-old_fav:,})')
                     emit(f'  转发:{ns:,}(+{ns-old_share:,})  评论:{ncm:,}(+{ncm-old_comment:,})  弹幕:{nd:,}(+{nd-old_danmaku:,})')
-                    time.sleep(7.0 + random.random() * 3.0)
+                    time.sleep(_VIDEO_SLEEP_BASE + random.random() * _VIDEO_SLEEP_JITTER)
             except Exception as e:
                 logger.error('最新视频追踪失败 mid=%d: %s', mid, e)
         except Exception as e:
@@ -323,6 +367,7 @@ def _check_new_videos(mid: int, app):
         finally:
             with _scrape_lock:
                 _incremental_running.discard(mid)
+                _scrape_progress.pop(mid, None)
             db.session.remove()
 
 
@@ -430,19 +475,21 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             total_in_db = BiliVideo.query.filter_by(up_id=up.id).count()
             should_fill = (
                 total_in_db == 0
-                or (total_in_api and total_in_db < total_in_api)
+                or total_in_api is None
+                or (total_in_api > 0 and total_in_db < total_in_api)
                 or (total_in_api == 0 and total_in_db > 0)
                 or force
             )
             fill_count = 0
+            fill_new_bvids: set[str] = set()
+            existing_ids = {
+                r[0] for r in BiliVideo.query.with_entities(BiliVideo.bvid).filter_by(up_id=up.id).all()
+            }
+            existing_aids = {
+                r[0] for r in BiliVideo.query.with_entities(BiliVideo.aid).filter_by(up_id=up.id).all()
+            }
             if should_fill:
                 from blog.bilibili.bili_api import get_video_list as _get_video_list
-                existing_ids = {
-                    r[0] for r in BiliVideo.query.with_entities(BiliVideo.bvid).filter_by(up_id=up.id).all()
-                }
-                existing_aids = {
-                    r[0] for r in BiliVideo.query.with_entities(BiliVideo.aid).filter_by(up_id=up.id).all()
-                }
                 need = (total_in_api - total_in_db) if total_in_api > 0 else -1
                 if need > 0:
                     emit(f'[补全] 发现 {need} 个缺失视频，开始补齐...')
@@ -460,7 +507,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                         try:
                             stat = get_video_stat(bvid)
                             video_info.update(stat)
-                            time.sleep(7.0 + random.random() * 3.0)
+                            time.sleep(_VIDEO_SLEEP_BASE + random.random() * _VIDEO_SLEEP_JITTER)
                         except Exception:
                             logger.warning("视频 %s 「%s」补全时统计获取失败", bvid, title_short)
                             time.sleep(12.0)
@@ -490,15 +537,60 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                         fill_count += 1
                         existing_ids.add(bvid)
                         existing_aids.add(aid)
+                        fill_new_bvids.add(bvid)
                         emit(f'[补全] ({fill_count}) 「{title_short}」')
                         if need > 0 and fill_count >= need:
                             break
-                if fill_count:
-                    emit(f'[补全] 完成，新增 {fill_count} 个视频')
+
+            # 动态发现兜底：始终执行，捕获 arc/search 可能遗漏的 shorts/新视频
+            from blog.bilibili.bili_api import get_video_list_from_dynamics
+            try:
+                dyn_videos = get_video_list_from_dynamics(mid)
+            except Exception as e:
+                logger.warning("补全动态发现失败 mid=%d: %s", mid, e)
+                dyn_videos = []
+            for video_info in dyn_videos:
+                bvid = video_info['bvid']
+                aid = video_info['aid']
+                title_short = (video_info.get('title') or '')[:30]
+                if bvid in existing_ids or aid in existing_aids:
+                    continue
+                try:
+                    video = BiliVideo(up_id=up.id, **video_info)
+                    db.session.add(video)
+                    db.session.commit()
+                except Exception as e:
+                    db.session.rollback()
+                    logger.warning("补全动态视频 %s 入库失败: %s", bvid, e)
+                    continue
+                try:
+                    db.session.add(BiliVideoHistory(
+                        video_id=video.id,
+                        view_count=video_info.get('view_count', 0),
+                        like_count=video_info.get('like_count', 0),
+                        coin_count=video_info.get('coin_count', 0),
+                        favorite_count=video_info.get('favorite_count', 0),
+                        share_count=video_info.get('share_count', 0),
+                        comment_count=video_info.get('comment_count', 0),
+                        danmaku_count=video_info.get('danmaku_count', 0),
+                    ))
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+                fill_count += 1
+                existing_ids.add(bvid)
+                existing_aids.add(aid)
+                fill_new_bvids.add(bvid)
+                emit(f'[补全/动态] ({fill_count}) 「{title_short}」')
+            if dyn_videos:
+                emit(f'补全动态扫描完成，共 {len(dyn_videos)} 个')
+
+            if fill_count:
+                emit(f'[补全] 完成，新增 {fill_count} 个视频')
 
             # 从 DB 按发布时间查视频 → 调 API 更新统计
-            # 记录补全阶段已处理的视频，避免 P0/P1 重复
-            filled_bvids = set(existing_ids) if fill_count else set()
+            # 记录补全阶段新入库的视频，避免 P0/P1 重复
+            filled_bvids = fill_new_bvids
             count = 0
             hot_done = 0
             warm_done = 0
@@ -528,7 +620,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                 try:
                     stat = get_video_stat(bvid)
                     retry_delay = 30
-                    time.sleep(7.0 + random.random() * 3.0)
+                    time.sleep(_VIDEO_SLEEP_BASE + random.random() * _VIDEO_SLEEP_JITTER)
                 except Exception as e:
                     if _is_risk_control(e):
                         logger.warning("触发风控，等待 %ds 后重试...", retry_delay)
@@ -536,8 +628,8 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                         retry_delay = min(retry_delay * 2, 600)
                         return False
                     logger.warning("视频 %s 统计获取失败: %s", bvid, e)
-                    time.sleep(12.0)
-                    return True
+                    time.sleep(8.0)
+                    return False
 
                 for key, val in stat.items():
                     setattr(v, key, val)
@@ -653,4 +745,5 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
         finally:
             with _scrape_lock:
                 _scrape_running.discard(mid)
+                _scrape_progress.pop(mid, None)
             db.session.remove()

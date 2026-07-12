@@ -44,6 +44,12 @@ def _sync(coro):
             return loop.run_until_complete(asyncio.wait_for(coro, timeout=_API_TIMEOUT))
         except asyncio.TimeoutError:
             logger.error("B站 API 请求超时 (%ds)", _API_TIMEOUT)
+            try:
+                if not loop.is_closed():
+                    loop.run_until_complete(loop.shutdown_asyncgens())
+                    loop.close()
+            except Exception:
+                pass
             _loop_local.loop = None
             raise TimeoutError(f"B站 API 请求超时 ({_API_TIMEOUT}s)")
         except Exception:
@@ -128,8 +134,8 @@ def get_user_info(mid: int) -> dict:
     return {
         'name': info.get('name', ''),
         'avatar': info.get('face', ''),
-        'follower_count': info.get('follower', 0),
-        'video_count': info.get('video', 0),
+        'follower_count': info.get('follower') or 0,
+        'video_count': info.get('video') or 0,
     }
 
 
@@ -204,12 +210,104 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
             }
 
         page = data.get("page", {})
-        total_pages = (page.get("count", 0) + PAGE_SIZE - 1) // PAGE_SIZE
-        if pn >= total_pages:
+        total_count = page.get("count", 0)
+        total_pages = (total_count + PAGE_SIZE - 1) // PAGE_SIZE if total_count > 0 else 0
+        if pn >= total_pages and total_pages > 0:
+            break
+        # 当 API 不返回 count 或 count=0 时，依赖 vlist 长度推断是否还有下页
+        if total_pages == 0 and len(vlist) < PAGE_SIZE:
             break
         pn += 1
         import random
         time.sleep(REQUEST_INTERVAL * 2 + random.random() * 3.0)
+
+
+def get_video_list_from_dynamics(mid: int) -> list[dict]:
+    """通过用户动态发现视频（捕获 arc/search 可能遗漏的 shorts/新视频）"""
+    u = _user_mod.User(mid, credential=_credential)
+    try:
+        data = _sync(u.get_dynamics_new())
+    except Exception as e:
+        if _credential and _is_auth_error(e):
+            u = _user_mod.User(mid)
+            data = _sync(u.get_dynamics_new())
+        else:
+            logger.warning("动态发现: get_dynamics_new 失败 mid=%d: %s", mid, e)
+            time.sleep(3.0)
+            u = _user_mod.User(mid)
+            try:
+                data = _sync(u.get_dynamics_new())
+            except Exception as e2:
+                logger.warning("动态发现: get_dynamics_new 重试失败 mid=%d: %s", mid, e2)
+                return []
+
+    items = data.get('items') or []
+    seen_bvids: set[str] = set()
+    results: list[dict] = []
+
+    for item in items:
+        work = item
+        if item.get('type') == 'DYNAMIC_TYPE_FORWARD':
+            orig = item.get('orig')
+            if orig:
+                work = orig
+        modules = work.get('modules') or {}
+        mod_dyn = modules.get('module_dynamic') or {}
+        major = mod_dyn.get('major') or {}
+        archive = major.get('archive') or {}
+        bvid = archive.get('bvid', '')
+        if not bvid or not bvid.startswith('BV') or bvid in seen_bvids:
+            continue
+        seen_bvids.add(bvid)
+
+        try:
+            if _credential is not None:
+                info = _sync(_video_mod.Video(bvid=bvid, credential=_credential).get_info())
+            else:
+                info = _sync(_video_mod.Video(bvid=bvid).get_info())
+        except Exception as e:
+            try:
+                info = _sync(_video_mod.Video(bvid=bvid).get_info())
+            except Exception as e2:
+                logger.warning("动态发现: 视频 %s 信息获取失败 (cred=%s): %s / %s",
+                               bvid, _credential is not None, e, e2)
+                time.sleep(3.0)
+                continue
+
+        # 跳过非本 UP 主的转发视频
+        owner_mid = info.get("owner", {}).get("mid", 0)
+        if owner_mid != mid:
+            logger.debug("动态发现: 跳过转发视频 %s (owner=%d != mid=%d)", bvid, owner_mid, mid)
+            continue
+
+        pubdate_ts = info.get("pubdate", 0)
+        stat = info.get("stat", {})
+        results.append({
+            "aid": int(info.get("aid", 0)),
+            "bvid": bvid,
+            "title": info.get("title", ""),
+            "description": info.get("desc", ""),
+            "duration": info.get("duration", 0),
+            "pubdate": pubdate_ts,
+            "pub_date": (
+                datetime.fromtimestamp(pubdate_ts, tz=timezone.utc).date()
+                if pubdate_ts else None
+            ),
+            "pub_datetime": (
+                datetime.fromtimestamp(pubdate_ts, tz=timezone.utc)
+                if pubdate_ts else None
+            ),
+            "view_count": stat.get("view", 0),
+            "like_count": stat.get("like", 0),
+            "coin_count": stat.get("coin", 0),
+            "favorite_count": stat.get("favorite", 0),
+            "share_count": stat.get("share", 0),
+            "comment_count": stat.get("reply", 0),
+            "danmaku_count": stat.get("danmaku", 0),
+        })
+
+    logger.info("动态发现: mid=%d 找到 %d 个视频 (去重后)", mid, len(results))
+    return results
 
 
 def get_video_stat(bvid: str) -> dict:
@@ -239,7 +337,11 @@ def get_video_stat(bvid: str) -> dict:
 def _parse_duration(length_str: str) -> int:
     if not length_str or not length_str.strip():
         return 0
-    parts = list(map(int, length_str.split(":")))
+    try:
+        parts = list(map(int, length_str.split(":")))
+    except (ValueError, TypeError):
+        logger.warning("无法解析视频时长: %r", length_str)
+        return 0
     if len(parts) == 2:
         return parts[0] * 60 + parts[1]
     elif len(parts) == 3:
