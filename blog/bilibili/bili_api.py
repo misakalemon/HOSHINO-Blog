@@ -131,10 +131,18 @@ def get_user_info(mid: int) -> dict:
             info = _sync(u.get_user_info())
         else:
             raise
+    follower = info.get('follower')
+    if follower is None:
+        try:
+            rel = _sync(_user_mod.User(mid).get_relation_info())
+            follower = rel.get('follower', 0)
+        except Exception:
+            logger.warning("粉丝数获取失败 mid=%d", mid)
+            follower = 0
     return {
         'name': info.get('name', ''),
         'avatar': info.get('face', ''),
-        'follower_count': info.get('follower') or 0,
+        'follower_count': follower,
         'video_count': info.get('video') or 0,
     }
 
