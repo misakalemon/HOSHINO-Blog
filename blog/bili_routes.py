@@ -432,6 +432,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             should_fill = (
                 total_in_db == 0
                 or (total_in_api and total_in_db < total_in_api)
+                or (total_in_api == 0 and total_in_db > 0)
                 or (force and total_in_api is not None)
             )
             fill_count = 0
