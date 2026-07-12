@@ -171,14 +171,20 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
             break
 
         page_info = data.get("page", {})
-        logger.info("第 %d 页返回 %d 个视频 (total=%s), 首 bvid=%s 末 bvid=%s",
-                    pn, len(vlist), page_info.get("count"),
-                    vlist[0].get("bvid", "?"), vlist[-1].get("bvid", "?"))
+        first_pubdate = vlist[0].get("created", 0)
+        first_pubdate_str = (
+            datetime.fromtimestamp(first_pubdate, tz=timezone.utc).strftime("%Y-%m-%d %H:%M")
+            if first_pubdate else "?"
+        )
+        logger.info("第 %d 页返回 %d/%d 个视频 (total=%s, ps=%s), 首 bvid=%s pubdate=%s",
+                    pn, len(vlist), PAGE_SIZE, page_info.get("count"),
+                    page_info.get("ps", "?"),
+                    vlist[0].get("bvid", "?"), first_pubdate_str)
 
         for item in vlist:
             pubdate_ts = item.get("created", 0)
             yield {
-                "aid": item.get("aid", 0),
+                "aid": int(item.get("aid", 0)),
                 "bvid": item.get("bvid", ""),
                 "title": item["title"],
                 "description": item.get("description", ""),

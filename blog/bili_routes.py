@@ -220,10 +220,14 @@ def _check_new_videos(mid: int, app):
             existing_aids = {r[0] for r in BiliVideo.query.with_entities(BiliVideo.aid).filter_by(up_id=up.id).all()}
 
             count = 0
-            for video_info in get_video_list(mid, max_pages=5):
+            for video_info in get_video_list(mid, max_pages=10):
                 bvid = video_info['bvid']
                 aid = video_info['aid']
-                if bvid in existing_bvids or aid in existing_aids:
+                title_short = (video_info.get('title') or '')[:30]
+                is_known = bvid in existing_bvids or aid in existing_aids
+                logger.info("增量检查: bvid=%s aid=%s title=%s known=%s",
+                            bvid, aid, title_short, is_known)
+                if is_known:
                     continue
 
                 try:
