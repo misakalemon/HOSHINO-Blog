@@ -535,6 +535,106 @@ Product ──1:N──→ ProductSource ──1:N──→ PriceRecord
 
 ---
 
+### 4.13 `blog/bilibili/` — B站 视频爬取模块
+
+**路径：** `/hoshino_blog/blog/bilibili/`
+
+**职责：** B站 API 封装、视频爬取调度、Cookie 凭证管理、V2 扫码登录认证。
+
+#### 4.13.1 `bili_api.py` — 核心 API 封装
+
+**关键函数：**
+
+| 函数 | 用途 | 使用 B站 API |
+|------|------|-------------|
+| `_sync(coro)` | 线程本地事件循环，`Semaphore(5)` 并发限制，30s 超时 | - |
+| `get_user_info(mid)` | 名称/头像/粉丝数/视频数 | `x/space/wbi/acc/info` + `x/relation/stat`（粉丝数 fallback） |
+| `get_video_list(mid)` | 分页视频列表（pubdate 倒序，风控退避 + Cookie 过期降级） | `x/space/wbi/arc/search` |
+| `get_video_stat(bvid)` | 视频统计（播放/点赞/投币/收藏/转发/评论/弹幕） | `Video.get_info()` |
+| `get_video_list_from_dynamics(mid)` | 动态发现 — 从用户动态流提取 BVID，捕获 shorts/新视频 | `x/polymer/web-dynamic/v1/feed/space` |
+| `extract_mid(url)` | 从空间 URL 提取 mid | - |
+| `is_logged_in()` | 检查凭证有效性 | `Credential.verify()` |
+
+**错误降级策略：**
+
+```
+凭证存在 → User(mid, credential=cred) 调用 API
+    ↓ 失败
+_is_auth_error? → 是 → 降级为匿名 User(mid) → 重试
+                → 否 → _is_risk_control? → 指数退避重试（30→60→120→…→600s）
+                       → 其他错误 → 记录日志，中断
+```
+
+**视频发现双路径：**
+
+```
+1. arc/search 翻页（主路径）
+   → 按 pubdate 倒序，已知视频 skip，新视频入库
+
+2. 动态兜底（始终执行，不依赖 arc/search 结果）
+   → get_dynamics_new() → 提取 DYNAMIC_TYPE_AV + forward 的 orig
+   → Video.get_info() → 验证 owner_mid == 目标 mid
+   → 新视频入库
+```
+
+#### 4.13.2 `config.py` — B站 配置
+
+| 常量 | 默认值 | 用途 |
+|------|--------|------|
+| `REQUEST_INTERVAL` | 5.0s | 翻页间隔 |
+| `PAGE_SIZE` | 15 | 每页视频数 |
+| `TIMEOUT` | 15s | HTTP 请求超时（login.py 使用） |
+| `COOKIE_FILE` | `.bili_cookies.txt` | Cookie 持久化路径 |
+| `CREDENTIAL_FILE` | `.bili_credential.json` | 完整 Credential（含 refresh_token） |
+
+#### 4.13.3 `login.py` — 登录认证
+
+| 函数 | 用途 |
+|------|------|
+| `generate_qr_v2()` | V2 扫码登录 → 生成二维码（base64 PNG） |
+| `poll_qr_v2(key)` | 轮询扫码状态（等待→已扫码→已确认→过期） |
+| `apply_cookies()` | 启动时加载持久化凭证（优先 `.bili_credential.json`） |
+| `save_credential(cred)` | 保存完整 Credential JSON（含 refresh_token，支持自动续期） |
+| `save_cookies(str)` | 保存 Cookie 字符串（`SESSDATA= ...` 格式，向后兼容） |
+
+#### 4.13.4 `bili_routes.py` — 爬取调度
+
+**核心函数：**
+
+| 函数 | 用途 |
+|------|------|
+| `_check_new_videos(mid, app)` | 增量检查 — arc/search 前 10 页 + 动态兜底 + 最新 3 视频跟踪 |
+| `_run_scrape(mid, url, app)` | 深扫 — 补全 + 动态兜底 + Hot/Warm/Cold 三层统计更新 |
+
+**三层统计更新策略：**
+
+| 分层 | 时间范围 | 跳过条件 | 配额 |
+|------|---------|---------|------|
+| Hot | ≤7天 | 不跳过 | 全部处理 |
+| Warm | 8~30天 | 1h 内已更新则跳过 | 配额内，最久未更新优先 |
+| Cold | >30天 | 24h 内已更新则跳过 | 剩余配额，最久未更新优先 |
+
+**共享状态（线程安全）：**
+
+| 变量 | 类型 | 用途 |
+|------|------|------|
+| `_scrape_running` | `set[int]` | 深扫运行中的 mid |
+| `_incremental_running` | `set[int]` | 增量检查运行中的 mid |
+| `_scrape_progress` | `dict[int,list[str]]` | 爬取进度日志 |
+| `_scrape_lock` | `threading.Lock` | 保护上述三个共享状态 |
+
+### 4.14 B站 定时任务（app.py 调度）
+
+| 任务 | 触发时间 | 线程超时 | 说明 |
+|------|---------|---------|------|
+| `_run_bili_incremental_check` | 每 30 分钟 | 10 分钟/UP | 对所有 UP 主并行增量检查 |
+| `_run_daily_bili_refresh` | 每天 02:00 | 15 分钟/UP | 所有 UP 主深扫（补全 + 三层更新） |
+| `_clean_bili_history` | 每天 04:00 | - | 删除 365 天前的历史快照 |
+
+**互斥保护：** 两个定时任务启动线程前在同一 `_scrape_lock` 下同时检查 `_scrape_running` 和 `_incremental_running`，同一 UP 主不会并发处理。
+
+---
+
 ## 五、路由表
 
 ### 5.1 前台路由（blog_bp — 前缀: `/`）
@@ -592,6 +692,32 @@ Product ──1:N──→ ProductSource ──1:N──→ PriceRecord
 | `/prices/add-product` | POST | `add_product` | 重定向 | 无 | 添加商品 |
 | `/prices/rates` | GET | `exchange_rates` | `price/rates.html` | 无 | 汇率页面 |
 
+### 5.4 Bilibili 后台路由（bili_bp — 前缀: `/admin/bilibili`）
+
+| 路由 | 方法 | 视图函数 | 认证 | 说明 |
+|------|------|----------|------|------|
+| `/admin/bilibili/` | GET | `index` | editor | UP 主管理列表（含扫码登录入口） |
+| `/admin/bilibili/scrape` | POST | `scrape` | editor | 启动爬取（Ajax，解析 space_url → 后台线程） |
+| `/admin/bilibili/scrape-status?mid=` | GET | `scrape_status` | editor | 爬取进度实时 JSON |
+| `/admin/bilibili/qr-gen` | GET | `qr_generate` | editor | 生成 V2 登录二维码（base64 PNG） |
+| `/admin/bilibili/qr-poll?key=` | GET | `qr_poll` | editor | 轮询扫码状态 |
+| `/admin/bilibili/logout-bili` | POST | `logout_bili` | editor | 清除 Cookie/Credential 文件 |
+| `/admin/bilibili/up/<up_id>` | GET | `up_detail` | editor | UP 主视频表格（分页 30/页） |
+| `/admin/bilibili/refresh/<up_id>` | POST | `refresh_up` | editor | 刷新单 UP（限 30 视频） |
+| `/admin/bilibili/refresh-all/<up_id>` | POST | `refresh_up_all` | editor | 强制刷新全部（无配额） |
+| `/admin/bilibili/delete/<up_id>` | POST | `delete_up` | editor | 删除 UP 主及所有视频 |
+| `/admin/bilibili/delete-video/<id>` | POST | `delete_video` | editor | 删除单条视频 |
+| `/admin/bilibili/check-missing` | GET | `check_missing` | editor | 遗漏检查 JSON |
+
+### 5.5 Bilibili 公开路由（bili_public_bp — 前缀: `/bilibili`）
+
+| 路由 | 方法 | 视图函数 | 认证 | 说明 |
+|------|------|----------|------|------|
+| `/bilibili` | GET | `bili_index` | 无 | UP 主列表（支持搜索） |
+| `/bilibili/up/<id>` | GET | `bili_up_detail` | 无 | UP 主视频列表 + 粉丝趋势图 |
+| `/bilibili/video/<id>` | GET | `bili_video_detail` | 无 | 视频详情 + 播放量趋势图 |
+| `/bilibili/api/video/<id>/history` | GET | `bili_video_history` | 无 | 视频历史统计 JSON API |
+
 ---
 
 ## 六、数据库设计
@@ -643,7 +769,59 @@ Product ──1:N──→ ProductSource ──1:N──→ PriceRecord
                                              └──────────────┘
 ```
 
-### 6.2 关联表
+### 6.2 B站 数据模型
+
+```
+┌───────────────────────────────────────────────┐
+│  BiliUp                                       │
+├───────────────────────────────────────────────┤
+│  id (PK) · mid · name · avatar · space_url   │
+│  follower_count · video_count                 │
+│  created_at · updated_at                      │
+└───────────────────┬───────────────────────────┘
+                    │ 1:N
+                    │
+┌───────────────────▼───────────────────────────┐
+│  BiliVideo                                    │
+├───────────────────────────────────────────────┤
+│  id (PK) · up_id (FK) · bvid · aid(UNIQUE)   │
+│  title · description · duration · pubdate     │
+│  pub_date · pub_datetime                      │
+│  view_count · like_count · coin_count         │
+│  favorite_count · share_count                 │
+│  comment_count · danmaku_count                │
+│  created_at · updated_at                      │
+└───────────────────┬───────────────────────────┘
+                    │ 1:N
+                    │
+┌───────────────────▼───────────────────────────┐
+│  BiliVideoHistory                             │
+├───────────────────────────────────────────────┤
+│  id (PK) · video_id (FK) · view_count        │
+│  like_count · coin_count · favorite_count    │
+│  share_count · comment_count · danmaku_count  │
+│  recorded_at                                  │
+└───────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────┐
+│  BiliUpHistory                                │
+├───────────────────────────────────────────────┤
+│  id (PK) · up_id (FK) · follower_count       │
+│  recorded_at                                  │
+└───────────────────────────────────────────────┘
+```
+
+**索引策略 (B站)：**
+
+| 表 | 索引 | 用途 |
+|------|------|------|
+| `bili_videos` | `(up_id, pub_datetime)` 复合索引 | 按 UP 主 + 时间查询 |
+| `bili_videos` | `(up_id, updated_at)` 复合索引 | Warm/Cold 阶段按最久未更新排序 |
+| `bili_videos` | `aid` UNIQUE | aid 去重 |
+| `bili_video_history` | `(video_id, recorded_at)` 复合索引 | 视频历史查询 |
+| `bili_up_history` | `(up_id, recorded_at)` 复合索引 | UP 主粉丝趋势 |
+
+### 6.3 关联表
 
 ```sql
 -- Post ↔ Category 多对多
