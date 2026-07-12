@@ -1,4 +1,9 @@
-"""B 站扫码登录（适配 Flask 路由）"""
+"""B站 登录认证 — V2 扫码登录 + Cookie/Credential 持久化
+
+凭证加载优先级（apply_cookies）:
+  1. 优先加载 .bili_credential.json → Credential（含 refresh_token，支持自动续期）
+  2. 回退加载 .bili_cookies.txt → set_cookies()（纯 Cookie 字符串，向后兼容）
+"""
 import logging
 import os
 import time

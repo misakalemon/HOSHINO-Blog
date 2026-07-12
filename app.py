@@ -205,9 +205,12 @@ def create_app():
 def _init_scheduler(app):
     """初始化 APScheduler 定时任务。
 
-    - 每天 09:00 自动爬取所有启用的商品价格
-    - 每天 03:00 自动轮换 SECRET_KEY
-    如果 APScheduler 未安装或导入失败，静默跳过。
+    定时任务清单：
+      - 每天 02:00  深扫所有 B站 UP 主视频（补全 + 三层统计更新）
+      - 每天 03:00  自动轮换 SECRET_KEY
+      - 每天 04:00  清理 365 天前的 BiliVideoHistory
+      - 每天 09:00  自动爬取所有启用的商品价格
+      - 每 30 分钟   B站 增量检查（新视频发现）
     """
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
@@ -251,7 +254,7 @@ def _init_scheduler(app):
             misfire_grace_time=600,
             coalesce=True,
         )
-        # 每天 04:00 清理 90 天前的 B站 视频历史
+        # 每天 04:00 清理 365 天前的 B站 视频历史
         scheduler.add_job(
             func=lambda: _clean_bili_history(app),
             trigger='cron',

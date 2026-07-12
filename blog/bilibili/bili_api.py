@@ -1,4 +1,11 @@
-"""B 站 API 封装（基于 bilibili-api-python）"""
+"""B站 API 封装
+
+基于 bilibili-api-python，统一封装：
+- 线程安全的事件循环管理（_sync + threading.local）
+- 并发信号量限流（Semaphore(5) 防 B站 风控）
+- Cookie 过期自动降级为匿名访问
+- 两路视频发现：arc/search 翻页 + 动态流兜底
+"""
 import asyncio
 import logging
 import re
@@ -29,7 +36,11 @@ _API_TIMEOUT = 30.0
 
 
 def _sync(coro):
-    """使用线程本地事件循环执行异步协程，受并发信号量保护，带 30s 超时"""
+    """在线程本地事件循环中执行协程，并发上限 5 路，单路 30s 超时。
+
+    每个线程拥有独立的 asyncio 事件循环（threading.local 隔离）。
+    超时或异常后关闭循环并重建，防止 fd/异步生成器资源泄漏。
+    """
     with _api_semaphore:
         loop = getattr(_loop_local, 'loop', None)
         if loop is None or loop.is_closed():
@@ -120,7 +131,12 @@ def extract_mid(space_url: str) -> int:
 
 
 def get_user_info(mid: int) -> dict:
-    """获取 UP 主信息（名称、头像、粉丝数、视频数），Cookie 过期时自动降级为匿名"""
+    """获取 UP 主基本信息。
+
+    主 API: x/space/wbi/acc/info（名称/头像/视频数）
+    Cookie 过期 → 自动降级匿名
+    粉丝数 fallback: x/relation/stat（匿名 acc/info 不返回 follower 字段）
+    """
     try:
         u = _user_mod.User(mid, credential=_credential)
         info = _sync(u.get_user_info())
@@ -148,11 +164,17 @@ def get_user_info(mid: int) -> dict:
 
 
 def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, None, None]:
-    """获取指定 mid 的所有视频基本信息（分页迭代，含风控指数退避 + Cookie过期自动降级）
-    
-    Args:
-        mid: B站 mid
-        max_pages: 最多翻页数，None 表示全部
+    """分页获取 UP 主视频列表（pubdate 倒序）。
+
+    使用 arc/search API，逐页 yield 视频 dict。
+    含三种错误处理路径：
+      1) Cookie 过期 → 切换匿名 User 重试（仅一次）
+      2) 风控限流 → 指数退避等待后重试当前页（30→60→120→…→600s）
+      3) 其他错误 → break 终止迭代
+
+    pagination 策略：
+      - 有 page.count 时按 total_pages 计算翻页数
+      - page.count==0 或缺失时按 vlist 长度判断（len < PAGE_SIZE 即最后一页）
     """
     u = _user_mod.User(mid, credential=_credential)
     pn = 1
@@ -231,7 +253,16 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
 
 
 def get_video_list_from_dynamics(mid: int) -> list[dict]:
-    """通过用户动态发现视频（捕获 arc/search 可能遗漏的 shorts/新视频）"""
+    """动态流兜底 — 捕获 arc/search 遗漏的视频（通常是 shorts / 短视频）。
+
+    请求 x/polymer/web-dynamic/v1/feed/space 获取最近 ~12 条动态：
+      DYNAMIC_TYPE_AV → 自身投稿，直接提取 bvid
+      DYNAMIC_TYPE_FORWARD → 转发，取 orig 中的 bvid
+    对每个 bvid 调 Video.get_info() 拿到完整元数据；
+    过滤 owner_mid != 目标 mid 的转发视频。
+    
+    返回 list[dict]，字段格式与 get_video_list 对齐。
+    """
     u = _user_mod.User(mid, credential=_credential)
     try:
         data = _sync(u.get_dynamics_new())

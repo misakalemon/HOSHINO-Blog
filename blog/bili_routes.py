@@ -1,4 +1,16 @@
-"""Bilibili 后台管理路由"""
+"""Bilibili 管理路由 — UP 主管理 / 爬取调度 / 扫码登录
+
+爬取架构概要：
+  增量检查（每 30min）→ _check_new_videos
+    arc/search 翻前 10 页 + 动态流兜底 + 最新 3 视频跟踪
+  每日深扫（02:00）    → _run_scrape
+    补全缺失视频 + 动态流兜底 + Hot/Warm/Cold 三层统计更新
+  手动刷新             → refresh_up / refresh_up_all → _run_scrape
+
+线程安全：
+  _scrape_running / _incremental_running / _scrape_progress
+  三者受 _scrape_lock 保护，深扫与增量可并行但同一 UP 互斥。
+"""
 import json
 import logging
 import os
@@ -183,22 +195,31 @@ def check_missing():
     return {'ok': True, 'results': results, 'total': len(results)}
 
 
-# ── 爬取任务（后台线程）────────────────────────
-# 正在爬取中的 mid 集合（防止重复爬同一个 UP 主）
+# ── 爬取任务共享状态 ────────────────────────────
+# 深扫运行中的 mid（每日刷新 / 手动触发）
 _scrape_running: set[int] = set()
-# 增量检查中的 mid 集合（与 _scrape_running 独立，不互相阻塞）
+# 增量检查运行中的 mid（与深扫互斥：启动前同时检查两者）
 _incremental_running: set[int] = set()
-# 爬取进度存储 { mid: [line, line, ...] }
+# 实时爬取日志 {mid: [str, ...]} 供 AJAX scrape-status 轮询
 _scrape_progress: dict[int, list[str]] = {}
-# 以上三个共享状态的操作锁
+# 上述三个共享状态的互斥锁
 _scrape_lock = threading.Lock()
-# 每个视频统计查询后的睡眠间隔（秒）
+# 每视频请求后的睡眠（防风控）— BASE + [0, JITTER) 秒
 _VIDEO_SLEEP_BASE = 7.0
 _VIDEO_SLEEP_JITTER = 3.0
 
 
 def _check_new_videos(mid: int, app):
-    """轻量增量检查：只爬取数据库中还不存在的新视频"""
+    """增量检查 — 每 30 分钟执行，只发现新视频。
+
+    流程：
+      1. 加载 DB 已知 bvid/aid 集合
+      2. arc/search 翻前 10 页（按 pubdate 倒序，最多 150 条）
+         → 已知跳过，新视频入库 + 写 BiliVideoHistory
+      3. 动态流兜底（始终执行，捕获 shorts/短视频）
+         → 同上过滤 + 入库
+      4. 追踪最新 3 个视频的统计数据（30min 快照）
+    """
     with _scrape_lock:
         prog = _scrape_progress.get(mid, [])
     _up_name = ['?']
@@ -415,14 +436,24 @@ def scrape():
 
 
 def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, force: bool = False):
-    """后台爬取线程
-    
+    """深扫 — 每日刷新或手动触发的完整爬取。
+
+    流程：
+      A. 获取/更新 UP 主信息（名称/头像/粉丝数）
+      B. 补全缺失视频（should_fill=True 时）
+         → arc/search 翻全量，已知跳过，新视频入库 + BiliVideoHistory
+      C. 动态流兜底（始终执行，不受 should_fill 影响）
+      D. 三层统计更新（Hot ≤7d / Warm 8~30d / Cold >30d）
+         → 跳过本次新入库的视频（fill_new_bvids）
+         → 新视频每个 7~10s 间隔，防风控 + 指数退避重试
+         → max_videos 控制总更新数上限
+
     Args:
-        mid: B站 mid
-        space_url: UP 主空间链接
-        app: Flask 应用实例
-        max_videos: 最多爬取视频数，None 表示全部
-        force: 是否强制刷新（跳过 1h 检查，忽略 Cookie 过期）
+        mid:         B站 mid
+        space_url:   空间页链接
+        app:         Flask app 实例（线程内 app_context 用）
+        max_videos:  最多更新视频数，None=不限
+        force:       True 时跳过 should_fill 条件，强制翻全量；跳过 age 检查
     """
     prog = _scrape_progress.get(mid, [])
     _up_name = ['?']
@@ -588,8 +619,8 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             if fill_count:
                 emit(f'[补全] 完成，新增 {fill_count} 个视频')
 
-            # 从 DB 按发布时间查视频 → 调 API 更新统计
-            # 记录补全阶段新入库的视频，避免 P0/P1 重复
+            # ── 三层统计更新 ────────────────────────
+            # fill_new_bvids: 本次新入库的视频 BVID — Hot 阶段排除这些（已有新鲜数据）
             filled_bvids = fill_new_bvids
             count = 0
             hot_done = 0
@@ -601,6 +632,12 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             cutoff_warm = now - datetime.timedelta(days=30)
 
             def _update_video(v, label='', min_age_hours=1):
+                """更新单个视频的统计数据并写 BiliVideoHistory。
+
+                Returns:
+                    True  — 成功或 min-age 跳过
+                    False — 风控/失败，需要外层 retry（continue 跳到下一个视频，本视频下次再试）
+                """
                 nonlocal count, retry_delay, hot_done, warm_done, cold_done
                 bvid = v.bvid
 
@@ -671,7 +708,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                 emit(f'  转发:{ns:,}(+{ns-old_share:,})  评论:{ncm:,}(+{ncm-old_comment:,})  弹幕:{nd:,}(+{nd-old_danmaku:,})')
                 return True
 
-            # Hot: ≤7天 — 全部处理，无年龄跳过
+            # ── Hot 阶段: ≤7 天 —— 全部更新，不跳过 ──
             hot_query = BiliVideo.query.filter(
                 BiliVideo.up_id == up.id,
                 BiliVideo.pub_datetime >= cutoff_hot,
