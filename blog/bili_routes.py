@@ -220,16 +220,11 @@ def _check_new_videos(mid: int, app):
             existing_aids = {r[0] for r in BiliVideo.query.with_entities(BiliVideo.aid).filter_by(up_id=up.id).all()}
 
             count = 0
-            page_count = 0
-            for video_info in get_video_list(mid):
+            for video_info in get_video_list(mid, max_pages=5):
                 bvid = video_info['bvid']
                 aid = video_info['aid']
                 if bvid in existing_bvids or aid in existing_aids:
-                    break
-                # 限制最多 2 页，防止大 UP 主第一页全为新视频时遍历过多
-                page_count += 1
-                if page_count > 30:
-                    break
+                    continue
 
                 try:
                     stat = get_video_stat(bvid)
@@ -450,21 +445,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                 else:
                     emit(f'[补全] DB 有 {total_in_db} 个视频，开始从 API 补齐...')
 
-                # 快速检测：force + 未知总数 → 只看第 1 页，全已知则跳过
-                _skip_fill = False
-                if force and total_in_api is not None and total_in_api == 0 and total_in_db > 0:
-                    for video_info in _get_video_list(mid, max_pages=1):
-                        bvid, aid = video_info['bvid'], video_info['aid']
-                        if bvid not in existing_ids and aid not in existing_aids:
-                            break
-                    else:
-                        emit('[补全] 第 1 页所有视频均已入库，跳过')
-                        _skip_fill = True
-
-                if _skip_fill:
-                    pass
-                else:
-                    for video_info in _get_video_list(mid):
+                for video_info in _get_video_list(mid):
                         bvid = video_info['bvid']
                         aid = video_info['aid']
                         title_short = (video_info.get('title') or '')[:30]
