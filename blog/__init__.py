@@ -109,6 +109,9 @@ def init_db(app):
         # ── 迁移 BiliVideo/BiliVideoHistory 复合索引 ─
         _migrate_bili_indexes(app)
 
+        # ── 迁移 BiliSubscription.token 唯一约束 → 普通索引 ─
+        _migrate_bili_sub_token_index(app)
+
         # ── 添加示例价格追踪商品（首次启动） ─────
         from .crawler import init_sample_products
         init_sample_products()
@@ -348,6 +351,39 @@ def _migrate_bili_indexes(app):
         except Exception as e:
             db.session.rollback()
             app.logger.warning('迁移: 添加 %s 索引失败: %s', name, e)
+
+
+def _migrate_bili_sub_token_index(app):
+    """迁移：BiliSubscription.token 从 UNIQUE 改为普通 INDEX（支持批量共用 token）。"""
+    engine = db.get_engine()
+    dialect = engine.dialect.name
+    if dialect != 'mysql':
+        return
+    from sqlalchemy import text
+
+    inspector = db.inspect(engine)
+    existing = {ix['name'] for ix in inspector.get_indexes('bili_subscriptions')}
+
+    # 删除旧的 UNIQUE 索引（MySQL 自动命名或用户定义）
+    for ix in existing:
+        if 'token' in ix.lower() and 'unique' not in ix.lower():
+            continue
+        try:
+            db.session.execute(text(f'ALTER TABLE bili_subscriptions DROP INDEX {ix}'))
+            db.session.commit()
+            app.logger.info('迁移: 已删除 bili_subscriptions 索引 %s', ix)
+        except Exception:
+            db.session.rollback()
+
+    # 添加普通索引
+    if 'ix_bili_sub_token' not in existing:
+        try:
+            db.session.execute(text('CREATE INDEX ix_bili_sub_token ON bili_subscriptions (token)'))
+            db.session.commit()
+            app.logger.info('迁移: 已添加 bili_subscriptions.token 普通索引')
+        except Exception as e:
+            db.session.rollback()
+            app.logger.warning('迁移: 添加 bili_subscriptions.token 索引失败: %s', e)
 
 
 # ── 后导入路由（延迟导入） ─────────────────────
