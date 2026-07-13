@@ -172,7 +172,42 @@
             <div id="subMsg" style="margin-top:10px;font-size:0.8rem;color:rgba(255,255,255,0.4)"></div>
         </form>
     </div>
+
+    <!-- 浮动对比栏 -->
+    <div id="compareBar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:999;padding:12px 24px;background:rgba(18,16,34,0.96);border-top:1px solid rgba(255,255,255,0.06);backdrop-filter:blur(12px);justify-content:center;align-items:center;gap:16px;flex-wrap:wrap">
+        <span style="color:rgba(255,255,255,0.6);font-size:0.85rem">📊 已选 <span id="compareCount">0</span> 个视频</span>
+        <a id="compareBtn" href="javascript:void(0)" style="padding:8px 20px;background:rgba(255,107,157,0.15);border:1px solid rgba(255,107,157,0.25);border-radius:10px;color:#ff8aae;text-decoration:none;font-size:0.8rem">开始对比</a>
+        <a href="javascript:void(0)" onclick="clearCompare()" style="padding:8px 16px;color:rgba(255,255,255,0.3);text-decoration:none;font-size:0.75rem">清除</a>
+    </div>
 </div>
+
+<script>
+// ── 视频对比栏（localStorage 同步） ────────────────
+(function() {
+    var STORAGE_KEY = 'bili_compare_ids';
+    var bar = document.getElementById('compareBar');
+    var countEl = document.getElementById('compareCount');
+    var btn = document.getElementById('compareBtn');
+
+    function getIds() {
+        try { var v = localStorage.getItem(STORAGE_KEY); return v ? JSON.parse(v) : []; } catch(e) { return []; }
+    }
+
+    function updateBar() {
+        var ids = getIds();
+        countEl.textContent = ids.length;
+        bar.style.display = ids.length >= 2 ? 'flex' : 'none';
+        btn.href = ids.length >= 2 ? '/bilibili/compare?ids=' + ids.join(',') : 'javascript:void(0)';
+    }
+
+    window.clearCompare = function() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+        updateBar();
+    };
+
+    updateBar();
+})();
+</script>
 
 <script>
 document.getElementById('subscribeForm').addEventListener('submit', function(e) {

@@ -12,17 +12,21 @@
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:28px">
         {% for v in videos %}
         {% set up = up_map.get(v.up_id) %}
-        <a href="{{ url_for('bili_public.video_detail', video_id=v.id) }}"
-           style="padding:16px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:14px;text-decoration:none;transition:all 0.2s"
-           onmouseover="this.style.borderColor='rgba(255,255,255,0.12)';this.style.background='rgba(255,255,255,0.04)'"
-           onmouseout="this.style.borderColor='rgba(255,255,255,0.04)';this.style.background='rgba(255,255,255,0.02)'">
-            <div style="font-size:0.85rem;color:#d0c8f0;font-weight:500;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ v.title }}">{{ v.title }}</div>
+        <div class="compare-card" data-vid="{{ v.id }}"
+             style="position:relative;padding:16px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:14px;cursor:pointer;transition:all 0.2s"
+             onmouseover="this.style.borderColor='rgba(255,255,255,0.12)';this.style.background='rgba(255,255,255,0.04)'"
+             onmouseout="this.style.borderColor='rgba(255,255,255,0.04)';this.style.background='rgba(255,255,255,0.02)'"
+             onclick="window.location='/bilibili/video/{{ v.id }}'">
+            <div style="font-size:0.85rem;color:#d0c8f0;font-weight:500;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:18px" title="{{ v.title }}">{{ v.title }}</div>
             <div style="font-size:0.7rem;color:rgba(255,255,255,0.35);display:flex;flex-wrap:wrap;gap:8px">
                 <span>{{ up.name if up else 'UP主' }}</span>
                 <span>⏱ {{ '%d:%02d'|format(v.duration//60, v.duration%60) if v.duration else '-' }}</span>
                 <span>{{ v.pub_date.strftime('%m/%d') if v.pub_date else '' }}</span>
             </div>
-        </a>
+            <span class="compare-del" onclick="event.stopPropagation();removeFromCompare({{ v.id }})"
+                  style="position:absolute;top:6px;right:8px;font-size:14px;color:rgba(255,255,255,0.2);cursor:pointer;transition:color 0.15s;line-height:1"
+                  onmouseover="this.style.color='#f25a5a'" onmouseout="this.style.color='rgba(255,255,255,0.2)'">✕</span>
+        </div>
         {% endfor %}
     </div>
 
@@ -104,5 +108,14 @@
     });
     window.addEventListener('resize', function(){ chart.resize(); });
 })();
+
+function removeFromCompare(id) {
+    var params = new URLSearchParams(window.location.search);
+    var ids = params.get('ids');
+    if (!ids) return;
+    var list = ids.split(',').map(Number).filter(function(n) { return n !== id; });
+    if (list.length < 2) { window.location.href = '/bilibili'; return; }
+    window.location.href = '/bilibili/compare?ids=' + list.join(',');
+}
 </script>
 {% endblock %}
