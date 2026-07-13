@@ -72,7 +72,12 @@
             <tbody>
                 {% for v in pagination.items %}
                 <tr id="video-{{ v.id }}">
-                    <td data-label="" style="text-align:center"><input type="checkbox" class="video-compare-cb" value="{{ v.id }}" style="accent-color:#ff8aae;cursor:pointer"></td>
+                    <td data-label="" style="text-align:center">
+                        <label style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border:1.5px solid rgba(255,255,255,0.12);border-radius:5px;cursor:pointer;transition:all 0.15s;position:relative" onmouseover="this.style.borderColor='rgba(255,255,255,0.3)'" onmouseout="if(!this.querySelector('input').checked)this.style.borderColor='rgba(255,255,255,0.12)'">
+                            <input type="checkbox" class="video-compare-cb" value="{{ v.id }}" style="opacity:0;position:absolute;width:100%;height:100%;cursor:pointer;margin:0">
+                            <span class="cb-check" style="display:none;font-size:11px;color:#ff8aae;line-height:1">✓</span>
+                        </label>
+                    </td>
                     <td data-label="标题" style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ v.title }}">
                         <a href="{{ url_for('bili_public.video_detail', video_id=v.id) }}#video-{{ v.id }}" style="color:#d0c8f0;text-decoration:none;transition:color 0.2s" onmouseover="this.style.color='#ff8aae'" onmouseout="this.style.color='#d0c8f0'">{{ v.title }}</a>
                     </td>
@@ -155,6 +160,21 @@
     var countEl = document.getElementById('compareCount');
     var btn = document.getElementById('compareBtn');
 
+    function syncCheckVisual(cb) {
+        var label = cb.closest('label');
+        if (!label) return;
+        var check = label.querySelector('.cb-check');
+        if (cb.checked) {
+            label.style.borderColor = '#ff8aae';
+            label.style.background = 'rgba(255,107,157,0.1)';
+            if (check) check.style.display = 'inline';
+        } else {
+            label.style.borderColor = 'rgba(255,255,255,0.12)';
+            label.style.background = 'transparent';
+            if (check) check.style.display = 'none';
+        }
+    }
+
     function getIds() {
         try { var v = localStorage.getItem(STORAGE_KEY); return v ? JSON.parse(v) : []; } catch(e) { return []; }
     }
@@ -170,11 +190,12 @@
         btn.href = ids.length >= 2 ? '/bilibili/compare?ids=' + ids.join(',') : 'javascript:void(0)';
     }
 
-    // 从 localStorage 恢复选中状态
+    // 从 localStorage 恢复选中状态 + 视觉同步
     var saved = getIds();
     var savedSet = new Set(saved.map(Number));
     cbs.forEach(function(cb) {
         if (savedSet.has(parseInt(cb.value))) cb.checked = true;
+        syncCheckVisual(cb);
     });
     updateBar();
 
@@ -184,18 +205,19 @@
             var ids = getIds();
             var val = parseInt(this.value);
             if (this.checked) {
-                if (ids.length >= MAX) { this.checked = false; alert('最多选择 ' + MAX + ' 个视频'); return; }
+                if (ids.length >= MAX) { this.checked = false; syncCheckVisual(this); alert('最多选择 ' + MAX + ' 个视频'); return; }
                 if (!ids.includes(val)) ids.push(val);
             } else {
                 ids = ids.filter(function(id) { return id !== val; });
             }
             saveIds(ids);
+            syncCheckVisual(this);
             updateBar();
         });
     });
 
     window.clearCompare = function() {
-        cbs.forEach(function(cb) { cb.checked = false; });
+        cbs.forEach(function(cb) { cb.checked = false; syncCheckVisual(cb); });
         saveIds([]);
         updateBar();
     };

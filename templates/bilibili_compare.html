@@ -71,7 +71,11 @@
     var metricNames = ['播放','点赞','投币','收藏','转发','评论','弹幕'];
     var colors = ['#c4b5fd','#f87171','#fbbf24','#34d399','#60a5fa','#a78bfa','#f472b6'];
 
-    var upMap = {{ {v.id: (up_map.get(v.up_id).name or (up_map.get(v.up_id).mid|string)) if up_map.get(v.up_id) else 'UP主' for v in videos} | tojson }};
+    var upMap = {};
+    {% for v in videos %}
+    {% set u = up_map.get(v.up_id) %}
+    upMap['{{ v.id }}'] = {{ ((u.name + ' (' + u.mid|string + ')') if u else 'UP主') | tojson }};
+    {% endfor %}
 
     var chart = echarts.init(document.getElementById('compareChart'));
     var series = [];
