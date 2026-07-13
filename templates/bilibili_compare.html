@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+{% block title %}视频对比 - Hoshino{% endblock %}
+{% block content %}
+<div class="content" style="padding-top:100px;max-width:1200px">
+    <div style="margin-bottom:20px">
+        <a href="javascript:history.back()" style="color:rgba(255,255,255,0.3);text-decoration:none;font-size:0.85rem">← 返回</a>
+    </div>
+
+    <h1 style="font-size:1.5rem;font-weight:400;color:rgba(255,255,255,0.8);margin:0 0 24px">📊 视频对比</h1>
+
+    <!-- 视频卡片 -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:28px">
+        {% for v in videos %}
+        {% set up = up_map.get(v.up_id) %}
+        <a href="{{ url_for('bili_public.video_detail', video_id=v.id) }}"
+           style="padding:16px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:14px;text-decoration:none;transition:all 0.2s"
+           onmouseover="this.style.borderColor='rgba(255,255,255,0.12)';this.style.background='rgba(255,255,255,0.04)'"
+           onmouseout="this.style.borderColor='rgba(255,255,255,0.04)';this.style.background='rgba(255,255,255,0.02)'">
+            <div style="font-size:0.85rem;color:#d0c8f0;font-weight:500;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ v.title }}">{{ v.title }}</div>
+            <div style="font-size:0.7rem;color:rgba(255,255,255,0.35);display:flex;flex-wrap:wrap;gap:8px">
+                <span>{{ up.name if up else 'UP主' }}</span>
+                <span>⏱ {{ '%d:%02d'|format(v.duration//60, v.duration%60) if v.duration else '-' }}</span>
+                <span>{{ v.pub_date.strftime('%m/%d') if v.pub_date else '' }}</span>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+
+    <!-- 对比表 -->
+    <div style="padding:24px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:20px;margin-bottom:28px;overflow-x:auto">
+        <table class="admin-table" style="min-width:600px">
+            <thead>
+                <tr>
+                    <th style="text-align:left;position:sticky;left:0;background:#0f0d1e">指标</th>
+                    {% for v in videos %}
+                    <th style="text-align:center;min-width:100px">{{ v.title[:20] }}{% if v.title|length > 20 %}…{% endif %}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in metrics %}
+                <tr>
+                    <td data-label="指标" style="color:rgba(255,255,255,0.5);font-size:0.8rem;position:sticky;left:0;background:#0f0d1e">{{ metric_labels[m] }}</td>
+                    {% for v in videos %}
+                    {% set val = v[m + '_count'] or 0 %}
+                    {% set max_val = videos|map(attribute=m + '_count')|map('default', 0)|list|max %}
+                    <td data-label="{{ metric_labels[m] }}" style="text-align:center;font-size:0.85rem">
+                        <span style="color:{% if val == max_val and max_val > 0 %}#ff8aae;font-weight:600{% else %}rgba(255,255,255,0.6){% endif %}">{{ '{:,}'.format(val) }}</span>
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 柱状图 -->
+    <div style="padding:24px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:20px">
+        <div style="font-size:0.85rem;color:rgba(255,255,255,0.5);margin-bottom:12px">📈 指标对比</div>
+        <div id="compareChart" style="width:100%;height:400px"></div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<script>
+(function() {
+    var rawData = {{ chart_data|safe }};
+    var videoIds = {{ videos|map(attribute='id')|list|tojson }};
+    var videoTitles = {{ videos|map(attribute='title')|list|tojson }};
+
+    var metricNames = ['播放','点赞','投币','收藏','转发','评论','弹幕'];
+    var colors = ['#c4b5fd','#f87171','#fbbf24','#34d399','#60a5fa','#a78bfa','#f472b6'];
+
+    var upMap = {{ {v.id: (up_map.get(v.up_id).name or (up_map.get(v.up_id).mid|string)) if up_map.get(v.up_id) else 'UP主' for v in videos} | tojson }};
+
+    var chart = echarts.init(document.getElementById('compareChart'));
+    var series = [];
+    for (var i = 0; i < 7; i++) {
+        series.push({
+            name: metricNames[i],
+            type: 'bar',
+            data: videoIds.map(function(id) { return (rawData[String(id)] || [])[i] || 0; }),
+            itemStyle: { color: colors[i], borderRadius: [4,4,0,0] },
+        });
+    }
+    chart.setOption({
+        tooltip: { trigger:'axis', backgroundColor:'rgba(18,16,34,0.95)',
+            borderColor:'rgba(255,255,255,0.06)', textStyle:{color:'#e0daff',fontSize:12} },
+        legend: { show: true, top:0, textStyle:{color:'rgba(255,255,255,0.4)',fontSize:11} },
+        grid: { left:60, right:20, top:50, bottom:40 },
+        xAxis: { type:'category',
+            data: videoIds.map(function(id,i) { return (upMap[id] || '') + '\n' + (videoTitles[i] || '').substring(0,12); }),
+            axisLabel:{color:'rgba(255,255,255,0.4)',fontSize:11,interval:0},
+            axisLine:{lineStyle:{color:'rgba(255,255,255,0.06)'}} },
+        yAxis: { type:'value',
+            axisLabel:{color:'rgba(255,255,255,0.3)',fontSize:11,
+                formatter:function(v){return v>=10000?(v/10000).toFixed(1)+'w':v;} },
+            splitLine:{lineStyle:{color:'rgba(255,255,255,0.04)'}} },
+        series: series,
+    });
+    window.addEventListener('resize', function(){ chart.resize(); });
+})();
+</script>
+{% endblock %}

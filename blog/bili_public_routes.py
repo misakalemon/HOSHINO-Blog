@@ -107,6 +107,31 @@ def video_detail(video_id):
                            growth=growth)
 
 
+@bili_public_bp.route('/compare')
+def compare():
+    """视频对比页面 — 可跨 UP 主"""
+    ids = request.args.get('ids', '')
+    video_ids = [int(x) for x in ids.split(',') if x.strip().isdigit()]
+    if len(video_ids) < 2:
+        return render_template('message.html', title='对比失败',
+                               message='请至少选择 2 个视频', type='error')
+    if len(video_ids) > 10:
+        video_ids = video_ids[:10]
+    import json
+    videos = BiliVideo.query.filter(BiliVideo.id.in_(video_ids)).all()
+    up_ids = {v.up_id for v in videos}
+    up_map = {u.id: u for u in BiliUp.query.filter(BiliUp.id.in_(up_ids)).all()}
+    metrics = ['view', 'like', 'coin', 'favorite', 'share', 'comment', 'danmaku']
+    metric_labels = {'view': '播放', 'like': '点赞', 'coin': '投币', 'favorite': '收藏',
+                     'share': '转发', 'comment': '评论', 'danmaku': '弹幕'}
+    chart_data = {}
+    for v in videos:
+        chart_data[str(v.id)] = [getattr(v, m + '_count') or 0 for m in metrics]
+    return render_template('bilibili_compare.html', videos=videos, up_map=up_map,
+                           metrics=metrics, metric_labels=metric_labels,
+                           chart_data=json.dumps(chart_data))
+
+
 @bili_public_bp.route('/subscribe', methods=['POST'])
 def subscribe():
     """订阅 UP 主新视频邮件通知（支持批量选择多个 UP 主）

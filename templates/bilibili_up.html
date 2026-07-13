@@ -57,6 +57,7 @@
         <table class="admin-table">
             <thead>
                 <tr>
+                    <th style="width:36px"></th>
                     <th>标题</th>
                     <th>时长</th>
                     <th>日期</th>
@@ -71,6 +72,7 @@
             <tbody>
                 {% for v in pagination.items %}
                 <tr id="video-{{ v.id }}">
+                    <td data-label="" style="text-align:center"><input type="checkbox" class="video-compare-cb" value="{{ v.id }}" style="accent-color:#ff8aae;cursor:pointer"></td>
                     <td data-label="标题" style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ v.title }}">
                         <a href="{{ url_for('bili_public.video_detail', video_id=v.id) }}#video-{{ v.id }}" style="color:#d0c8f0;text-decoration:none;transition:color 0.2s" onmouseover="this.style.color='#ff8aae'" onmouseout="this.style.color='#d0c8f0'">{{ v.title }}</a>
                     </td>
@@ -114,6 +116,13 @@
         </div>
     </div>
     {% endif %}
+
+    <!-- 浮动对比栏 -->
+    <div id="compareBar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:999;padding:12px 24px;background:rgba(18,16,34,0.96);border-top:1px solid rgba(255,255,255,0.06);backdrop-filter:blur(12px);justify-content:center;align-items:center;gap:16px;flex-wrap:wrap">
+        <span style="color:rgba(255,255,255,0.6);font-size:0.85rem">📊 已选 <span id="compareCount">0</span> 个视频</span>
+        <a id="compareBtn" href="javascript:void(0)" style="padding:8px 20px;background:rgba(255,107,157,0.15);border:1px solid rgba(255,107,157,0.25);border-radius:10px;color:#ff8aae;text-decoration:none;font-size:0.8rem">开始对比</a>
+        <a href="javascript:void(0)" onclick="clearCompare()" style="padding:8px 16px;color:rgba(255,255,255,0.3);text-decoration:none;font-size:0.75rem">清除</a>
+    </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
 <script>
@@ -135,6 +144,61 @@
         }]
     });
     window.addEventListener('resize', function(){ chart.resize(); });
+})();
+
+// ── 视频对比（localStorage 持久化） ────────────────
+(function() {
+    var STORAGE_KEY = 'bili_compare_ids';
+    var MAX = 10;
+    var cbs = document.querySelectorAll('.video-compare-cb');
+    var bar = document.getElementById('compareBar');
+    var countEl = document.getElementById('compareCount');
+    var btn = document.getElementById('compareBtn');
+
+    function getIds() {
+        try { var v = localStorage.getItem(STORAGE_KEY); return v ? JSON.parse(v) : []; } catch(e) { return []; }
+    }
+
+    function saveIds(ids) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
+    }
+
+    function updateBar() {
+        var ids = getIds();
+        countEl.textContent = ids.length;
+        bar.style.display = ids.length >= 2 ? 'flex' : 'none';
+        btn.href = ids.length >= 2 ? '/bilibili/compare?ids=' + ids.join(',') : 'javascript:void(0)';
+    }
+
+    // 从 localStorage 恢复选中状态
+    var saved = getIds();
+    var savedSet = new Set(saved.map(Number));
+    cbs.forEach(function(cb) {
+        if (savedSet.has(parseInt(cb.value))) cb.checked = true;
+    });
+    updateBar();
+
+    // 勾选/取消时同步
+    cbs.forEach(function(cb) {
+        cb.addEventListener('change', function() {
+            var ids = getIds();
+            var val = parseInt(this.value);
+            if (this.checked) {
+                if (ids.length >= MAX) { this.checked = false; alert('最多选择 ' + MAX + ' 个视频'); return; }
+                if (!ids.includes(val)) ids.push(val);
+            } else {
+                ids = ids.filter(function(id) { return id !== val; });
+            }
+            saveIds(ids);
+            updateBar();
+        });
+    });
+
+    window.clearCompare = function() {
+        cbs.forEach(function(cb) { cb.checked = false; });
+        saveIds([]);
+        updateBar();
+    };
 })();
 </script>
 {% endblock %}
