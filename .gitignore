@@ -12,6 +12,7 @@ venv/
 # IDE
 .idea/
 .vscode/
+.arts/
 *.swp
 *.swo
 
