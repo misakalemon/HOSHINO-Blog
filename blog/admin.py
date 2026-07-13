@@ -232,7 +232,6 @@ def login():
             user.login_count = (user.login_count or 0) + 1
             db.session.commit()
             session.permanent = True
-            session.regenerate()
             login_user(user)
             if user.is_editor:
                 return redirect(url_for('admin.dashboard'))
