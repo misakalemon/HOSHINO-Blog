@@ -491,6 +491,9 @@ class BiliSubscription(db.Model):
 
     用户通过邮箱订阅某个 UP 主，新视频发布时接收邮件通知。
     需通过邮件验证链接确认后才激活。
+
+    批量订阅：一次订阅多个 UP 主时，所有记录共用同一个 token，
+    验证/取消订阅时批量操作。
     """
     __tablename__ = 'bili_subscriptions'
     __table_args__ = (
@@ -500,7 +503,7 @@ class BiliSubscription(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), nullable=False, index=True)
     up_id = db.Column(db.Integer, db.ForeignKey('bili_ups.id'), nullable=False, index=True)
-    token = db.Column(db.String(64), unique=True, nullable=False, comment='验证/取消订阅 token')
+    token = db.Column(db.String(64), nullable=False, index=True, comment='验证/取消订阅 token（同批次相同）')
     verified = db.Column(db.Boolean, default=False, comment='是否已通过邮件验证')
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 

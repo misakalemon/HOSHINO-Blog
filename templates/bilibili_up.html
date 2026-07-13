@@ -1,6 +1,5 @@
 {% extends 'base.html' %}
 {% block title %}{{ up.name or 'UP主' }} 视频列表 - Hoshino{% endblock %}
-{% block extra_head %}<meta name="csrf-token" content="{{ csrf_token() }}">{% endblock %}
 {% block content %}
 <div class="content" style="padding-top:100px;max-width:1200px">
     <div style="margin-bottom:24px">
@@ -37,18 +36,6 @@
         </div>
     </div>
     {% endif %}
-
-    <!-- 邮件订阅 -->
-    <div style="margin-bottom:16px;padding:20px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:16px">
-        <div style="font-size:0.85rem;color:rgba(255,255,255,0.5);margin-bottom:12px">📬 新视频邮件通知</div>
-        <form id="subscribeForm" style="display:flex;gap:8px;max-width:420px">
-            <input type="hidden" name="up_id" value="{{ up.id }}">
-            <input type="email" id="subEmail" placeholder="输入邮箱地址，订阅新视频通知..." required
-                   style="flex:1;padding:8px 12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;color:#e8edf5;font-size:0.8rem;outline:none">
-            <button type="submit" style="padding:8px 16px;background:rgba(255,107,157,0.15);border:1px solid rgba(255,107,157,0.25);border-radius:10px;color:#ff8aae;font-size:0.75rem;cursor:pointer;white-space:nowrap">订阅</button>
-        </form>
-        <div id="subMsg" style="margin-top:8px;font-size:0.75rem;color:rgba(255,255,255,0.4)"></div>
-    </div>
 
     <!-- 搜索视频 -->
     <div style="margin-bottom:16px">
@@ -149,43 +136,5 @@
     });
     window.addEventListener('resize', function(){ chart.resize(); });
 })();
-</script>
-<script>
-document.getElementById('subscribeForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    var email = document.getElementById('subEmail').value.trim();
-    var up_id = this.querySelector('input[name="up_id"]').value;
-    var msgEl = document.getElementById('subMsg');
-    msgEl.textContent = '发送中...';
-    msgEl.style.color = 'rgba(255,255,255,0.4)';
-    var formData = new FormData();
-    formData.append('email', email);
-    formData.append('up_id', up_id);
-    var csrfMeta = document.querySelector('meta[name="csrf-token"]');
-    var headers = {};
-    if (csrfMeta) {
-        headers['X-CSRFToken'] = csrfMeta.getAttribute('content');
-    }
-    fetch('{{ url_for("bili_public.subscribe") }}', {
-        method: 'POST',
-        headers: headers,
-        body: formData
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (data.ok) {
-            msgEl.textContent = data.message || '验证邮件已发送，请检查邮箱';
-            msgEl.style.color = '#3dd68c';
-            document.getElementById('subEmail').value = '';
-        } else {
-            msgEl.textContent = data.error || '订阅失败';
-            msgEl.style.color = '#f25a5a';
-        }
-    })
-    .catch(function(err) {
-        msgEl.textContent = '网络错误，请稍后重试';
-        msgEl.style.color = '#f25a5a';
-    });
-});
 </script>
 {% endblock %}

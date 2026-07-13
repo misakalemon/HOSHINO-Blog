@@ -17,6 +17,7 @@ def index():
     page = request.args.get('page', 1, type=int)
     per_page = 20
     q = request.args.get('q', '').strip()
+    all_ups = BiliUp.query.order_by(BiliUp.follower_count.desc()).all()
 
     if q:
         # 统一搜索：同时匹配 UP 主和视频
@@ -28,12 +29,14 @@ def index():
         up_ids = {v.up_id for v in videos}
         up_map = {u.id: u for u in BiliUp.query.filter(BiliUp.id.in_(up_ids)).all()}
         return render_template('bilibili.html', ups=ups, videos=videos,
-                               q=q, total=len(ups) + len(videos), up_map=up_map)
+                               q=q, total=len(ups) + len(videos), up_map=up_map,
+                               all_ups=all_ups)
     else:
         # 无搜索：显示所有 UP 主
         pagination = BiliUp.query.order_by(BiliUp.follower_count.desc())\
             .paginate(page=page, per_page=per_page, error_out=False)
-        return render_template('bilibili.html', pagination=pagination, q='')
+        return render_template('bilibili.html', pagination=pagination, q='',
+                               all_ups=all_ups)
 
 
 @bili_public_bp.route('/up/<int:up_id>')
@@ -90,73 +93,107 @@ def video_detail(video_id):
 
 @bili_public_bp.route('/subscribe', methods=['POST'])
 def subscribe():
-    """订阅 UP 主新视频邮件通知
+    """订阅 UP 主新视频邮件通知（支持批量选择多个 UP 主）
 
-    需提供 email + up_id，创建未验证的订阅记录，
-    发送验证邮件，用户点击链接确认后激活。
+    前端传入 email + up_ids[]，同一个批次内所有订阅共用
+    一个 token，验证/取消订阅时整批操作。
     """
     email = (request.form.get('email') or '').strip().lower()
-    up_id = request.form.get('up_id', type=int)
+    up_ids = request.form.getlist('up_ids[]', type=int)
 
     if not email or '@' not in email:
         return jsonify({'ok': False, 'error': '请输入有效的邮箱地址'}), 400
-    if not up_id:
-        return jsonify({'ok': False, 'error': '缺少 UP 主 ID'}), 400
+    if not up_ids:
+        return jsonify({'ok': False, 'error': '请至少选择一个 UP 主'}), 400
 
-    up = BiliUp.query.get(up_id)
-    if not up:
-        return jsonify({'ok': False, 'error': 'UP 主不存在'}), 404
+    # 过滤掉已订阅且已验证的 UP 主
+    existing_subs = BiliSubscription.query.filter(
+        BiliSubscription.email == email,
+        BiliSubscription.up_id.in_(up_ids),
+    ).all()
+    existing_map = {s.up_id: s for s in existing_subs}
 
-    existing = BiliSubscription.query.filter_by(email=email, up_id=up_id).first()
-    if existing:
-        if existing.verified:
-            return jsonify({'ok': False, 'error': '已订阅该 UP 主'}), 400
-        token = existing.token
-    else:
-        token = secrets.token_urlsafe(32)
-        sub = BiliSubscription(email=email, up_id=up_id, token=token)
-        db.session.add(sub)
-        db.session.commit()
+    new_up_ids = []
+    already_verified = []
+    for uid in up_ids:
+        if uid in existing_map:
+            if existing_map[uid].verified:
+                already_verified.append(uid)
+            else:
+                new_up_ids.append(uid)
+        else:
+            new_up_ids.append(uid)
+
+    if not new_up_ids:
+        if already_verified:
+            names = [BiliUp.query.get(uid).name or str(uid) for uid in already_verified]
+            return jsonify({'ok': False, 'error': f'已订阅: {", ".join(names)}'}), 400
+        return jsonify({'ok': False, 'error': '没有可订阅的 UP 主'}), 400
+
+    token = secrets.token_urlsafe(32)
+    for uid in new_up_ids:
+        if uid in existing_map:
+            sub = existing_map[uid]
+            sub.token = token
+        else:
+            sub = BiliSubscription(email=email, up_id=uid, token=token)
+            db.session.add(sub)
+    db.session.commit()
+
+    selected_ups = BiliUp.query.filter(BiliUp.id.in_(up_ids)).all()
+    up_names = [u.name or str(u.mid) for u in selected_ups]
 
     verify_url = url_for('bili_public.verify_subscription', token=token, _external=True)
     unsubscribe_url = url_for('bili_public.unsubscribe', token=token, _external=True)
 
     from blog.mail import send_verify_email
-    send_verify_email(email, up.name or str(up.mid), verify_url, unsubscribe_url)
+    label = f'{len(up_names)} 个 UP 主'
+    send_verify_email(email, label, verify_url, unsubscribe_url)
 
-    return jsonify({'ok': True, 'message': '验证邮件已发送，请检查邮箱并点击确认链接'})
+    msg = f'验证邮件已发送至 {email}，请检查邮箱并确认订阅'
+    return jsonify({'ok': True, 'message': msg})
 
 
 @bili_public_bp.route('/verify/<token>')
 def verify_subscription(token):
-    """验证邮件订阅"""
-    sub = BiliSubscription.query.filter_by(token=token).first()
-    if not sub:
+    """验证邮件订阅（批量验证同一 token 的所有订阅）"""
+    subs = BiliSubscription.query.filter_by(token=token).all()
+    if not subs:
         return render_template('message.html', title='验证失败',
                                message='链接无效或已过期', type='error')
-    if sub.verified:
+    all_verified = all(s.verified for s in subs)
+    if all_verified:
         return render_template('message.html', title='已验证',
-                               message='该邮箱已验证，无需重复操作', type='info')
-    sub.verified = True
+                               message='已订阅，无需重复操作', type='info')
+    for sub in subs:
+        sub.verified = True
     db.session.commit()
-    up = BiliUp.query.get(sub.up_id)
-    up_name = up.name or str(up.mid) if up else 'UP 主'
+    up_names = []
+    for sub in subs:
+        up = BiliUp.query.get(sub.up_id)
+        if up:
+            up_names.append(up.name or str(up.mid))
+    label = '、'.join(up_names)
     return render_template('message.html', title='订阅成功',
-                           message=f'您已成功订阅 {up_name} 的新视频通知',
+                           message=f'您已成功订阅 {label} 的新视频通知',
                            type='success')
 
 
 @bili_public_bp.route('/unsubscribe/<token>')
 def unsubscribe(token):
-    """取消订阅（通过邮件中的链接）"""
-    sub = BiliSubscription.query.filter_by(token=token).first()
-    if not sub:
+    """取消订阅（批量取消同一 token 的所有订阅）"""
+    subs = BiliSubscription.query.filter_by(token=token).all()
+    if not subs:
         return render_template('message.html', title='取消失败',
                                message='链接无效或已过期', type='error')
-    up = BiliUp.query.get(sub.up_id)
-    up_name = up.name or str(up.mid) if up else 'UP 主'
-    db.session.delete(sub)
+    up_names = []
+    for sub in subs:
+        up = BiliUp.query.get(sub.up_id)
+        if up:
+            up_names.append(up.name or str(up.mid))
+        db.session.delete(sub)
     db.session.commit()
+    label = '、'.join(up_names) if up_names else '所有 UP 主'
     return render_template('message.html', title='已取消订阅',
-                           message=f'您已取消订阅 {up_name} 的通知',
+                           message=f'您已取消订阅 {label} 的通知',
                            type='success')
