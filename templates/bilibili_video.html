@@ -30,34 +30,58 @@
     .stat-card .value { font-size:1.1rem; font-weight:600; }
     .stat-card.active { border-color:var(--ac); background:rgba(255,255,255,0.05); }
     </style>
+    {% macro growth_display(metric) %}
+    {% set g = growth.get(metric, {'total':0,'last':0}) %}
+    {% set total = g['total']|int %}
+    {% set last = g['last']|int %}
+    {% if total != 0 or last != 0 %}
+    <div class="growth" style="font-size:0.6rem;margin-top:3px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
+        <span{% if total >= 0 %} style="color:#3dd68c"{% else %} style="color:#f25a5a"{% endif %}>
+        {% if total >= 0 %}▲{% else %}▼{% endif %}{{ '{:,}'.format(total|abs) }}
+        </span>
+        <span style="color:rgba(255,255,255,0.12)">·</span>
+        <span{% if last >= 0 %} style="color:#3dd68c"{% else %} style="color:#f25a5a"{% endif %}>
+        {% if last >= 0 %}▲{% else %}▼{% endif %}{{ '{:,}'.format(last|abs) }}
+        </span>
+    </div>
+    {% endif %}
+    {% endmacro %}
+
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px;margin-bottom:24px">
         <div class="stat-card active" data-metric="view" onclick="toggleMetric('view')" style="--ac:#c4b5fd">
             <div class="label">播放</div>
             <div class="value" style="color:#e0daff">{{ '{:,}'.format(video.view_count) if video.view_count else '0' }}</div>
+            {{ growth_display('view') }}
         </div>
         <div class="stat-card" data-metric="like" onclick="toggleMetric('like')" style="--ac:#f87171">
             <div class="label">点赞</div>
             <div class="value" style="color:#f87171">{{ '{:,}'.format(video.like_count) if video.like_count else '0' }}</div>
+            {{ growth_display('like') }}
         </div>
         <div class="stat-card" data-metric="coin" onclick="toggleMetric('coin')" style="--ac:#fbbf24">
             <div class="label">投币</div>
             <div class="value" style="color:#fbbf24">{{ '{:,}'.format(video.coin_count) if video.coin_count else '0' }}</div>
+            {{ growth_display('coin') }}
         </div>
         <div class="stat-card" data-metric="favorite" onclick="toggleMetric('favorite')" style="--ac:#34d399">
             <div class="label">收藏</div>
             <div class="value" style="color:#34d399">{{ '{:,}'.format(video.favorite_count) if video.favorite_count else '0' }}</div>
+            {{ growth_display('favorite') }}
         </div>
         <div class="stat-card" data-metric="share" onclick="toggleMetric('share')" style="--ac:#60a5fa">
             <div class="label">转发</div>
             <div class="value" style="color:#60a5fa">{{ '{:,}'.format(video.share_count) if video.share_count else '0' }}</div>
+            {{ growth_display('share') }}
         </div>
         <div class="stat-card" data-metric="comment" onclick="toggleMetric('comment')" style="--ac:#a78bfa">
             <div class="label">评论</div>
             <div class="value" style="color:#a78bfa">{{ '{:,}'.format(video.comment_count) if video.comment_count else '0' }}</div>
+            {{ growth_display('comment') }}
         </div>
         <div class="stat-card" data-metric="danmaku" onclick="toggleMetric('danmaku')" style="--ac:#f472b6">
             <div class="label">弹幕</div>
             <div class="value" style="color:#f472b6">{{ '{:,}'.format(video.danmaku_count) if video.danmaku_count else '0' }}</div>
+            {{ growth_display('danmaku') }}
         </div>
     </div>
 

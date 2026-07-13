@@ -85,10 +85,26 @@ def video_detail(video_id):
         'comment':  [h.comment_count   for h in history],
         'danmaku':  [h.danmaku_count   for h in history],
     })
+
+    metrics = ['view', 'like', 'coin', 'favorite', 'share', 'comment', 'danmaku']
+    growth = {}
+    if len(history) >= 2:
+        first = history[0]
+        last = history[-1]
+        prev = history[-2]
+        for m in metrics:
+            attr = m + '_count'
+            total = getattr(last, attr) - getattr(first, attr)
+            last_change = getattr(last, attr) - getattr(prev, attr)
+            growth[m] = {'total': total, 'last': last_change}
+    else:
+        growth = {m: {'total': 0, 'last': 0} for m in metrics}
+
     return render_template('bilibili_video.html', video=video, up=up,
                            history=history,
                            time_labels=time_labels,
-                           chart_data=chart_data)
+                           chart_data=chart_data,
+                           growth=growth)
 
 
 @bili_public_bp.route('/subscribe', methods=['POST'])
