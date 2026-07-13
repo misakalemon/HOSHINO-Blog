@@ -11,6 +11,7 @@ HOSHINO Blog — 应用配置
 使用方式：
    app.config.from_object('config.ActiveConfig')
 """
+
 import os
 import json
 import secrets
@@ -104,8 +105,9 @@ def _build_database_uri():
     dbname = os.environ.get('DB_NAME', 'hoshino_blog')
 
     # 默认使用 pymysql 驱动连接 MySQL，UTF-8 编码 + 10 秒连接超时
-    return (f'mysql+pymysql://{user}:{passwd}@{host}:{port}/{dbname}'
-            '?charset=utf8mb4&connect_timeout=10')
+    return (
+        f'mysql+pymysql://{user}:{passwd}@{host}:{port}/{dbname}?charset=utf8mb4&connect_timeout=10'
+    )
 
 
 class Config:
@@ -131,7 +133,9 @@ class Config:
     SESSION_COOKIE_SAMESITE = 'Lax'
     # 生产环境默认强制 HTTPS，可通过 .env 中 SESSION_COOKIE_SECURE=false 关闭
     _default_secure = os.environ.get('FLASK_ENV') != 'development'
-    SESSION_COOKIE_SECURE = os.environ.get('SESSION_COOKIE_SECURE', str(_default_secure)).lower() in ('true', '1')
+    SESSION_COOKIE_SECURE = os.environ.get(
+        'SESSION_COOKIE_SECURE', str(_default_secure)
+    ).lower() in ('true', '1')
     PERMANENT_SESSION_LIFETIME = timedelta(days=7)
 
     # ── CSRF 保护 ──────────────────────────────────
@@ -152,10 +156,10 @@ class Config:
     SQLALCHEMY_DATABASE_URI = _build_database_uri()
     # 连接池配置（适合 MySQL 5.7 conda 版本，不宜过大）
     SQLALCHEMY_ENGINE_OPTIONS = {
-        'pool_size': 5,          # 连接池大小（应对并发访问）
-        'pool_recycle': 3600,    # 空闲连接 1 小时后回收（MySQL 默认 8h 超时）
-        'pool_pre_ping': True,   # 每次借用连接前发送 ping 检测有效性
-        'max_overflow': 5,       # 突发流量时允许的临时连接数
+        'pool_size': 5,  # 连接池大小（应对并发访问）
+        'pool_recycle': 3600,  # 空闲连接 1 小时后回收（MySQL 默认 8h 超时）
+        'pool_pre_ping': True,  # 每次借用连接前发送 ping 检测有效性
+        'max_overflow': 5,  # 突发流量时允许的临时连接数
     }
 
     # ── 上传 ──────────────────────────────────────
@@ -172,8 +176,9 @@ class Config:
     PER_PAGE_OPTIONS = sorted(set([POSTS_PER_PAGE, 6, 12, 24, 48]))
 
     # ── 博客副标题（首页英雄区显示）─────────────
-    BLOG_SUBTITLE = os.environ.get('BLOG_SUBTITLE',
-        '碧蓝档案 · 手办 · 键盘 · 耳机 · 桌面 · 圣地巡礼 · 虎式坦克 · 迷彩历史')
+    BLOG_SUBTITLE = os.environ.get(
+        'BLOG_SUBTITLE', '碧蓝档案 · 手办 · 键盘 · 耳机 · 桌面 · 圣地巡礼 · 虎式坦克 · 迷彩历史'
+    )
 
     # ── 默认主题（dark / light）────────────────
     # 首次访问时的默认主题。用户手动切换后以 localStorage 为准，不再受此值影响。
@@ -213,10 +218,12 @@ class Config:
     # ── 邮件（SMTP 邮件订阅）─────────────────────────
     MAIL_SERVER = os.environ.get('MAIL_SERVER', '')
     MAIL_PORT = int(os.environ.get('MAIL_PORT', 587))
+    MAIL_USE_SSL = os.environ.get('MAIL_USE_SSL', 'false').lower() in ('true', '1')
     MAIL_USE_TLS = os.environ.get('MAIL_USE_TLS', 'true').lower() in ('true', '1')
     MAIL_USERNAME = os.environ.get('MAIL_USERNAME', '')
     MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD', '')
     MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER', '')
+    MAIL_TIMEOUT = int(os.environ.get('MAIL_TIMEOUT', 10))
 
     # ── Exa API（搜索引擎，绕过 GFW 获取海外价格）──
     # 从 https://exa.ai 注册获取 API Key

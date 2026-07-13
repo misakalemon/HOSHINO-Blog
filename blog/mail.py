@@ -14,13 +14,24 @@ def _send_email_async(app, msg: MIMEMultipart):
     with app.app_context():
         try:
             config = app.config
-            server = smtplib.SMTP(config['MAIL_SERVER'], config['MAIL_PORT'])
-            if config['MAIL_USE_TLS']:
-                server.starttls()
+            use_ssl = config.get('MAIL_USE_SSL', False)
+            timeout = config.get('MAIL_TIMEOUT', 10)
+
+            if use_ssl:
+                server = smtplib.SMTP_SSL(config['MAIL_SERVER'], config['MAIL_PORT'], timeout=timeout)
+            else:
+                server = smtplib.SMTP(config['MAIL_SERVER'], config['MAIL_PORT'], timeout=timeout)
+                if config['MAIL_USE_TLS']:
+                    server.starttls()
+
             server.login(config['MAIL_USERNAME'], config['MAIL_PASSWORD'])
             server.send_message(msg)
             server.quit()
             logger.info('邮件发送成功 → %s', msg['To'])
+        except smtplib.SMTPAuthenticationError:
+            logger.error('邮件发送失败 → %s: 认证失败，请检查用户名/密码', msg['To'])
+        except smtplib.SMTPException as e:
+            logger.error('邮件发送失败 → %s: SMTP错误 %s', msg['To'], e)
         except Exception as e:
             logger.error('邮件发送失败 → %s: %s', msg['To'], e)
 
