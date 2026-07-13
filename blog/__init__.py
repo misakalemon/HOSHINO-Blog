@@ -362,21 +362,23 @@ def _migrate_bili_sub_token_index(app):
     from sqlalchemy import text
 
     inspector = db.inspect(engine)
-    existing = {ix['name'] for ix in inspector.get_indexes('bili_subscriptions')}
+    indexes = inspector.get_indexes('bili_subscriptions')
+    existing_names = {ix['name'] for ix in indexes}
 
-    # 删除旧的 UNIQUE 索引（MySQL 自动命名或用户定义）
-    for ix in existing:
-        if 'token' in ix.lower() and 'unique' not in ix.lower():
-            continue
-        try:
-            db.session.execute(text(f'ALTER TABLE bili_subscriptions DROP INDEX {ix}'))
-            db.session.commit()
-            app.logger.info('迁移: 已删除 bili_subscriptions 索引 %s', ix)
-        except Exception:
-            db.session.rollback()
+    # 删除 token 列的 UNIQUE 索引
+    dropped = False
+    for ix in indexes:
+        if 'token' in ix.get('column_names', []) and ix.get('unique', False):
+            try:
+                db.session.execute(text(f'ALTER TABLE bili_subscriptions DROP INDEX {ix["name"]}'))
+                db.session.commit()
+                app.logger.info('迁移: 已删除 bili_subscriptions 的 UNIQUE 索引 %s', ix['name'])
+                dropped = True
+            except Exception:
+                db.session.rollback()
 
-    # 添加普通索引
-    if 'ix_bili_sub_token' not in existing:
+    # 添加普通索引（如果还没有的话）
+    if 'ix_bili_sub_token' not in existing_names:
         try:
             db.session.execute(text('CREATE INDEX ix_bili_sub_token ON bili_subscriptions (token)'))
             db.session.commit()
@@ -384,6 +386,15 @@ def _migrate_bili_sub_token_index(app):
         except Exception as e:
             db.session.rollback()
             app.logger.warning('迁移: 添加 bili_subscriptions.token 索引失败: %s', e)
+
+    # 如果 token 列仍存在 UNIQUE 约束（非索引方式），删除它
+    if not dropped:
+        try:
+            db.session.execute(text('ALTER TABLE bili_subscriptions DROP INDEX token'))
+            db.session.commit()
+            app.logger.info('迁移: 已删除 bili_subscriptions 的 token 索引（回退方案）')
+        except Exception:
+            db.session.rollback()
 
 
 # ── 后导入路由（延迟导入） ─────────────────────
