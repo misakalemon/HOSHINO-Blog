@@ -207,6 +207,9 @@ _scrape_lock = threading.Lock()
 # 每视频请求后的睡眠（防风控）— BASE + [0, JITTER) 秒
 _VIDEO_SLEEP_BASE = 7.0
 _VIDEO_SLEEP_JITTER = 3.0
+# 全局熔断器 — 检测到 412 IP封禁后自动暂停所有爬取直到此时间
+_circuit_open_until: float = 0.0
+_CIRCUIT_COOLDOWN = 60 * 60  # 封禁后冷却 60 分钟
 
 
 def _check_new_videos(mid: int, app):
@@ -220,6 +223,11 @@ def _check_new_videos(mid: int, app):
          → 同上过滤 + 入库
       4. 追踪最新 3 个视频的统计数据（30min 快照）
     """
+    # 全局熔断检查
+    if time.time() < _circuit_open_until:
+        logger.warning('全局熔断中，跳过增量检查 mid=%d', mid)
+        return
+
     with _scrape_lock:
         prog = _scrape_progress.get(mid, [])
     _up_name = ['?']
@@ -243,15 +251,22 @@ def _check_new_videos(mid: int, app):
             existing_aids = {r[0] for r in BiliVideo.query.with_entities(BiliVideo.aid).filter_by(up_id=up.id).all()}
 
             count = 0
+            consecutive_known = 0  # 连续已知视频计数 — 超阈值说明已无新视频
+            MAX_CONSECUTIVE_KNOWN = 30  # 连续 2 页全已知 → 提前停止 arc/search
             for video_info in get_video_list(mid, max_pages=10):
                 bvid = video_info['bvid']
                 aid = video_info['aid']
                 title_short = (video_info.get('title') or '')[:30]
                 is_known = bvid in existing_bvids or aid in existing_aids
+                if is_known:
+                    consecutive_known += 1
+                    if consecutive_known > MAX_CONSECUTIVE_KNOWN:
+                        logger.info("连续 %d 个视频已知，跳过后续页", consecutive_known)
+                        break
+                    continue
+                consecutive_known = 0
                 logger.info("增量检查: bvid=%s aid=%s title=%s known=%s",
                             bvid, aid, title_short, is_known)
-                if is_known:
-                    continue
 
                 try:
                     stat = get_video_stat(bvid)
@@ -385,6 +400,10 @@ def _check_new_videos(mid: int, app):
                 logger.error('最新视频追踪失败 mid=%d: %s', mid, e)
         except Exception as e:
             logger.error('增量检查失败 mid=%d: %s', mid, e)
+            # 检测到 412 IP 封禁 → 打开全局熔断
+            if '412' in str(e).lower():
+                _circuit_open_until = time.time() + _CIRCUIT_COOLDOWN
+                logger.error('检测到 412 封禁，全局熔断 %d 分钟', _CIRCUIT_COOLDOWN // 60)
         finally:
             with _scrape_lock:
                 _incremental_running.discard(mid)
@@ -455,6 +474,11 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
         max_videos:  最多更新视频数，None=不限
         force:       True 时跳过 should_fill 条件，强制翻全量；跳过 age 检查
     """
+    # 全局熔断检查
+    if not force and time.time() < _circuit_open_until:
+        logger.warning('全局熔断中，跳过深扫 mid=%d', mid)
+        return
+
     prog = _scrape_progress.get(mid, [])
     _up_name = ['?']
     def emit(line: str):
@@ -777,8 +801,11 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                 emit(f'完整性检查: Cookie 可能过期，API 返回 video_count=0')
 
         except Exception as e:
-                emit(f'爬取失败: {e}')
-                logger.exception('爬取失败 mid=%d', mid)
+            emit(f'爬取失败: {e}')
+            logger.exception('爬取失败 mid=%d', mid)
+            if '412' in str(e).lower():
+                _circuit_open_until = time.time() + _CIRCUIT_COOLDOWN
+                logger.error('检测到 412 封禁，全局熔断 %d 分钟', _CIRCUIT_COOLDOWN // 60)
         finally:
             with _scrape_lock:
                 _scrape_running.discard(mid)

@@ -25,6 +25,17 @@ logger = logging.getLogger(__name__)
 
 _credential: Credential | None = None
 
+# IP 级封禁追踪 — 任意线程检测到 412 后记录在此，供调用方决定是否熔断
+_last_412_time: float = 0.0
+
+
+def was_recently_blocked(cooldown: float = 0) -> bool:
+    """检查最近是否被 B站 IP 级封禁（412）"""
+    global _last_412_time
+    if cooldown <= 0:
+        return _last_412_time > 0
+    return time.time() - _last_412_time < cooldown
+
 # 按线程隔离的事件循环（每个线程独立，不互相干扰）
 _loop_local = threading.local()
 
@@ -75,10 +86,15 @@ def _sync(coro):
 
 
 def _is_risk_control(e: Exception) -> bool:
-    """判断异常是否为 B站 风控/限流"""
+    """判断异常是否为 B站 风控/限流（可重试）"""
     err_str = str(e).lower()
-    codes = ['429', '-509', '-352', '412', 'too many requests', 'ratelimit', '被拒绝']
+    codes = ['429', '-509', '-352', 'too many requests', 'ratelimit', '被拒绝']
     return any(c in err_str for c in codes)
+
+
+def _is_ip_blocked(e: Exception) -> bool:
+    """判断异常是否为 IP 级安全封禁（412 验证页，不可重试）"""
+    return '412' in str(e).lower()
 
 
 def _is_auth_error(e: Exception) -> bool:
@@ -167,10 +183,11 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
     """分页获取 UP 主视频列表（pubdate 倒序）。
 
     使用 arc/search API，逐页 yield 视频 dict。
-    含三种错误处理路径：
+    含四种错误处理路径：
       1) Cookie 过期 → 切换匿名 User 重试（仅一次）
-      2) 风控限流 → 指数退避等待后重试当前页（30→60→120→…→600s）
-      3) 其他错误 → break 终止迭代
+      2) IP 级封禁 412 → 立即 break，不重试
+      3) 风控限流 → 指数退避等待后重试（每页最多 3 次）
+      4) 其他错误 → break 终止迭代
 
     pagination 策略：
       - 有 page.count 时按 total_pages 计算翻页数
@@ -180,6 +197,8 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
     pn = 1
     retry_delay = 30
     auth_retried = False
+    page_retries = 0
+    MAX_PAGE_RETRIES = 3
 
     while True:
         if max_pages is not None and pn > max_pages:
@@ -187,6 +206,7 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
         logger.info("正在获取第 %d 页视频列表 ...", pn)
         try:
             data = _sync(u.get_videos(ps=PAGE_SIZE, pn=pn))
+            page_retries = 0  # 成功则重置本页重试计数
         except Exception as e:
             logger.error("获取第 %d 页视频列表失败: %s", pn, e)
             if _credential and _is_auth_error(e) and not auth_retried:
@@ -194,11 +214,21 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
                 auth_retried = True
                 u = _user_mod.User(mid)
                 continue
+            if _is_ip_blocked(e):
+                global _last_412_time
+                _last_412_time = time.time()
+                logger.error("IP 被安全封禁(412)，停止爬取")
+                break
             if _is_risk_control(e):
-                logger.warning("⚠️ 触发风控，等待 %ds 后重试...", retry_delay)
+                page_retries += 1
+                if page_retries > MAX_PAGE_RETRIES:
+                    logger.error("第 %d 页重试 %d 次仍被风控，停止", pn, MAX_PAGE_RETRIES)
+                    break
+                logger.warning("⚠️ 触发风控，等待 %ds 后重试 (第 %d/%d 次)...",
+                               retry_delay, page_retries, MAX_PAGE_RETRIES)
                 time.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, 600)
-                continue  # 重试当前页
+                continue
             break
 
         vlist = data.get("list", {}).get("vlist", [])
@@ -249,7 +279,9 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
             break
         pn += 1
         import random
-        time.sleep(REQUEST_INTERVAL * 2 + random.random() * 3.0)
+        # 匿名访问时翻倍间隔，降低风控概率
+        sleep_base = REQUEST_INTERVAL * 4 if _credential is None else REQUEST_INTERVAL * 2
+        time.sleep(sleep_base + random.random() * 3.0)
 
 
 def get_video_list_from_dynamics(mid: int) -> list[dict]:

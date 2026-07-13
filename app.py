@@ -278,10 +278,15 @@ def _run_daily_bili_refresh(app):
         from blog.models import BiliUp
         from blog.bili_routes import (_run_scrape, _scrape_progress,
                                        _scrape_running, _incremental_running,
-                                       _scrape_lock)
+                                       _scrape_lock, _circuit_open_until)
 
         ups = BiliUp.query.all()
         logger.info('B站 每日刷新启动: 共 %d 个 UP 主', len(ups))
+
+        if time.time() < _circuit_open_until:
+            remaining = int(_circuit_open_until - time.time()) // 60
+            logger.warning('B站 每日刷新取消: 全局熔断中，剩余 %d 分钟', remaining)
+            return
 
         THREAD_TIMEOUT = 15 * 60  # 每个 UP 主最多允许 15 分钟
 
@@ -324,7 +329,12 @@ def _run_bili_incremental_check(app):
         from blog.models import BiliUp
         from blog.bili_routes import (_check_new_videos, _scrape_progress,
                                        _incremental_running, _scrape_running,
-                                       _scrape_lock)
+                                       _scrape_lock, _circuit_open_until)
+
+        if time.time() < _circuit_open_until:
+            remaining = int(_circuit_open_until - time.time()) // 60
+            logger.warning('B站 增量检查取消: 全局熔断中，剩余 %d 分钟', remaining)
+            return
 
         THREAD_TIMEOUT = 10 * 60  # 每个 UP 主最多允许 10 分钟
 
