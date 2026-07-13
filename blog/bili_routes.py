@@ -261,7 +261,6 @@ def _check_new_videos(mid: int, app):
     with app.app_context():
         try:
             import datetime
-            import time
             from blog.bilibili.bili_api import get_video_list, get_video_stat
 
             up = BiliUp.query.filter_by(mid=mid).first()
@@ -541,7 +540,6 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
     with app.app_context():
         try:
             import datetime
-            import time
             from blog.bilibili.bili_api import _is_risk_control, get_video_stat, get_user_info
 
             up = BiliUp.query.filter_by(mid=mid).first()
