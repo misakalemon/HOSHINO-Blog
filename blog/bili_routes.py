@@ -247,6 +247,7 @@ def _check_new_videos(mid: int, app):
       4. 追踪最新 3 个视频的统计数据（30min 快照）
     """
     # 全局熔断检查
+    global _circuit_open_until
     if time.time() < _circuit_open_until:
         logger.warning('全局熔断中，跳过增量检查 mid=%d', mid)
         return
@@ -527,6 +528,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
         force:       True 时跳过 should_fill 条件，强制翻全量；跳过 age 检查
     """
     # 全局熔断检查
+    global _circuit_open_until
     if not force and time.time() < _circuit_open_until:
         logger.warning('全局熔断中，跳过深扫 mid=%d', mid)
         return
