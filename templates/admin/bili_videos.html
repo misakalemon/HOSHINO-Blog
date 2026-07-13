@@ -1,6 +1,13 @@
 {% extends 'admin/base_admin.html' %}
 {% block title %}{{ up.name or 'UP主' }} 视频列表{% endblock %}
 {% block admin_content %}
+<style>
+.star-btn { background:none; border:none; cursor:pointer; font-size:1.1rem; padding:2px 4px;
+    color:rgba(255,255,255,0.15); transition:color 0.2s; }
+.star-btn:hover { color:rgba(255,255,255,0.4); }
+.star-btn.watched { color:#fbbf24; }
+.star-btn.watched:hover { color:#facc15; }
+</style>
 <div class="admin-header">
     <h3>
         <a href="{{ url_for('bili.index') }}" style="color:rgba(255,255,255,0.3);text-decoration:none">📺 Bilibili</a>
@@ -29,6 +36,7 @@
         <table class="admin-table">
             <thead>
                 <tr>
+                    <th style="width:36px">重点</th>
                     <th>BV 号</th>
                     <th>标题</th>
                     <th>时长</th>
@@ -45,8 +53,15 @@
             <tbody>
                 {% for v in pagination.items %}
                 <tr>
+                    <td data-label="重点">
+                        <button class="star-btn {% if v.id in watched_ids %}watched{% endif %}"
+                                data-video-id="{{ v.id }}" onclick="toggleWatch(this)"
+                                title="{% if v.id in watched_ids %}取消重点追踪{% else %}加入重点追踪{% endif %}">
+                            ★
+                        </button>
+                    </td>
                     <td data-label="BV"><code>{{ v.bvid }}</code></td>
-                    <td data-label="标题" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ v.title }}">{{ v.title }}</td>
+                    <td data-label="标题" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ v.title }}">{{ v.title }}</td>
                     <td data-label="时长">{{ '%d:%02d'|format(v.duration//60, v.duration%60) if v.duration else '-' }}</td>
                     <td data-label="日期">{{ v.pub_datetime.strftime('%Y/%m/%d %H:%M') if v.pub_datetime else v.pub_date.strftime('%Y/%m/%d') if v.pub_date else '-' }}</td>
                     <td data-label="播放">{{ '{:,}'.format(v.view_count) if v.view_count else '0' }}</td>
@@ -83,4 +98,23 @@
     <div style="padding:40px;text-align:center;color:rgba(255,255,255,0.3)">暂无视频数据</div>
     {% endif %}
 </div>
+
+<script>
+var csrfToken = '{{ csrf_token() }}';
+function toggleWatch(btn) {
+    var videoId = btn.dataset.videoId;
+    var isWatched = btn.classList.contains('watched');
+    var url = isWatched
+        ? '/admin/bilibili/video/' + videoId + '/unwatch'
+        : '/admin/bilibili/video/' + videoId + '/watch';
+    fetch(url, { method:'POST', headers:{'X-CSRFToken': csrfToken} })
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+            if (data.ok) {
+                btn.classList.toggle('watched', data.watched);
+                btn.title = data.watched ? '取消重点追踪' : '加入重点追踪';
+            }
+        });
+}
+</script>
 {% endblock %}

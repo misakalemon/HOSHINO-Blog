@@ -22,7 +22,7 @@ from flask import (Blueprint, current_app, flash, redirect, render_template,
                    request, url_for)
 from flask_login import login_required
 
-from blog.models import BiliUp, BiliUpHistory, BiliVideo, BiliVideoHistory, db
+from blog.models import BiliUp, BiliUpHistory, BiliVideo, BiliVideoHistory, BiliWatchedVideo, db
 from .admin import editor_required
 
 logger = logging.getLogger(__name__)
@@ -91,7 +91,9 @@ def up_detail(up_id):
     pagination = BiliVideo.query.filter_by(up_id=up_id)\
         .order_by(BiliVideo.pubdate.desc())\
         .paginate(page=page, per_page=per_page, error_out=False)
-    return render_template('admin/bili_videos.html', up=up, pagination=pagination)
+    watched_ids = {w.video_id for w in BiliWatchedVideo.query.all()}
+    return render_template('admin/bili_videos.html', up=up, pagination=pagination,
+                           watched_ids=watched_ids)
 
 
 @bili_bp.route('/refresh/<int:up_id>', methods=['POST'])
@@ -155,6 +157,27 @@ def delete_video(video_id):
     db.session.commit()
     flash(f'已删除视频 {video.bvid}', 'success')
     return redirect(url_for('bili.up_detail', up_id=up_id))
+
+
+@bili_bp.route('/video/<int:video_id>/watch', methods=['POST'])
+@editor_required
+def watch_video(video_id):
+    """加入重点追踪 — 每 30 分钟更新统计"""
+    video = BiliVideo.query.get_or_404(video_id)
+    if BiliWatchedVideo.query.filter_by(video_id=video_id).first():
+        return {'ok': False, 'error': '已在重点追踪列表中'}
+    db.session.add(BiliWatchedVideo(video_id=video_id))
+    db.session.commit()
+    return {'ok': True, 'watched': True}
+
+
+@bili_bp.route('/video/<int:video_id>/unwatch', methods=['POST'])
+@editor_required
+def unwatch_video(video_id):
+    """取消重点追踪"""
+    db.session.query(BiliWatchedVideo).filter_by(video_id=video_id).delete()
+    db.session.commit()
+    return {'ok': True, 'watched': False}
 
 
 @bili_bp.route('/check-missing')
@@ -398,6 +421,36 @@ def _check_new_videos(mid: int, app):
                     time.sleep(_VIDEO_SLEEP_BASE + random.random() * _VIDEO_SLEEP_JITTER)
             except Exception as e:
                 logger.error('最新视频追踪失败 mid=%d: %s', mid, e)
+
+            # ── 追踪用户标记的重点视频 ──────────────
+            try:
+                watched = BiliVideo.query.join(BiliWatchedVideo)\
+                    .filter(BiliVideo.up_id == up.id).all()
+                if watched:
+                    emit(f'追踪 {len(watched)} 个重点视频')
+                    count += len(watched)
+                for v in watched:
+                    stat = get_video_stat(v.bvid)
+                    for key, val in stat.items():
+                        setattr(v, key, val)
+                    db.session.commit()
+                    db.session.add(BiliVideoHistory(
+                        video_id=v.id,
+                        view_count=stat.get('view_count', 0),
+                        like_count=stat.get('like_count', 0),
+                        coin_count=stat.get('coin_count', 0),
+                        favorite_count=stat.get('favorite_count', 0),
+                        share_count=stat.get('share_count', 0),
+                        comment_count=stat.get('comment_count', 0),
+                        danmaku_count=stat.get('danmaku_count', 0),
+                    ))
+                    db.session.commit()
+                    title_short = (v.title or '')[:30]
+                    emit(f'[重点] 「{title_short}」  播放:{stat.get("view_count",0):,}  点赞:{stat.get("like_count",0):,}  投币:{stat.get("coin_count",0):,}')
+                    time.sleep(_VIDEO_SLEEP_BASE + random.random() * _VIDEO_SLEEP_JITTER)
+            except Exception as e:
+                logger.error('重点视频追踪失败 mid=%d: %s', mid, e)
+
         except Exception as e:
             logger.error('增量检查失败 mid=%d: %s', mid, e)
             # 检测到 412 IP 封禁 → 打开全局熔断

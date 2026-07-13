@@ -472,3 +472,15 @@ class BiliVideoHistory(db.Model):
     recorded_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, index=True)
 
     video = db.relationship('BiliVideo', backref='history_records', lazy='joined')
+
+
+class BiliWatchedVideo(db.Model):
+    """用户标记的重点追踪视频（每 30 分钟增量检查时更新统计）"""
+    __tablename__ = 'bili_watched_videos'
+
+    id = db.Column(db.Integer, primary_key=True)
+    video_id = db.Column(db.Integer, db.ForeignKey('bili_videos.id', ondelete='CASCADE'),
+                         unique=True, nullable=False)
+    added_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    video = db.relationship('BiliVideo', backref='watched_entry', lazy='joined')
