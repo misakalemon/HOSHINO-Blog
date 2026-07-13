@@ -267,8 +267,11 @@ def _run_daily_crawl(app):
         app.logger.info('每日价格爬取完成: %d 条记录', count)
 
 
+_BATCH_SIZE = 3
+
+
 def _run_daily_bili_refresh(app):
-    """每日刷新所有 B站 UP 主视频数据（在应用上下文中运行）。"""
+    """每日刷新所有 B站 UP 主视频数据（分批并发，每批 3 个 UP 主并行）"""
     with app.app_context():
         import logging
         import random
@@ -281,45 +284,48 @@ def _run_daily_bili_refresh(app):
                                        _scrape_lock, _circuit_open_until)
 
         ups = BiliUp.query.all()
-        logger.info('B站 每日刷新启动: 共 %d 个 UP 主', len(ups))
+        logger.info('B站 每日刷新启动: 共 %d 个 UP 主, 每批 %d 个', len(ups), _BATCH_SIZE)
 
         if time.time() < _circuit_open_until:
             remaining = int(_circuit_open_until - time.time()) // 60
             logger.warning('B站 每日刷新取消: 全局熔断中，剩余 %d 分钟', remaining)
             return
 
-        THREAD_TIMEOUT = 15 * 60  # 每个 UP 主最多允许 15 分钟
+        THREAD_TIMEOUT = 15 * 60
 
-        threads = []
+        active: list = []
         for up in ups:
             mid = up.mid
             with _scrape_lock:
                 if mid in _scrape_running or mid in _incremental_running:
-                    logger.warning('B站 每日刷新跳过 mid=%d（正在 %s）', mid,
-                                   '爬取' if mid in _scrape_running else '增量检查')
                     continue
                 _scrape_progress[mid] = []
                 _scrape_running.add(mid)
-            t = threading.Thread(
-                target=_run_scrape,
-                args=(mid, up.space_url, app),
-                kwargs={'max_videos': 30},
-                daemon=True,
-            )
-            t.start()
-            threads.append(t)
-            time.sleep(random.uniform(1.0, 4.0))
+            active.append(up)
 
-        for t in threads:
-            t.join(timeout=THREAD_TIMEOUT)
-            if t.is_alive():
-                logger.warning('B站 每日刷新: 线程 %s 超时 (>%ds)，跳过', t.name, THREAD_TIMEOUT)
+        for i in range(0, len(active), _BATCH_SIZE):
+            batch = active[i:i + _BATCH_SIZE]
+            threads = []
+            for up in batch:
+                t = threading.Thread(
+                    target=_run_scrape,
+                    args=(up.mid, up.space_url, app),
+                    kwargs={'max_videos': 30},
+                    daemon=True,
+                )
+                t.start()
+                threads.append(t)
+                time.sleep(random.uniform(0.5, 2.0))
+            for t in threads:
+                t.join(timeout=THREAD_TIMEOUT)
+                if t.is_alive():
+                    logger.warning('B站 每日刷新: 线程 %s 超时 (>%ds)，跳过', t.name, THREAD_TIMEOUT)
 
         logger.info('B站 每日刷新完成')
 
 
 def _run_bili_incremental_check(app):
-    """每 30 分钟增量检查所有 UP 主是否有新视频"""
+    """每 30 分钟增量检查所有 UP 主（分批并发，每批 3 个 UP 主并行）"""
     with app.app_context():
         import logging
         import random
@@ -336,10 +342,10 @@ def _run_bili_incremental_check(app):
             logger.warning('B站 增量检查取消: 全局熔断中，剩余 %d 分钟', remaining)
             return
 
-        THREAD_TIMEOUT = 10 * 60  # 每个 UP 主最多允许 10 分钟
+        THREAD_TIMEOUT = 10 * 60
 
         ups = BiliUp.query.all()
-        threads = []
+        active: list = []
         for up in ups:
             mid = up.mid
             with _scrape_lock:
@@ -347,19 +353,24 @@ def _run_bili_incremental_check(app):
                     continue
                 _scrape_progress[mid] = []
                 _incremental_running.add(mid)
-            t = threading.Thread(
-                target=_check_new_videos,
-                args=(mid, app),
-                daemon=True,
-            )
-            t.start()
-            threads.append(t)
-            time.sleep(random.uniform(0.5, 2.0))
+            active.append(up)
 
-        for t in threads:
-            t.join(timeout=THREAD_TIMEOUT)
-            if t.is_alive():
-                logger.warning('B站 增量检查: 线程 %s 超时 (>%ds)，跳过', t.name, THREAD_TIMEOUT)
+        for i in range(0, len(active), _BATCH_SIZE):
+            batch = active[i:i + _BATCH_SIZE]
+            threads = []
+            for up in batch:
+                t = threading.Thread(
+                    target=_check_new_videos,
+                    args=(up.mid, app),
+                    daemon=True,
+                )
+                t.start()
+                threads.append(t)
+                time.sleep(random.uniform(0.5, 2.0))
+            for t in threads:
+                t.join(timeout=THREAD_TIMEOUT)
+                if t.is_alive():
+                    logger.warning('B站 增量检查: 线程 %s 超时 (>%ds)，跳过', t.name, THREAD_TIMEOUT)
 
 
 if __name__ == '__main__':
