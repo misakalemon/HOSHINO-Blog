@@ -23,7 +23,7 @@
                 <span>⏱ {{ '%d:%02d'|format(v.duration//60, v.duration%60) if v.duration else '-' }}</span>
                 <span>{{ v.pub_date.strftime('%m/%d') if v.pub_date else '' }}</span>
             </div>
-            <span class="compare-del" onclick="event.stopPropagation();removeFromCompare({{ v.id }})"
+            <span class="compare-del" onclick="event.stopPropagation();showConfirm('从对比中移除此视频？',function(r){if(r)removeFromCompare({{ v.id }})})"
                   style="position:absolute;top:6px;right:8px;font-size:14px;color:rgba(255,255,255,0.2);cursor:pointer;transition:color 0.15s;line-height:1"
                   onmouseover="this.style.color='#f25a5a'" onmouseout="this.style.color='rgba(255,255,255,0.2)'">✕</span>
         </div>

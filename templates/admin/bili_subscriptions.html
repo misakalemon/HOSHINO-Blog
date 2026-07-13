@@ -3,7 +3,7 @@
 {% block admin_content %}
 <div class="admin-header">
     <h3>📧 B站 邮件订阅</h3>
-    <form method="POST" action="{{ url_for('admin.cleanup_unverified_subscriptions') }}" style="display:inline">
+    <form method="POST" action="{{ url_for('admin.cleanup_unverified_subscriptions') }}" style="display:inline" onsubmit="var _f=this;event.preventDefault();showConfirm('确定清理所有 24 小时未验证的过期订阅？',function(r){if(r){_f.onsubmit=null;_f.submit()}})">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-ghost" style="font-size:0.75rem">清理过期未验证</button>
     </form>
@@ -44,7 +44,7 @@
                 </td>
                 <td data-label="订阅时间">{{ sub.created_at.strftime('%Y-%m-%d %H:%M') if sub.created_at else '-' }}</td>
                 <td data-label="操作">
-                    <form method="POST" action="{{ url_for('admin.delete_bili_subscription', id=sub.id) }}" style="display:inline" onsubmit="return confirm('确定删除该订阅记录？')">
+                    <form method="POST" action="{{ url_for('admin.delete_bili_subscription', id=sub.id) }}" style="display:inline" onsubmit="var _f=this;event.preventDefault();showConfirm('确定删除该订阅记录？',function(r){if(r){_f.onsubmit=null;_f.submit()}})">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn btn-danger" style="padding:4px 12px;font-size:0.7rem">删除</button>
                     </form>
