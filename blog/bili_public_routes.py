@@ -64,18 +64,24 @@ def up_videos(up_id):
 
 @bili_public_bp.route('/video/<int:video_id>')
 def video_detail(video_id):
-    """视频详情页"""
+    """视频详情页 — 多指标折线图（点击卡片开关曲线）"""
     video = BiliVideo.query.get_or_404(video_id)
     up = BiliUp.query.get_or_404(video.up_id)
-    # 播放量变化历史（最近 300 条 + JSON 供图表）
     import json
-    view_history = BiliVideoHistory.query.filter_by(video_id=video_id)\
+    history = BiliVideoHistory.query.filter_by(video_id=video_id)\
         .order_by(BiliVideoHistory.recorded_at.desc()).limit(300).all()
-    view_history.reverse()
-    view_chart_data = json.dumps([
-        {'t': h.recorded_at.strftime('%m/%d %H:%M'), 'v': h.view_count}
-        for h in view_history
-    ])
+    history.reverse()
+    time_labels = json.dumps([h.recorded_at.strftime('%m/%d %H:%M') for h in history])
+    chart_data = json.dumps({
+        'view':     [h.view_count     for h in history],
+        'like':     [h.like_count      for h in history],
+        'coin':     [h.coin_count      for h in history],
+        'favorite': [h.favorite_count  for h in history],
+        'share':    [h.share_count     for h in history],
+        'comment':  [h.comment_count   for h in history],
+        'danmaku':  [h.danmaku_count   for h in history],
+    })
     return render_template('bilibili_video.html', video=video, up=up,
-                           view_history=view_history,
-                           view_chart_data=view_chart_data)
+                           history=history,
+                           time_labels=time_labels,
+                           chart_data=chart_data)
