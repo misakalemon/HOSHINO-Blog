@@ -208,7 +208,6 @@ def _init_scheduler(app):
     定时任务清单：
       - 每天 02:00  深扫所有 B站 UP 主视频（补全 + 三层统计更新）
       - 每天 03:00  自动轮换 SECRET_KEY
-      - 每天 04:00  清理 365 天前的 BiliVideoHistory
       - 每天 09:00  自动爬取所有启用的商品价格
       - 每 30 分钟   B站 增量检查（新视频发现）
     """
@@ -254,17 +253,8 @@ def _init_scheduler(app):
             misfire_grace_time=600,
             coalesce=True,
         )
-        # 每天 04:00 清理 365 天前的 B站 视频历史
-        scheduler.add_job(
-            func=lambda: _clean_bili_history(app),
-            trigger='cron',
-            hour=4,
-            minute=0,
-            id='clean_bili_history',
-            replace_existing=True,
-        )
         scheduler.start()
-        app.logger.info('定时任务: 09:00价格 / 03:00密钥 / 每30minB站增量 / 02:00B站深扫 / 04:00清理历史')
+        app.logger.info('定时任务: 09:00价格 / 03:00密钥 / 每30minB站增量 / 02:00B站深扫')
     except Exception as e:
         app.logger.warning('定时任务启动失败（不影响运行）: %s', e)
 
@@ -360,19 +350,6 @@ def _run_bili_incremental_check(app):
             t.join(timeout=THREAD_TIMEOUT)
             if t.is_alive():
                 logger.warning('B站 增量检查: 线程 %s 超时 (>%ds)，跳过', t.name, THREAD_TIMEOUT)
-
-
-def _clean_bili_history(app):
-    """清理 365 天前的 B站 视频历史快照"""
-    with app.app_context():
-        from blog import db
-        from blog.models import BiliVideoHistory
-        from datetime import datetime, timedelta
-        cutoff = datetime.utcnow() - timedelta(days=365)
-        deleted = BiliVideoHistory.query.filter(BiliVideoHistory.recorded_at < cutoff).delete()
-        db.session.commit()
-        if deleted:
-            app.logger.info('清理 B站 视频历史: 删除 %d 条 365 天前的记录', deleted)
 
 
 if __name__ == '__main__':
