@@ -22,7 +22,7 @@ from flask import (Blueprint, current_app, flash, redirect, render_template,
                    request, url_for)
 from flask_login import login_required
 
-from blog.models import BiliUp, BiliUpHistory, BiliVideo, BiliVideoHistory, BiliWatchedVideo, db
+from blog.models import BiliSubscription, BiliUp, BiliUpHistory, BiliVideo, BiliVideoHistory, BiliWatchedVideo, db
 from .admin import editor_required
 
 logger = logging.getLogger(__name__)
@@ -376,6 +376,27 @@ def _check_new_videos(mid: int, app):
             db.session.commit()
             if count:
                 emit(f'增量完成，新增 {count} 个视频')
+                # ── 发送邮件通知 ─────────────────────
+                try:
+                    new_videos = BiliVideo.query.filter_by(up_id=up.id)\
+                        .order_by(BiliVideo.pubdate.desc()).limit(count).all()
+                    new_videos_data = [{
+                        'title': v.title or '',
+                        'bvid': v.bvid,
+                        'pub_date': v.pub_date.strftime('%Y-%m-%d') if v.pub_date else '',
+                        'duration': f'{v.duration // 60}:{v.duration % 60:02d}' if v.duration else '',
+                        'view_count': v.view_count or 0,
+                        'like_count': v.like_count or 0,
+                    } for v in new_videos]
+                    subs = BiliSubscription.query.filter_by(up_id=up.id, verified=True).all()
+                    if subs:
+                        from blog.mail import send_new_video_notify
+                        emit(f'发送邮件通知给 {len(subs)} 个订阅者')
+                        for sub in subs:
+                            unsub_url = url_for('bili_public.unsubscribe', token=sub.token, _external=True)
+                            send_new_video_notify(sub.email, up.name or str(up.mid), new_videos_data, unsub_url)
+                except Exception as e:
+                    logger.error('发送新视频通知失败 mid=%d: %s', mid, e)
 
             # ── 追踪最新 3 个视频的统计（每 30 分钟快照）──
             try:

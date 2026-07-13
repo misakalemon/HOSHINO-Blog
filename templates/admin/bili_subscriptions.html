@@ -1,0 +1,81 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}B站 订阅管理{% endblock %}
+{% block admin_content %}
+<div class="admin-header">
+    <h3>📧 B站 邮件订阅</h3>
+    <form method="POST" action="{{ url_for('admin.cleanup_unverified_subscriptions') }}" style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-ghost" style="font-size:0.75rem">清理过期未验证</button>
+    </form>
+</div>
+
+<div style="margin-bottom:16px">
+    <form method="GET" style="display:flex;gap:8px;max-width:400px">
+        <input type="text" name="q" value="{{ q }}" placeholder="搜索邮箱或 UP 主..." style="flex:1;padding:8px 12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;color:#e8edf5;font-size:0.8rem;outline:none">
+        <button type="submit" class="btn btn-primary" style="padding:8px 16px;font-size:0.75rem">搜索</button>
+        {% if q %}
+        <a href="{{ url_for('admin.bili_subscriptions') }}" class="btn btn-ghost" style="padding:8px 16px;font-size:0.75rem">清除</a>
+        {% endif %}
+    </form>
+</div>
+
+<div class="admin-table-wrapper">
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>邮箱</th>
+                <th>UP 主</th>
+                <th>状态</th>
+                <th>订阅时间</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for sub in pagination.items %}
+            <tr>
+                <td data-label="邮箱">{{ sub.email }}</td>
+                <td data-label="UP 主">{{ sub.up.name or sub.up.mid }}</td>
+                <td data-label="状态">
+                    {% if sub.verified %}
+                    <span class="badge badge-published">已验证</span>
+                    {% else %}
+                    <span class="badge badge-draft">未验证</span>
+                    {% endif %}
+                </td>
+                <td data-label="订阅时间">{{ sub.created_at.strftime('%Y-%m-%d %H:%M') if sub.created_at else '-' }}</td>
+                <td data-label="操作">
+                    <form method="POST" action="{{ url_for('admin.delete_bili_subscription', id=sub.id) }}" style="display:inline" onsubmit="return confirm('确定删除该订阅记录？')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-danger" style="padding:4px 12px;font-size:0.7rem">删除</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" style="color:rgba(255,255,255,0.3);text-align:center;padding:40px">暂无订阅记录</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if pagination.pages > 1 %}
+<div class="pagination-wrap" style="margin-top:24px">
+    <ul class="pagination">
+        {% if pagination.has_prev %}
+        <li><a href="{{ url_for('admin.bili_subscriptions', page=pagination.prev_num, q=q) }}">←</a></li>
+        {% endif %}
+        {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+            {% if page_num %}
+            <li {% if page_num == pagination.page %}class="active"{% endif %}>
+                <a href="{{ url_for('admin.bili_subscriptions', page=page_num, q=q) }}">{{ page_num }}</a>
+            </li>
+            {% else %}
+            <li><span>···</span></li>
+            {% endif %}
+        {% endfor %}
+        {% if pagination.has_next %}
+        <li><a href="{{ url_for('admin.bili_subscriptions', page=pagination.next_num, q=q) }}">→</a></li>
+        {% endif %}
+    </ul>
+</div>
+{% endif %}
+{% endblock %}

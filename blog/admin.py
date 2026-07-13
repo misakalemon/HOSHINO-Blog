@@ -57,7 +57,8 @@ from flask_login import current_user, login_required, login_user, logout_user
 
 from . import admin_bp
 from .forms import CategoryForm, FeaturedCardForm, LoginForm, PostForm, ProfileForm, RegisterForm, UserForm
-from .models import Category, Comment, FeaturedCard, Post, User, db
+from .models import (BiliSubscription, BiliUp, Category, Comment, FeaturedCard,
+                     Post, User, db)
 
 logger = logging.getLogger(__name__)
 
@@ -1092,3 +1093,56 @@ def delete_featured_card(id):
     db.session.commit()
     flash('特色卡片已删除', 'success')
     return redirect(url_for('admin.featured_card_list'))
+
+
+# ═══════════════════════════════════════════════
+# B站 订阅管理
+# ═══════════════════════════════════════════════
+
+
+@admin_bp.route('/bili-subscriptions')
+@admin_required
+def bili_subscriptions():
+    """B站 邮件订阅管理列表"""
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    q = request.args.get('q', '').strip()
+
+    query = BiliSubscription.query.join(BiliUp, BiliSubscription.up_id == BiliUp.id)
+    if q:
+        query = query.filter(
+            db.or_(
+                BiliSubscription.email.ilike(f'%{q}%'),
+                BiliUp.name.ilike(f'%{q}%'),
+            )
+        )
+    pagination = query.order_by(BiliSubscription.created_at.desc())\
+        .paginate(page=page, per_page=per_page, error_out=False)
+
+    return render_template('admin/bili_subscriptions.html', pagination=pagination, q=q)
+
+
+@admin_bp.route('/bili-subscriptions/<int:id>/delete', methods=['POST'])
+@admin_required
+def delete_bili_subscription(id):
+    """删除单条订阅记录"""
+    sub = BiliSubscription.query.get_or_404(id)
+    db.session.delete(sub)
+    db.session.commit()
+    flash('订阅记录已删除', 'success')
+    return redirect(url_for('admin.bili_subscriptions'))
+
+
+@admin_bp.route('/bili-subscriptions/cleanup-unverified', methods=['POST'])
+@admin_required
+def cleanup_unverified_subscriptions():
+    """清理 24 小时未验证的订阅记录"""
+    import datetime
+    cutoff = datetime.datetime.utcnow() - datetime.timedelta(hours=24)
+    deleted = BiliSubscription.query.filter(
+        BiliSubscription.verified == False,
+        BiliSubscription.created_at < cutoff
+    ).delete()
+    db.session.commit()
+    flash(f'已清理 {deleted} 条未验证的过期订阅', 'success')
+    return redirect(url_for('admin.bili_subscriptions'))

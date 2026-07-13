@@ -1,9 +1,10 @@
 """Bilibili 公开页面路由"""
 import logging
+import secrets
 
-from flask import Blueprint, render_template, request, abort
+from flask import Blueprint, jsonify, render_template, request, url_for
 
-from blog.models import BiliUp, BiliUpHistory, BiliVideo, BiliVideoHistory, db
+from blog.models import BiliSubscription, BiliUp, BiliUpHistory, BiliVideo, BiliVideoHistory, db
 
 logger = logging.getLogger(__name__)
 
@@ -85,3 +86,77 @@ def video_detail(video_id):
                            history=history,
                            time_labels=time_labels,
                            chart_data=chart_data)
+
+
+@bili_public_bp.route('/subscribe', methods=['POST'])
+def subscribe():
+    """订阅 UP 主新视频邮件通知
+
+    需提供 email + up_id，创建未验证的订阅记录，
+    发送验证邮件，用户点击链接确认后激活。
+    """
+    email = (request.form.get('email') or '').strip().lower()
+    up_id = request.form.get('up_id', type=int)
+
+    if not email or '@' not in email:
+        return jsonify({'ok': False, 'error': '请输入有效的邮箱地址'}), 400
+    if not up_id:
+        return jsonify({'ok': False, 'error': '缺少 UP 主 ID'}), 400
+
+    up = BiliUp.query.get(up_id)
+    if not up:
+        return jsonify({'ok': False, 'error': 'UP 主不存在'}), 404
+
+    existing = BiliSubscription.query.filter_by(email=email, up_id=up_id).first()
+    if existing:
+        if existing.verified:
+            return jsonify({'ok': False, 'error': '已订阅该 UP 主'}), 400
+        token = existing.token
+    else:
+        token = secrets.token_urlsafe(32)
+        sub = BiliSubscription(email=email, up_id=up_id, token=token)
+        db.session.add(sub)
+        db.session.commit()
+
+    verify_url = url_for('bili_public.verify_subscription', token=token, _external=True)
+    unsubscribe_url = url_for('bili_public.unsubscribe', token=token, _external=True)
+
+    from blog.mail import send_verify_email
+    send_verify_email(email, up.name or str(up.mid), verify_url, unsubscribe_url)
+
+    return jsonify({'ok': True, 'message': '验证邮件已发送，请检查邮箱并点击确认链接'})
+
+
+@bili_public_bp.route('/verify/<token>')
+def verify_subscription(token):
+    """验证邮件订阅"""
+    sub = BiliSubscription.query.filter_by(token=token).first()
+    if not sub:
+        return render_template('message.html', title='验证失败',
+                               message='链接无效或已过期', type='error')
+    if sub.verified:
+        return render_template('message.html', title='已验证',
+                               message='该邮箱已验证，无需重复操作', type='info')
+    sub.verified = True
+    db.session.commit()
+    up = BiliUp.query.get(sub.up_id)
+    up_name = up.name or str(up.mid) if up else 'UP 主'
+    return render_template('message.html', title='订阅成功',
+                           message=f'您已成功订阅 {up_name} 的新视频通知',
+                           type='success')
+
+
+@bili_public_bp.route('/unsubscribe/<token>')
+def unsubscribe(token):
+    """取消订阅（通过邮件中的链接）"""
+    sub = BiliSubscription.query.filter_by(token=token).first()
+    if not sub:
+        return render_template('message.html', title='取消失败',
+                               message='链接无效或已过期', type='error')
+    up = BiliUp.query.get(sub.up_id)
+    up_name = up.name or str(up.mid) if up else 'UP 主'
+    db.session.delete(sub)
+    db.session.commit()
+    return render_template('message.html', title='已取消订阅',
+                           message=f'您已取消订阅 {up_name} 的通知',
+                           type='success')

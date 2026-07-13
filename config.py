@@ -210,6 +210,14 @@ class Config:
     # 格式: http://user:pass@host:port
     SCRAPING_PROXY = os.environ.get('SCRAPING_PROXY') or ''
 
+    # ── 邮件（SMTP 邮件订阅）─────────────────────────
+    MAIL_SERVER = os.environ.get('MAIL_SERVER', '')
+    MAIL_PORT = int(os.environ.get('MAIL_PORT', 587))
+    MAIL_USE_TLS = os.environ.get('MAIL_USE_TLS', 'true').lower() in ('true', '1')
+    MAIL_USERNAME = os.environ.get('MAIL_USERNAME', '')
+    MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD', '')
+    MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER', '')
+
     # ── Exa API（搜索引擎，绕过 GFW 获取海外价格）──
     # 从 https://exa.ai 注册获取 API Key
     # 通过搜索获取电商页面内容，解析价格信息

@@ -484,3 +484,24 @@ class BiliWatchedVideo(db.Model):
     added_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
     video = db.relationship('BiliVideo', backref='watched_entry', lazy='joined')
+
+
+class BiliSubscription(db.Model):
+    """B站 UP 主邮件订阅
+
+    用户通过邮箱订阅某个 UP 主，新视频发布时接收邮件通知。
+    需通过邮件验证链接确认后才激活。
+    """
+    __tablename__ = 'bili_subscriptions'
+    __table_args__ = (
+        db.UniqueConstraint('email', 'up_id', name='uq_sub_email_up'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(120), nullable=False, index=True)
+    up_id = db.Column(db.Integer, db.ForeignKey('bili_ups.id'), nullable=False, index=True)
+    token = db.Column(db.String(64), unique=True, nullable=False, comment='验证/取消订阅 token')
+    verified = db.Column(db.Boolean, default=False, comment='是否已通过邮件验证')
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    up = db.relationship('BiliUp', backref=db.backref('subscriptions', lazy='dynamic'))

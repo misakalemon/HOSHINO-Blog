@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>新视频通知</title></head>
+<body style="margin:0;padding:0;background:#0f0d1e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+<table role="presentation" style="width:100%;max-width:600px;margin:0 auto;padding:40px 20px">
+<tr><td style="text-align:center;padding-bottom:24px">
+<h1 style="color:#e8edf5;font-size:20px;font-weight:500;margin:0">{{ up_name }} 发布了新视频</h1>
+</td></tr>
+{% for v in videos %}
+<tr><td style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:16px;padding:20px;margin-bottom:12px;display:block">
+<h2 style="color:#e8edf5;font-size:15px;font-weight:500;margin:0 0 8px">{{ v.title }}</h2>
+<table style="width:100%">
+<tr>
+<td style="color:rgba(255,255,255,0.4);font-size:12px;padding:2px 0">📅 {{ v.pub_date }}</td>
+<td style="color:rgba(255,255,255,0.4);font-size:12px;padding:2px 0">⏱ {{ v.duration }}</td>
+</tr>
+<tr>
+<td style="color:rgba(255,255,255,0.4);font-size:12px;padding:2px 0">▶ {{ '{:,}'.format(v.view_count) if v.view_count else 0 }}</td>
+<td style="color:rgba(255,255,255,0.4);font-size:12px;padding:2px 0">👍 {{ '{:,}'.format(v.like_count) if v.like_count else 0 }}</td>
+</tr>
+</table>
+</td></tr>
+{% endfor %}
+<tr><td style="text-align:center;padding:24px 0 0">
+<a href="{{ unsubscribe_url }}" style="color:rgba(255,255,255,0.25);font-size:12px;text-decoration:none">取消订阅该 UP 主的通知</a>
+</td></tr>
+</table>
+</body>
+</html>

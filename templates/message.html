@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }} - Hoshino{% endblock %}
+{% block content %}
+<div class="content" style="padding-top:120px;max-width:600px;margin:0 auto;text-align:center">
+    <div style="padding:48px 32px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:20px">
+        <div style="font-size:48px;margin-bottom:16px">
+            {% if type == 'success' %}✅
+            {% elif type == 'error' %}❌
+            {% else %}ℹ️{% endif %}
+        </div>
+        <h1 style="font-size:1.5rem;font-weight:500;color:rgba(255,255,255,0.9);margin:0 0 12px">{{ title }}</h1>
+        <p style="color:rgba(255,255,255,0.5);font-size:0.95rem;line-height:1.6;margin:0 0 24px">{{ message }}</p>
+        <a href="{{ url_for('bili_public.index') }}" style="display:inline-block;padding:10px 24px;background:rgba(255,107,157,0.15);border:1px solid rgba(255,107,157,0.25);border-radius:12px;color:#ff8aae;text-decoration:none;font-size:0.85rem">返回 B站 UP 主</a>
+    </div>
+</div>
+{% endblock %}
