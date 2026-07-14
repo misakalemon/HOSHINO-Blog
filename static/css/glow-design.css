@@ -231,8 +231,7 @@ ul { list-style: none; }
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.08);
   color: #fff; text-decoration: none; font-size: 0.9rem;
-  transition: all 0.3s; backdrop-filter: blur(8px);
-  cursor: pointer; font-family: inherit;
+  transition: all 0.3s;   cursor: pointer; font-family: inherit;
 }
 .back-btn { background:none; border:1px solid rgba(255,255,255,0.08); color:rgba(255,255,255,0.4); padding:6px 18px; border-radius:30px; cursor:pointer; font-size:0.8rem; font-family:inherit; transition:all 0.2s; }
 .back-btn:hover { color:#fff; border-color:rgba(255,255,255,0.2); }
@@ -341,7 +340,7 @@ ul { list-style: none; }
   will-change: opacity;
 }
 /* 确保卡片内容在 z-index 上层，不被光晕遮挡 */
-.glass-card > * { position: relative; z-index: 1; }
+.glass-card > * { position: relative; }
 .card-content { border-radius: 20px; overflow: hidden; padding: 1.25rem; }
 
 /* 卡片入场动画：淡入上移 */
@@ -379,7 +378,7 @@ ul { list-style: none; }
   font-size: 0.6rem; padding: 0.2rem 0.8rem; border-radius: 20px;
   letter-spacing: 0.04em;
   border: 1px solid rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(8px); transition: 0.3s;
+  transition: 0.3s;
 }
 .pill-light:hover {
   background: rgba(255, 255, 255, 0.12);
@@ -568,7 +567,6 @@ ul { list-style: none; }
   border: 1px solid rgba(255,255,255,0.08);
   background: rgba(255,255,255,0.04);
   color: rgba(255,255,255,0.7);
-  backdrop-filter: blur(8px);
 }
 .btn:hover {
   background: rgba(255,255,255,0.08);
@@ -958,12 +956,12 @@ ul { list-style: none; }
     rgba(192, 132, 252, calc(var(--glow-intensity, 0) * 0.4)) 5%,
     transparent 10%
   );
-  clip-path: inset(2px); pointer-events: none; z-index: 0;
+  clip-path: inset(2px); pointer-events: none; z-index: -1;
   opacity: var(--glow-opacity, 0);
   transition: opacity 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   will-change: opacity;
 }
-.admin-card > * { position: relative; z-index: 1; }
+.admin-card > * { position: relative; }
 .admin-card h5 {
   font-size: 0.65rem; font-weight: 600; text-transform: uppercase;
   letter-spacing: 0.08em; color: rgba(255,255,255,0.3);
@@ -1173,7 +1171,6 @@ ul { list-style: none; }
 }
 .crop-mask-piece {
   position:absolute; background:rgba(0,0,0,0.45);
-  backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);
 }
 
 .crop-footer {
@@ -1276,7 +1273,7 @@ ul { list-style: none; }
   /* 汉堡菜单按钮：固定左上角 + 三条横线 → X 动画 */
   .admin-toggle {
     display: flex !important; flex-direction: column; gap: 5px; cursor: pointer;
-    background: rgba(8,10,15,0.3); backdrop-filter: blur(12px);
+    background: rgba(8,10,15,0.3);
     border: 1px solid rgba(255,255,255,0.06); border-radius: 12px;
     padding: 10px; z-index: 10000; position: fixed; top: 10px; left: 10px;
   }
@@ -1397,7 +1394,7 @@ ul { list-style: none; }
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 12px;
   color: rgba(255,255,255,0.4); font-family: inherit; cursor: pointer;
-  transition: all 0.3s; backdrop-filter: blur(8px);
+  transition: all 0.3s;
 }
 .tools-nav-btn:hover { border-color: rgba(255,255,255,0.15); color: rgba(255,255,255,0.8); }
 .tools-nav-btn.active {

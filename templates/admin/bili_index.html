@@ -167,7 +167,9 @@ function startScrape() {
         pollScrapeLog(d.mid);
     });
 }
-function pollScrapeLog(mid) {
+function pollScrapeLog(mid, attempt) {
+    if (attempt === undefined) attempt = 0;
+    if (attempt >= 300) { return; }
     if (scrapeTimer) clearTimeout(scrapeTimer);
     fetch('{{ url_for("bili.scrape_status") }}?mid=' + mid)
         .then(function(r) { return r.json(); })
@@ -176,7 +178,7 @@ function pollScrapeLog(mid) {
             if (d.lines && d.lines.length) el.textContent = d.lines.join('\n');
             el.scrollTop = el.scrollHeight;
             if (d.running) {
-                scrapeTimer = setTimeout(function() { pollScrapeLog(mid); }, 1000);
+                scrapeTimer = setTimeout(function() { pollScrapeLog(mid, attempt + 1); }, 1000);
             } else {
                 scrapeTimer = setTimeout(function() { location.reload(); }, 2000);
             }
