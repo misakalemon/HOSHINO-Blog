@@ -23,6 +23,7 @@ HOSHINO Blog — Flask 应用入口
     gunicorn app:create_app()  # Linux 生产部署（需读取 .env）
     waitress-serve --port=5000 app:create_app  # Windows 生产部署
 """
+
 import os
 import time
 
@@ -31,6 +32,7 @@ from flask import Flask, request
 from flask_compress import Compress
 from flask_login import LoginManager
 from flask_wtf.csrf import CSRFProtect
+from flask_migrate import Migrate
 
 # ── 环境变量加载 ──────────────────────────────
 # load_dotenv() 必须在 Flask 应用创建之前执行，
@@ -76,15 +78,19 @@ def create_app():
     csrf = CSRFProtect(app)
     # Gzip 压缩哪些 MIME 类型
     app.config['COMPRESS_MIMETYPES'] = [
-        'text/html', 'text/css', 'text/javascript',
-        'application/json', 'application/xml'
+        'text/html',
+        'text/css',
+        'text/javascript',
+        'application/json',
+        'application/xml',
     ]
-    app.config['COMPRESS_LEVEL'] = 6       # 压缩级别 1-9
+    app.config['COMPRESS_LEVEL'] = 6  # 压缩级别 1-9
     app.config['COMPRESS_MIN_SIZE'] = 500  # 小于 500 字节不压缩
 
     # ── 日志系统（必须在其他初始化之前） ────────────
     # 先初始化日志，后续所有模块的 logger 直接可用
     from blog.logger import log_request, setup_logging
+
     logger = setup_logging(app)
     logger.info('应用启动中...')
 
@@ -99,43 +105,51 @@ def create_app():
     #   3. 自动迁移 v1→v2       —— 兼容旧版单分类数据
     #   4. 创建默认管理员        —— 首次启动时
     from blog import db, init_db
+
     init_db(app)
+    migrate = Migrate(app, db)
     logger.info('数据库初始化完成')
 
     # ── Redis 缓存（数据库之后，蓝图之前） ────────
     # 初始化 Redis 连接池。如果 REDIS_URL 未配置，
     # 则静默降级（所有缓存操作直接返回 None，不影响业务）。
     from blog.cache import init_redis
+
     init_redis(app)
 
     # ── Amazon 直爬（curl_cffi 模拟浏览器） ────
     from blog.apify_client import scraper
+
     scraper._proxy = app.config.get('SCRAPING_PROXY') or None
-    logger.info('Amazon 爬虫已就绪%s',
-                '，代理: ' + scraper._proxy if scraper._proxy else '（无代理）')
+    logger.info(
+        'Amazon 爬虫已就绪%s', '，代理: ' + scraper._proxy if scraper._proxy else '（无代理）'
+    )
 
     # ── Exa API（海外价格搜索引擎，绕过 GFW） ──
     from blog.exa_client import ExaClient
+
     app.exa_client = ExaClient(app.config.get('EXA_API_KEY', ''))
     if app.exa_client._ready:
         logger.info('Exa 客户端已就绪')
         # 将启动时获取的汇率写入数据库
         from blog.models import ExchangeRate
+
         with app.app_context():
             for currency, rate in app.exa_client._rates.items():
-                existing = ExchangeRate.query.filter_by(
-                    currency=currency
-                ).order_by(ExchangeRate.recorded_at.desc()).first()
+                existing = (
+                    ExchangeRate.query.filter_by(currency=currency)
+                    .order_by(ExchangeRate.recorded_at.desc())
+                    .first()
+                )
                 if not existing or abs(existing.rate - rate) / rate > 0.001:
-                    db.session.add(ExchangeRate(
-                        currency=currency, rate=rate
-                    ))
+                    db.session.add(ExchangeRate(currency=currency, rate=rate))
             db.session.commit()
     else:
         logger.info('Exa 未配置（EXA_API_KEY 为空），跳过')
 
     # ── 加载 B站 持久化登录凭证 ──
     from blog.bilibili.login import apply_cookies as _bili_apply_cookies
+
     _bili_apply_cookies()
 
     # ── 定时任务（价格爬虫 + SECRET_KEY 轮换） ──
@@ -144,7 +158,7 @@ def create_app():
     # ── 登录管理 ──────────────────────────────────
     login_manager = LoginManager()
     login_manager.init_app(app)
-    login_manager.login_view = 'admin.login'       # 未登录时跳转
+    login_manager.login_view = 'admin.login'  # 未登录时跳转
     login_manager.login_message = '请先登录'
 
     from blog.models import User
@@ -158,18 +172,23 @@ def create_app():
     # ── 注册蓝图 ─────────────────────────────────
     # 前台 blueprint（URL 前缀为空，所有前台路由直接挂在 / 下）
     from blog import blog_bp
+
     app.register_blueprint(blog_bp)
     # 后台 blueprint（所有后台路由自动添加 /admin 前缀）
     from blog import admin_bp
+
     app.register_blueprint(admin_bp)
     # 价格追踪 blueprint（所有价格路由自动添加 /prices 前缀）
     from blog import price_bp
+
     app.register_blueprint(price_bp)
     # Bilibili 管理 blueprint
     from blog.bili_routes import bili_bp
+
     app.register_blueprint(bili_bp)
     # Bilibili 公开页面 blueprint
     from blog.bili_public_routes import bili_public_bp
+
     app.register_blueprint(bili_public_bp)
     logger.info('蓝图注册完成')
 
@@ -179,13 +198,25 @@ def create_app():
 
     # ── 413 请求过大处理 ──────────────────────────
     from werkzeug.exceptions import RequestEntityTooLarge
-    app.register_error_handler(RequestEntityTooLarge, lambda e: (
-        logger.error('413 REQUEST TOO LARGE: Content-Length=%s  Remote=%s  Path=%s',
-                     request.content_length, request.remote_addr, request.path),
-        (f'<h1>413 Request Entity Too Large</h1><p>请求体过大 (Content-Length: {request.content_length})，'
-         f'当前限制: {app.config["MAX_CONTENT_LENGTH"]//1024//1024}MB。'
-         f'请减小文件或联系管理员。</p>', 413, {'Content-Type': 'text/html; charset=utf-8'})
-    )[1])
+
+    app.register_error_handler(
+        RequestEntityTooLarge,
+        lambda e: (
+            logger.error(
+                '413 REQUEST TOO LARGE: Content-Length=%s  Remote=%s  Path=%s',
+                request.content_length,
+                request.remote_addr,
+                request.path,
+            ),
+            (
+                f'<h1>413 Request Entity Too Large</h1><p>请求体过大 (Content-Length: {request.content_length})，'
+                f'当前限制: {app.config["MAX_CONTENT_LENGTH"] // 1024 // 1024}MB。'
+                f'请减小文件或联系管理员。</p>',
+                413,
+                {'Content-Type': 'text/html; charset=utf-8'},
+            ),
+        )[1],
+    )
 
     # ── 全局请求日志中间件 ───────────────────────
     # 每次 HTTP 响应返回到客户端之前执行 log_request()
@@ -193,12 +224,17 @@ def create_app():
 
     # ── 请求结束时清理数据库 session ────────────
     from blog import db
+
     @app.teardown_appcontext
     def shutdown_session(exception=None):
         db.session.remove()
 
     elapsed = time.time() - _startup_time
-    logger.info('应用就绪 (%.2fs)  MAX_CONTENT_LENGTH=%dMB', elapsed, app.config['MAX_CONTENT_LENGTH'] / 1024 / 1024)
+    logger.info(
+        '应用就绪 (%.2fs)  MAX_CONTENT_LENGTH=%dMB',
+        elapsed,
+        app.config['MAX_CONTENT_LENGTH'] / 1024 / 1024,
+    )
     return app
 
 
@@ -215,6 +251,7 @@ def _init_scheduler(app):
         from apscheduler.schedulers.background import BackgroundScheduler
 
         from config import rotate_secret_key
+
         scheduler = BackgroundScheduler()
         # 每天 09:00 执行
         scheduler.add_job(
@@ -235,12 +272,24 @@ def _init_scheduler(app):
             replace_existing=True,
         )
         # 每天 02:00 深扫所有 UP 主 Hot/Warm/Cold 三层数据
+        from blog.bili_routes import cleanup_old_history, run_daily_scrape
+
         scheduler.add_job(
-            func=lambda: _run_daily_bili_refresh(app),
+            func=lambda: run_daily_scrape(app),
             trigger='cron',
             hour=2,
             minute=0,
             id='daily_bili_refresh',
+            replace_existing=True,
+        )
+        # 清理 90 天前的 B站视频历史快照（保留磁盘空间）
+        scheduler.add_job(
+            func=lambda: cleanup_old_history(app),
+            trigger='cron',
+            day=1,
+            hour=3,
+            minute=0,
+            id='cleanup_bili_history',
             replace_existing=True,
         )
         # 每 30 分钟增量检查 B站 新视频
@@ -263,65 +312,9 @@ def _run_daily_crawl(app):
     """执行每日价格爬取（在应用上下文中运行）。"""
     with app.app_context():
         from blog.crawler import crawl_all_active_sources
+
         count = crawl_all_active_sources()
         app.logger.info('每日价格爬取完成: %d 条记录', count)
-
-
-_BATCH_SIZE = 3
-
-
-def _run_daily_bili_refresh(app):
-    """每日刷新所有 B站 UP 主视频数据（分批并发，每批 3 个 UP 主并行）"""
-    with app.app_context():
-        import logging
-        import random
-        import threading
-        import time
-        logger = logging.getLogger(__name__)
-        from blog.models import BiliUp
-        from blog.bili_routes import (_run_scrape, _scrape_progress,
-                                       _scrape_running, _incremental_running,
-                                       _scrape_lock, _circuit_open_until)
-
-        ups = BiliUp.query.all()
-        logger.info('B站 每日刷新启动: 共 %d 个 UP 主, 每批 %d 个', len(ups), _BATCH_SIZE)
-
-        if time.time() < _circuit_open_until:
-            remaining = int(_circuit_open_until - time.time()) // 60
-            logger.warning('B站 每日刷新取消: 全局熔断中，剩余 %d 分钟', remaining)
-            return
-
-        THREAD_TIMEOUT = 15 * 60
-
-        active: list = []
-        for up in ups:
-            mid = up.mid
-            with _scrape_lock:
-                if mid in _scrape_running or mid in _incremental_running:
-                    continue
-                _scrape_progress[mid] = []
-                _scrape_running.add(mid)
-            active.append(up)
-
-        for i in range(0, len(active), _BATCH_SIZE):
-            batch = active[i:i + _BATCH_SIZE]
-            threads = []
-            for up in batch:
-                t = threading.Thread(
-                    target=_run_scrape,
-                    args=(up.mid, up.space_url, app),
-                    kwargs={'max_videos': 30},
-                    daemon=True,
-                )
-                t.start()
-                threads.append(t)
-                time.sleep(random.uniform(0.5, 2.0))
-            for t in threads:
-                t.join(timeout=THREAD_TIMEOUT)
-                if t.is_alive():
-                    logger.warning('B站 每日刷新: 线程 %s 超时 (>%ds)，跳过', t.name, THREAD_TIMEOUT)
-
-        logger.info('B站 每日刷新完成')
 
 
 def _run_bili_incremental_check(app):
@@ -331,11 +324,18 @@ def _run_bili_incremental_check(app):
         import random
         import threading
         import time
+
         logger = logging.getLogger(__name__)
         from blog.models import BiliUp
-        from blog.bili_routes import (_check_new_videos, _scrape_progress,
-                                       _incremental_running, _scrape_running,
-                                       _scrape_lock, _circuit_open_until)
+        from blog.bili_routes import (
+            _BATCH_SIZE,
+            _check_new_videos,
+            _scrape_progress,
+            _incremental_running,
+            _scrape_running,
+            _scrape_lock,
+            _circuit_open_until,
+        )
 
         if time.time() < _circuit_open_until:
             remaining = int(_circuit_open_until - time.time()) // 60
@@ -356,7 +356,7 @@ def _run_bili_incremental_check(app):
             active.append(up)
 
         for i in range(0, len(active), _BATCH_SIZE):
-            batch = active[i:i + _BATCH_SIZE]
+            batch = active[i : i + _BATCH_SIZE]
             threads = []
             for up in batch:
                 t = threading.Thread(
@@ -370,7 +370,9 @@ def _run_bili_incremental_check(app):
             for t in threads:
                 t.join(timeout=THREAD_TIMEOUT)
                 if t.is_alive():
-                    logger.warning('B站 增量检查: 线程 %s 超时 (>%ds)，跳过', t.name, THREAD_TIMEOUT)
+                    logger.warning(
+                        'B站 增量检查: 线程 %s 超时 (>%ds)，跳过', t.name, THREAD_TIMEOUT
+                    )
 
 
 if __name__ == '__main__':
@@ -386,4 +388,4 @@ if __name__ == '__main__':
     logger.info('=' * 50)
     logger.info('服务启动: http://%s:%d  debug=%s', host, port, debug)
     logger.info('=' * 50)
-    app.run(host='0.0.0.0', port=port, debug=debug)
+    app.run(host=host, port=port, debug=debug)

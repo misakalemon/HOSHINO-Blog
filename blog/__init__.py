@@ -13,7 +13,9 @@ Blueprint 路由前缀：
   blog_bp  → / （前台，无前缀）
   admin_bp → /admin （后台，自动追加前缀）
 """
+
 from flask import Blueprint
+from flask_migrate import Migrate
 
 # ── 蓝图 ──────────────────────────────────────────
 # 前台 blueprint（URL 前缀为空，所有前台路由直接挂在 / 下）
@@ -26,10 +28,24 @@ price_bp = Blueprint('price', __name__, url_prefix='/prices')
 # 先导入模型，确保 admin 和 routes 中的 from .models import ... 可用
 # 这种 "先声明蓝图、再导入模型、最后导入路由" 的顺序是关键，
 # 可以避免 Flask 常见的循环导入问题。
-from .models import (BiliSubscription, BiliUp, BiliUpHistory, BiliVideo,
-                     BiliVideoHistory, BiliWatchedVideo, Category, Comment,
-                     ExchangeRate, FeaturedCard, Post, PriceRecord, Product,
-                     ProductSource, User, db)
+from .models import (
+    BiliSubscription,
+    BiliUp,
+    BiliUpHistory,
+    BiliVideo,
+    BiliVideoHistory,
+    BiliWatchedVideo,
+    Category,
+    Comment,
+    ExchangeRate,
+    FeaturedCard,
+    Post,
+    PriceRecord,
+    Product,
+    ProductSource,
+    User,
+    db,
+)
 
 # ── 蓝图集合 ──────────────────────────────────────
 blueprints = {
@@ -49,6 +65,7 @@ def init_db(app):
     4. 检查 admin 用户是否已存在 → 不存在则创建默认管理员
     """
     db.init_app(app)
+    Migrate(app, db)
     with app.app_context():
         # ── 建表 ──────────────────────────────────
         # SQLAlchemy 根据 Model 定义自动 CREATE TABLE IF NOT EXISTS
@@ -71,6 +88,7 @@ def init_db(app):
         # 仅当 users 表中没有任何用户名为 "admin" 的记录时执行
         if not User.query.filter_by(username='admin').first():
             import secrets
+
             admin_password = app.config.get('ADMIN_PASSWORD', 'CHANGE_ME')
             if admin_password == 'CHANGE_ME':
                 admin_password = secrets.token_urlsafe(24)
@@ -83,7 +101,7 @@ def init_db(app):
                 email=app.config.get('ADMIN_EMAIL', 'admin@localhost'),
                 display_name=app.config.get('ADMIN_DISPLAY_NAME', 'Admin'),
                 is_admin=True,
-                is_active=True
+                is_active=True,
             )
             # set_password() 内部使用 werkzeug 的加密哈希，
             # 不会明文存储密码
@@ -114,6 +132,7 @@ def init_db(app):
 
         # ── 添加示例价格追踪商品（首次启动） ─────
         from .crawler import init_sample_products
+
         init_sample_products()
 
 
@@ -148,17 +167,14 @@ def _migrate_category_to_many2many(app):
     ignore_keyword = 'OR IGNORE' if 'sqlite' in driver else 'IGNORE'
 
     # 执行迁移 SQL：将所有有分类的文章关联写入 post_categories 表
-    sql = f'''
+    sql = f"""
         INSERT {ignore_keyword} INTO post_categories (post_id, category_id)
         SELECT id, category_id FROM posts WHERE category_id IS NOT NULL
-    '''
+    """
     result = db.session.execute(db.text(sql))
     rowcount = result.rowcount
     if rowcount > 0:
-        app.logger.info(
-            '迁移: 已迁移 %d 条分类关联记录 (category_id → post_categories)',
-            rowcount
-        )
+        app.logger.info('迁移: 已迁移 %d 条分类关联记录 (category_id → post_categories)', rowcount)
     db.session.commit()
 
 
@@ -218,9 +234,9 @@ def _migrate_featured_icon(app):
     dialect = engine.dialect.name
     if dialect == 'mysql':
         try:
-            db.session.execute(db.text(
-                'ALTER TABLE featured_cards MODIFY icon VARCHAR(256) DEFAULT \'✦\''
-            ))
+            db.session.execute(
+                db.text("ALTER TABLE featured_cards MODIFY icon VARCHAR(256) DEFAULT '✦'")
+            )
             db.session.commit()
         except Exception:
             db.session.rollback()
@@ -232,9 +248,7 @@ def _migrate_post_content(app):
     dialect = engine.dialect.name
     if dialect == 'mysql':
         try:
-            db.session.execute(db.text(
-                'ALTER TABLE posts MODIFY content MEDIUMTEXT NOT NULL'
-            ))
+            db.session.execute(db.text('ALTER TABLE posts MODIFY content MEDIUMTEXT NOT NULL'))
             db.session.commit()
             app.logger.info('迁移: posts.content 已扩展为 MEDIUMTEXT')
         except Exception:
@@ -248,9 +262,8 @@ def _migrate_author_to_user(app):
     将数据库中 role='author' 的用户改为 role='user'。
     """
     from sqlalchemy import text
-    result = db.session.execute(
-        text("UPDATE users SET role = 'user' WHERE role = 'author'")
-    )
+
+    result = db.session.execute(text("UPDATE users SET role = 'user' WHERE role = 'author'"))
     if result.rowcount > 0:
         app.logger.info('迁移: 已将 %d 个用户从 author 角色合并到 user 角色', result.rowcount)
     db.session.commit()
@@ -265,12 +278,13 @@ def _migrate_user_profile_fields(app):
     if dialect != 'mysql':
         return
     from sqlalchemy import text
+
     new_columns = {
         'gitcode_url': "VARCHAR(256) DEFAULT ''",
         'github_url': "VARCHAR(256) DEFAULT ''",
         'gitee_url': "VARCHAR(256) DEFAULT ''",
         'bilibili_url': "VARCHAR(256) DEFAULT ''",
-        'about_content': "MEDIUMTEXT",
+        'about_content': 'MEDIUMTEXT',
     }
     for col, col_type in new_columns.items():
         if col not in cols:
@@ -292,9 +306,12 @@ def _migrate_bili_up_fields(app):
     if dialect != 'mysql':
         return
     from sqlalchemy import text
+
     if 'follower_count' not in cols:
         try:
-            db.session.execute(text('ALTER TABLE bili_ups ADD COLUMN follower_count INTEGER DEFAULT 0'))
+            db.session.execute(
+                text('ALTER TABLE bili_ups ADD COLUMN follower_count INTEGER DEFAULT 0')
+            )
             db.session.commit()
             app.logger.info('迁移: 已添加 bili_ups.follower_count 列')
         except Exception as e:
@@ -311,11 +328,16 @@ def _migrate_bili_video_fields(app):
     if dialect != 'mysql':
         return
     from sqlalchemy import text
+
     if 'pub_datetime' not in cols:
         try:
             db.session.execute(text('ALTER TABLE bili_videos ADD COLUMN pub_datetime DATETIME'))
             # 用已有 pubdate 时间戳回填 pub_datetime
-            db.session.execute(text('UPDATE bili_videos SET pub_datetime = FROM_UNIXTIME(pubdate) WHERE pubdate IS NOT NULL AND pub_datetime IS NULL'))
+            db.session.execute(
+                text(
+                    'UPDATE bili_videos SET pub_datetime = FROM_UNIXTIME(pubdate) WHERE pubdate IS NOT NULL AND pub_datetime IS NULL'
+                )
+            )
             db.session.commit()
             app.logger.info('迁移: 已添加 bili_videos.pub_datetime 列')
         except Exception as e:

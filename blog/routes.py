@@ -22,6 +22,7 @@ HOSHINO Blog — 前台路由
    format_date()           — 模板全局函数：日期格式化
    now()                   — 模板全局函数：当前 UTC 时间
 """
+
 import datetime
 import logging
 import os
@@ -40,6 +41,59 @@ from .models import Category, Comment, FeaturedCard, Post, db, post_categories
 
 logger = logging.getLogger(__name__)
 
+# 共享 XSS 过滤白名单（多路由复用）
+ALLOWED_TAGS = [
+    'p',
+    'br',
+    'strong',
+    'em',
+    'a',
+    'code',
+    'pre',
+    'span',
+    'div',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6',
+    'ul',
+    'ol',
+    'li',
+    'blockquote',
+    'table',
+    'thead',
+    'tbody',
+    'tr',
+    'th',
+    'td',
+    'img',
+    'hr',
+    'sup',
+    'sub',
+    'del',
+    'ins',
+    'kbd',
+    'samp',
+    'var',
+    'abbr',
+    'dfn',
+    'u',
+    's',
+]
+ALLOWED_ATTRS = {
+    'a': ['href', 'title', 'rel'],
+    'img': ['src', 'alt', 'title', 'style'],
+    'th': ['align'],
+    'td': ['align'],
+    'code': ['class'],
+    'span': ['class', 'style'],
+    'div': ['class'],
+    'pre': ['class'],
+    'abbr': ['title'],
+}
+
 # 缩略图缓存版本号（修改此值使旧缓存自动失效并清理）
 THUMB_CACHE_VER = 'v3'
 
@@ -47,6 +101,7 @@ THUMB_CACHE_VER = 'v3'
 # ── 侧边栏数据缓存（Redis，降级友好） ─────────
 # 共享线程池，避免每次请求创建/销毁
 _sidebar_executor = None
+
 
 def _get_sidebar_data():
     """获取侧边栏数据（分类列表 + 最新文章），带 Redis 缓存。
@@ -81,10 +136,13 @@ def _get_sidebar_data():
     def _fetch_cat_post_counts():
         with app.app_context():
             return dict(
-                db.session.query(post_categories.c.category_id, func.count(post_categories.c.post_id))
+                db.session.query(
+                    post_categories.c.category_id, func.count(post_categories.c.post_id)
+                )
                 .join(Post, Post.id == post_categories.c.post_id)
                 .filter(Post.is_published == True)
-                .group_by(post_categories.c.category_id).all()
+                .group_by(post_categories.c.category_id)
+                .all()
             )
 
     def _fetch_recent_posts():
@@ -92,14 +150,22 @@ def _get_sidebar_data():
             cached = cache_get('sidebar:recent_posts')
             if cached is not None:
                 return cached
-            posts = Post.query.filter_by(is_published=True).options(
-                load_only(Post.id, Post.title, Post.slug, Post.cover_image, Post.created_at)
-            ).order_by(Post.created_at.desc()).limit(4).all()
+            posts = (
+                Post.query.filter_by(is_published=True)
+                .options(
+                    load_only(Post.id, Post.title, Post.slug, Post.cover_image, Post.created_at)
+                )
+                .order_by(Post.created_at.desc())
+                .limit(4)
+                .all()
+            )
             result = [
                 {
-                    'id': p.id, 'title': p.title, 'slug': p.slug,
+                    'id': p.id,
+                    'title': p.title,
+                    'slug': p.slug,
                     'cover_image': p.cover_image,
-                    'created_at': p.created_at.isoformat() if p.created_at else None
+                    'created_at': p.created_at.isoformat() if p.created_at else None,
                 }
                 for p in posts
             ]
@@ -138,7 +204,7 @@ def index():
     query = Post.query.options(
         db.joinedload(Post.author),
         db.joinedload(Post.categories),
-        load_only(Post.id, Post.title, Post.slug, Post.summary, Post.cover_image, Post.created_at)
+        load_only(Post.id, Post.title, Post.slug, Post.summary, Post.cover_image, Post.created_at),
     ).filter_by(is_published=True)
     # 按分类筛选（多对多关联）
     if category_slug:
@@ -152,17 +218,23 @@ def index():
         page=page, per_page=per_page, error_out=False
     )
     categories, recent_posts, cat_post_counts = _get_sidebar_data()
-    featured_cards = FeaturedCard.query.filter_by(is_active=True).order_by(FeaturedCard.sort_order).all()
+    featured_cards = (
+        FeaturedCard.query.filter_by(is_active=True).order_by(FeaturedCard.sort_order).all()
+    )
     cat_lookup = {c.slug: c.name for c in categories}
 
-    return render_template('index.html',
-        posts=posts, categories=categories,
-        recent_posts=recent_posts, cat_post_counts=cat_post_counts, current_category=category_slug,
+    return render_template(
+        'index.html',
+        posts=posts,
+        categories=categories,
+        recent_posts=recent_posts,
+        cat_post_counts=cat_post_counts,
+        current_category=category_slug,
         current_per_page=per_page,
         per_page_options=current_app.config['PER_PAGE_OPTIONS'],
         featured_cards=featured_cards,
         cat_lookup=cat_lookup,
-        blog_subtitle=current_app.config['BLOG_SUBTITLE']
+        blog_subtitle=current_app.config['BLOG_SUBTITLE'],
     )
 
 
@@ -192,8 +264,8 @@ def single_post(slug):
             post_id=post.id,
             author_name=form.author_name.data,
             author_email=form.author_email.data,
-            content=form.content.data,
-            is_approved=False  # 新评论默认隐藏，需管理员审核
+            content=bleach.clean(form.content.data or '', tags=[], strip=True),
+            is_approved=False,  # 新评论默认隐藏，需管理员审核
         )
         db.session.add(comment)
         db.session.commit()
@@ -204,34 +276,22 @@ def single_post(slug):
     # 使用 Python-Markdown 库将正文渲染为 HTML
     # 支持代码块（fenced_code）、代码高亮（codehilite）、表格（tables）
     # 输出经 bleach 过滤，防止 XSS
-    ALLOWED_TAGS = [
-        'p', 'br', 'strong', 'em', 'a', 'code', 'pre', 'span', 'div',
-        'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li',
-        'blockquote', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
-        'img', 'hr', 'sup', 'sub', 'del', 'ins', 'kbd', 'samp', 'var',
-        'abbr', 'dfn',
-    ]
-    ALLOWED_ATTRS = {
-        'a': ['href', 'title', 'rel'],
-        'img': ['src', 'alt', 'title'],
-        'th': ['align'],
-        'td': ['align'],
-        'code': ['class'],
-        'span': ['class'],
-        'div': ['class'],
-        'pre': ['class'],
-        'abbr': ['title'],
-    }
     from markdown import markdown
+
     rendered_content = bleach.clean(
         markdown(post.content, extensions=['fenced_code', 'codehilite', 'tables']),
         tags=ALLOWED_TAGS,
         attributes=ALLOWED_ATTRS,
     )
 
-    return render_template('single-post.html',
-        post=post, rendered_content=rendered_content, categories=categories,
-        recent_posts=recent_posts, cat_post_counts=cat_post_counts, form=form
+    return render_template(
+        'single-post.html',
+        post=post,
+        rendered_content=rendered_content,
+        categories=categories,
+        recent_posts=recent_posts,
+        cat_post_counts=cat_post_counts,
+        form=form,
     )
 
 
@@ -253,19 +313,24 @@ def category(slug):
     page = request.args.get('page', 1, type=int)
     # per_page 取自 URL 参数或配置默认值，与首页一致
     per_page = request.args.get('per_page', current_app.config['POSTS_PER_PAGE'], type=int)
-    posts = Post.query.options(
-        load_only(Post.id, Post.title, Post.slug, Post.cover_image, Post.created_at)
-    ).filter(
-        Post.categories.any(id=cat.id), Post.is_published == True
-    ).order_by(Post.created_at.desc()).paginate(
-        page=page, per_page=per_page, error_out=False
+    posts = (
+        Post.query.options(
+            load_only(Post.id, Post.title, Post.slug, Post.cover_image, Post.created_at)
+        )
+        .filter(Post.categories.any(id=cat.id), Post.is_published == True)
+        .order_by(Post.created_at.desc())
+        .paginate(page=page, per_page=per_page, error_out=False)
     )
     categories, recent_posts, cat_post_counts = _get_sidebar_data()
-    return render_template('category-grid.html',
-        category=cat, posts=posts,
-        categories=categories, recent_posts=recent_posts, cat_post_counts=cat_post_counts,
+    return render_template(
+        'category-grid.html',
+        category=cat,
+        posts=posts,
+        categories=categories,
+        recent_posts=recent_posts,
+        cat_post_counts=cat_post_counts,
         current_per_page=per_page,
-        per_page_options=current_app.config['PER_PAGE_OPTIONS']
+        per_page_options=current_app.config['PER_PAGE_OPTIONS'],
     )
 
 
@@ -282,30 +347,19 @@ def about():
     """
     categories, recent_posts, cat_post_counts = _get_sidebar_data()
     from .models import User
+
     admin = User.query.filter_by(role='admin').order_by(User.id).first()
-    about_content = admin.about_content if admin and admin.about_content else '<p>欢迎来到 Hoshino Blog</p>'
-    ALLOWED_TAGS = [
-        'p', 'br', 'strong', 'em', 'a', 'code', 'pre', 'span', 'div',
-        'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li',
-        'blockquote', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
-        'img', 'hr', 'sup', 'sub', 'del', 'ins', 'kbd', 'samp', 'var',
-        'abbr', 'dfn', 'u', 's',
-    ]
-    ALLOWED_ATTRS = {
-        'a': ['href', 'title', 'rel'],
-        'img': ['src', 'alt', 'title', 'style'],
-        'th': ['align'],
-        'td': ['align'],
-        'code': ['class'],
-        'span': ['class', 'style'],
-        'div': ['class'],
-        'pre': ['class'],
-        'abbr': ['title'],
-    }
+    about_content = (
+        admin.about_content if admin and admin.about_content else '<p>欢迎来到 Hoshino Blog</p>'
+    )
     about_content = bleach.clean(about_content, tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS)
-    return render_template('about.html', about_content=about_content,
-                           categories=categories, recent_posts=recent_posts,
-                           cat_post_counts=cat_post_counts)
+    return render_template(
+        'about.html',
+        about_content=about_content,
+        categories=categories,
+        recent_posts=recent_posts,
+        cat_post_counts=cat_post_counts,
+    )
 
 
 # ═══════════════════════════════════════════════
@@ -323,12 +377,26 @@ def contact():
     form = ContactForm()
     message_sent = False
     if form.validate_on_submit():
-        # 表单有效：标记为已发送（生产环境应改为发送邮件）
+        # 表单有效：留存留言至 session 供页面显示（未来可改为发邮件）
+        from .models import ContactMessage
+
+        msg = ContactMessage(
+            name=form.name.data,
+            email=form.email.data,
+            subject=form.subject.data or '',
+            content=form.content.data,
+        )
+        db.session.add(msg)
+        db.session.commit()
         message_sent = True
     categories, recent_posts, cat_post_counts = _get_sidebar_data()
-    return render_template('contact.html',
-        categories=categories, recent_posts=recent_posts, cat_post_counts=cat_post_counts,
-        message_sent=message_sent, form=form
+    return render_template(
+        'contact.html',
+        categories=categories,
+        recent_posts=recent_posts,
+        cat_post_counts=cat_post_counts,
+        message_sent=message_sent,
+        form=form,
     )
 
 
@@ -372,28 +440,59 @@ def search():
     page = request.args.get('page', 1, type=int)
     if not q:
         return redirect(url_for('blog.index'))
-    # per_page 取自 URL 参数或配置默认值，搜索结果也支持分页调整
+    # 转义 SQL 通配符，防止 DoS
+    safe_q = q.replace('%', '\\%').replace('_', '\\_')
     per_page = request.args.get('per_page', current_app.config['POSTS_PER_PAGE'], type=int)
     categories, recent_posts, cat_post_counts = _get_sidebar_data()
-    # 使用 db.or_() 在标题、摘要、正文三个字段中同时搜索
-    results = Post.query.options(
-        db.joinedload(Post.categories),
-        load_only(Post.id, Post.title, Post.slug, Post.summary, Post.cover_image, Post.created_at)
-    ).filter(
-        Post.is_published == True,
-        db.or_(
-            Post.title.ilike(f'%{q}%'),
-            Post.summary.ilike(f'%{q}%'),
-            Post.content.ilike(f'%{q}%')
+    # 使用 MATCH AGAINST 全文搜索（需 FULLTEXT 索引）
+    results = (
+        Post.query.options(
+            db.joinedload(Post.categories),
+            load_only(
+                Post.id, Post.title, Post.slug, Post.summary, Post.cover_image, Post.created_at
+            ),
         )
-    ).order_by(Post.created_at.desc()).paginate(
-        page=page, per_page=per_page, error_out=False
+        .filter(
+            Post.is_published == True,
+            db.or_(
+                Post.title.match(q, postgresql_regconfig='simple'),
+                Post.summary.match(q, postgresql_regconfig='simple'),
+                Post.content.match(q, postgresql_regconfig='simple'),
+            ),
+        )
+        .order_by(Post.created_at.desc())
+        .paginate(page=page, per_page=per_page, error_out=False)
     )
-    return render_template('index.html',
-        posts=results, categories=categories,
-        recent_posts=recent_posts, cat_post_counts=cat_post_counts, search_query=q,
-        current_category=None, current_per_page=per_page,
-        per_page_options=current_app.config['PER_PAGE_OPTIONS']
+    # 若全文搜索无结果，回退到 ILIKE 模糊匹配（转义后的安全版本）
+    if results.total == 0:
+        results = (
+            Post.query.options(
+                db.joinedload(Post.categories),
+                load_only(
+                    Post.id, Post.title, Post.slug, Post.summary, Post.cover_image, Post.created_at
+                ),
+            )
+            .filter(
+                Post.is_published == True,
+                db.or_(
+                    Post.title.ilike(f'%{safe_q}%'),
+                    Post.summary.ilike(f'%{safe_q}%'),
+                    Post.content.ilike(f'%{safe_q}%'),
+                ),
+            )
+            .order_by(Post.created_at.desc())
+            .paginate(page=page, per_page=per_page, error_out=False)
+        )
+    return render_template(
+        'index.html',
+        posts=results,
+        categories=categories,
+        recent_posts=recent_posts,
+        cat_post_counts=cat_post_counts,
+        search_query=q,
+        current_category=None,
+        current_per_page=per_page,
+        per_page_options=current_app.config['PER_PAGE_OPTIONS'],
     )
 
 
@@ -413,14 +512,14 @@ def rss_feed():
     Template: rss.xml
     """
     from .cache import cache_get, cache_set
+
     ttl = current_app.config.get('CACHE_TTL_RSS', 600)
     cached = cache_get('rss:feed')
     if cached:
         response = Response(cached)
         response.headers['Content-Type'] = 'application/xml; charset=utf-8'
         return response
-    posts = Post.query.filter_by(is_published=True).order_by(
-        Post.created_at.desc()).limit(20).all()
+    posts = Post.query.filter_by(is_published=True).order_by(Post.created_at.desc()).limit(20).all()
     output = render_template('rss.xml', posts=posts)
     cache_set('rss:feed', output, ttl)
     response = Response(output)
@@ -457,6 +556,7 @@ def thumbnail():
     import mimetypes
 
     from flask import current_app
+
     # 路径安全检查：禁止目录遍历（规范化后验证前缀）
     safe_path = os.path.normpath(os.path.join(current_app.root_path, 'static', path))
     static_dir = os.path.normpath(os.path.join(current_app.root_path, 'static'))
@@ -471,20 +571,36 @@ def thumbnail():
             b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff'
             b'\x00\x00\x00!\xf9\x04\x00\x00\x00\x00\x00,\x00\x00\x00\x00'
             b'\x01\x00\x01\x00\x00\x02\x02D\x01\x00;',
-            mimetype='image/gif', headers={'Cache-Control': 'no-cache'}
+            mimetype='image/gif',
+            headers={'Cache-Control': 'no-cache'},
         )
 
     # ── 输出格式 ──────────────────────────────
     fmt_param = request.args.get('fmt', '').upper()
     if fmt_param in ('JPEG', 'JPG'):
-        output_fmt, ext, save_kwargs, mime_type = 'JPEG', '.jpg', {'quality': 85, 'optimize': True}, 'image/jpeg'
+        output_fmt, ext, save_kwargs, mime_type = (
+            'JPEG',
+            '.jpg',
+            {'quality': 85, 'optimize': True},
+            'image/jpeg',
+        )
     elif fmt_param == 'PNG':
-        output_fmt, ext, save_kwargs, mime_type = 'PNG', '.png', {'quality': 85, 'optimize': True}, 'image/png'
+        output_fmt, ext, save_kwargs, mime_type = (
+            'PNG',
+            '.png',
+            {'quality': 85, 'optimize': True},
+            'image/png',
+        )
     else:
-        output_fmt, ext, save_kwargs, mime_type = 'WEBP', '.webp', {'quality': 80, 'method': 6}, 'image/webp'
+        output_fmt, ext, save_kwargs, mime_type = (
+            'WEBP',
+            '.webp',
+            {'quality': 80, 'method': 6},
+            'image/webp',
+        )
 
     # 生成缓存文件路径
-    cache_key = f'{THUMB_CACHE_VER}_{path.replace("/","_")}_{w}{ext}'
+    cache_key = f'{THUMB_CACHE_VER}_{path.replace("/", "_")}_{w}{ext}'
     cache_dir = os.path.join(current_app.root_path, 'static', '.thumb_cache')
     cache_path = os.path.join(cache_dir, cache_key)
     os.makedirs(cache_dir, exist_ok=True)
@@ -498,13 +614,15 @@ def thumbnail():
         cache_mtime = os.path.getmtime(cache_path)
         if cache_mtime >= img_mtime:
             with open(cache_path, 'rb') as f:
-                return Response(f.read(),
+                return Response(
+                    f.read(),
                     mimetype=mime_type,
-                    headers={'Cache-Control': 'public, max-age=2592000'}
+                    headers={'Cache-Control': 'public, max-age=2592000'},
                 )
     # ── 生成缩略图 ──────────────────────────
     try:
         from PIL import Image
+
         img = Image.open(img_path)
         # 只缩小不放大（ratio 最大为 1.0）
         ratio = min(w / img.width, 1.0)
@@ -517,17 +635,14 @@ def thumbnail():
             img = img.convert('RGB')
         img.save(cache_path, output_fmt, **save_kwargs)
         with open(cache_path, 'rb') as f:
-            return Response(f.read(),
-                mimetype=mime_type,
-                headers={'Cache-Control': 'public, max-age=2592000'}
+            return Response(
+                f.read(), mimetype=mime_type, headers={'Cache-Control': 'public, max-age=2592000'}
             )
     except Exception as e:
         # 缩略图生成失败时，返回原始图片
         logger.error('缩略图失败: %s w=%d error=%s', path, w, e)
         with open(img_path, 'rb') as f:
-            return Response(f.read(),
-                mimetype=mimetypes.guess_type(path)[0] or 'image/jpeg'
-            )
+            return Response(f.read(), mimetype=mimetypes.guess_type(path)[0] or 'image/jpeg')
 
 
 # ── 缓存清理辅助函数 ──────────────────────────
@@ -602,7 +717,7 @@ def now():
     Returns:
         datetime: 当前 UTC 时间
     """
-    return datetime.datetime.utcnow()
+    return datetime.datetime.now(datetime.UTC)
 
 
 @blog_bp.app_template_global()
@@ -611,14 +726,30 @@ def admin_social():
 
     返回 dict: { website, gitcode_url, github_url, gitee_url, bilibili_url }
     """
+    from .cache import cache_get, cache_set
+
+    cached = cache_get('admin:social_links')
+    if cached:
+        return cached
     from .models import User
+
     admin = User.query.filter_by(role='admin').order_by(User.id).first()
-    if admin:
-        return {
+    result = (
+        {
             'website': admin.website or '',
             'gitcode_url': admin.gitcode_url or '',
             'github_url': admin.github_url or '',
             'gitee_url': admin.gitee_url or '',
             'bilibili_url': admin.bilibili_url or '',
         }
-    return {'website': '', 'gitcode_url': '', 'github_url': '', 'gitee_url': '', 'bilibili_url': ''}
+        if admin
+        else {
+            'website': '',
+            'gitcode_url': '',
+            'github_url': '',
+            'gitee_url': '',
+            'bilibili_url': '',
+        }
+    )
+    cache_set('admin:social_links', result, 300)
+    return result

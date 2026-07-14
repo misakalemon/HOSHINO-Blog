@@ -13,6 +13,7 @@ blinker==1.9.0
 # --- 数据库 ---
 SQLAlchemy==2.0.50
 Flask-SQLAlchemy==3.1.1
+Flask-Migrate>=4.0
 
 # --- 认证 ---
 Flask-Login==0.6.3
@@ -45,6 +46,9 @@ redis==5.2.1
 
 # --- 定时任务 ---
 APScheduler==3.11.0
+
+# --- HTML 清理（XSS 防护）---
+bleach>=6.0
 
 # --- 爬虫 ---
 curl_cffi==0.15.0

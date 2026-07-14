@@ -38,4 +38,6 @@ static/.thumb_cache/
 
 # Bilibili login cookie (B站登录凭证，不提交)
 blog/bilibili/cookies.txt
+blog/bilibili/.bili_credential.json
+blog/bilibili/.bili_cookies.txt
 

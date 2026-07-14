@@ -1,0 +1,21 @@
+Looking in indexes: https://pypi.tuna.tsinghua.edu.cn/simple
+Collecting Flask-Migrate
+  Downloading Flask_Migrate-4.1.0-py3-none-any.whl (21 kB)
+Requirement already satisfied: Flask>=0.9 in /home/moyu/anaconda3/envs/blog_env/lib/python3.12/site-packages (from Flask-Migrate) (3.1.0)
+Requirement already satisfied: Flask-SQLAlchemy>=1.0 in /home/moyu/anaconda3/envs/blog_env/lib/python3.12/site-packages (from Flask-Migrate) (3.1.1)
+Collecting alembic>=1.9.0 (from Flask-Migrate)
+  Downloading alembic-1.18.5-py3-none-any.whl (264 kB)
+Requirement already satisfied: SQLAlchemy>=1.4.23 in /home/moyu/anaconda3/envs/blog_env/lib/python3.12/site-packages (from alembic>=1.9.0->Flask-Migrate) (2.0.50)
+Collecting Mako (from alembic>=1.9.0->Flask-Migrate)
+  Downloading mako-1.3.12-py3-none-any.whl (78 kB)
+Requirement already satisfied: typing-extensions>=4.12 in /home/moyu/anaconda3/envs/blog_env/lib/python3.12/site-packages (from alembic>=1.9.0->Flask-Migrate) (4.15.0)
+Requirement already satisfied: Werkzeug>=3.1 in /home/moyu/anaconda3/envs/blog_env/lib/python3.12/site-packages (from Flask>=0.9->Flask-Migrate) (3.1.8)
+Requirement already satisfied: Jinja2>=3.1.2 in /home/moyu/anaconda3/envs/blog_env/lib/python3.12/site-packages (from Flask>=0.9->Flask-Migrate) (3.1.6)
+Requirement already satisfied: itsdangerous>=2.2 in /home/moyu/anaconda3/envs/blog_env/lib/python3.12/site-packages (from Flask>=0.9->Flask-Migrate) (2.2.0)
+Requirement already satisfied: click>=8.1.3 in /home/moyu/anaconda3/envs/blog_env/lib/python3.12/site-packages (from Flask>=0.9->Flask-Migrate) (8.4.1)
+Requirement already satisfied: blinker>=1.9 in /home/moyu/anaconda3/envs/blog_env/lib/python3.12/site-packages (from Flask>=0.9->Flask-Migrate) (1.9.0)
+Requirement already satisfied: MarkupSafe>=2.0 in /home/moyu/anaconda3/envs/blog_env/lib/python3.12/site-packages (from Jinja2>=3.1.2->Flask>=0.9->Flask-Migrate) (3.0.3)
+Requirement already satisfied: greenlet>=1 in /home/moyu/anaconda3/envs/blog_env/lib/python3.12/site-packages (from SQLAlchemy>=1.4.23->alembic>=1.9.0->Flask-Migrate) (3.5.1)
+Installing collected packages: Mako, alembic, Flask-Migrate
+
+Successfully installed Flask-Migrate-4.1.0 Mako-1.3.12 alembic-1.18.5

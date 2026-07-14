@@ -29,8 +29,10 @@ HOSHINO Blog — Redis 缓存层
 依赖：
   redis==5.2.1  （pip install redis）
 """
+
 import json
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +41,33 @@ _redis_client = None
 
 # 缓存键统一前缀，方便在 Redis 中识别和批量删除
 _KEY_PREFIX = 'hblog'
+
+
+def _get_redis(redis_url, max_retries=3, retry_delay=1):
+    """尝试连接 Redis，失败时返回 None（快速降级）。
+
+    使用简单重试机制，最多重试 max_retries 次，每次间隔 retry_delay 秒。
+    """
+    import redis
+
+    for attempt in range(max_retries):
+        try:
+            client = redis.from_url(
+                redis_url,
+                decode_responses=True,
+                socket_connect_timeout=2,
+                socket_timeout=3,
+                retry_on_timeout=False,
+            )
+            client.ping()
+            return client
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logger.warning('Redis 连接失败 (尝试 %d/%d): %s', attempt + 1, max_retries, e)
+                time.sleep(retry_delay)
+            else:
+                logger.warning('Redis 连接失败，缓存已降级: %s', e)
+                return None
 
 
 def init_redis(app):
@@ -59,14 +88,20 @@ def init_redis(app):
         _redis_client = None
         return
 
+    _redis_client = _get_redis(redis_url)
+    if _redis_client is not None:
+        logger.info('Redis 缓存已连接: %s', redis_url)
+        return
+
     try:
         import redis
+
         _redis_client = redis.from_url(
             redis_url,
-            decode_responses=True,       # 自动将 bytes → str
-            socket_connect_timeout=2,    # 连接超时 2 秒
-            socket_timeout=3,            # 读写超时 3 秒
-            retry_on_timeout=False       # 超时不重试（快速降级）
+            decode_responses=True,  # 自动将 bytes → str
+            socket_connect_timeout=2,  # 连接超时 2 秒
+            socket_timeout=3,  # 读写超时 3 秒
+            retry_on_timeout=False,  # 超时不重试（快速降级）
         )
         # 发送 PING 验证连接是否可用
         _redis_client.ping()
@@ -188,7 +223,7 @@ def cache_scan(pattern):
             for key in keys:
                 raw = _redis_client.get(key)
                 if raw is not None:
-                    biz_key = key[len(_KEY_PREFIX) + 1:]
+                    biz_key = key[len(_KEY_PREFIX) + 1 :]
                     results.append((biz_key, json.loads(raw)))
             if cursor == 0:
                 break

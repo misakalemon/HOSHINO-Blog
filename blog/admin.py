@@ -43,6 +43,7 @@ HOSHINO Blog — 管理后台路由
   edit_featured_card(id)       — 编辑特色卡片
   delete_featured_card(id)     — 删除特色卡片
 """
+
 import datetime
 import logging
 import os
@@ -52,13 +53,30 @@ import uuid
 from collections import defaultdict
 from functools import wraps
 
-from flask import abort, current_app, flash, jsonify, redirect, render_template, request, session, url_for
+from flask import (
+    abort,
+    current_app,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 from flask_login import current_user, login_required, login_user, logout_user
 
 from . import admin_bp
-from .forms import CategoryForm, FeaturedCardForm, LoginForm, PostForm, ProfileForm, RegisterForm, UserForm
-from .models import (BiliSubscription, BiliUp, Category, Comment, FeaturedCard,
-                     Post, User, db)
+from .forms import (
+    CategoryForm,
+    FeaturedCardForm,
+    LoginForm,
+    PostForm,
+    ProfileForm,
+    RegisterForm,
+    UserForm,
+)
+from .models import BiliSubscription, BiliUp, Category, Comment, FeaturedCard, Post, User, db
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +88,7 @@ def _invalidate_sidebar_cache():
     在文章或分类发生变更时调用，确保前台能及时看到最新内容。
     """
     from .cache import cache_delete_pattern
+
     cache_delete_pattern('sidebar:*')
     cache_delete_pattern('rss:*')
 
@@ -85,6 +104,7 @@ def _check_active():
 
 def admin_required(f):
     """装饰器：仅允许管理员访问（同时检查用户未被禁用）。"""
+
     @wraps(f)
     @login_required
     def decorated_function(*args, **kwargs):
@@ -92,11 +112,13 @@ def admin_required(f):
         if not current_user.is_admin:
             abort(403)
         return f(*args, **kwargs)
+
     return decorated_function
 
 
 def editor_required(f):
     """装饰器：允许管理员和编辑访问（同时检查用户未被禁用）。"""
+
     @wraps(f)
     @login_required
     def decorated_function(*args, **kwargs):
@@ -104,11 +126,13 @@ def editor_required(f):
         if not current_user.is_editor:
             abort(403)
         return f(*args, **kwargs)
+
     return decorated_function
 
 
 def author_required(f):
     """装饰器：允许管理员、编辑和作者访问（同时检查用户未被禁用）。"""
+
     @wraps(f)
     @login_required
     def decorated_function(*args, **kwargs):
@@ -116,12 +140,14 @@ def author_required(f):
         if not current_user.is_author:
             abort(403)
         return f(*args, **kwargs)
+
     return decorated_function
 
 
 # ═══════════════════════════════════════════════
 # 诊断
 # ═══════════════════════════════════════════════
+
 
 @admin_bp.route('/_bili_debug/<int:mid>')
 @admin_required
@@ -130,6 +156,7 @@ def bili_debug(mid):
     from flask import jsonify
     from blog.bilibili.bili_api import get_user_info, get_video_list
     import traceback
+
     result = {}
     try:
         ui = get_user_info(mid)
@@ -143,12 +170,14 @@ def bili_debug(mid):
     try:
         first10 = []
         for i, v in enumerate(get_video_list(mid, max_pages=2)):
-            first10.append({
-                'bvid': v['bvid'],
-                'aid': v['aid'],
-                'title': v['title'][:40],
-                'pubdate': v['pubdate'],
-            })
+            first10.append(
+                {
+                    'bvid': v['bvid'],
+                    'aid': v['aid'],
+                    'title': v['title'][:40],
+                    'pubdate': v['pubdate'],
+                }
+            )
             if i >= 9:
                 break
         result['videos_sample'] = first10
@@ -160,27 +189,30 @@ def bili_debug(mid):
 @admin_bp.route('/_debug')
 def debug_info():
     """诊断端点：查看当前请求的 session、cookie、请求头等信息。
-    
+
     帮助排查 CSRF 403 等远程访问问题。仅管理员可访问。
     """
     if not current_user.is_authenticated or not current_user.is_admin:
         abort(403)
     from flask import jsonify
+
     headers = dict(request.headers)
     headers.pop('Cookie', None)
-    return jsonify({
-        'session': dict(session),
-        'session_permanent': session.permanent,
-        'remote_addr': request.remote_addr,
-        'host': request.host,
-        'origin': request.headers.get('Origin', ''),
-        'referrer': request.headers.get('Referer', ''),
-        'x_forwarded_for': request.headers.get('X-Forwarded-For', ''),
-        'x_forwarded_proto': request.headers.get('X-Forwarded-Proto', ''),
-        'has_csrf_token': 'csrf_token' in session,
-        'is_authenticated': current_user.is_authenticated,
-        'user': current_user.username if current_user.is_authenticated else None,
-    })
+    return jsonify(
+        {
+            'session': dict(session),
+            'session_permanent': session.permanent,
+            'remote_addr': request.remote_addr,
+            'host': request.host,
+            'origin': request.headers.get('Origin', ''),
+            'referrer': request.headers.get('Referer', ''),
+            'x_forwarded_for': request.headers.get('X-Forwarded-For', ''),
+            'x_forwarded_proto': request.headers.get('X-Forwarded-Proto', ''),
+            'has_csrf_token': 'csrf_token' in session,
+            'is_authenticated': current_user.is_authenticated,
+            'user': current_user.username if current_user.is_authenticated else None,
+        }
+    )
 
 
 # ═══════════════════════════════════════════════
@@ -188,10 +220,26 @@ def debug_info():
 # ═══════════════════════════════════════════════
 
 # 登录频率限制（简易内存实现：每 IP 每分钟最多 10 次）
-_login_attempts = defaultdict(list)
+# 使用固定大小的 LRU 字典避免内存泄漏
+from collections import OrderedDict
+
+
+class _LRUDict(OrderedDict):
+    def __init__(self, maxsize=1000, *args, **kwargs):
+        self.maxsize = maxsize
+        super().__init__(*args, **kwargs)
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        if len(self) > self.maxsize:
+            self.popitem(last=False)
+
+
+_login_attempts = _LRUDict(maxsize=1000)
 _login_attempts_lock = threading.Lock()
 LOGIN_RATE_LIMIT = 10
 LOGIN_RATE_WINDOW = 60
+
 
 @admin_bp.route('/login', methods=['GET', 'POST'])
 def login():
@@ -302,6 +350,7 @@ def logout():
 # 仪表盘
 # ═══════════════════════════════════════════════
 
+
 @admin_bp.route('/')
 @editor_required
 def dashboard():
@@ -317,6 +366,7 @@ def dashboard():
     Template: admin/dashboard.html
     """
     from .cache import cache_get, cache_set
+
     ttl = current_app.config.get('CACHE_TTL_DASHBOARD', 60)
     stats = cache_get('dashboard:stats')
     if stats:
@@ -335,11 +385,19 @@ def dashboard():
         fut_pub = pool.submit(_run, lambda: Post.query.filter_by(is_published=True).count())
         fut_cc = pool.submit(_run, lambda: Comment.query.filter_by(is_approved=False).count())
         fut_uc = pool.submit(_run, lambda: User.query.count())
-        fut_rp = pool.submit(_run, lambda: Post.query.order_by(Post.created_at.desc()).limit(5).all())
-        fut_rc = pool.submit(_run, lambda: Comment.query.options(
-            db.joinedload(Comment.post)
-        ).filter_by(is_approved=False).order_by(
-            Comment.created_at.desc()).limit(5).all())
+        fut_rp = pool.submit(
+            _run, lambda: Post.query.order_by(Post.created_at.desc()).limit(5).all()
+        )
+        fut_rc = pool.submit(
+            _run,
+            lambda: (
+                Comment.query.options(db.joinedload(Comment.post))
+                .filter_by(is_approved=False)
+                .order_by(Comment.created_at.desc())
+                .limit(5)
+                .all()
+            ),
+        )
 
         stats = {
             'post_count': fut_pc.result(),
@@ -357,6 +415,7 @@ def dashboard():
 # 文章管理
 # ═══════════════════════════════════════════════
 
+
 @admin_bp.route('/posts')
 @author_required
 def post_list():
@@ -366,6 +425,7 @@ def post_list():
     Template: admin/post-list.html
     """
     from sqlalchemy.orm import joinedload
+
     page = request.args.get('page', 1, type=int)
     q = request.args.get('q', '').strip()
     query = Post.query.options(
@@ -373,12 +433,11 @@ def post_list():
         joinedload(Post.author),
     )
     if q:
-        query = query.filter(Post.title.ilike(f'%{q}%'))
+        safe_q = q.replace('%', '\\%').replace('_', '\\_')
+        query = query.filter(Post.title.ilike(f'%{safe_q}%'))
     if not current_user.is_editor:
         query = query.filter(Post.author_id == current_user.id)
-    posts = query.order_by(Post.created_at.desc()).paginate(
-        page=page, per_page=20, error_out=False
-    )
+    posts = query.order_by(Post.created_at.desc()).paginate(page=page, per_page=20, error_out=False)
     return render_template('admin/post-list.html', posts=posts)
 
 
@@ -396,9 +455,7 @@ def new_post():
     """
     form = PostForm()
     # 动态填充分类多选下拉框的选项
-    form.categories.choices = [
-        (c.id, c.name) for c in Category.query.order_by(Category.name).all()
-    ]
+    form.categories.choices = [(c.id, c.name) for c in Category.query.order_by(Category.name).all()]
     if form.validate_on_submit():
         # ── slug 唯一性检查 ─────────────────────
         existing = Post.query.filter_by(slug=form.slug.data).first()
@@ -411,12 +468,46 @@ def new_post():
             return render_template('admin/post-form.html', form=form, editing=False)
         # ── XSS 过滤：净化富文本编辑器内容 ─────
         import bleach
+
         ALLOWED_TAGS = [
-            'p', 'br', 'strong', 'em', 'a', 'code', 'pre', 'span', 'div',
-            'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li',
-            'blockquote', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
-            'img', 'hr', 'sup', 'sub', 'del', 'ins', 'kbd', 'samp', 'var',
-            'abbr', 'dfn', 'u', 's',
+            'p',
+            'br',
+            'strong',
+            'em',
+            'a',
+            'code',
+            'pre',
+            'span',
+            'div',
+            'h1',
+            'h2',
+            'h3',
+            'h4',
+            'h5',
+            'h6',
+            'ul',
+            'ol',
+            'li',
+            'blockquote',
+            'table',
+            'thead',
+            'tbody',
+            'tr',
+            'th',
+            'td',
+            'img',
+            'hr',
+            'sup',
+            'sub',
+            'del',
+            'ins',
+            'kbd',
+            'samp',
+            'var',
+            'abbr',
+            'dfn',
+            'u',
+            's',
         ]
         ALLOWED_ATTRS = {
             'a': ['href', 'title', 'rel'],
@@ -429,20 +520,20 @@ def new_post():
             'pre': ['class'],
             'abbr': ['title'],
         }
-        form.content.data = bleach.clean(form.content.data or '', tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS)
+        form.content.data = bleach.clean(
+            form.content.data or '', tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS
+        )
         post = Post(
             title=form.title.data,
             slug=form.slug.data,
             summary=form.summary.data,
             content=form.content.data,
             cover_image=form.cover_image.data or '',
-            author_id=current_user.id,       # 当前登录的管理员为作者
-            is_published=form.is_published.data
+            author_id=current_user.id,  # 当前登录的管理员为作者
+            is_published=form.is_published.data,
         )
         # ── 多对多关联：设置分类 ─────────────
-        post.categories = Category.query.filter(
-            Category.id.in_(form.categories.data)
-        ).all()
+        post.categories = Category.query.filter(Category.id.in_(form.categories.data)).all()
         db.session.add(post)
         db.session.commit()
         _invalidate_sidebar_cache()
@@ -473,15 +564,10 @@ def edit_post(id):
         abort(403)
     # obj=post 让表单自动填充现有字段值
     form = PostForm(obj=post)
-    form.categories.choices = [
-        (c.id, c.name) for c in Category.query.order_by(Category.name).all()
-    ]
+    form.categories.choices = [(c.id, c.name) for c in Category.query.order_by(Category.name).all()]
     if form.validate_on_submit():
         # ── slug 唯一性检查（排除自身） ─────
-        existing = Post.query.filter(
-            Post.slug == form.slug.data,
-            Post.id != id
-        ).first()
+        existing = Post.query.filter(Post.slug == form.slug.data, Post.id != id).first()
         if existing:
             flash('链接标识已被其他文章使用，请更换一个', 'error')
             return render_template('admin/post-form.html', form=form, editing=True, post=post)
@@ -490,12 +576,46 @@ def edit_post(id):
             return render_template('admin/post-form.html', form=form, editing=True, post=post)
         # ── XSS 过滤：净化富文本编辑器内容 ─────
         import bleach
+
         ALLOWED_TAGS = [
-            'p', 'br', 'strong', 'em', 'a', 'code', 'pre', 'span', 'div',
-            'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li',
-            'blockquote', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
-            'img', 'hr', 'sup', 'sub', 'del', 'ins', 'kbd', 'samp', 'var',
-            'abbr', 'dfn', 'u', 's',
+            'p',
+            'br',
+            'strong',
+            'em',
+            'a',
+            'code',
+            'pre',
+            'span',
+            'div',
+            'h1',
+            'h2',
+            'h3',
+            'h4',
+            'h5',
+            'h6',
+            'ul',
+            'ol',
+            'li',
+            'blockquote',
+            'table',
+            'thead',
+            'tbody',
+            'tr',
+            'th',
+            'td',
+            'img',
+            'hr',
+            'sup',
+            'sub',
+            'del',
+            'ins',
+            'kbd',
+            'samp',
+            'var',
+            'abbr',
+            'dfn',
+            'u',
+            's',
         ]
         ALLOWED_ATTRS = {
             'a': ['href', 'title', 'rel'],
@@ -508,7 +628,9 @@ def edit_post(id):
             'pre': ['class'],
             'abbr': ['title'],
         }
-        form.content.data = bleach.clean(form.content.data or '', tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS)
+        form.content.data = bleach.clean(
+            form.content.data or '', tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS
+        )
         # ── 更新字段 ────────────────────────
         post.title = form.title.data
         post.slug = form.slug.data
@@ -518,9 +640,7 @@ def edit_post(id):
         post.is_published = form.is_published.data
         post.updated_at = datetime.datetime.utcnow()
         # ── 更新多对多分类关联 ───────────────
-        post.categories = Category.query.filter(
-            Category.id.in_(form.categories.data)
-        ).all()
+        post.categories = Category.query.filter(Category.id.in_(form.categories.data)).all()
         db.session.commit()
         _invalidate_sidebar_cache()
         flash('文章已更新', 'success')
@@ -554,6 +674,7 @@ def delete_post(id):
     db.session.commit()
     _invalidate_sidebar_cache()
     from .cache import cache_delete
+
     cache_delete('dashboard:stats')
     flash('文章已删除', 'success')
     return redirect(url_for('admin.post_list'))
@@ -562,6 +683,7 @@ def delete_post(id):
 # ═══════════════════════════════════════════════
 # 分类管理
 # ═══════════════════════════════════════════════
+
 
 @admin_bp.route('/categories')
 @editor_required
@@ -585,11 +707,7 @@ def new_category():
     """
     form = CategoryForm()
     if form.validate_on_submit():
-        cat = Category(
-            name=form.name.data,
-            slug=form.slug.data,
-            description=form.description.data
-        )
+        cat = Category(name=form.name.data, slug=form.slug.data, description=form.description.data)
         db.session.add(cat)
         db.session.commit()
         _invalidate_sidebar_cache()
@@ -635,7 +753,10 @@ def delete_category(id):
     cat = Category.query.get_or_404(id)
     # 遍历所有包含此分类的文章，解除关联
     from sqlalchemy.orm import joinedload
-    for post in Post.query.options(joinedload(Post.categories)).filter(Post.categories.any(id=id)).all():
+
+    for post in (
+        Post.query.options(joinedload(Post.categories)).filter(Post.categories.any(id=id)).all()
+    ):
         post.categories = [c for c in post.categories if c.id != id]
     db.session.delete(cat)
     db.session.commit()
@@ -647,6 +768,7 @@ def delete_category(id):
 # ═══════════════════════════════════════════════
 # 评论管理
 # ═══════════════════════════════════════════════
+
 
 @admin_bp.route('/comments')
 @editor_required
@@ -663,14 +785,21 @@ def comment_list():
     Template: admin/comment-list.html
     """
     from sqlalchemy.orm import joinedload
+
     pending_page = request.args.get('pending_page', 1, type=int)
     approved_page = request.args.get('approved_page', 1, type=int)
-    pending = Comment.query.options(joinedload(Comment.post)).filter_by(is_approved=False).order_by(
-        Comment.created_at.desc()
-    ).paginate(page=pending_page, per_page=20, error_out=False)
-    approved = Comment.query.options(joinedload(Comment.post)).filter_by(is_approved=True).order_by(
-        Comment.created_at.desc()
-    ).paginate(page=approved_page, per_page=20, error_out=False)
+    pending = (
+        Comment.query.options(joinedload(Comment.post))
+        .filter_by(is_approved=False)
+        .order_by(Comment.created_at.desc())
+        .paginate(page=pending_page, per_page=20, error_out=False)
+    )
+    approved = (
+        Comment.query.options(joinedload(Comment.post))
+        .filter_by(is_approved=True)
+        .order_by(Comment.created_at.desc())
+        .paginate(page=approved_page, per_page=20, error_out=False)
+    )
     return render_template('admin/comment-list.html', pending=pending, approved=approved)
 
 
@@ -710,6 +839,7 @@ def delete_comment(id):
 # 用户管理
 # ═══════════════════════════════════════════════
 
+
 @admin_bp.route('/users')
 @admin_required
 def user_list():
@@ -741,7 +871,7 @@ def new_user():
             display_name=form.display_name.data,
             bio=form.bio.data,
             website=form.website.data,
-            role=form.role.data
+            role=form.role.data,
         )
         user.set_password(form.password.data)
         db.session.add(user)
@@ -823,6 +953,7 @@ def toggle_user_active(id):
 # 个人资料
 # ═══════════════════════════════════════════════
 
+
 @admin_bp.route('/profile', methods=['GET', 'POST'])
 @login_required
 def profile():
@@ -864,6 +995,7 @@ def profile():
                     import io as _io
 
                     from PIL import Image
+
                     img = Image.open(file)
                     # 缩放到 200px 宽（保持宽高比）
                     ratio = min(200 / img.width, 1.0)
@@ -877,6 +1009,7 @@ def profile():
                     # 生成唯一文件名，避免覆盖
                     filename = 'avatar_' + str(uuid.uuid4()) + '.' + ext
                     from flask import current_app
+
                     upload_dir = os.path.join(current_app.root_path, 'static', 'uploads')
                     os.makedirs(upload_dir, exist_ok=True)
                     with open(os.path.join(upload_dir, filename), 'wb') as f:
@@ -915,6 +1048,7 @@ def profile():
 # 图片上传 API
 # ═══════════════════════════════════════════════
 
+
 @admin_bp.route('/upload-image', methods=['POST'])
 @author_required
 def upload_image():
@@ -946,20 +1080,22 @@ def upload_image():
         return jsonify({'error': '不支持的格式'}), 400
     # 校验 Magic Bytes（防止改名绕过）
     import io as _io
+
     magic = file.read(8)
     file.seek(0)
     is_valid_magic = (
-        magic.startswith(b'\x89PNG') or
-        magic.startswith(b'\xff\xd8') or
-        magic.startswith(b'GIF87a') or
-        magic.startswith(b'GIF89a') or
-        magic.startswith(b'RIFF')
+        magic.startswith(b'\x89PNG')
+        or magic.startswith(b'\xff\xd8')
+        or magic.startswith(b'GIF87a')
+        or magic.startswith(b'GIF89a')
+        or magic.startswith(b'RIFF')
     )
     if not is_valid_magic:
         return jsonify({'error': '文件内容不是有效的图片'}), 400
     # 使用 PIL 重新编码图片（统一质量控制）
     try:
         from PIL import Image
+
         img = Image.open(file)
         img.verify()
         file.seek(0)
@@ -975,12 +1111,19 @@ def upload_image():
     # 生成 UUID 文件名，避免路径冲突
     filename = str(uuid.uuid4()) + '.' + ext
     from flask import current_app
+
     upload_dir = os.path.join(current_app.root_path, 'static', 'uploads')
     os.makedirs(upload_dir, exist_ok=True)
     with open(os.path.join(upload_dir, filename), 'wb') as f:
         f.write(buf.getvalue())
-    logger.info('图片上传: %s → uploads/%s (%dx%d, %dKB)',
-                file.filename, filename, img.width, img.height, buf.tell() // 1024)
+    logger.info(
+        '图片上传: %s → uploads/%s (%dx%d, %dKB)',
+        file.filename,
+        filename,
+        img.width,
+        img.height,
+        buf.tell() // 1024,
+    )
     url = url_for('static', filename='uploads/' + filename)
     return jsonify({'url': url})
 
@@ -988,6 +1131,7 @@ def upload_image():
 # ═══════════════════════════════════════════════
 # 特色卡片管理
 # ═══════════════════════════════════════════════
+
 
 @admin_bp.route('/featured-cards')
 @admin_required
@@ -1029,7 +1173,7 @@ def new_featured_card():
             link=form.link.data or '',
             image_url=form.image_url.data or '',
             sort_order=form.sort_order.data or 0,
-            is_active=form.is_active.data
+            is_active=form.is_active.data,
         )
         db.session.add(card)
         db.session.commit()
@@ -1116,8 +1260,9 @@ def bili_subscriptions():
                 BiliUp.name.ilike(f'%{q}%'),
             )
         )
-    pagination = query.order_by(BiliSubscription.created_at.desc())\
-        .paginate(page=page, per_page=per_page, error_out=False)
+    pagination = query.order_by(BiliSubscription.created_at.desc()).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
 
     return render_template('admin/bili_subscriptions.html', pagination=pagination, q=q)
 
@@ -1138,10 +1283,10 @@ def delete_bili_subscription(id):
 def cleanup_unverified_subscriptions():
     """清理 24 小时未验证的订阅记录"""
     import datetime
+
     cutoff = datetime.datetime.utcnow() - datetime.timedelta(hours=24)
     deleted = BiliSubscription.query.filter(
-        BiliSubscription.verified == False,
-        BiliSubscription.created_at < cutoff
+        BiliSubscription.verified == False, BiliSubscription.created_at < cutoff
     ).delete()
     db.session.commit()
     flash(f'已清理 {deleted} 条未验证的过期订阅', 'success')

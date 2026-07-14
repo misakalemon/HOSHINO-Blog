@@ -14,6 +14,7 @@ HOSHINO Blog 日志模块
   在 create_app() 中先调用 setup_logging(app) 初始化，
   其他模块直接用 logging.getLogger(__name__) 获取 logger 即可。
 """
+
 import logging
 import logging.handlers
 import os
@@ -31,17 +32,9 @@ ERROR_LOG_FILE = os.path.join(LOG_DIR, 'error.log')
 # 日志格式
 #   DETAILED_FORMAT — 文件日志：包含时间、级别、模块名、函数名、行号
 #   CONSOLE_FORMAT  — 终端日志：带颜色，更易读
-DETAILED_FORMAT = (
-    '[%(asctime)s] %(levelname)-8s '
-    '[%(name)s:%(funcName)s:%(lineno)d] '
-    '%(message)s'
-)
+DETAILED_FORMAT = '[%(asctime)s] %(levelname)-8s [%(name)s:%(funcName)s:%(lineno)d] %(message)s'
 # 终端日志：带模块名、函数名，与文件日志一致
-CONSOLE_FORMAT = (
-    '%(asctime)s  %(levelname)-7s  '
-    '[%(name)s:%(funcName)s:%(lineno)d] '
-    '%(message)s'
-)
+CONSOLE_FORMAT = '%(asctime)s  %(levelname)-7s  [%(name)s:%(funcName)s:%(lineno)d] %(message)s'
 DATE_FORMAT = '%m/%d %H:%M:%S'
 
 
@@ -72,8 +65,7 @@ def setup_logging(app):
     # ===== 2. 文件 Handler（全部日志，每日轮转，保留30天） =====
     # 使用 TimedRotatingFileHandler 按天轮转，避免单个日志文件过大
     file_handler = logging.handlers.TimedRotatingFileHandler(
-        LOG_FILE, when='midnight', interval=1, backupCount=30,
-        encoding='utf-8'
+        LOG_FILE, when='midnight', interval=1, backupCount=30, encoding='utf-8'
     )
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(logging.Formatter(DETAILED_FORMAT, DATE_FORMAT))
@@ -81,8 +73,7 @@ def setup_logging(app):
     # ===== 3. 错误文件 Handler（仅 ERROR 以上，单独文件） =====
     # 使用 RotatingFileHandler 按大小轮转，专门记录错误信息
     error_handler = logging.handlers.RotatingFileHandler(
-        ERROR_LOG_FILE, maxBytes=10 * 1024 * 1024, backupCount=5,
-        encoding='utf-8'
+        ERROR_LOG_FILE, maxBytes=10 * 1024 * 1024, backupCount=5, encoding='utf-8'
     )
     error_handler.setLevel(logging.ERROR)
     error_handler.setFormatter(logging.Formatter(DETAILED_FORMAT, DATE_FORMAT))
@@ -117,9 +108,11 @@ def setup_logging(app):
 
     # ===== 6. 第三方库日志级别压制 =====
     # Selenium WebDriver 远程调用日志（每条 HTTP 请求/响应都打 DEBUG，太吵）
-    for logger_name in ('selenium.webdriver.remote.remote_connection',
-                        'selenium.webdriver.remote',
-                        'selenium'):
+    for logger_name in (
+        'selenium.webdriver.remote.remote_connection',
+        'selenium.webdriver.remote',
+        'selenium',
+    ):
         log = logging.getLogger(logger_name)
         log.setLevel(logging.WARNING)
         log.handlers.clear()
@@ -173,7 +166,7 @@ def log_request(response):
     response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
     response.headers['Content-Security-Policy'] = (
         "default-src 'self';"
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net;"
+        "script-src 'self' https://cdn.jsdelivr.net;"
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net;"
         "img-src 'self' data: https:;"
         "font-src 'self' https://fonts.gstatic.com;"
@@ -197,17 +190,17 @@ def log_request(response):
 
     # 格式化的日志消息
     msg = (
-        f"{extra['ip']:>15} {extra['method']:<7} "
-        f"{extra['status']}  {extra['path']:<40} "
-        f"{extra['user_agent']}"
+        f'{extra["ip"]:>15} {extra["method"]:<7} '
+        f'{extra["status"]}  {extra["path"]:<40} '
+        f'{extra["user_agent"]}'
     )
 
     # 按状态码分级记录
     if response.status_code >= 500:
-        logger.error(msg)    # 服务器错误
+        logger.error(msg)  # 服务器错误
     elif response.status_code >= 400:
         logger.warning(msg)  # 客户端错误
     else:
-        logger.info(msg)     # 成功 / 重定向
+        logger.info(msg)  # 成功 / 重定向
 
     return response
