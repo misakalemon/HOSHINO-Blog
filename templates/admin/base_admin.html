@@ -659,12 +659,12 @@ function bindCropUpload(inputId, uploadUrl, fieldSelector, previewSelector, onSu
 }
 </script>
 
+{% include 'admin/_cookie_banner.html' %}
+
     <!-- admin_content 块：子模板填充 -->
     {% block admin_content %}{% endblock %}
     </div>
 </div>
-
-{% include 'admin/_cookie_banner.html' %}
 
 <!-- 自定义下拉框 (glow-select) 驱动 + 全局弹窗 -->
 <script>

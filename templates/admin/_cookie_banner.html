@@ -1,15 +1,20 @@
 <div class="cookie-banner" id="cookieBanner">
     <span>本站使用 Cookie 来改善体验。<a href="{{ url_for('blog.about') }}" style="color:rgba(0,150,255,0.8);text-decoration:underline">了解更多</a></span>
-    <button id="cookieConsentBtn">同意</button>
+    <button id="cookieConsentBtn" onclick="document.getElementById('cookieBanner').style.display='none';try{localStorage.setItem('cookie_consent','1')}catch(e){}">同意</button>
 </div>
 <script>
 (function(){
   var b = document.getElementById('cookieBanner');
   if (!b) return;
   try { if (localStorage.getItem('cookie_consent')) { b.style.display = 'none'; return; } } catch(e) {}
-  document.getElementById('cookieConsentBtn').addEventListener('click', function(){
-    b.style.display = 'none';
-    try { localStorage.setItem('cookie_consent', '1'); } catch(e) {}
+  document.addEventListener('click', function(e) {
+    if (b.style.display === 'none') return;
+    var t = e.target;
+    if (t && (t.id === 'cookieConsentBtn' || t.closest('#cookieBanner'))) {
+      b.style.display = 'none';
+      try { localStorage.setItem('cookie_consent', '1'); } catch(ex) {}
+    }
   });
+  setTimeout(function(){ b.style.display = 'none'; try { localStorage.setItem('cookie_consent', '1'); } catch(e) {} }, 10000);
 })();
 </script>
