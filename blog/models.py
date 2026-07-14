@@ -97,7 +97,7 @@ class User(UserMixin, db.Model):
     created_at = db.Column(db.DateTime, default=datetime.datetime.now(datetime.timezone.utc))
 
     # ── 关联关系 ────────────────────────────────
-    posts = db.relationship('Post', backref='author', lazy='select')
+    posts = db.relationship('Post', backref='author', lazy='dynamic')
 
     # ── 属性 ────────────────────────────────────
     @property
