@@ -272,7 +272,7 @@ def _init_scheduler(app):
             replace_existing=True,
         )
         # 每天 02:00 深扫所有 UP 主 Hot/Warm/Cold 三层数据
-        from blog.bili_routes import cleanup_old_history, run_daily_scrape
+        from blog.bili_routes import run_daily_scrape
 
         scheduler.add_job(
             func=lambda: run_daily_scrape(app),
@@ -280,16 +280,6 @@ def _init_scheduler(app):
             hour=2,
             minute=0,
             id='daily_bili_refresh',
-            replace_existing=True,
-        )
-        # 清理 90 天前的 B站视频历史快照（保留磁盘空间）
-        scheduler.add_job(
-            func=lambda: cleanup_old_history(app),
-            trigger='cron',
-            day=1,
-            hour=3,
-            minute=0,
-            id='cleanup_bili_history',
             replace_existing=True,
         )
         # 每 30 分钟增量检查 B站 新视频

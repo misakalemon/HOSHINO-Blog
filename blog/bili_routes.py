@@ -1043,22 +1043,3 @@ def run_daily_scrape(app):
                     )
 
         logger.info('B站 每日刷新完成')
-
-
-def cleanup_old_history(app=None):
-    """删除 90 天前的 B站视频历史快照"""
-    from blog.models import BiliVideoHistory, db as _db
-    import datetime
-
-    ctx = app.app_context() if app else None
-    if ctx:
-        ctx.push()
-    try:
-        cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=90)
-        deleted = BiliVideoHistory.query.filter(BiliVideoHistory.recorded_at < cutoff).delete()
-        _db.session.commit()
-        if deleted:
-            logger.info('清理了 %d 条 90 天前的 B站视频历史快照', deleted)
-    finally:
-        if ctx:
-            ctx.pop()
