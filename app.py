@@ -292,8 +292,19 @@ def _init_scheduler(app):
             misfire_grace_time=600,
             coalesce=True,
         )
+        # 每天 03:00 自动清理 B站视频历史快照（按 BiliCleanupConfig 配置）
+        from blog.bili_routes import auto_cleanup_history
+
+        scheduler.add_job(
+            func=lambda: auto_cleanup_history(),
+            trigger='cron',
+            hour=3,
+            minute=0,
+            id='bili_auto_cleanup',
+            replace_existing=True,
+        )
         scheduler.start()
-        app.logger.info('定时任务: 09:00价格 / 03:00密钥 / 每30minB站增量 / 02:00B站深扫')
+        app.logger.info('定时任务: 09:00价格 / 03:00密钥/清理 / 每30minB站增量 / 02:00B站深扫')
     except Exception as e:
         app.logger.warning('定时任务启动失败（不影响运行）: %s', e)
 

@@ -558,3 +558,14 @@ class BiliSubscription(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.datetime.now(datetime.timezone.utc))
 
     up = db.relationship('BiliUp', backref=db.backref('subscriptions', lazy='dynamic'))
+
+
+class BiliCleanupConfig(db.Model):
+    """B站历史快照自动清理配置"""
+
+    __tablename__ = 'bili_cleanup_config'
+
+    id = db.Column(db.Integer, primary_key=True)
+    days = db.Column(db.Integer, default=90, nullable=False, comment='清理几天前的数据')
+    enabled = db.Column(db.Boolean, default=False, comment='是否启用自动清理')
+    updated_at = db.Column(db.DateTime, default=datetime.datetime.now(datetime.timezone.utc))

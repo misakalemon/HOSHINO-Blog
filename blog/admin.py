@@ -1296,25 +1296,52 @@ def cleanup_unverified_subscriptions():
 @admin_bp.route('/bili-history-cleanup', methods=['GET', 'POST'])
 @admin_required
 def bili_history_cleanup():
-    """B站视频历史记录清理（管理员手动指定天数）"""
+    """B站视频历史记录清理（配置自动清理 + 手动执行）"""
     from blog.bili_routes import cleanup_old_history
+    from blog.models import BiliCleanupConfig, BiliVideoHistory
+
+    # 获取或创建配置
+    cfg = BiliCleanupConfig.query.first()
+    if not cfg:
+        cfg = BiliCleanupConfig()
+        db.session.add(cfg)
+        db.session.commit()
 
     deleted = None
-    days = None
+    days_used = None
     total = None
-    if request.method == 'POST':
-        days = request.form.get('days', 90, type=int)
-        if days < 1:
-            flash('天数必须大于 0', 'error')
-        else:
-            from blog.models import BiliVideoHistory
 
-            total = BiliVideoHistory.query.count()
-            deleted = cleanup_old_history(days=days)
-            flash(
-                f'已清理 {deleted} 条 {days} 天前的 B站视频历史快照（剩余 {total - deleted} 条）',
-                'success',
-            )
+    if request.method == 'POST':
+        action = request.form.get('action', 'manual')
+
+        if action == 'manual':
+            days_used = request.form.get('days', 90, type=int)
+            if days_used < 1:
+                flash('天数必须大于 0', 'error')
+            else:
+                total = BiliVideoHistory.query.count()
+                deleted = cleanup_old_history(days=days_used)
+                flash(
+                    f'已清理 {deleted} 条 {days_used} 天前的记录（剩余 {total - deleted} 条）',
+                    'success',
+                )
+
+        elif action == 'config':
+            cfg.days = request.form.get('days', 90, type=int)
+            if cfg.days < 1:
+                flash('天数必须大于 0', 'error')
+            else:
+                cfg.enabled = request.form.get('enabled') == '1'
+                db.session.commit()
+                flash(
+                    f'自动清理已{"启用" if cfg.enabled else "禁用"}，保留最近 {cfg.days} 天数据',
+                    'success',
+                )
+
     return render_template(
-        'admin/bili_history_cleanup.html', deleted=deleted, days=days, total=total
+        'admin/bili_history_cleanup.html',
+        cfg=cfg,
+        deleted=deleted,
+        days=days_used,
+        total=total,
     )
