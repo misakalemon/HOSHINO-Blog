@@ -118,6 +118,13 @@ class Config:
     """
 
     # ── Flask 核心 ──────────────────────────────
+    # 服务器主机名（后台线程构建绝对 URL 时必须）
+    # 格式：host:port，如 192.168.3.84:5000
+    # 留空时仅请求上下文中可用 url_for(_external=True)
+    SERVER_NAME = os.environ.get('SERVER_NAME') or None
+    # 外部 URL 协议（配合 SERVER_NAME 使用）
+    PREFERRED_URL_SCHEME = os.environ.get('PREFERRED_URL_SCHEME', 'http')
+
     # 密钥用于 Session 签名、CSRF token 加密。
     # 优先级：.env 中的 SECRET_KEY > .secret_keys 文件（自动轮换）
     SECRET_KEY = os.environ.get('SECRET_KEY')
