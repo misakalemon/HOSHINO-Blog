@@ -1,11 +1,7 @@
 <div class="cookie-banner" id="cookieBanner" role="dialog" aria-label="Cookie 同意提示">
-    <p class="cookie-text">本站使用 Cookie 来改善体验。<a href="{{ url_for('blog.about') }}" class="cookie-link" onclick="event.stopPropagation()">了解更多</a></p>
+    <p class="cookie-text">本站使用 Cookie 来改善体验。<a href="{{ url_for('blog.about') }}" class="cookie-link">了解更多</a></p>
     <div class="cookie-actions">
-        <button type="button" class="cookie-btn cookie-btn--secondary" onclick="this.closest('.cookie-banner').remove();try{localStorage.setItem('cookie_consent','rejected')}catch(e){}">拒绝</button>
-        <button type="button" class="cookie-btn cookie-btn--primary" onclick="this.closest('.cookie-banner').remove();try{localStorage.setItem('cookie_consent','accepted')}catch(e){}">同意</button>
+        <button type="button" class="cookie-btn cookie-btn--secondary" id="cookieReject">拒绝</button>
+        <button type="button" class="cookie-btn cookie-btn--primary" id="cookieAccept">同意</button>
     </div>
 </div>
-<script>
-try { if (localStorage.getItem('cookie_consent')) { document.getElementById('cookieBanner').remove(); } } catch(e) {}
-setTimeout(function(){ var b = document.getElementById('cookieBanner'); if (b) { b.remove(); try { localStorage.setItem('cookie_consent', 'accepted'); } catch(e){} } }, 8000);
-</script>
