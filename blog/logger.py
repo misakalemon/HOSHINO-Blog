@@ -33,7 +33,7 @@ ERROR_LOG_FILE = os.path.join(LOG_DIR, 'error.log')
 #   DETAILED_FORMAT — 文件日志：包含时间、级别、模块名、函数名、行号
 #   CONSOLE_FORMAT  — 终端日志：精简，仅时间+级别+消息
 DETAILED_FORMAT = '[%(asctime)s] %(levelname)-8s [%(name)s:%(funcName)s:%(lineno)d] %(message)s'
-CONSOLE_FORMAT = '%(asctime)s  %(levelname)-6s  %(message)s'
+CONSOLE_FORMAT = '%(asctime)s  %(levelname)-6s  [%(name)s] %(message)s'
 DATE_FORMAT = '%m/%d %H:%M:%S'
 CONSOLE_DATE_FORMAT = '%m/%d %H:%M'
 
