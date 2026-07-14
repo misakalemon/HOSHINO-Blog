@@ -39,9 +39,9 @@
 </div>
 
 <!-- 导航栏 -->
-<nav class="navbar">
+<nav class="navbar{% if request.endpoint != 'blog.index' %} visible{% endif %}"{% if request.endpoint == 'blog.index' %} data-nav-auto{% endif %}>
     <div style="display:flex;align-items:center;gap:16px">
-        <a href="{{ url_for('blog.index') }}" class="nav-logo" id="navLogo" onclick="if(window.innerWidth<640){event.preventDefault();toggleDrawer();}">✦ Hoshino <span style="font-size:0.65rem;font-weight:400;background:linear-gradient(135deg,#ff8aae,#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:0.08em">—— 星野、参上！——</span></a>
+        <a href="{{ url_for('blog.index') }}" class="nav-logo" id="navLogo">✦ Hoshino <span style="font-size:0.65rem;font-weight:400;background:linear-gradient(135deg,#ff8aae,#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:0.08em">—— 星野、参上！——</span></a>
     </div>
     <div class="nav-links">
         <a href="{{ url_for('blog.index') }}" {% if request.endpoint == 'blog.index' or request.endpoint == 'blog.category' %}class="nav-link-active"{% endif %}><i class="hm-public-home"></i>博客</a>
@@ -74,10 +74,10 @@
     {% endif %}
     {% endif %}
 </div>
-<div class="drawer-overlay" id="drawerOverlay" onclick="toggleDrawer()"></div>
+<div class="drawer-overlay" id="drawerOverlay"></div>
 
 <!-- 图片灯箱 -->
-<div id="lightbox" onclick="closeLightbox()" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);align-items:center;justify-content:center;cursor:zoom-out">
+<div id="lightbox" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);align-items:center;justify-content:center;cursor:zoom-out">
     <img id="lightboxImg" src="" alt="" style="max-width:90vw;max-height:90vh;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.6)">
 </div>
 
@@ -104,21 +104,6 @@
 
 <!-- 提取的全局 JS（抽屉 / 灯箱 / 下拉框 / 弹窗 / showConfirm） -->
 <script src="{{ url_for('static', filename='js/base.js') }}"></script>
-<script>
-// ── 导航栏渐显（Jinja2 变量保持内联）──
-document.addEventListener('DOMContentLoaded', function() {
-  var nav = document.querySelector('.navbar');
-  if (!nav) return;
-  {% if request.endpoint == 'blog.index' %}
-  if (!document.querySelector('.hero')) { nav.classList.add('visible'); return; }
-  function checkNav() { nav.classList.toggle('visible', window.scrollY > window.innerHeight * 0.2); }
-  window.addEventListener('scroll', checkNav, {passive:true});
-  checkNav();
-  {% else %}
-  nav.classList.add('visible');
-  {% endif %}
-});
-</script>
 
 </body>
 </html>

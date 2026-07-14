@@ -1,8 +1,27 @@
+// ── 导航栏渐显（仅首页滚动触发）────────────
+(function(){
+  var nav = document.querySelector('.navbar');
+  if (!nav) return;
+  if (nav.hasAttribute('data-nav-auto')) {
+    var hero = document.querySelector('.hero');
+    if (!hero) { nav.classList.add('visible'); return; }
+    function checkNav() { nav.classList.toggle('visible', window.scrollY > window.innerHeight * 0.2); }
+    window.addEventListener('scroll', checkNav, {passive:true});
+    checkNav();
+  }
+})();
+
 // 移动端抽屉菜单
 function toggleDrawer(){
   document.getElementById('mobileDrawer').classList.toggle('open');
   document.getElementById('drawerOverlay').classList.toggle('show');
 }
+// 抽屉 logo 点击 + 遮罩层（CSP-safe，不用 onclick）
+document.getElementById('navLogo')?.addEventListener('click', function(e) {
+  if (window.innerWidth < 640) { e.preventDefault(); toggleDrawer(); }
+});
+document.getElementById('drawerOverlay')?.addEventListener('click', toggleDrawer);
+
 function openLightbox(src) {
   document.getElementById('lightboxImg').src = src;
   document.getElementById('lightbox').style.display = 'flex';
@@ -10,6 +29,9 @@ function openLightbox(src) {
 function closeLightbox() {
   document.getElementById('lightbox').style.display = 'none';
 }
+// 灯箱关闭（CSP-safe，不用 onclick）
+document.getElementById('lightbox')?.addEventListener('click', closeLightbox);
+
 
 // ── 浏览器返回时恢复滚动位置 ──────────────
 if ('scrollRestoration' in history) history.scrollRestoration = 'auto';
