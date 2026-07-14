@@ -59,6 +59,7 @@ document.addEventListener('click',function(e){
 
 // ── 全局弹窗（暗色粉紫风格，替换原生 alert/confirm/prompt）──
 (function() {
+  if (document.querySelector('.glow-modal-overlay')) return;
   var overlay = document.createElement('div');
   overlay.className = 'glow-modal-overlay';
   overlay.innerHTML =
