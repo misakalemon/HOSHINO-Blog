@@ -928,8 +928,7 @@ ul { list-style: none; }
 /* 主区域：紧贴侧边栏右侧 */
 .admin-main { margin-left: 240px; flex: 1; padding: 28px 32px; min-height: 100vh; position: relative; z-index: 1; }
 .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-.admin-table-wrapper { overflow-x: auto; }
-@media (min-width: 769px) { .admin-table-wrapper { overflow-x: visible; } }
+.admin-table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .admin-header h3 { font-size: 1.3rem; font-weight: 400; color: rgba(255,255,255,0.8); }
 /* 管理卡片：与 glass-card 类似，带鼠标追踪光晕 */
 .admin-card {
@@ -941,6 +940,7 @@ ul { list-style: none; }
   border-radius: 20px; padding: 24px; margin-bottom: 20px;
   transition: transform 0.3s, border-color 0.3s, box-shadow 0.3s;
   box-shadow: 0 0 0 1px rgba(255,255,255,0.02) inset;
+  overflow-wrap: break-word; word-break: break-word;
 }
 .admin-card:hover {
   border-color: rgba(255,255,255,0.15);
@@ -987,7 +987,7 @@ ul { list-style: none; }
   padding: 14px 16px; font-size: 0.85rem;
   color: rgba(255,255,255,0.5);
   border-bottom: 1px solid rgba(255,255,255,0.04);
-  white-space: nowrap;
+  overflow-wrap: break-word; word-break: break-word;
 }
 .admin-table tr:hover td { background: rgba(255,255,255,0.01); }
 .admin-table td a:not(.btn) { color: #7abfff; font-weight: 500; }
