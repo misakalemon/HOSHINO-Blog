@@ -6,6 +6,7 @@
 - Cookie 过期自动降级为匿名访问
 - 两路视频发现：arc/search 翻页 + 动态流兜底
 """
+
 import asyncio
 import logging
 import re
@@ -36,6 +37,7 @@ def was_recently_blocked(cooldown: float = 0) -> bool:
         return _last_412_time > 0
     return time.time() - _last_412_time < cooldown
 
+
 # 按线程隔离的事件循环（每个线程独立，不互相干扰）
 _loop_local = threading.local()
 
@@ -65,7 +67,7 @@ def _sync(coro):
         try:
             return loop.run_until_complete(asyncio.wait_for(coro, timeout=_API_TIMEOUT))
         except asyncio.TimeoutError:
-            logger.error("B站 API 请求超时 (%ds)", _API_TIMEOUT)
+            logger.error('B站 API 请求超时 (%ds)', _API_TIMEOUT)
             try:
                 if not loop.is_closed():
                     loop.run_until_complete(loop.shutdown_asyncgens())
@@ -73,7 +75,7 @@ def _sync(coro):
             except Exception:
                 pass
             _loop_local.loop = None
-            raise TimeoutError(f"B站 API 请求超时 ({_API_TIMEOUT}s)")
+            raise TimeoutError(f'B站 API 请求超时 ({_API_TIMEOUT}s)')
         except Exception:
             try:
                 if not loop.is_closed():
@@ -108,18 +110,18 @@ def set_cookies(cookie_str: str):
     """设置登录态 Cookie（SESSDATA=abc; bili_jct=def; buvid3=ghi）"""
     global _credential
     cookies = {}
-    for item in cookie_str.split(";"):
+    for item in cookie_str.split(';'):
         item = item.strip()
-        if "=" in item:
-            k, v = item.split("=", 1)
+        if '=' in item:
+            k, v = item.split('=', 1)
             cookies[k.strip()] = v.strip()
     _credential = Credential(
-        sessdata=cookies.get("SESSDATA", ""),
-        bili_jct=cookies.get("bili_jct", ""),
-        buvid3=cookies.get("buvid3", ""),
-        buvid4=cookies.get("buvid4", ""),
-        dedeuserid=cookies.get("DedeUserID", ""),
-        ac_time_value=cookies.get("ac_time_value", ""),
+        sessdata=cookies.get('SESSDATA', ''),
+        bili_jct=cookies.get('bili_jct', ''),
+        buvid3=cookies.get('buvid3', ''),
+        buvid4=cookies.get('buvid4', ''),
+        dedeuserid=cookies.get('DedeUserID', ''),
+        ac_time_value=cookies.get('ac_time_value', ''),
     )
 
 
@@ -140,9 +142,9 @@ def is_logged_in() -> bool:
 
 def extract_mid(space_url: str) -> int:
     """从 UP 主空间 URL 中提取 mid"""
-    m = re.search(r"space\.bilibili\.com/(\d+)", space_url)
+    m = re.search(r'space\.bilibili\.com/(\d+)', space_url)
     if not m:
-        raise ValueError(f"无法从 URL 中提取 mid: {space_url}")
+        raise ValueError(f'无法从 URL 中提取 mid: {space_url}')
     return int(m.group(1))
 
 
@@ -158,7 +160,7 @@ def get_user_info(mid: int) -> dict:
         info = _sync(u.get_user_info())
     except Exception as e:
         if _credential and _is_auth_error(e):
-            logger.warning("UP主信息获取凭证过期，使用匿名: %s", e)
+            logger.warning('UP主信息获取凭证过期，使用匿名: %s', e)
             u = _user_mod.User(mid)
             info = _sync(u.get_user_info())
         else:
@@ -169,11 +171,11 @@ def get_user_info(mid: int) -> dict:
             rel = _sync(_user_mod.User(mid).get_relation_info())
             follower = rel.get('follower', 0)
         except Exception:
-            logger.warning("粉丝数获取失败 mid=%d", mid)
+            logger.warning('粉丝数获取失败 mid=%d', mid)
             follower = 0
     return {
         'name': info.get('name', ''),
-        'avatar': info.get('face', ''),
+        'avatar': (info.get('face', '') or '').replace('http://', 'https://'),
         'follower_count': follower,
         'video_count': info.get('video') or 0,
     }
@@ -203,74 +205,85 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
     while True:
         if max_pages is not None and pn > max_pages:
             break
-        logger.info("正在获取第 %d 页视频列表 ...", pn)
+        logger.info('正在获取第 %d 页视频列表 ...', pn)
         try:
             data = _sync(u.get_videos(ps=PAGE_SIZE, pn=pn))
             page_retries = 0  # 成功则重置本页重试计数
         except Exception as e:
-            logger.error("获取第 %d 页视频列表失败: %s", pn, e)
+            logger.error('获取第 %d 页视频列表失败: %s', pn, e)
             if _credential and _is_auth_error(e) and not auth_retried:
-                logger.warning("凭证过期，切换为匿名访问后重试第 %d 页", pn)
+                logger.warning('凭证过期，切换为匿名访问后重试第 %d 页', pn)
                 auth_retried = True
                 u = _user_mod.User(mid)
                 continue
             if _is_ip_blocked(e):
                 global _last_412_time
                 _last_412_time = time.time()
-                logger.error("IP 被安全封禁(412)，停止爬取")
+                logger.error('IP 被安全封禁(412)，停止爬取')
                 break
             if _is_risk_control(e):
                 page_retries += 1
                 if page_retries > MAX_PAGE_RETRIES:
-                    logger.error("第 %d 页重试 %d 次仍被风控，停止", pn, MAX_PAGE_RETRIES)
+                    logger.error('第 %d 页重试 %d 次仍被风控，停止', pn, MAX_PAGE_RETRIES)
                     break
-                logger.warning("⚠️ 触发风控，等待 %ds 后重试 (第 %d/%d 次)...",
-                               retry_delay, page_retries, MAX_PAGE_RETRIES)
+                logger.warning(
+                    '⚠️ 触发风控，等待 %ds 后重试 (第 %d/%d 次)...',
+                    retry_delay,
+                    page_retries,
+                    MAX_PAGE_RETRIES,
+                )
                 time.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, 600)
                 continue
             break
 
-        vlist = data.get("list", {}).get("vlist", [])
+        vlist = data.get('list', {}).get('vlist', [])
         if not vlist:
-            logger.info("第 %d 页 vlist 为空，结束迭代", pn)
+            logger.info('第 %d 页 vlist 为空，结束迭代', pn)
             break
 
-        page_info = data.get("page", {})
-        first_pubdate = vlist[0].get("created", 0)
+        page_info = data.get('page', {})
+        first_pubdate = vlist[0].get('created', 0)
         first_pubdate_str = (
-            datetime.fromtimestamp(first_pubdate, tz=timezone.utc).strftime("%Y-%m-%d %H:%M")
-            if first_pubdate else "?"
+            datetime.fromtimestamp(first_pubdate, tz=timezone.utc).strftime('%Y-%m-%d %H:%M')
+            if first_pubdate
+            else '?'
         )
-        logger.info("第 %d 页返回 %d/%d 个视频 (total=%s, ps=%s), 首 bvid=%s pubdate=%s",
-                    pn, len(vlist), PAGE_SIZE, page_info.get("count"),
-                    page_info.get("ps", "?"),
-                    vlist[0].get("bvid", "?"), first_pubdate_str)
+        logger.info(
+            '第 %d 页返回 %d/%d 个视频 (total=%s, ps=%s), 首 bvid=%s pubdate=%s',
+            pn,
+            len(vlist),
+            PAGE_SIZE,
+            page_info.get('count'),
+            page_info.get('ps', '?'),
+            vlist[0].get('bvid', '?'),
+            first_pubdate_str,
+        )
 
         for item in vlist:
-            pubdate_ts = item.get("created", 0)
+            pubdate_ts = item.get('created', 0)
             yield {
-                "aid": int(item.get("aid", 0)),
-                "bvid": item.get("bvid", ""),
-                "title": item["title"],
-                "description": item.get("description", ""),
-                "duration": _parse_duration(item.get("length", "00:00")),
-                "pubdate": pubdate_ts,
-                "pub_date": (
+                'aid': int(item.get('aid', 0)),
+                'bvid': item.get('bvid', ''),
+                'title': item['title'],
+                'description': item.get('description', ''),
+                'duration': _parse_duration(item.get('length', '00:00')),
+                'pubdate': pubdate_ts,
+                'pub_date': (
                     datetime.fromtimestamp(pubdate_ts, tz=timezone.utc).date()
-                    if pubdate_ts else None
+                    if pubdate_ts
+                    else None
                 ),
-                "pub_datetime": (
-                    datetime.fromtimestamp(pubdate_ts, tz=timezone.utc)
-                    if pubdate_ts else None
+                'pub_datetime': (
+                    datetime.fromtimestamp(pubdate_ts, tz=timezone.utc) if pubdate_ts else None
                 ),
-                "view_count": item.get("play", 0),
-                "comment_count": item.get("comment", 0),
-                "danmaku_count": item.get("video_review", 0),
+                'view_count': item.get('play', 0),
+                'comment_count': item.get('comment', 0),
+                'danmaku_count': item.get('video_review', 0),
             }
 
-        page = data.get("page", {})
-        total_count = page.get("count", 0)
+        page = data.get('page', {})
+        total_count = page.get('count', 0)
         total_pages = (total_count + PAGE_SIZE - 1) // PAGE_SIZE if total_count > 0 else 0
         if pn >= total_pages and total_pages > 0:
             break
@@ -279,6 +292,7 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
             break
         pn += 1
         import random
+
         # 匿名访问时翻倍间隔，降低风控概率
         sleep_base = REQUEST_INTERVAL * 4 if _credential is None else REQUEST_INTERVAL * 2
         time.sleep(sleep_base + random.random() * 3.0)
@@ -292,7 +306,7 @@ def get_video_list_from_dynamics(mid: int) -> list[dict]:
       DYNAMIC_TYPE_FORWARD → 转发，取 orig 中的 bvid
     对每个 bvid 调 Video.get_info() 拿到完整元数据；
     过滤 owner_mid != 目标 mid 的转发视频。
-    
+
     返回 list[dict]，字段格式与 get_video_list 对齐。
     """
     u = _user_mod.User(mid, credential=_credential)
@@ -303,13 +317,13 @@ def get_video_list_from_dynamics(mid: int) -> list[dict]:
             u = _user_mod.User(mid)
             data = _sync(u.get_dynamics_new())
         else:
-            logger.warning("动态发现: get_dynamics_new 失败 mid=%d: %s", mid, e)
+            logger.warning('动态发现: get_dynamics_new 失败 mid=%d: %s', mid, e)
             time.sleep(3.0)
             u = _user_mod.User(mid)
             try:
                 data = _sync(u.get_dynamics_new())
             except Exception as e2:
-                logger.warning("动态发现: get_dynamics_new 重试失败 mid=%d: %s", mid, e2)
+                logger.warning('动态发现: get_dynamics_new 重试失败 mid=%d: %s', mid, e2)
                 return []
 
     items = data.get('items') or []
@@ -340,44 +354,51 @@ def get_video_list_from_dynamics(mid: int) -> list[dict]:
             try:
                 info = _sync(_video_mod.Video(bvid=bvid).get_info())
             except Exception as e2:
-                logger.warning("动态发现: 视频 %s 信息获取失败 (cred=%s): %s / %s",
-                               bvid, _credential is not None, e, e2)
+                logger.warning(
+                    '动态发现: 视频 %s 信息获取失败 (cred=%s): %s / %s',
+                    bvid,
+                    _credential is not None,
+                    e,
+                    e2,
+                )
                 time.sleep(3.0)
                 continue
 
         # 跳过非本 UP 主的转发视频
-        owner_mid = info.get("owner", {}).get("mid", 0)
+        owner_mid = info.get('owner', {}).get('mid', 0)
         if owner_mid != mid:
-            logger.debug("动态发现: 跳过转发视频 %s (owner=%d != mid=%d)", bvid, owner_mid, mid)
+            logger.debug('动态发现: 跳过转发视频 %s (owner=%d != mid=%d)', bvid, owner_mid, mid)
             continue
 
-        pubdate_ts = info.get("pubdate", 0)
-        stat = info.get("stat", {})
-        results.append({
-            "aid": int(info.get("aid", 0)),
-            "bvid": bvid,
-            "title": info.get("title", ""),
-            "description": info.get("desc", ""),
-            "duration": info.get("duration", 0),
-            "pubdate": pubdate_ts,
-            "pub_date": (
-                datetime.fromtimestamp(pubdate_ts, tz=timezone.utc).date()
-                if pubdate_ts else None
-            ),
-            "pub_datetime": (
-                datetime.fromtimestamp(pubdate_ts, tz=timezone.utc)
-                if pubdate_ts else None
-            ),
-            "view_count": stat.get("view", 0),
-            "like_count": stat.get("like", 0),
-            "coin_count": stat.get("coin", 0),
-            "favorite_count": stat.get("favorite", 0),
-            "share_count": stat.get("share", 0),
-            "comment_count": stat.get("reply", 0),
-            "danmaku_count": stat.get("danmaku", 0),
-        })
+        pubdate_ts = info.get('pubdate', 0)
+        stat = info.get('stat', {})
+        results.append(
+            {
+                'aid': int(info.get('aid', 0)),
+                'bvid': bvid,
+                'title': info.get('title', ''),
+                'description': info.get('desc', ''),
+                'duration': info.get('duration', 0),
+                'pubdate': pubdate_ts,
+                'pub_date': (
+                    datetime.fromtimestamp(pubdate_ts, tz=timezone.utc).date()
+                    if pubdate_ts
+                    else None
+                ),
+                'pub_datetime': (
+                    datetime.fromtimestamp(pubdate_ts, tz=timezone.utc) if pubdate_ts else None
+                ),
+                'view_count': stat.get('view', 0),
+                'like_count': stat.get('like', 0),
+                'coin_count': stat.get('coin', 0),
+                'favorite_count': stat.get('favorite', 0),
+                'share_count': stat.get('share', 0),
+                'comment_count': stat.get('reply', 0),
+                'danmaku_count': stat.get('danmaku', 0),
+            }
+        )
 
-    logger.info("动态发现: mid=%d 找到 %d 个视频 (去重后)", mid, len(results))
+    logger.info('动态发现: mid=%d 找到 %d 个视频 (去重后)', mid, len(results))
     return results
 
 
@@ -388,20 +409,20 @@ def get_video_stat(bvid: str) -> dict:
         info = _sync(v.get_info())
     except Exception as e:
         if _credential and _is_auth_error(e):
-            logger.warning("视频统计获取凭证过期，使用匿名: %s", e)
+            logger.warning('视频统计获取凭证过期，使用匿名: %s', e)
             v = _video_mod.Video(bvid=bvid)
             info = _sync(v.get_info())
         else:
             raise
-    stat = info.get("stat", {})
+    stat = info.get('stat', {})
     return {
-        "view_count": stat.get("view", 0),
-        "like_count": stat.get("like", 0),
-        "coin_count": stat.get("coin", 0),
-        "favorite_count": stat.get("favorite", 0),
-        "share_count": stat.get("share", 0),
-        "comment_count": stat.get("reply", 0),
-        "danmaku_count": stat.get("danmaku", 0),
+        'view_count': stat.get('view', 0),
+        'like_count': stat.get('like', 0),
+        'coin_count': stat.get('coin', 0),
+        'favorite_count': stat.get('favorite', 0),
+        'share_count': stat.get('share', 0),
+        'comment_count': stat.get('reply', 0),
+        'danmaku_count': stat.get('danmaku', 0),
     }
 
 
@@ -409,9 +430,9 @@ def _parse_duration(length_str: str) -> int:
     if not length_str or not length_str.strip():
         return 0
     try:
-        parts = list(map(int, length_str.split(":")))
+        parts = list(map(int, length_str.split(':')))
     except (ValueError, TypeError):
-        logger.warning("无法解析视频时长: %r", length_str)
+        logger.warning('无法解析视频时长: %r', length_str)
         return 0
     if len(parts) == 2:
         return parts[0] * 60 + parts[1]
