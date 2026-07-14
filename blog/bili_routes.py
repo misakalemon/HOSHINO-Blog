@@ -481,12 +481,12 @@ def _check_new_videos(mid: int, app):
                 except Exception as e:
                     logger.error('发送新视频通知失败 mid=%d: %s', mid, e)
 
-            # ── 追踪最新 3 个视频的统计（每 30 分钟快照）──
+            # ── 追踪最新 10 个视频的统计（每 30 分钟快照）──
             try:
                 latest = (
                     BiliVideo.query.filter_by(up_id=up.id)
                     .order_by(BiliVideo.pubdate.desc())
-                    .limit(3)
+                    .limit(10)
                     .all()
                 )
                 if latest:
