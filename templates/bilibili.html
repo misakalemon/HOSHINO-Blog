@@ -201,7 +201,7 @@
     }
 
     window.clearCompare = function() {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify([])); } catch(e) {}
         updateBar();
     };
 

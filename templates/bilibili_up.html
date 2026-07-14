@@ -180,7 +180,7 @@
     }
 
     function saveIds(ids) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(ids)); } catch(e) {}
     }
 
     function updateBar() {
