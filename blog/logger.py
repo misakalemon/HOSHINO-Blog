@@ -35,7 +35,7 @@ ERROR_LOG_FILE = os.path.join(LOG_DIR, 'error.log')
 DETAILED_FORMAT = '[%(asctime)s] %(levelname)-8s [%(name)s:%(funcName)s:%(lineno)d] %(message)s'
 CONSOLE_FORMAT = '%(asctime)s  %(levelname)-6s  [%(name)s] %(message)s'
 DATE_FORMAT = '%m/%d %H:%M:%S'
-CONSOLE_DATE_FORMAT = '%m/%d %H:%M'
+CONSOLE_DATE_FORMAT = '%m/%d %H:%M:%S'
 
 
 def setup_logging(app):
