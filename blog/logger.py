@@ -31,11 +31,11 @@ ERROR_LOG_FILE = os.path.join(LOG_DIR, 'error.log')
 
 # 日志格式
 #   DETAILED_FORMAT — 文件日志：包含时间、级别、模块名、函数名、行号
-#   CONSOLE_FORMAT  — 终端日志：带颜色，更易读
+#   CONSOLE_FORMAT  — 终端日志：精简，仅时间+级别+消息
 DETAILED_FORMAT = '[%(asctime)s] %(levelname)-8s [%(name)s:%(funcName)s:%(lineno)d] %(message)s'
-# 终端日志：带模块名、函数名，与文件日志一致
-CONSOLE_FORMAT = '%(asctime)s  %(levelname)-7s  [%(name)s:%(funcName)s:%(lineno)d] %(message)s'
+CONSOLE_FORMAT = '%(asctime)s  %(levelname)-6s  %(message)s'
 DATE_FORMAT = '%m/%d %H:%M:%S'
+CONSOLE_DATE_FORMAT = '%m/%d %H:%M'
 
 
 def setup_logging(app):
@@ -81,7 +81,7 @@ def setup_logging(app):
     # ===== 4. 终端 Handler（INFO 级别，不显示 DEBUG 噪音） =====
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(logging.Formatter(CONSOLE_FORMAT, DATE_FORMAT))
+    console_handler.setFormatter(logging.Formatter(CONSOLE_FORMAT, CONSOLE_DATE_FORMAT))
 
     # 添加到根日志器
     root_logger.addHandler(file_handler)
@@ -100,7 +100,7 @@ def setup_logging(app):
         # 终端 handler：仅 WARNING+（抑制 werkzeug HTTP 访问日志）
         console_h = logging.StreamHandler()
         console_h.setLevel(logging.WARNING)
-        console_h.setFormatter(logging.Formatter(CONSOLE_FORMAT, DATE_FORMAT))
+        console_h.setFormatter(logging.Formatter(CONSOLE_FORMAT, CONSOLE_DATE_FORMAT))
         log.addHandler(file_handler)
         log.addHandler(console_h)
         # 禁止 propagate，避免日志重复（父 logger 也会输出）
@@ -189,18 +189,30 @@ def log_request(response):
     }
 
     # 格式化的日志消息
-    msg = (
+    # 终端简洁版（短路径、无 UA、不换行）
+    # 文件详细版（完整信息）
+
+    short_path = extra['path'].split('?')[0]
+    if len(short_path) > 36:
+        short_path = short_path[:33] + '...'
+    console_msg = f'{extra["status"]} {extra["method"]:<6} {short_path}'
+    file_msg = (
         f'{extra["ip"]:>15} {extra["method"]:<7} '
         f'{extra["status"]}  {extra["path"]:<40} '
         f'{extra["user_agent"]}'
     )
 
     # 按状态码分级记录
+    # 终端：精简版（仅状态+方法+短路径）
+    # 文件：详细版（含 IP、UA 等）
     if response.status_code >= 500:
-        logger.error(msg)  # 服务器错误
+        logger.error(console_msg)
+        logger.debug(file_msg)
     elif response.status_code >= 400:
-        logger.warning(msg)  # 客户端错误
+        logger.warning(console_msg)
+        logger.debug(file_msg)
     else:
-        logger.info(msg)  # 成功 / 重定向
+        logger.info(console_msg)
+        logger.debug(file_msg)
 
     return response
