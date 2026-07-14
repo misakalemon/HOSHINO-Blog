@@ -1,0 +1,43 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}B站 历史记录清理{% endblock %}
+{% block admin_content %}
+<div class="admin-header">
+    <h3>📊 B站 视频历史快照清理</h3>
+</div>
+
+<div style="max-width:560px;margin:0 auto;padding:24px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:16px">
+    <p style="color:rgba(255,255,255,0.5);font-size:0.85rem;margin:0 0 16px">
+        删除指定天数前的视频统计数据历史快照（BiliVideoHistory），释放数据库空间。<br>
+        此操作不可恢复，建议保留至少 30 天数据用于趋势分析。
+    </p>
+
+    {% if deleted is not none %}
+    <div style="padding:12px 16px;background:rgba(80,200,120,0.08);border:1px solid rgba(80,200,120,0.2);border-radius:10px;margin-bottom:16px;color:#b0ffb0;font-size:0.85rem">
+        已清理 <strong>{{ deleted }}</strong> 条 {{ days }} 天前的历史快照{% if total is not none %}（剩余 {{ total - deleted }} 条）{% endif %}
+    </div>
+    {% endif %}
+
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div style="display:flex;gap:12px;align-items:center">
+            <label style="color:rgba(255,255,255,0.6);font-size:0.85rem;white-space:nowrap">删除超过</label>
+            <input type="number" name="days" value="90" min="1" max="3650" required
+                   style="width:80px;padding:8px 12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;color:#e8edf5;font-size:0.85rem;outline:none;text-align:center">
+            <label style="color:rgba(255,255,255,0.6);font-size:0.85rem;white-space:nowrap">天的记录</label>
+            <button type="submit" class="btn btn-primary" style="padding:8px 20px;font-size:0.8rem;margin-left:auto"
+                    onclick="var _f=this.form;event.preventDefault();showConfirm('确定删除超过 ' + _f.days.value + ' 天的历史快照？\n此操作不可恢复！',function(r){if(r){_f.onsubmit=null;_f.submit()}})">
+                执行清理
+            </button>
+        </div>
+    </form>
+</div>
+
+<div style="max-width:560px;margin:16px auto;padding:24px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:16px">
+    <h4 style="color:rgba(255,255,255,0.6);font-size:0.85rem;margin:0 0 12px;font-weight:500">⚠️ 注意事项</h4>
+    <ul style="color:rgba(255,255,255,0.35);font-size:0.8rem;margin:0;padding-left:16px;line-height:1.8">
+        <li>仅删除 BiliVideoHistory（历史快照），不影响视频本身和最新统计数据</li>
+        <li>建议保留至少 30 天数据，否则视频详情页的增长趋势图可能无数据</li>
+        <li>清理后不可恢复，请谨慎操作</li>
+    </ul>
+</div>
+{% endblock %}

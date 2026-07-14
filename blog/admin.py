@@ -1291,3 +1291,30 @@ def cleanup_unverified_subscriptions():
     db.session.commit()
     flash(f'已清理 {deleted} 条未验证的过期订阅', 'success')
     return redirect(url_for('admin.bili_subscriptions'))
+
+
+@admin_bp.route('/bili-history-cleanup', methods=['GET', 'POST'])
+@admin_required
+def bili_history_cleanup():
+    """B站视频历史记录清理（管理员手动指定天数）"""
+    from blog.bili_routes import cleanup_old_history
+
+    deleted = None
+    days = None
+    total = None
+    if request.method == 'POST':
+        days = request.form.get('days', 90, type=int)
+        if days < 1:
+            flash('天数必须大于 0', 'error')
+        else:
+            from blog.models import BiliVideoHistory
+
+            total = BiliVideoHistory.query.count()
+            deleted = cleanup_old_history(days=days)
+            flash(
+                f'已清理 {deleted} 条 {days} 天前的 B站视频历史快照（剩余 {total - deleted} 条）',
+                'success',
+            )
+    return render_template(
+        'admin/bili_history_cleanup.html', deleted=deleted, days=days, total=total
+    )

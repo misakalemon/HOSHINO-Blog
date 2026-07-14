@@ -1043,3 +1043,16 @@ def run_daily_scrape(app):
                     )
 
         logger.info('B站 每日刷新完成')
+
+
+def cleanup_old_history(days=90):
+    """删除指定天数前的 B站视频历史快照（后台管理员手动触发）"""
+    from blog.models import BiliVideoHistory, db as _db
+    import datetime
+
+    cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=days)
+    deleted = BiliVideoHistory.query.filter(BiliVideoHistory.recorded_at < cutoff).delete()
+    _db.session.commit()
+    if deleted:
+        logger.info('管理员手动清理了 %d 条 %d 天前的 B站视频历史快照', deleted, days)
+    return deleted
