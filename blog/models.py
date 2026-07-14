@@ -434,6 +434,10 @@ class BiliUp(db.Model):
     def __repr__(self):
         return f'<BiliUp {self.name or self.mid}>'
 
+    @property
+    def safe_avatar(self):
+        return (self.avatar or '').replace('http://', 'https://')
+
 
 class BiliVideo(db.Model):
     """B站视频数据"""
