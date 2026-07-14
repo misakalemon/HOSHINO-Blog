@@ -63,6 +63,8 @@
     <a href="{{ url_for('admin.logout') }}" class="logout-link"><i class="hm-quit"></i>退出登录</a>
 </div>
 
+{% include 'admin/_cookie_banner.html' %}
+
 <!-- 主内容区 -->
 <div class="admin-main">
     <div class="admin-container">
@@ -658,8 +660,6 @@ function bindCropUpload(inputId, uploadUrl, fieldSelector, previewSelector, onSu
   });
 }
 </script>
-
-{% include 'admin/_cookie_banner.html' %}
 
     <!-- admin_content 块：子模板填充 -->
     {% block admin_content %}{% endblock %}
