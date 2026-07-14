@@ -1958,9 +1958,19 @@ ul { list-style: none; }
   pointer-events: auto !important;
 }
 .cookie-banner.is-hidden { display: none !important; }
-.cookie-banner button {
-  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1);
-  color: #e8edf5; padding: 6px 22px; border-radius: 20px; cursor: pointer;
-  font-size: 0.85rem; transition: background 0.2s; white-space: nowrap;
+.cookie-text { margin: 0; }
+.cookie-link { color: rgba(0,150,255,0.8); text-decoration: underline; }
+.cookie-actions { display: flex; gap: 10px; flex-shrink: 0; }
+.cookie-btn {
+  border: 1px solid rgba(255,255,255,0.1); padding: 6px 22px;
+  border-radius: 20px; cursor: pointer; font-size: 0.85rem;
+  transition: background 0.2s; font-family: inherit;
 }
-.cookie-banner button:hover { background: rgba(255,255,255,0.15); }
+.cookie-btn--primary {
+  background: rgba(255,255,255,0.08); color: #e8edf5;
+}
+.cookie-btn--primary:hover { background: rgba(255,255,255,0.15); }
+.cookie-btn--secondary {
+  background: transparent; color: rgba(255,255,255,0.45); border-color: rgba(255,255,255,0.06);
+}
+.cookie-btn--secondary:hover { background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.7); }
