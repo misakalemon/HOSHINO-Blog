@@ -1071,8 +1071,8 @@ ul { list-style: none; }
 }
 
 /* ── 全局自定义弹窗 (替换原生 alert/confirm/prompt) ──── */
-.glow-modal-overlay { display:none; position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,0.6); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); align-items:center; justify-content:center; }
-.glow-modal { background:rgba(20,20,30,0.96); border:1px solid rgba(255,255,255,0.08); border-radius:16px; padding:28px 32px; max-width:380px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,0.5); }
+.glow-modal-overlay { display:none; position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,0.6); align-items:center; justify-content:center; }
+.glow-modal { background:rgba(20,20,30,0.96); border:1px solid rgba(255,255,255,0.08); border-radius:16px; padding:28px 32px; max-width:380px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,0.5); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); }
 .glow-modal h4 { font-size:16px; font-weight:600; color:rgba(255,255,255,0.9); margin:0 0 8px; text-align:center; }
 .glow-modal p { font-size:13px; color:rgba(255,255,255,0.5); text-align:center; margin:0 0 20px; line-height:1.6; }
 .glow-modal-input { width:100%; padding:10px 14px; border-radius:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); color:#e8edf5; font-size:14px; outline:none; box-sizing:border-box; margin-top:12px; }
@@ -1082,7 +1082,7 @@ ul { list-style: none; }
 /* ── 图片裁剪弹窗 ──────────────────────────── */
 .crop-overlay {
   display:none; position:fixed; inset:0; z-index:99998;
-  background:rgba(0,0,0,0.7); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+  background:rgba(0,0,0,0.7);
   align-items:center; justify-content:center;
 }
 .crop-modal {
@@ -1961,5 +1961,6 @@ ul { list-style: none; }
   background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1);
   color: #e8edf5; padding: 6px 22px; border-radius: 20px; cursor: pointer;
   font-size: 0.85rem; transition: background 0.2s; white-space: nowrap;
+  pointer-events: auto;
 }
 .cookie-banner button:hover { background: rgba(255,255,255,0.15); }
