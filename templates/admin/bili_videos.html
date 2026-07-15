@@ -100,7 +100,7 @@
 </div>
 
 <script>
-var csrfToken = '{{ csrf_token() }}';
+var csrfToken = {{ csrf_token()|tojson }};
 function toggleWatch(btn) {
     var videoId = btn.dataset.videoId;
     var isWatched = btn.classList.contains('watched');

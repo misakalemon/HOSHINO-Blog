@@ -263,7 +263,7 @@ def login():
             return redirect(url_for('admin.dashboard'))
         return redirect(url_for('admin.profile'))
 
-    ip = request.remote_addr or 'unknown'
+    ip = request.access_route[0] if request.access_route else request.remote_addr or 'unknown'
     now = time.time()
     with _login_attempts_lock:
         _login_attempts[ip] = [
@@ -410,8 +410,24 @@ def dashboard():
             'published_count': fut_pub.result(),
             'comment_count': fut_cc.result(),
             'user_count': fut_uc.result(),
-            'recent_posts': fut_rp.result(),
-            'recent_comments': fut_rc.result(),
+            'recent_posts': [
+                {
+                    'id': p.id,
+                    'title': p.title,
+                    'is_published': p.is_published,
+                    'created_at': p.created_at.isoformat() if p.created_at else None,
+                }
+                for p in fut_rp.result()
+            ],
+            'recent_comments': [
+                {
+                    'id': c.id,
+                    'content': c.content,
+                    'post': {'id': c.post.id, 'title': c.post.title},
+                    'created_at': c.created_at.isoformat() if c.created_at else None,
+                }
+                for c in fut_rc.result()
+            ],
         }
     cache_set('dashboard:stats', stats, ttl)
     return render_template('admin/dashboard.html', **stats)

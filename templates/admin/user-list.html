@@ -32,11 +32,13 @@
                 <a href="{{ url_for('admin.edit_user', id=u.id) }}" class="btn btn-sm">编辑</a>
                 {% if u.id != current_user.id %}
                 <form method="POST" action="{{ url_for('admin.toggle_user_active', id=u.id) }}" style="display:inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-sm" style="background:rgba(255,255,255,0.05)">
                         {{ '禁用' if u.is_active else '启用' }}
                     </button>
                 </form>
-                <form method="POST" action="{{ url_for('admin.delete_user', id=u.id) }}" style="display:inline" onsubmit="var _f=this;event.preventDefault();showConfirm('确定要删除用户 {{ u.username }} 吗？',function(r){if(r){_f.onsubmit=null;_f.submit()}})">
+                <form method="POST" action="{{ url_for('admin.delete_user', id=u.id) }}" style="display:inline" onsubmit="var _f=this;event.preventDefault();showConfirm('确定要删除用户 ' + {{ u.username|tojson }} + ' 吗？',function(r){if(r){_f.onsubmit=null;_f.submit()}})">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-sm" style="background:rgba(255,60,60,0.2);color:rgba(255,100,100,0.9)">删除</button>
                 </form>
                 {% endif %}

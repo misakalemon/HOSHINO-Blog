@@ -954,7 +954,7 @@ function removeCover(e) {
 
 // 编辑模式：加载已有封面
 (function() {
-  var existingCover = '{{ form.cover_image.data or "" }}';
+  var existingCover = {{ form.cover_image.data|tojson or '' }};
   if (existingCover) {
     var url = '/static/' + existingCover;
     document.getElementById('coverPreview').innerHTML = '<img src="' + url + '" alt="cover">';

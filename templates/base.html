@@ -87,7 +87,7 @@
 <!-- 页脚 -->
 <footer class="footer">
     <!-- 如果 now 可用则显示动态年份，否则显示 2026 -->
-    <span>&copy; {{ now().year if now else '2026' }} Hoshino</span>
+    <span>&copy; {{ (now() if callable(now) else now).year if now else '2026' }} Hoshino</span>
     <span>
         {% set social = admin_social() %}
         {% if social.website %}<a href="{{ social.website }}" target="_blank" rel="noopener" title="个人网站">网站</a>{% endif %}
@@ -104,6 +104,8 @@
 
 <!-- 提取的全局 JS（抽屉 / 灯箱 / 下拉框 / 弹窗 / showConfirm） -->
 <script src="{{ url_for('static', filename='js/base.js') }}"></script>
+
+{% block scripts %}{% endblock %}
 
 </body>
 </html>

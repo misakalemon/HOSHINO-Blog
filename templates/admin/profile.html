@@ -97,7 +97,7 @@
                 <button type="button" onclick="aboutRte('formatBlock','pre')" title="代码块">&lt;/&gt;</button>
                 <button type="button" onclick="aboutRte('formatBlock','blockquote')" title="引用">❝</button>
             </div>
-            <div id="about-rte-content" contenteditable="true">{{ form.about_content.data or ''|safe }}</div>
+            <div id="about-rte-content" contenteditable="true">{{ (form.about_content.data or '')|safe }}</div>
             <textarea name="about_content" id="aboutContentHidden" style="display:none">{{ form.about_content.data or '' }}</textarea>
         </div>
         {% endif %}

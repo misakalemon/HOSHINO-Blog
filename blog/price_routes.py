@@ -220,6 +220,7 @@ def manual_price():
     )
     db.session.add(record)
     source.latest_price = price
+    db.session.commit()
     flash(f'已录入 {product.name} 价格 ¥{price:.2f}', 'success')
     return redirect(url_for('price.index'))
 

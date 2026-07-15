@@ -33,7 +33,7 @@
                         <!-- 联系表单 -->
                         <form method="POST">
                             <!-- CSRF 令牌 -->
-                            {{ form.hidden_tag() }}
+                            {{ form.hidden_tag() if form else '' }}
                             <div class="form-group">
                                 <input type="text" name="name" placeholder="您的姓名" required>
                             </div>

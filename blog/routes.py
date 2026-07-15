@@ -101,6 +101,7 @@ THUMB_CACHE_VER = 'v3'
 # ── 侧边栏数据缓存（Redis，降级友好） ─────────
 # 共享线程池，避免每次请求创建/销毁
 _sidebar_executor = None
+_sidebar_executor_lock = threading.Lock()
 
 
 def _get_sidebar_data():
@@ -124,7 +125,9 @@ def _get_sidebar_data():
 
     global _sidebar_executor
     if _sidebar_executor is None:
-        _sidebar_executor = ThreadPoolExecutor(max_workers=3)
+        with _sidebar_executor_lock:
+            if _sidebar_executor is None:
+                _sidebar_executor = ThreadPoolExecutor(max_workers=3)
 
     ttl = current_app.config.get('CACHE_TTL_SIDEBAR', 300)
     app = current_app._get_current_object()
@@ -201,7 +204,7 @@ def _cached_featured_cards():
         for c in cards
     ]
     cache_set('home:featured_cards', cards_data, 300)
-    return cards
+    return cards_data
 
 
 # ═══════════════════════════════════════════════
