@@ -262,7 +262,9 @@ def login():
     ip = request.remote_addr or 'unknown'
     now = time.time()
     with _login_attempts_lock:
-        _login_attempts[ip] = [t for t in _login_attempts[ip] if now - t < LOGIN_RATE_WINDOW]
+        _login_attempts[ip] = [
+            t for t in _login_attempts.get(ip, []) if now - t < LOGIN_RATE_WINDOW
+        ]
         if len(_login_attempts[ip]) >= LOGIN_RATE_LIMIT:
             flash('登录尝试过于频繁，请稍后再试', 'error')
             return render_template('admin/login.html', form=LoginForm())
