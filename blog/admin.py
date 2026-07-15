@@ -254,6 +254,10 @@ def login():
 
     Template: admin/login.html
     """
+    from flask import get_flashed_messages
+
+    get_flashed_messages()
+
     if current_user.is_authenticated:
         if current_user.is_editor:
             return redirect(url_for('admin.dashboard'))
