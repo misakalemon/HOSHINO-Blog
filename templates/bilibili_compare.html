@@ -114,8 +114,8 @@ function removeFromCompare(id) {
     var ids = params.get('ids');
     if (!ids) return;
     var list = ids.split(',').map(Number).filter(function(n) { return n !== id; });
-    if (list.length < 2) { window.location.href = '/bilibili'; return; }
-    window.location.href = '/bilibili/compare?ids=' + list.join(',');
+    if (list.length < 2) { window.location.href = '{{ url_for('bili_public.index') }}'; return; }
+    window.location.href = '{{ url_for('bili_public.compare') }}?ids=' + list.join(',');
 }
 </script>
 {% endblock %}

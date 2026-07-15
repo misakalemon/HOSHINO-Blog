@@ -9,7 +9,8 @@
 </td></tr>
 <tr><td style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:16px;padding:32px">
 <p style="color:rgba(255,255,255,0.6);font-size:14px;line-height:1.7;margin:0 0 20px">
-您好，您已申请订阅 <strong style="color:#e8edf5">{{ up_name }}</strong> 的新视频邮件通知。
+{% if to_name %}{{ to_name }}，您好！<br>{% endif %}
+您已申请订阅 <strong style="color:#e8edf5">{{ up_name }}</strong> 的新视频邮件通知。
 请点击下方按钮确认订阅：
 </p>
 <table role="presentation" style="width:100%"><tr><td style="text-align:center">

@@ -187,6 +187,9 @@ class Config:
         'BLOG_SUBTITLE', '碧蓝档案 · 手办 · 键盘 · 耳机 · 桌面 · 圣地巡礼 · 虎式坦克 · 迷彩历史'
     )
 
+    # ── 站点名称（邮件标题等处显示）────────────
+    SITE_NAME = os.environ.get('SITE_NAME', 'Hoshino')
+
     # ── 默认主题（dark / light）────────────────
     # 首次访问时的默认主题。用户手动切换后以 localStorage 为准，不再受此值影响。
     DEFAULT_THEME = os.environ.get('DEFAULT_THEME', 'dark')

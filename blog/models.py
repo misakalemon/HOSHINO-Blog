@@ -466,7 +466,11 @@ class BiliVideo(db.Model):
     comment_count = db.Column(db.Integer, default=0, comment='评论数')
     danmaku_count = db.Column(db.Integer, default=0, comment='弹幕数')
     created_at = db.Column(db.DateTime, default=datetime.datetime.now(datetime.timezone.utc))
-    updated_at = db.Column(db.DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.datetime.now(datetime.timezone.utc),
+        onupdate=datetime.datetime.now(datetime.timezone.utc),
+    )
 
     def __repr__(self):
         return f'<BiliVideo {self.bvid} {self.title[:20]!r}>'

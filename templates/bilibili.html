@@ -197,7 +197,7 @@
         var ids = getIds();
         countEl.textContent = ids.length;
         bar.style.display = ids.length >= 2 ? 'flex' : 'none';
-        btn.href = ids.length >= 2 ? '/bilibili/compare?ids=' + ids.join(',') : 'javascript:void(0)';
+        btn.href = ids.length >= 2 ? '{{ url_for('bili_public.compare') }}?ids=' + ids.join(',') : 'javascript:void(0)';
     }
 
     window.clearCompare = function() {

@@ -277,7 +277,11 @@ def single_post(slug):
 
     Template: single-post.html
     """
-    post = Post.query.filter_by(slug=slug, is_published=True).first_or_404()
+    post = (
+        Post.query.options(db.joinedload(Post.author), db.joinedload(Post.categories))
+        .filter_by(slug=slug, is_published=True)
+        .first_or_404()
+    )
     categories, recent_posts, cat_post_counts = _get_sidebar_data()
     form = CommentForm()
 
@@ -341,7 +345,8 @@ def category(slug):
     per_page = request.args.get('per_page', current_app.config['POSTS_PER_PAGE'], type=int)
     posts = (
         Post.query.options(
-            load_only(Post.id, Post.title, Post.slug, Post.cover_image, Post.created_at)
+            load_only(Post.id, Post.title, Post.slug, Post.cover_image, Post.created_at),
+            db.joinedload(Post.categories),
         )
         .filter(Post.categories.any(id=cat.id), Post.is_published == True)
         .order_by(Post.created_at.desc())

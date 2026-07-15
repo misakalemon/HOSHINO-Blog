@@ -220,7 +220,9 @@ def subscribe():
 
     if not new_up_ids:
         if already_verified:
-            names = [BiliUp.query.get(uid).name or str(uid) for uid in already_verified]
+            existing_ups = BiliUp.query.filter(BiliUp.id.in_(already_verified)).all()
+            up_map = {u.id: u for u in existing_ups}
+            names = [up_map[uid].name or str(uid) for uid in already_verified]
             return jsonify({'ok': False, 'error': f'已订阅: {", ".join(names)}'}), 400
         return jsonify({'ok': False, 'error': '没有可订阅的 UP 主'}), 400
 
@@ -234,7 +236,7 @@ def subscribe():
             db.session.add(sub)
     db.session.commit()
 
-    selected_ups = BiliUp.query.filter(BiliUp.id.in_(up_ids)).all()
+    selected_ups = BiliUp.query.filter(BiliUp.id.in_(new_up_ids)).all()
     up_names = [u.name or str(u.mid) for u in selected_ups]
 
     verify_url = url_for('bili_public.verify_subscription', token=token, _external=True)
@@ -242,7 +244,7 @@ def subscribe():
 
     from blog.mail import send_verify_email
 
-    label = f'{len(up_names)} 个 UP 主'
+    label = '、'.join(up_names) if len(up_names) <= 3 else f'{len(up_names)} 个 UP 主（{"、".join(up_names[:3])}…）'
     send_verify_email(email, label, verify_url, unsubscribe_url)
 
     msg = f'验证邮件已发送至 {email}，请检查邮箱并确认订阅'

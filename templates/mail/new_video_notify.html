@@ -5,6 +5,7 @@
 <table role="presentation" style="width:100%;max-width:600px;margin:0 auto;padding:40px 20px">
 <tr><td style="text-align:center;padding-bottom:24px">
 <h1 style="color:#e8edf5;font-size:20px;font-weight:500;margin:0">{{ up_name }} 发布了新视频</h1>
+{% if to_name %}<p style="color:rgba(255,255,255,0.5);font-size:13px;margin:8px 0 0">{{ to_name }}，以下是最新的视频动态：</p>{% endif %}
 </td></tr>
 {% for v in videos %}
 <tr><td style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:16px;padding:20px;margin-bottom:12px;display:block">

@@ -91,24 +91,6 @@ def init_redis(app):
     _redis_client = _get_redis(redis_url)
     if _redis_client is not None:
         logger.info('Redis 缓存已连接: %s', redis_url)
-        return
-
-    try:
-        import redis
-
-        _redis_client = redis.from_url(
-            redis_url,
-            decode_responses=True,  # 自动将 bytes → str
-            socket_connect_timeout=2,  # 连接超时 2 秒
-            socket_timeout=3,  # 读写超时 3 秒
-            retry_on_timeout=False,  # 超时不重试（快速降级）
-        )
-        # 发送 PING 验证连接是否可用
-        _redis_client.ping()
-        logger.info('Redis 缓存已连接: %s', redis_url)
-    except Exception as e:
-        logger.warning('Redis 连接失败，缓存已降级: %s', e)
-        _redis_client = None
 
 
 def _make_key(key):
@@ -220,11 +202,12 @@ def cache_scan(pattern):
         cursor = 0
         while True:
             cursor, keys = _redis_client.scan(cursor, match=full_pattern, count=100)
-            for key in keys:
-                raw = _redis_client.get(key)
-                if raw is not None:
-                    biz_key = key[len(_KEY_PREFIX) + 1 :]
-                    results.append((biz_key, json.loads(raw)))
+            if keys:
+                raws = _redis_client.mget(keys)
+                for key, raw in zip(keys, raws):
+                    if raw is not None:
+                        biz_key = key[len(_KEY_PREFIX) + 1 :]
+                        results.append((biz_key, json.loads(raw)))
             if cursor == 0:
                 break
         return results

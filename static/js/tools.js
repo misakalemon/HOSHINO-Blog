@@ -106,14 +106,16 @@ function onHslInput() {
 }
 function clamp(v, mn, mx) { return Math.min(Math.max(v, mn), mx); }
 
-function copyColor(type) {
+function copyColor(type, e) {
+  var ev = e || window.event;
+  if (!ev) return;
   let val = '';
   if (type === 'hex') val = '#' + document.getElementById('previewHex').textContent;
   else if (type === 'rgb') val = document.getElementById('previewRgb').textContent;
   else if (type === 'hsl') val = document.getElementById('previewHsl').textContent;
   if (val) {
     navigator.clipboard.writeText(val).catch(function() {});
-    const btn = event.target;
+    const btn = ev.currentTarget || ev.target;
     const orig = btn.textContent;
     btn.textContent = '✓ 已复制';
     setTimeout(function() { btn.textContent = orig; }, 1500);
