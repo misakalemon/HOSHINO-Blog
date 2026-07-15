@@ -22,6 +22,7 @@ HOSHINO Blog — 价格追踪路由
   rates_page()        — 汇率走势页面
   api_rates()         — 汇率历史 JSON API
 """
+
 import datetime
 import logging
 
@@ -64,8 +65,10 @@ def index():
     categories = db.session.query(Product.category).distinct().order_by(Product.category).all()
     categories = [c[0] for c in categories]
 
-    return render_template('price/dashboard.html',
-        products=products, categories=categories,
+    return render_template(
+        'price/dashboard.html',
+        products=products,
+        categories=categories,
         current_category=cat_filter,
         current_per_page=per_page,
         per_page_options=[12, 24, 48, 96],
@@ -93,9 +96,7 @@ def detail(id):
     product = Product.query.get_or_404(id)
     days = request.args.get('days', 30, type=int)
     records = product.price_history(days=days)
-    return render_template('price/detail.html',
-        product=product, records=records, days=days
-    )
+    return render_template('price/detail.html', product=product, records=records, days=days)
 
 
 # ═══════════════════════════════════════════════
@@ -103,44 +104,28 @@ def detail(id):
 # ═══════════════════════════════════════════════
 @price_bp.route('/api/product/<int:id>/history')
 def api_history(id):
-    """返回商品价格历史 JSON 数据。
+    from blog.cache import cache_get, cache_set
 
-    按来源分组返回，供前端 ECharts 折线图使用。
-
-    Args:
-        id: 商品 ID
-
-    URL 参数：
-      days — 最近 N 天（默认 30）
-
-    返回格式：
-    {
-      "name": "商品名",
-      "sources": [
-        {
-          "site": "jd",
-          "url": "...",
-          "latest_price": 1999.00,
-          "prices": [
-            {"date": "2026-01-15 12:00", "price": 1999.00},
-            ...
-          ]
-        }
-      ]
-    }
-    """
-    product = Product.query.get_or_404(id)
     days = request.args.get('days', 30, type=int)
+    cache_key = f'price:history:{id}:{days}'
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return jsonify(cached)
+
+    product = Product.query.get_or_404(id)
     since = datetime.datetime.utcnow() - datetime.timedelta(days=days)
 
     sources_data = []
     source_ids = [s.id for s in product.sources]
     records_by_source = {sid: [] for sid in source_ids}
     if source_ids:
-        all_records = PriceRecord.query.filter(
-            PriceRecord.source_id.in_(source_ids),
-            PriceRecord.recorded_at >= since
-        ).order_by(PriceRecord.recorded_at.asc()).all()
+        all_records = (
+            PriceRecord.query.filter(
+                PriceRecord.source_id.in_(source_ids), PriceRecord.recorded_at >= since
+            )
+            .order_by(PriceRecord.recorded_at.asc())
+            .all()
+        )
         for r in all_records:
             records_by_source.setdefault(r.source_id, []).append(r)
 
@@ -149,21 +134,25 @@ def api_history(id):
         prices = [
             {
                 'date': r.recorded_at.strftime('%Y-%m-%d %H:%M'),
-                'price': r.price,
+                'price': float(r.price),
             }
             for r in records
         ]
-        sources_data.append({
-            'site': source.site,
-            'url': source.url,
-            'latest_price': source.latest_price,
-            'prices': prices,
-        })
+        sources_data.append(
+            {
+                'site': source.site,
+                'url': source.url,
+                'latest_price': float(source.latest_price) if source.latest_price else None,
+                'prices': prices,
+            }
+        )
 
-    return jsonify({
+    result = {
         'name': product.name,
         'sources': sources_data,
-    })
+    }
+    cache_set(cache_key, result, 60)
+    return jsonify(result)
 
 
 # ═══════════════════════════════════════════════
@@ -212,9 +201,7 @@ def manual_price():
     product = Product.query.get_or_404(product_id)
 
     # 查找或创建默认的 manual 来源
-    source = ProductSource.query.filter_by(
-        product_id=product_id, site='manual'
-    ).first()
+    source = ProductSource.query.filter_by(product_id=product_id, site='manual').first()
     if not source:
         source = ProductSource(
             product_id=product_id,
@@ -278,6 +265,7 @@ def add_product():
     # Amazon 直爬（curl_cffi）
     try:
         from .apify_client import scraper
+
         price = scraper.fetch_amazon_price(name)
         site = 'amazon'
     except Exception as e:
@@ -285,12 +273,17 @@ def add_product():
 
     if price and site:
         source = ProductSource(
-            product_id=product.id, site=site, url='', is_active=True,
+            product_id=product.id,
+            site=site,
+            url='',
+            is_active=True,
         )
         db.session.add(source)
         db.session.flush()
         record = PriceRecord(
-            source_id=source.id, product_id=product.id, price=price,
+            source_id=source.id,
+            product_id=product.id,
+            price=price,
         )
         db.session.add(record)
         source.latest_price = price
@@ -323,38 +316,33 @@ def rates_page():
 
 @price_bp.route('/api/rates')
 def api_rates():
-    """返回汇率历史 JSON 数据。
+    from blog.cache import cache_get, cache_set
 
-    按币种分组返回，供前端 ECharts 折线图使用。
-
-    URL 参数：
-      days — 最近 N 天（默认 90）
-
-    返回格式：
-    {
-      "rates": [
-        { "currency": "USD", "history": [{"date": "01-15", "rate": 7.2}, ...] },
-        ...
-      ]
-    }
-    """
     days = request.args.get('days', 90, type=int)
+    cache_key = f'price:rates:{days}'
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return jsonify(cached)
+
     since = datetime.datetime.utcnow() - datetime.timedelta(days=days)
 
-    records = ExchangeRate.query.filter(
-        ExchangeRate.recorded_at >= since
-    ).order_by(ExchangeRate.recorded_at.asc()).all()
+    records = (
+        ExchangeRate.query.filter(ExchangeRate.recorded_at >= since)
+        .order_by(ExchangeRate.recorded_at.asc())
+        .all()
+    )
 
     grouped = {}
     for r in records:
-        grouped.setdefault(r.currency, []).append({
-            'date': r.recorded_at.strftime('%m-%d'),
-            'rate': r.rate,
-        })
+        grouped.setdefault(r.currency, []).append(
+            {
+                'date': r.recorded_at.strftime('%m-%d'),
+                'rate': float(r.rate),
+            }
+        )
 
-    rates_data = [
-        {'currency': c, 'history': h}
-        for c, h in sorted(grouped.items())
-    ]
+    rates_data = [{'currency': c, 'history': h} for c, h in sorted(grouped.items())]
 
-    return jsonify({'rates': rates_data})
+    result = {'rates': rates_data}
+    cache_set(cache_key, result, 60)
+    return jsonify(result)

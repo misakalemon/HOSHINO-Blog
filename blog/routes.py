@@ -182,6 +182,28 @@ def _get_sidebar_data():
     return categories, recent_posts, cat_post_counts
 
 
+def _cached_featured_cards():
+    from .cache import cache_get, cache_set
+
+    cached = cache_get('home:featured_cards')
+    if cached is not None:
+        return cached
+    cards = FeaturedCard.query.filter_by(is_active=True).order_by(FeaturedCard.sort_order).all()
+    cards_data = [
+        {
+            'title': c.title,
+            'description': c.description,
+            'icon': c.icon,
+            'tag': c.tag,
+            'link': c.link,
+            'image_url': c.image_url,
+        }
+        for c in cards
+    ]
+    cache_set('home:featured_cards', cards_data, 300)
+    return cards
+
+
 # ═══════════════════════════════════════════════
 # 首页：文章瀑布流
 # ═══════════════════════════════════════════════
@@ -218,9 +240,7 @@ def index():
         page=page, per_page=per_page, error_out=False
     )
     categories, recent_posts, cat_post_counts = _get_sidebar_data()
-    featured_cards = (
-        FeaturedCard.query.filter_by(is_active=True).order_by(FeaturedCard.sort_order).all()
-    )
+    featured_cards = _cached_featured_cards()
     cat_lookup = {c.slug: c.name for c in categories}
 
     return render_template(
@@ -272,17 +292,20 @@ def single_post(slug):
         # 提交后重定向到文章页的 #comments 锚点
         return redirect(url_for('blog.single_post', slug=slug) + '#comments')
 
-    # ── Markdown → HTML ────────────────────────
-    # 使用 Python-Markdown 库将正文渲染为 HTML
-    # 支持代码块（fenced_code）、代码高亮（codehilite）、表格（tables）
-    # 输出经 bleach 过滤，防止 XSS
-    from markdown import markdown
+    # ── 渲染缓存（内容不变时跳过 markdown + bleach）──
+    from .cache import cache_get, cache_set
 
-    rendered_content = bleach.clean(
-        markdown(post.content, extensions=['fenced_code', 'codehilite', 'tables']),
-        tags=ALLOWED_TAGS,
-        attributes=ALLOWED_ATTRS,
-    )
+    cache_key = f'post:rendered:{post.id}:{post.updated_at.timestamp() if post.updated_at else ""}'
+    rendered_content = cache_get(cache_key)
+    if rendered_content is None:
+        from markdown import markdown
+
+        rendered_content = bleach.clean(
+            markdown(post.content, extensions=['fenced_code', 'codehilite', 'tables']),
+            tags=ALLOWED_TAGS,
+            attributes=ALLOWED_ATTRS,
+        )
+        cache_set(cache_key, rendered_content, 3600)
 
     return render_template(
         'single-post.html',
