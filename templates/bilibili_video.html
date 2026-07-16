@@ -136,7 +136,7 @@
         chart.setOption({
             tooltip: { trigger:'axis', backgroundColor:'rgba(18,16,34,0.95)',
                 borderColor:'rgba(255,255,255,0.06)', textStyle:{color:'#e0daff',fontSize:12} },
-            grid: { left:60, right:20, top:25, bottom:50 },
+            grid: { left:60, right:20, top:25, bottom:85 },
             xAxis: { type:'category', data:labels,
                 axisLabel:{color:'rgba(255,255,255,0.3)',fontSize:11,rotate:45},
                 axisLine:{lineStyle:{color:'rgba(255,255,255,0.06)'}} },
@@ -145,7 +145,7 @@
                     formatter:function(v){return v>=10000?(v/10000).toFixed(1)+'w':v;} },
                 splitLine:{lineStyle:{color:'rgba(255,255,255,0.04)'}} },
             series: series,
-            legend: { show: true, bottom:5, textStyle:{color:'rgba(255,255,255,0.4)',fontSize:11},
+            legend: { show: true, bottom: 0, textStyle:{color:'rgba(255,255,255,0.4)',fontSize:11},
                 data: Array.from(activeMetrics).map(function(m){return METRICS[m].name;}) },
         }, true);
     }
