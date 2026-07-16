@@ -33,7 +33,7 @@
     <table class="admin-table">
         <thead>
             <tr>
-                <th style="width:36px"><input type="checkbox" id="selectAll" onchange="toggleCheckboxes(this)"></th>
+                <th style="width:36px"><label class="glow-checkbox"><input type="checkbox" id="selectAll" onchange="toggleCheckboxes(this)"><span class="cb-box"></span></label></th>
                 <th>邮箱</th>
                 <th>UP 主</th>
                 <th>状态</th>
@@ -44,7 +44,7 @@
         <tbody>
             {% for sub in pagination.items %}
             <tr>
-                <td><input type="checkbox" name="ids" value="{{ sub.id }}" class="row-checkbox"></td>
+                <td><label class="glow-checkbox"><input type="checkbox" name="ids" value="{{ sub.id }}" class="row-checkbox"><span class="cb-box"></span></label></td>
                 <td data-label="邮箱">{{ sub.email }}</td>
                 <td data-label="UP 主">{{ sub.up.name or sub.up.mid }}</td>
                 <td data-label="状态">
