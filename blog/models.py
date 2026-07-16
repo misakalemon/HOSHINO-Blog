@@ -94,7 +94,7 @@ class User(UserMixin, db.Model):
     login_count = db.Column(db.Integer, default=0)  # 登录次数
 
     # ── 时间戳 ──────────────────────────────────
-    created_at = db.Column(db.DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     # ── 关联关系 ────────────────────────────────
     posts = db.relationship('Post', backref='author', lazy='dynamic')
@@ -167,7 +167,7 @@ class Category(db.Model):
     name = db.Column(db.String(64), unique=True, nullable=False)  # 分类名，唯一
     slug = db.Column(db.String(64), unique=True, nullable=False, index=True)  # URL 标识
     description = db.Column(db.Text, default='')  # 分类描述
-    created_at = db.Column(db.DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     # 多对多关联：一个分类包含多篇文章
     # secondary 指向关联表 post_categories
@@ -211,12 +211,12 @@ class Post(db.Model):
 
     # ── 时间戳 ──────────────────────────────────
     created_at = db.Column(
-        db.DateTime, default=datetime.datetime.now(datetime.timezone.utc), index=True
+        db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True
     )
     updated_at = db.Column(
         db.DateTime,
-        default=datetime.datetime.now(datetime.timezone.utc),
-        onupdate=datetime.datetime.now(datetime.timezone.utc),  # 更新时自动修改
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc),  # 更新时自动修改
     )
 
     # ── 关联关系 ────────────────────────────────
@@ -264,7 +264,7 @@ class Comment(db.Model):
     author_email = db.Column(db.String(120), nullable=True)  # 评论者邮箱（选填）
     content = db.Column(db.Text, nullable=False)  # 评论正文
     is_approved = db.Column(db.Boolean, default=False)  # 管理员审核标记
-    created_at = db.Column(db.DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
 
 class ContactMessage(db.Model):
@@ -277,7 +277,7 @@ class ContactMessage(db.Model):
     email = db.Column(db.String(120), nullable=False)
     subject = db.Column(db.String(256), default='')
     content = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
 
 # ═══════════════════════════════════════════════
@@ -300,11 +300,11 @@ class Product(db.Model):
     category = db.Column(db.String(64), default='')
     image_url = db.Column(db.String(512), default='')
     specs = db.Column(db.JSON, default=dict)  # 关键规格参数（JSON格式）
-    created_at = db.Column(db.DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
     updated_at = db.Column(
         db.DateTime,
-        default=datetime.datetime.now(datetime.timezone.utc),
-        onupdate=datetime.datetime.now(datetime.timezone.utc),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc),
     )
 
     price_records = db.relationship(
@@ -357,7 +357,7 @@ class PriceRecord(db.Model):
     product_id = db.Column(db.Integer, db.ForeignKey('products.id'), nullable=False, index=True)
     price = db.Column(db.Numeric(10, 2), nullable=False)
     recorded_at = db.Column(
-        db.DateTime, default=datetime.datetime.now(datetime.timezone.utc), index=True
+        db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True
     )
     source = db.relationship('ProductSource', backref=db.backref('records', lazy='dynamic'))
 
@@ -379,11 +379,11 @@ class FeaturedCard(db.Model):
     image_url = db.Column(db.String(256), default='')
     sort_order = db.Column(db.Integer, default=0)
     is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
     updated_at = db.Column(
         db.DateTime,
-        default=datetime.datetime.now(datetime.timezone.utc),
-        onupdate=datetime.datetime.now(datetime.timezone.utc),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc),
     )
 
 
@@ -401,7 +401,7 @@ class ExchangeRate(db.Model):
     currency = db.Column(db.String(10), nullable=False, index=True)  # USD / EUR / GBP
     rate = db.Column(db.Float, nullable=False)  # → CNY
     recorded_at = db.Column(
-        db.DateTime, default=datetime.datetime.now(datetime.timezone.utc), index=True
+        db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True
     )
 
 
@@ -420,11 +420,11 @@ class BiliUp(db.Model):
     space_url = db.Column(db.String(256), default='', comment='空间链接')
     video_count = db.Column(db.Integer, default=0, comment='视频数')
     follower_count = db.Column(db.Integer, default=0, comment='粉丝数')
-    created_at = db.Column(db.DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
     updated_at = db.Column(
         db.DateTime,
-        default=datetime.datetime.now(datetime.timezone.utc),
-        onupdate=datetime.datetime.now(datetime.timezone.utc),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc),
     )
 
     videos = db.relationship(
@@ -465,11 +465,11 @@ class BiliVideo(db.Model):
     share_count = db.Column(db.Integer, default=0, comment='转发数')
     comment_count = db.Column(db.Integer, default=0, comment='评论数')
     danmaku_count = db.Column(db.Integer, default=0, comment='弹幕数')
-    created_at = db.Column(db.DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
     updated_at = db.Column(
         db.DateTime,
-        default=datetime.datetime.now(datetime.timezone.utc),
-        onupdate=datetime.datetime.now(datetime.timezone.utc),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc),
     )
 
     def __repr__(self):
@@ -501,7 +501,7 @@ class BiliUpHistory(db.Model):
     up_id = db.Column(db.Integer, db.ForeignKey('bili_ups.id'), nullable=False, index=True)
     follower_count = db.Column(db.Integer, default=0, comment='粉丝数')
     recorded_at = db.Column(
-        db.DateTime, default=datetime.datetime.now(datetime.timezone.utc), index=True
+        db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True
     )
 
     up = db.relationship('BiliUp', backref='history_records', lazy='joined')
@@ -523,7 +523,7 @@ class BiliVideoHistory(db.Model):
     comment_count = db.Column(db.Integer, default=0, comment='评论数')
     danmaku_count = db.Column(db.Integer, default=0, comment='弹幕数')
     recorded_at = db.Column(
-        db.DateTime, default=datetime.datetime.now(datetime.timezone.utc), index=True
+        db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True
     )
 
     video = db.relationship('BiliVideo', backref='history_records', lazy='joined')
@@ -538,7 +538,7 @@ class BiliWatchedVideo(db.Model):
     video_id = db.Column(
         db.Integer, db.ForeignKey('bili_videos.id', ondelete='CASCADE'), unique=True, nullable=False
     )
-    added_at = db.Column(db.DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    added_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     video = db.relationship('BiliVideo', backref='watched_entry', lazy='joined')
 
@@ -563,7 +563,7 @@ class BiliSubscription(db.Model):
         db.String(64), nullable=False, index=True, comment='验证/取消订阅 token（同批次相同）'
     )
     verified = db.Column(db.Boolean, default=False, comment='是否已通过邮件验证')
-    created_at = db.Column(db.DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     up = db.relationship('BiliUp', backref=db.backref('subscriptions', lazy='dynamic'))
 
@@ -576,4 +576,4 @@ class BiliCleanupConfig(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     days = db.Column(db.Integer, default=90, nullable=False, comment='清理几天前的数据')
     enabled = db.Column(db.Boolean, default=False, comment='是否启用自动清理')
-    updated_at = db.Column(db.DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
