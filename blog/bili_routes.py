@@ -275,6 +275,7 @@ _CIRCUIT_COOLDOWN = 60 * 60  # 封禁后冷却 60 分钟
 
 def _insert_or_update_video(up, video_info, aid, bvid, title_short):
     """插入新视频或更新已有视频的统计数据。返回 (video, is_new) 或 (None, False)。"""
+    is_new = True
     try:
         video = BiliVideo(up_id=up.id, **video_info)
         db.session.add(video)
@@ -296,6 +297,7 @@ def _insert_or_update_video(up, video_info, aid, bvid, title_short):
                     setattr(existing, key, video_info[key])
             existing.updated_at = datetime.datetime.utcnow()
             video = existing
+            is_new = False
         else:
             return None, False
     except Exception as e:
@@ -318,7 +320,7 @@ def _insert_or_update_video(up, video_info, aid, bvid, title_short):
     except Exception:
         db.session.rollback()
         return None, False
-    return video, True
+    return video, is_new
 
 
 def _check_new_videos(mid: int, app):
