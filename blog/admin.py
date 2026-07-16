@@ -1300,6 +1300,39 @@ def delete_bili_subscription(id):
     return redirect(url_for('admin.bili_subscriptions'))
 
 
+@admin_bp.route('/bili-subscriptions/batch', methods=['POST'])
+@admin_required
+def batch_bili_subscriptions():
+    """批量管理订阅记录"""
+    action = request.form.get('action', '')
+    ids = request.form.getlist('ids', type=int)
+    if not ids:
+        flash('请至少选择一条订阅记录', 'warning')
+        return redirect(url_for('admin.bili_subscriptions'))
+
+    subs = BiliSubscription.query.filter(BiliSubscription.id.in_(ids)).all()
+    count = len(subs)
+
+    if action == 'delete':
+        for sub in subs:
+            db.session.delete(sub)
+        db.session.commit()
+        flash(f'已删除 {count} 条订阅记录', 'success')
+    elif action == 'verify':
+        for sub in subs:
+            sub.verified = True
+        db.session.commit()
+        flash(f'已标记 {count} 条订阅为已验证', 'success')
+    elif action == 'unverify':
+        for sub in subs:
+            sub.verified = False
+        db.session.commit()
+        flash(f'已取消 {count} 条订阅的验证状态', 'success')
+    else:
+        flash(f'未知操作: {action}', 'warning')
+    return redirect(url_for('admin.bili_subscriptions'))
+
+
 @admin_bp.route('/bili-subscriptions/cleanup-unverified', methods=['POST'])
 @admin_required
 def cleanup_unverified_subscriptions():
