@@ -314,6 +314,8 @@ def single_post(slug):
         )
         cache_set(cache_key, rendered_content, 3600)
 
+    comment_count = post.published_comments()
+
     return render_template(
         'single-post.html',
         post=post,
@@ -322,6 +324,7 @@ def single_post(slug):
         recent_posts=recent_posts,
         cat_post_counts=cat_post_counts,
         form=form,
+        comment_count=comment_count,
     )
 
 

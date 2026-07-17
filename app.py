@@ -222,6 +222,14 @@ def create_app():
     # 每次 HTTP 响应返回到客户端之前执行 log_request()
     app.after_request(log_request)
 
+    # ── 安全响应头 ───────────────────────────────
+    @app.after_request
+    def add_security_headers(response):
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+        return response
+
     # ── 请求结束时清理数据库 session ────────────
     from blog import db
 

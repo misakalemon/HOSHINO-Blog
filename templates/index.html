@@ -210,27 +210,28 @@
 'use strict';
 var progressBar=document.getElementById('scrollProgress');
 function updateProgress(){var scrollTop=window.scrollY;var docHeight=document.documentElement.scrollHeight-window.innerHeight;var progress=docHeight>0?(scrollTop/docHeight)*100:0;progressBar.style.width=Math.min(progress,100)+'%';}
-window.addEventListener('scroll',updateProgress);window.addEventListener('resize',updateProgress);updateProgress();
-var hero=document.getElementById('heroSection');
+window.addEventListener('scroll',updateProgress,{passive:true});window.addEventListener('resize',updateProgress);updateProgress();
 var cards=document.querySelectorAll('.featured-card,.masonry-item');
-var cardData=[];
-cards.forEach(function(c,i){cardData.push({speed:0.2+i*0.05,delay:i*0.08});});
-var featuredGrid=document.querySelector('.featured-grid');
-function ease(t){return 1-Math.pow(1-t,3);}
-function update(){
-  var sy=window.scrollY,st=0,ed=hero.offsetHeight*0.6;
-  var p=Math.max(0,Math.min(1,(sy-st)/(ed-st)));
-  hero.style.paddingBottom=((1-ease(p))*120)+'px';
-  if(featuredGrid)featuredGrid.style.marginTop=((1-ease(p))*120)+'px';
-  cards.forEach(function(c,i){
-    var d=cardData[i],cp=Math.max(0,Math.min(1,(p-d.delay)*(1+d.speed*0.5)));
-    var e=ease(cp),ty=(1-e)*50,rot=(1-e)*3*(i%2===0?1:-1);
-    c.style.transform='translateY('+ty+'px) rotate('+rot+'deg)';c.style.opacity=e;
+if('IntersectionObserver' in window){
+  var observer=new IntersectionObserver(function(entries){
+    entries.forEach(function(e,i){
+      if(e.isIntersecting){
+        var delay=Array.from(cards).indexOf(e.target)*0.08;
+        e.target.style.transition='transform 0.6s ease-out '+delay+'s, opacity 0.6s ease-out '+delay+'s';
+        e.target.style.transform='translateY(0) rotate(0deg)';e.target.style.opacity=1;
+        observer.unobserve(e.target);
+      }
+    });
+  },{threshold:0.1});
+  cards.forEach(function(c){
+    c.style.transform='translateY(50px) rotate('+(Array.from(cards).indexOf(c)%2===0?3:-3)+'deg)';c.style.opacity=0;
+    observer.observe(c);
   });
+} else {
+  cards.forEach(function(c){c.style.transform='translateY(0) rotate(0deg)';c.style.opacity=1;});
 }
-var tick=false;window.addEventListener('scroll',function(){if(!tick){window.requestAnimationFrame(function(){update();tick=false});tick=true;}},{passive:true});
-window.addEventListener('resize',update);update();
-var ht=hero.querySelector('h1');
+var hero=document.getElementById('heroSection');
+var ht=hero&&hero.querySelector('h1');
 if(ht){window.addEventListener('scroll',function(){var s=Math.min(window.scrollY/hero.offsetHeight,1);ht.style.transform='translateY('+(s*30)+'px)';ht.style.opacity=1-s*0.3;},{passive:true});}
 })();
 </script>

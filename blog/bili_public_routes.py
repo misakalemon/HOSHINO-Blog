@@ -18,7 +18,7 @@ def index():
     page = request.args.get('page', 1, type=int)
     per_page = 20
     q = request.args.get('q', '').strip()
-    all_ups = BiliUp.query.order_by(BiliUp.follower_count.desc()).all()
+    all_ups = BiliUp.query.order_by(BiliUp.follower_count.desc()).limit(200).all()
 
     if q:
         # 统一搜索：同时匹配 UP 主和视频（限制各 50 条防爆）
@@ -97,8 +97,8 @@ def up_videos(up_id):
 @bili_public_bp.route('/video/<int:video_id>')
 def video_detail(video_id):
     """视频详情页 — 多指标折线图（点击卡片开关曲线）"""
-    video = BiliVideo.query.get_or_404(video_id)
-    up = BiliUp.query.get_or_404(video.up_id)
+    video = BiliVideo.query.options(db.joinedload(BiliVideo.up)).get_or_404(video_id)
+    up = video.up
     import json
 
     history = (
@@ -254,7 +254,7 @@ def subscribe():
 @bili_public_bp.route('/verify/<token>')
 def verify_subscription(token):
     """验证邮件订阅（批量验证同一 token 的所有订阅）"""
-    subs = BiliSubscription.query.filter_by(token=token).all()
+    subs = BiliSubscription.query.filter_by(token=token).options(db.joinedload(BiliSubscription.up)).all()
     if not subs:
         return render_template(
             'message.html', title='验证失败', message='链接无效或已过期', type='error'
@@ -269,9 +269,8 @@ def verify_subscription(token):
     db.session.commit()
     up_names = []
     for sub in subs:
-        up = BiliUp.query.get(sub.up_id)
-        if up:
-            up_names.append(up.name or str(up.mid))
+        if sub.up:
+            up_names.append(sub.up.name or str(sub.up.mid))
     label = '、'.join(up_names)
     return render_template(
         'message.html',
@@ -284,16 +283,15 @@ def verify_subscription(token):
 @bili_public_bp.route('/unsubscribe/<token>')
 def unsubscribe(token):
     """取消订阅（批量取消同一 token 的所有订阅）"""
-    subs = BiliSubscription.query.filter_by(token=token).all()
+    subs = BiliSubscription.query.filter_by(token=token).options(db.joinedload(BiliSubscription.up)).all()
     if not subs:
         return render_template(
             'message.html', title='取消失败', message='链接无效或已过期', type='error'
         )
     up_names = []
     for sub in subs:
-        up = BiliUp.query.get(sub.up_id)
-        if up:
-            up_names.append(up.name or str(up.mid))
+        if sub.up:
+            up_names.append(sub.up.name or str(sub.up.mid))
         db.session.delete(sub)
     db.session.commit()
     label = '、'.join(up_names) if up_names else '所有 UP 主'

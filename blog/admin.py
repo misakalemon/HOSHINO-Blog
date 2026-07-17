@@ -944,9 +944,10 @@ def delete_user(id):
         flash('不能删除自己', 'error')
         return redirect(url_for('admin.user_list'))
     # 删除该用户的所有文章（及关联评论）
-    for post in user.posts.all():
-        Comment.query.filter_by(post_id=post.id).delete()
-        db.session.delete(post)
+    post_ids = [p.id for p in user.posts.all()]
+    if post_ids:
+        Comment.query.filter(Comment.post_id.in_(post_ids)).delete(synchronize_session=False)
+        Post.query.filter(Post.id.in_(post_ids)).delete(synchronize_session=False)
     db.session.delete(user)
     db.session.commit()
     flash('用户已删除', 'success')
@@ -1126,12 +1127,15 @@ def upload_image():
         return jsonify({'error': '无法解析图片文件'}), 400
     try:
         buf = _io.BytesIO()
-        img.save(buf, 'JPEG' if ext in ('jpg', 'jpeg') else 'PNG', quality=85, optimize=True)
+        if ext == 'gif':
+            img.save(buf, 'GIF')
+        else:
+            img.save(buf, 'WEBP', quality=85, method=6)
         buf.seek(0)
     except Exception:
         return jsonify({'error': '图片处理失败'}), 400
     # 生成 UUID 文件名，避免路径冲突
-    filename = str(uuid.uuid4()) + '.' + ext
+    filename = str(uuid.uuid4()) + ('.webp' if ext != 'gif' else '.gif')
     from flask import current_app
 
     upload_dir = os.path.join(current_app.root_path, 'static', 'uploads')

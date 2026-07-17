@@ -66,7 +66,7 @@
                     <div style="color:rgba(255,255,255,0.25);font-size:0.8rem;margin-top:12px">
                         <span>{{ format_date(post.created_at, '%Y/%m/%d') }}</span>
                         <!-- published_comments() 返回审核通过的评论数 -->
-                        <span style="margin-left:12px">{{ post.published_comments() }} 评论</span>
+                        <span style="margin-left:12px">{{ comment_count }} 评论</span>
                     </div>
                 </div>
 
@@ -93,7 +93,7 @@
 
                 <!-- 评论区 -->
                 <div class="comments-section" id="comments">
-                    <h4>评论 · {{ post.published_comments() }}</h4>
+                    <h4>评论 · {{ comment_count }}</h4>
                     <!-- 仅显示审核通过的评论 -->
                     {% set approved_comments = post.comments.filter_by(is_approved=True).all() %}
                     <!-- 遍历审核通过的评论 -->
@@ -141,16 +141,7 @@
     </div>
 </div>
 
-<script src="{{ url_for('static', filename='vendor/prism.min.js') }}"></script>
-<script src="{{ url_for('static', filename='vendor/prism-markup.min.js') }}"></script>
-<script src="{{ url_for('static', filename='vendor/prism-css.min.js') }}"></script>
-<script src="{{ url_for('static', filename='vendor/prism-javascript.min.js') }}"></script>
-<script src="{{ url_for('static', filename='vendor/prism-python.min.js') }}"></script>
-<script src="{{ url_for('static', filename='vendor/prism-sql.min.js') }}"></script>
-<script src="{{ url_for('static', filename='vendor/prism-bash.min.js') }}"></script>
-<script src="{{ url_for('static', filename='vendor/prism-json.min.js') }}"></script>
-<script src="{{ url_for('static', filename='vendor/prism-yaml.min.js') }}"></script>
-<script src="{{ url_for('static', filename='vendor/prism-line-numbers.min.js') }}"></script>
-<script>Prism.highlightAll();</script>
+<script src="{{ url_for('static', filename='vendor/prism-bundle.min.js') }}" defer></script>
+<script>document.addEventListener('DOMContentLoaded',function(){Prism.highlightAll();});</script>
 
 {% endblock %}

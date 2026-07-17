@@ -30,14 +30,10 @@
 /* ── 0b. HarmonyOS 图标字体 ──────────────────────────── */
 @font-face {
   font-family: 'harmonyos';
-  src: url('/static/font/harmonyos/harmonyos.eot');
-  src: url('/static/font/harmonyos/harmonyos.eot?#iefix') format('embedded-opentype'),
-       url('/static/font/harmonyos/harmonyos.ttf') format('truetype'),
-       url('/static/font/harmonyos/harmonyos.woff') format('woff'),
-       url('/static/font/harmonyos/harmonyos.svg?#harmonyos') format('svg');
+  src: url('/static/font/harmonyos/harmonyos.woff2') format('woff2');
   font-weight: normal;
   font-style: normal;
-  font-display: block;
+  font-display: swap;
 }
 [class^="hm-"], [class*=" hm-"] {
   font-family: 'harmonyos' !important;
