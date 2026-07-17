@@ -104,7 +104,7 @@ def video_detail(video_id):
     history = (
         BiliVideoHistory.query.filter_by(video_id=video_id)
         .order_by(BiliVideoHistory.recorded_at.desc())
-        .limit(300)
+        .limit(170)
         .all()
     )
     history.reverse()
