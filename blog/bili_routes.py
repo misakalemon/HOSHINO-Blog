@@ -990,7 +990,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             db.session.remove()
 
 
-_BATCH_SIZE = 15
+_BATCH_SIZE = 10
 
 
 def run_daily_scrape(app):
