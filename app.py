@@ -125,28 +125,6 @@ def create_app():
         'Amazon 爬虫已就绪%s', '，代理: ' + scraper._proxy if scraper._proxy else '（无代理）'
     )
 
-    # ── Exa API（海外价格搜索引擎，绕过 GFW） ──
-    from blog.exa_client import ExaClient
-
-    app.exa_client = ExaClient(app.config.get('EXA_API_KEY', ''))
-    if app.exa_client._ready:
-        logger.info('Exa 客户端已就绪')
-        # 将启动时获取的汇率写入数据库
-        from blog.models import ExchangeRate
-
-        with app.app_context():
-            for currency, rate in app.exa_client._rates.items():
-                existing = (
-                    ExchangeRate.query.filter_by(currency=currency)
-                    .order_by(ExchangeRate.recorded_at.desc())
-                    .first()
-                )
-                if not existing or abs(existing.rate - rate) / rate > 0.001:
-                    db.session.add(ExchangeRate(currency=currency, rate=rate))
-            db.session.commit()
-    else:
-        logger.info('Exa 未配置（EXA_API_KEY 为空），跳过')
-
     # ── 加载 B站 持久化登录凭证 ──
     from blog.bilibili.login import apply_cookies as _bili_apply_cookies
 
@@ -178,10 +156,6 @@ def create_app():
     from blog import admin_bp
 
     app.register_blueprint(admin_bp)
-    # 价格追踪 blueprint（所有价格路由自动添加 /prices 前缀）
-    from blog import price_bp
-
-    app.register_blueprint(price_bp)
     # Bilibili 管理 blueprint
     from blog.bili_routes import bili_bp
 
@@ -252,8 +226,7 @@ def _init_scheduler(app):
     定时任务清单：
       - 每天 02:00  深扫所有 B站 UP 主视频（补全 + 三层统计更新）
       - 每天 03:00  自动轮换 SECRET_KEY
-      - 每天 09:00  自动爬取所有启用的商品价格
-      - 增量检查     B站 新视频（跑完一轮等 40 分钟再跑下一轮）
+      - 增量检查     B站 新视频（跑完一轮等 30 分钟再跑下一轮）
     """
     try:
         from datetime import datetime, timedelta
@@ -262,15 +235,6 @@ def _init_scheduler(app):
         from config import rotate_secret_key
 
         scheduler = BackgroundScheduler()
-        # 每天 09:00 执行
-        scheduler.add_job(
-            func=lambda: _run_daily_crawl(app),
-            trigger='cron',
-            hour=9,
-            minute=0,
-            id='daily_price_crawl',
-            replace_existing=True,
-        )
         # 每天 03:00 自动轮换 SECRET_KEY
         scheduler.add_job(
             func=lambda: rotate_secret_key(app),
@@ -312,18 +276,9 @@ def _init_scheduler(app):
         )
         scheduler.start()
         app.scheduler = scheduler
-        app.logger.info('定时任务: 09:00价格 / 03:00密钥/清理 / 每40minB站增量 / 02:00B站深扫')
+        app.logger.info('定时任务: 03:00密钥/清理 / 每30minB站增量 / 02:00B站深扫')
     except Exception as e:
         app.logger.warning('定时任务启动失败（不影响运行）: %s', e)
-
-
-def _run_daily_crawl(app):
-    """执行每日价格爬取（在应用上下文中运行）。"""
-    with app.app_context():
-        from blog.crawler import crawl_all_active_sources
-
-        count = crawl_all_active_sources()
-        app.logger.info('每日价格爬取完成: %d 条记录', count)
 
 
 def _run_bili_incremental_check(app):

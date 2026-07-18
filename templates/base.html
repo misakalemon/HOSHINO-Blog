@@ -47,7 +47,6 @@
         <a href="{{ url_for('blog.index') }}" {% if request.endpoint == 'blog.index' or request.endpoint == 'blog.category' %}class="nav-link-active"{% endif %}><i class="hm-public-home"></i>博客</a>
         <a href="{{ url_for('blog.about') }}" {% if request.endpoint == 'blog.about' %}class="nav-link-active"{% endif %}><i class="hm-public-highlights"></i>关于</a>
         <a href="{{ url_for('blog.contact') }}" {% if request.endpoint == 'blog.contact' %}class="nav-link-active"{% endif %}><i class="hm-public-email"></i>联系</a>
-        <a href="{{ url_for('price.index') }}" {% if request.endpoint and 'price' in request.endpoint %}class="nav-link-active"{% endif %}><i class="hm-public-history"></i>价格</a>
         <a href="{{ url_for('blog.tools') }}" {% if request.endpoint == 'blog.tools' %}class="nav-link-active"{% endif %}><i class="hm-public-settings"></i>工具</a>
         <a href="{{ url_for('bili_public.index') }}" {% if request.endpoint and 'bili_public' in request.endpoint %}class="nav-link-active"{% endif %}><i class="hm-bilibili"></i>B站</a>
         {% if current_user.is_authenticated %}
@@ -64,7 +63,6 @@
     <a href="{{ url_for('blog.index') }}" {% if request.endpoint == 'blog.index' or request.endpoint == 'blog.category' %}class="nav-link-active"{% endif %}><i class="hm-public-home"></i>博客</a>
     <a href="{{ url_for('blog.about') }}" {% if request.endpoint == 'blog.about' %}class="nav-link-active"{% endif %}><i class="hm-public-highlights"></i>关于</a>
     <a href="{{ url_for('blog.contact') }}" {% if request.endpoint == 'blog.contact' %}class="nav-link-active"{% endif %}><i class="hm-public-email"></i>联系</a>
-    <a href="{{ url_for('price.index') }}" {% if request.endpoint and 'price' in request.endpoint %}class="nav-link-active"{% endif %}><i class="hm-public-history"></i>价格</a>
     <a href="{{ url_for('blog.tools') }}" {% if request.endpoint == 'blog.tools' %}class="nav-link-active"{% endif %}><i class="hm-public-settings"></i>工具</a>
     <a href="{{ url_for('bili_public.index') }}" {% if request.endpoint and 'bili_public' in request.endpoint %}class="nav-link-active"{% endif %}><i class="hm-bilibili"></i>B站</a>
     {% if current_user.is_authenticated %}

@@ -1324,62 +1324,6 @@ ul { list-style: none; }
   .admin-row { flex-direction: column; }
 }
 
-/* ── 20. Price 卡片 ──────────────────────────── */
-.price-card {
-  position: relative;
-  background: rgba(255,255,255,0.02);
-  backdrop-filter: blur(10px) saturate(1.4);
-  -webkit-backdrop-filter: blur(10px) saturate(1.4);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 20px; padding: 16px;
-  transition: transform 0.3s, border-color 0.3s;
-}
-.price-card:hover {
-  transform: translateY(-4px);
-  border-color: rgba(255,255,255,0.15);
-}
-.price-card-body h3 { font-size: 0.9rem; font-weight: 500; line-height: 1.3; color: rgba(255,255,255,0.8); }
-.price-category {
-  font-size: 0.6rem; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.06em; color: #7abfff;
-  padding: 2px 8px; border-radius: 6px;
-  background: rgba(0, 102, 255, 0.1);
-}
-.price-brand { font-size: 0.65rem; color: rgba(255,255,255,0.3); }
-.spec-tag {
-  background: rgba(255,255,255,0.03); padding: 2px 8px; border-radius: 6px;
-  font-size: 0.6rem; color: rgba(255,255,255,0.35);
-}
-
-/* ── 21. Price 详情 ──────────────────────────── */
-.price-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
-.price-table th, .price-table td {
-  padding: 10px 16px; text-align: left;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
-}
-.price-table th {
-  background: rgba(255,255,255,0.02);
-  font-weight: 600; color: rgba(255,255,255,0.3);
-  font-size: 0.65rem; text-transform: uppercase;
-}
-.price-table td { color: rgba(255,255,255,0.6); }
-.price-table tbody tr:hover { background: rgba(0, 240, 255, 0.02); }
-
-/* 5 列等宽统计网格 */
-.price-stats { display: grid; grid-template-columns: repeat(5,1fr); gap: 10px; }
-/* 图表容器：毛玻璃卡片 */
-.chart-wrap {
-  background: rgba(255,255,255,0.02);
-  backdrop-filter: blur(10px) saturate(1.4);
-  -webkit-backdrop-filter: blur(10px) saturate(1.4);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 20px; padding: 20px; margin-top: 16px;
-}
-@media (max-width:640px) {
-  .price-stats { grid-template-columns: repeat(3,1fr); }
-  .chart-wrap { padding: 12px; }
-}
-
 /* ── 22. 工具页面 ──────────────────────────── */
 /* 导航按钮：flex-wrap 自动换行，每项图标 + 标签纵向排列 */
 .tools-nav { display: flex; gap: 8px; justify-content: center; margin-bottom: 24px; flex-wrap: wrap; }
@@ -1753,93 +1697,6 @@ ul { list-style: none; }
   font-size: 0.9rem; color: rgba(255,255,255,0.35); max-width: 500px; margin: 0 auto;
 }
 
-/* ── 28. 价格统计卡片 ────────────────────────── */
-.price-stat-card {
-  background: rgba(255,255,255,0.02);
-  backdrop-filter: blur(10px) saturate(1.4);
-  -webkit-backdrop-filter: blur(10px) saturate(1.4);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 16px; padding: 20px 12px; text-align: center;
-}
-.price-stat-label {
-  display: block; font-size: 0.6rem; font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.06em;
-  color: rgba(255,255,255,0.25); margin-bottom: 6px;
-}
-.price-stat-value {
-  font-size: 1.3rem; font-weight: 700; font-variant-numeric: tabular-nums;
-  color: #e8edf5;
-}
-/* 涨/跌语义色：涨＝橙色，跌＝绿色 */
-.price-stat-value.change-up { color: #f0a030; }
-.price-stat-value.change-down { color: #3dd68c; }
-
-/* ── 29. 价格详情来源卡片 ────────────────────── */
-.source-card {
-  background: rgba(255,255,255,0.02);
-  backdrop-filter: blur(10px) saturate(1.4);
-  -webkit-backdrop-filter: blur(10px) saturate(1.4);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 16px; padding: 16px; transition: border-color 0.3s;
-}
-.source-card:hover { border-color: rgba(255,255,255,0.15); }
-.source-card .source-header {
-  display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
-}
-.source-card .source-name { font-weight: 600; font-size: 0.85rem; }
-.source-card .source-price { font-size: 1.15rem; font-weight: 700; }
-
-/* ── 29b. 价格详情页 ────────────────────────── */
-.detail-header {
-  display: flex; align-items: center; gap: 12px; justify-content: center; flex-wrap: wrap;
-}
-.detail-header h1 { font-size: 1.5rem; font-weight: 250; margin: 0; }
-.detail-subtitle { margin-top: 8px; font-size: 0.9rem; color: rgba(255,255,255,0.35); }
-.detail-tabs {
-  display: flex; gap: 8px; margin-bottom: 16px; justify-content: center;
-}
-/* 来源网格：自适应列数 */
-.source-grid {
-  margin-top: 24px;
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(280px,1fr)); gap: 16px;
-}
-.source-link {
-  font-size: 0.75rem; color: #7abfff; word-break: break-all;
-}
-.source-link:hover { color: #b8d6ff; }
-/* 历史价格卡片 */
-.history-card {
-  margin-top: 32px;
-  background: rgba(255,255,255,0.02);
-  backdrop-filter: blur(10px) saturate(1.4);
-  -webkit-backdrop-filter: blur(10px) saturate(1.4);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 20px; overflow: hidden;
-}
-.history-header {
-  padding: 16px 20px; font-weight: 600; font-size: 0.9rem;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
-}
-.history-table-wrap { overflow-x: auto; }
-#chartMain { width: 100%; height: 500px; }
-@media (max-width: 640px) {
-  #chartMain { height: 320px; }
-}
-.empty-cell {
-  text-align: center; padding: 20px; color: rgba(255,255,255,0.3);
-}
-
-/* ── 30. 价格看板页 ────────────────────────── */
-.page-header-actions {
-  margin-top: 12px; display: flex; gap: 10px;
-  justify-content: center; flex-wrap: wrap;
-}
-.add-product-form {
-  margin-top: 16px; max-width: 600px; margin-left: auto; margin-right: auto;
-}
-.add-card { padding: 20px; }
-.add-card h3 { margin-bottom: 12px; font-size: 1rem; font-weight: 500; color: rgba(255,255,255,0.7); }
-.add-form-row { display: flex; gap: 10px; margin-bottom: 10px; }
 .form-control {
   padding: 8px 12px; border-radius: 8px; font-size: 0.8rem;
   background: rgba(255,255,255,0.03);
@@ -1848,39 +1705,6 @@ ul { list-style: none; }
 }
 .form-control:focus { border-color: rgba(255,255,255,0.2); }
 .form-control::placeholder { color: rgba(255,255,255,0.2); }
-.price-section { padding-bottom: 60px; position: relative; z-index: 10; }
-/* 商品网格布局 */
-.product-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(280px,1fr)); gap: 16px;
-}
-.price-card-link { text-decoration: none; display: block; }
-.price-card-meta {
-  display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;
-}
-.price-card-body h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 8px; line-height: 1.3; }
-.price-card-footer { display: flex; justify-content: space-between; align-items: baseline; }
-.price-amount { font-size: 1.4rem; font-weight: 800; }
-.price-na { font-size: 0.85rem; color: rgba(255,255,255,0.3); }
-.specs-row {
-  margin-top: 8px; padding-top: 8px; display: flex; flex-wrap: wrap; gap: 4px;
-}
-.manual-price-form {
-  margin-top: 8px; display: flex; gap: 4px; padding: 0 4px 4px;
-}
-.price-input {
-  flex: 1; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; outline: none;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.08);
-  color: #e8edf5; font-family: inherit;
-}
-.price-input:focus { border-color: rgba(255,255,255,0.2); }
-.price-submit {
-  padding: 4px 10px; border: none; border-radius: 4px; font-size: 0.75rem;
-  font-weight: 600; cursor: pointer;
-  background: rgba(0, 102, 255, 0.15); color: #7abfff;
-  transition: background 0.3s;
-}
-.price-submit:hover { background: rgba(0, 102, 255, 0.25); }
 .widget-stats { font-size: 0.8rem; line-height: 1.8; }
 .widget-stats strong { color: rgba(255,255,255,0.6); }
 .widget-desc { font-size: 0.8rem; line-height: 1.6; color: rgba(255,255,255,0.35); }

@@ -13,15 +13,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ['CONFIG_PATH'] = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
 
 from app import create_app
-from blog.models import db, BiliVideoHistory, BiliUpHistory, PriceRecord, ExchangeRate
+from blog.models import db, BiliVideoHistory, BiliUpHistory
 
 app = create_app()
 
 HISTORY_MODELS = [
     ('BiliVideoHistory', BiliVideoHistory, 'video_id'),
     ('BiliUpHistory', BiliUpHistory, 'up_id'),
-    ('PriceRecord', PriceRecord, 'product_id'),
-    ('ExchangeRate', ExchangeRate, None),
 ]
 
 INTERVAL = datetime.timedelta(minutes=30)

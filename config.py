@@ -235,11 +235,6 @@ class Config:
     MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER', '')
     MAIL_TIMEOUT = int(os.environ.get('MAIL_TIMEOUT', 10))
 
-    # ── Exa API（搜索引擎，绕过 GFW 获取海外价格）──
-    # 从 https://exa.ai 注册获取 API Key
-    # 通过搜索获取电商页面内容，解析价格信息
-    EXA_API_KEY = os.environ.get('EXA_API_KEY') or ''
-
 
 # 导出给 app.py 使用的活动配置
 # 这是一种简化写法：Config 本身可直接作为配置源，

@@ -57,8 +57,6 @@ APPS = [
      'cmd': lambda env: f'conda run -n {env} python {os.path.join(BASE_DIR, "scripts", "bili_incremental.py")}'},
     {'name': 'B站 全量刷新', 'icon': '📊', 'desc': '对所有 UP 主执行完整爬取',
      'cmd': lambda env: f'conda run -n {env} python {os.path.join(BASE_DIR, "scripts", "bili_daily_scrape.py")}'},
-    {'name': '价格爬虫', 'icon': '💰', 'desc': '手动触发价格数据爬取',
-     'cmd': lambda env: f'conda run -n {env} python {os.path.join(BASE_DIR, "scripts", "price_crawl.py")}'},
 ]
 
 # ── 进程管理 ──────────────────────────────────────

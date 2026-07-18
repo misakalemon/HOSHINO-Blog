@@ -22,8 +22,7 @@ from flask_migrate import Migrate
 blog_bp = Blueprint('blog', __name__)
 # 后台 blueprint（所有后台路由自动添加 /admin 前缀）
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
-# 价格追踪 blueprint（价格看板路由在 /prices 下）
-price_bp = Blueprint('price', __name__, url_prefix='/prices')
+
 
 # 先导入模型，确保 admin 和 routes 中的 from .models import ... 可用
 # 这种 "先声明蓝图、再导入模型、最后导入路由" 的顺序是关键，
@@ -37,12 +36,8 @@ from .models import (
     BiliWatchedVideo,
     Category,
     Comment,
-    ExchangeRate,
     FeaturedCard,
     Post,
-    PriceRecord,
-    Product,
-    ProductSource,
     User,
     db,
 )
@@ -51,7 +46,6 @@ from .models import (
 blueprints = {
     'blog_bp': blog_bp,
     'admin_bp': admin_bp,
-    'price_bp': price_bp,
 }
 
 
@@ -129,11 +123,6 @@ def init_db(app):
 
         # ── 迁移 BiliSubscription.token 唯一约束 → 普通索引 ─
         _migrate_bili_sub_token_index(app)
-
-        # ── 添加示例价格追踪商品（首次启动） ─────
-        from .crawler import init_sample_products
-
-        init_sample_products()
 
 
 def _migrate_category_to_many2many(app):
@@ -423,4 +412,4 @@ def _migrate_bili_sub_token_index(app):
 # 此处的 import 必须放在模型和 init_db 之后，否则会导致循环依赖：
 #   __init__.py → routes.py → __init__.py
 # 延迟导入打破了这个循环。
-from . import admin, price_routes, routes
+from . import admin, routes
