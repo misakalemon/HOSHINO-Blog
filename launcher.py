@@ -70,6 +70,52 @@ class API:
                 states[name] = 'exited'
         return states
 
+    def get_stats(self) -> dict:
+        """获取网站统计参数"""
+        try:
+            sys.path.insert(0, BASE_DIR)
+            from app import create_app
+            from blog.models import BiliUp, BiliVideo, User, Post, Comment, db
+            app = create_app()
+            with app.app_context():
+                up_count = BiliUp.query.count()
+                video_count = BiliVideo.query.count()
+                user_count = User.query.count()
+                post_count = Post.query.count()
+                comment_count = Comment.query.count()
+                last_up = BiliUp.query.order_by(BiliUp.updated_at.desc()).first()
+                last_video = BiliVideo.query.order_by(BiliVideo.updated_at.desc()).first()
+                return {
+                    'up_count': up_count,
+                    'video_count': video_count,
+                    'user_count': user_count,
+                    'post_count': post_count,
+                    'comment_count': comment_count,
+                    'last_up_update': (last_up.updated_at.strftime('%m/%d %H:%M') if last_up and last_up.updated_at else '-'),
+                    'last_video_update': (last_video.updated_at.strftime('%m/%d %H:%M') if last_video and last_video.updated_at else '-'),
+                }
+        except Exception as e:
+            return {'error': str(e)}
+
+    def get_next_schedule(self) -> dict:
+        """计算下次爬取时间"""
+        from datetime import datetime, timedelta
+        now = datetime.now()
+        # 每天 02:00 全量刷新
+        daily = now.replace(hour=2, minute=0, second=0, microsecond=0)
+        if now >= daily:
+            daily += timedelta(days=1)
+        daily_remaining = int((daily - now).total_seconds())
+        # 每 30 分钟增量检查
+        next_inc = now + timedelta(minutes=30)
+        inc_remaining = 1800
+        return {
+            'daily_next': daily.strftime('%m/%d %H:%M'),
+            'daily_remaining': daily_remaining,
+            'incremental_next': next_inc.strftime('%m/%d %H:%M'),
+            'incremental_remaining': inc_remaining,
+        }
+
     def start_app(self, name: str) -> str:
         cfg = next((a for a in APPS if a['name'] == name), None)
         if not cfg:
@@ -227,6 +273,19 @@ body {
   cursor: pointer; font-family: inherit;
 }
 .footer button:hover { background: rgba(242,90,90,0.2); }
+.dashboard { display: flex; gap: 8px; padding: 0 24px; flex-shrink: 0; flex-wrap: wrap; }
+.dash-item {
+  flex: 1; min-width: 100px; padding: 10px 14px; border-radius: 10px;
+  background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04);
+  text-align: center; font-size: 11px; color: rgba(255,255,255,0.4);
+}
+.dash-item .num { font-size: 18px; font-weight: 600; color: #d0c8f0; display: block; margin-bottom: 2px; }
+.dash-item .sub { font-size: 10px; color: rgba(255,255,255,0.25); }
+.schedule { display: flex; gap: 8px; padding: 8px 24px 0; flex-shrink: 0; flex-wrap: wrap; }
+.sched-item { font-size: 11px; color: rgba(255,255,255,0.35); padding: 6px 12px; background: rgba(0,0,0,0.2); border-radius: 8px; }
+.sched-item .label { color: rgba(255,255,255,0.25); }
+.sched-item .time { color: #a78bfa; font-weight: 500; }
+.sched-item .countdown { color: #f472b6; }
 </style>
 </head>
 <body>
@@ -235,6 +294,8 @@ body {
   <h1>Hoshino Launcher</h1>
   <select id="envSelect"><option>加载中...</option></select>
 </div>
+<div class="dashboard" id="dashBoard"></div>
+<div class="schedule" id="scheduleBoard"></div>
 <div class="cards" id="cardList"></div>
 <div class="log-area" id="logArea"></div>
 <div class="footer">
@@ -296,10 +357,42 @@ function appendLog(line) {
   el.scrollTop = el.scrollHeight;
 }
 function escapeHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function formatTime(sec) {
+  if (sec <= 0) return '即将运行';
+  var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  return (h ? h+'h ' : '') + (m ? m+'m ' : '') + s + 's';
+}
+function refreshStats() {
+  pywebview.api.get_stats().then(function(d) {
+    if (d.error) return;
+    var html = '';
+    var items = [
+      {n:d.up_count, s:'UP 主'}, {n:d.video_count, s:'视频'},
+      {n:d.post_count, s:'文章'}, {n:d.comment_count, s:'评论'},
+      {n:d.user_count, s:'用户'}
+    ];
+    items.forEach(function(i) {
+      html += '<div class="dash-item"><span class="num">' + i.n + '</span><span class="sub">' + i.s + '</span></div>';
+    });
+    html += '<div class="dash-item" style="min-width:140px"><span class="sub" style="font-size:10px">UP主更新</span><span class="sub">' + d.last_up_update + '</span></div>';
+    document.getElementById('dashBoard').innerHTML = html;
+  });
+  pywebview.api.get_next_schedule().then(function(d) {
+    if (d.error) return;
+    var html = '';
+    html += '<div class="sched-item"><span class="label">全量刷新: </span><span class="time">' + d.daily_next + '</span> <span class="countdown" id="countdownDaily">(' + formatTime(d.daily_remaining) + ')</span></div>';
+    html += '<div class="sched-item"><span class="label">增量检查: </span><span class="time">' + d.incremental_next + '</span> <span class="countdown" id="countdownInc">(约30m)</span></div>';
+    document.getElementById('scheduleBoard').innerHTML = html;
+  });
+}
 function startApp(name) { pywebview.api.start_app(name).then(function(r) { if (r !== 'ok') appendLog(r); }); }
 function stopApp(name) { pywebview.api.stop_app(name); }
 function stopAll() { pywebview.api.stop_all(); }
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('DOMContentLoaded', function() {
+  init();
+  refreshStats();
+  setInterval(refreshStats, 30000);
+});
 </script>
 </body>
 </html>'''
