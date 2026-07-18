@@ -20,19 +20,39 @@
 
 {% block extra_head %}
 <style>
-/* 背景光晕 — 与 base.html 的 glow-bg 不冲突（已移除旧版） */
 .glow-bg { position:fixed; inset:0; z-index:0; pointer-events:none;
   background:radial-gradient(ellipse at 50% 50%, #0b1a2e 0%, #1a0b2e 20%, #0e0b1a 45%, #06070a 70%);
   background-size:200% 200%; animation:glowShift 30s ease-in-out infinite; }
 @keyframes glowShift { 0%{background-position:0% 50%} 25%{background-position:100% 0%} 50%{background-position:100% 100%} 75%{background-position:0% 100%} 100%{background-position:0% 50%} }
 
-/* 英雄区全屏 */
 .hero { position:relative; z-index:10; min-height:100vh; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:0 28px; }
 .hero-badge { display:inline-block; padding:6px 18px; border-radius:30px; font-size:0.8rem; font-weight:500; letter-spacing:0.06em; background:rgba(167,139,250,0.12); border:1px solid rgba(167,139,250,0.2); color:#c4b5fd; margin-bottom:20px; backdrop-filter:blur(8px); }
 .scroll-hint { display:inline-block; color:rgba(255,255,255,0.3); font-size:0.8rem; letter-spacing:0.15em; border:1px solid rgba(255,255,255,0.06); padding:0.4rem 1.4rem; border-radius:40px; backdrop-filter:blur(4px); margin-top:20px; }
 .scroll-hint span { display:inline-block; animation:bounceDown 2s infinite; }
 @keyframes bounceDown { 0%,100%{transform:translateY(0)} 50%{transform:translateY(6px)} }
 .scroll-progress { position:fixed; top:0; left:0; height:2.5px; background:linear-gradient(90deg,#7c5cfc,#a78bfa,#c4b5fd); z-index:999; width:0%; transition:width 0.1s linear; box-shadow:0 0 20px rgba(167,139,250,0.2); }
+
+.hero-particle { position:relative; z-index:10; min-height:100vh; display:flex; align-items:center; padding:0 28px; overflow:hidden; }
+.hero-particle #particleCanvas { position:absolute; inset:0; width:100%; height:100%; cursor:crosshair; touch-action:none; }
+.hero-particle-text { position:relative; z-index:2; max-width:420px; pointer-events:none; }
+.hero-particle-text .hero-badge { pointer-events:auto; }
+.hero-particle-text h1 { font-size:clamp(2.4rem,5vw,4rem); font-weight:250; letter-spacing:-0.02em; line-height:1.1; margin-bottom:16px; }
+.hero-particle-text h1 .highlight { background:linear-gradient(135deg,#ff8aae,#ff6b9d,#c084fc,#ff8aae); background-size:300% 300%; -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; animation:hueFlow 8s ease-in-out infinite; }
+.hero-particle-text p { font-size:1.1rem; color:rgba(255,255,255,0.35); max-width:500px; margin:0 auto 32px; font-weight:300; line-height:1.6; }
+.hero-particle-text .scroll-hint { pointer-events:auto; }
+.hero-particle-actions { margin-top:24px; display:flex; gap:12px; pointer-events:auto; }
+.hero-particle-actions button { appearance:none; padding:8px 20px; border-radius:30px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.04); color:rgba(255,255,255,0.5); font-size:0.75rem; letter-spacing:0.1em; cursor:pointer; font-family:inherit; transition:all 0.3s; }
+.hero-particle-actions button:hover { background:rgba(255,255,255,0.1); border-color:rgba(255,255,255,0.2); color:rgba(255,255,255,0.8); }
+#particleLoader { position:fixed; inset:0; z-index:999; background:#07090f; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:14px; transition:opacity 0.8s; font-size:0.8rem; letter-spacing:0.3em; color:rgba(255,255,255,0.3); }
+#particleLoader.done { opacity:0; pointer-events:none; }
+#particleLoader .bar { width:160px; height:1px; background:rgba(255,255,255,0.06); overflow:hidden; }
+#particleLoader .bar i { display:block; height:100%; width:30%; background:linear-gradient(90deg,#c084fc,#ff8aae); animation:loadBar 1s ease-in-out infinite; }
+@keyframes loadBar { 0%{transform:translateX(-100%)} 100%{transform:translateX(430%)} }
+@media (max-width:820px) {
+  .hero-particle { justify-content:center; }
+  .hero-particle-text { text-align:center; align-items:center; max-width:100%; }
+  .hero-particle-actions { justify-content:center; }
+}
 </style>
 {% endblock %}
 {% block content %}
@@ -46,15 +66,29 @@
 {% if search_query %}
 <section class="hero">
     <h1>搜索：<span class="highlight">{{ search_query }}</span></h1>
-    <!-- posts.total 为搜索结果总数，若未定义则显示 0 -->
     <p>找到 {{ posts.total if posts.total is defined else 0 }} 篇相关文章</p>
+</section>
+{% elif hero_image %}
+<section class="hero-particle" id="heroSection">
+    <canvas id="particleCanvas" data-src="{{ hero_image }}"></canvas>
+    <div id="particleLoader"><div class="bar"><i></i></div>粒子重构中 …</div>
+    <div class="hero-particle-text">
+        <div class="hero-badge">✦ 个人博客</div>
+        <h1>最喜欢<br><span class="highlight">小鸟游星野</span></h1>
+        <p>{{ blog_subtitle }}</p>
+        <div class="hero-particle-actions">
+            <button id="btnScatter" onclick="_particleToggle()">粒子散开</button>
+            <button onclick="_particleBurst()">星尘迸发</button>
+        </div>
+        <div class="scroll-hint" onclick="document.querySelector('.featured-grid').scrollIntoView({behavior:'smooth'})"><span>↓ 向下滚动 ↓</span></div>
+    </div>
 </section>
 {% else %}
 <section class="hero" id="heroSection">
     <div class="hero-badge">✦ 个人博客</div>
     <h1>最喜欢<br><span class="highlight">小鸟游星野</span></h1>
     <p>{{ blog_subtitle }}</p>
-    <div class="scroll-hint" onclick="document.querySelector('.content,.cards-section,.featured-grid').scrollIntoView({behavior:'smooth'})"><span>↓ 向下滚动 ↓</span></div>
+    <div class="scroll-hint" onclick="document.querySelector('.featured-grid').scrollIntoView({behavior:'smooth'})"><span>↓ 向下滚动 ↓</span></div>
 </section>
 {% endif %}
 
@@ -205,6 +239,15 @@
 {% endblock %}
 
 {% block scripts %}
+{% if hero_image %}
+<script src="{{ url_for('static', filename='js/particle-hero.js') }}"></script>
+<script>
+function _particleBurst(){
+  var c=document.getElementById('particleCanvas');
+  if(c) c.dispatchEvent(new PointerEvent('pointerdown',{clientX:window.innerWidth/2,clientY:window.innerHeight/2}));
+}
+</script>
+{% endif %}
 <script>
 (function(){
 'use strict';
@@ -230,9 +273,6 @@ if('IntersectionObserver' in window){
 } else {
   cards.forEach(function(c){c.style.transform='translateY(0) rotate(0deg)';c.style.opacity=1;});
 }
-var hero=document.getElementById('heroSection');
-var ht=hero&&hero.querySelector('h1');
-if(ht){window.addEventListener('scroll',function(){var s=Math.min(window.scrollY/hero.offsetHeight,1);ht.style.transform='translateY('+(s*30)+'px)';ht.style.opacity=1-s*0.3;},{passive:true});}
 })();
 </script>
 {% endblock %}

@@ -37,6 +37,7 @@ from .models import (
     Category,
     Comment,
     FeaturedCard,
+    HeroImage,
     Post,
     User,
     db,

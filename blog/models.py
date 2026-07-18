@@ -495,3 +495,16 @@ class BiliCleanupConfig(db.Model):
     days = db.Column(db.Integer, default=90, nullable=False, comment='清理几天前的数据')
     enabled = db.Column(db.Boolean, default=False, comment='是否启用自动清理')
     updated_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+
+class HeroImage(db.Model):
+    """首页粒子画像（后台可上传多张，每次随机展示）。"""
+
+    __tablename__ = 'hero_images'
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(128), default='')
+    image_url = db.Column(db.String(512), nullable=False)
+    is_active = db.Column(db.Boolean, default=True)
+    sort_order = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))

@@ -46,6 +46,7 @@
     {% endif %}
     {% if current_user.is_admin %}
     <a href="{{ url_for('admin.featured_card_list') }}" {% if request.endpoint and 'featured_card' in request.endpoint %}class="active"{% endif %}><i class="hm-public-highlights"></i>特色卡片</a>
+    <a href="{{ url_for('admin.hero_image_list') }}" {% if request.endpoint and 'hero_image' in request.endpoint %}class="active"{% endif %}><i class="hm-public-magic"></i>Hero 画像</a>
     {% endif %}
     {% if current_user.is_editor %}
     <a href="{{ url_for('admin.comment_list') }}" {% if request.endpoint and 'comment' in request.endpoint %}class="active"{% endif %}><i class="hm-comments"></i>评论</a>

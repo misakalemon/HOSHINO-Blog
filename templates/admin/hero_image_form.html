@@ -1,0 +1,30 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}{{ '编辑' if editing else '新增' }} Hero 画像{% endblock %}
+{% block admin_content %}
+<div class="page-header">
+    <h1>{{ '编辑' if editing else '新增' }} Hero 粒子画像</h1>
+    <p>上传透明背景 PNG 立绘，建议尺寸 400-800px 宽</p>
+</div>
+<form method="POST" enctype="multipart/form-data" style="max-width:500px;margin-top:20px">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div style="margin-bottom:16px">
+        <label style="display:block;font-size:0.85rem;color:rgba(255,255,255,0.5);margin-bottom:6px">角色名 (可选)</label>
+        {{ form.title(class='form-control', placeholder='例: 小鸟游星野') }}
+    </div>
+    <div style="margin-bottom:16px">
+        <label style="display:block;font-size:0.85rem;color:rgba(255,255,255,0.5);margin-bottom:6px">图片文件 (PNG)</label>
+        {{ form.image(class='form-control', accept='.png,image/png') }}
+    </div>
+    <div style="margin-bottom:16px">
+        <label style="display:block;font-size:0.85rem;color:rgba(255,255,255,0.5);margin-bottom:6px">排序</label>
+        {{ form.sort_order(class='form-control', type='number') }}
+    </div>
+    <div style="margin-bottom:16px">
+        <label>{{ form.is_active() }} 启用</label>
+    </div>
+    <div style="display:flex;gap:10px">
+        <button type="submit" class="btn-pill">{{ '保存' if editing else '创建' }}</button>
+        <a href="{{ url_for('admin.hero_image_list') }}" class="btn-pill" style="background:rgba(255,255,255,0.02)">取消</a>
+    </div>
+</form>
+{% endblock %}

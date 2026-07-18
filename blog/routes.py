@@ -246,6 +246,12 @@ def index():
     featured_cards = _cached_featured_cards()
     cat_lookup = {c.slug: c.name for c in categories}
 
+    import random
+    from blog.models import HeroImage
+
+    hero_images = HeroImage.query.filter_by(is_active=True).order_by(HeroImage.sort_order).all()
+    hero_image = random.choice(hero_images).image_url if hero_images else None
+
     return render_template(
         'index.html',
         posts=posts,
@@ -258,6 +264,7 @@ def index():
         featured_cards=featured_cards,
         cat_lookup=cat_lookup,
         blog_subtitle=current_app.config['BLOG_SUBTITLE'],
+        hero_image=hero_image,
     )
 
 

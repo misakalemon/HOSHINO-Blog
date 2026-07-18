@@ -70,13 +70,14 @@ from . import admin_bp
 from .forms import (
     CategoryForm,
     FeaturedCardForm,
+    HeroImageForm,
     LoginForm,
     PostForm,
     ProfileForm,
     RegisterForm,
     UserForm,
 )
-from .models import BiliSubscription, BiliUp, Category, Comment, FeaturedCard, Post, User, db
+from .models import BiliSubscription, BiliUp, Category, Comment, FeaturedCard, HeroImage, Post, User, db
 
 logger = logging.getLogger(__name__)
 
@@ -1404,3 +1405,91 @@ def bili_history_cleanup():
         days=days_used,
         total=total,
     )
+
+
+# ── Hero 粒子画像管理 ────────────────────────────
+
+
+@admin_bp.route('/hero-images')
+@admin_required
+def hero_image_list():
+    """Hero 粒子画像列表。"""
+    images = HeroImage.query.order_by(HeroImage.sort_order).all()
+    return render_template('admin/hero_image_list.html', images=images)
+
+
+@admin_bp.route('/hero-images/new', methods=['GET', 'POST'])
+@admin_required
+def new_hero_image():
+    """新建 Hero 粒子画像。"""
+    form = HeroImageForm()
+    if form.validate_on_submit():
+        file = form.image.data
+        ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'png'
+        filename = f'hero_{uuid.uuid4().hex}.{ext}'
+        upload_dir = os.path.join(current_app.static_folder, 'uploads', 'hero')
+        os.makedirs(upload_dir, exist_ok=True)
+        path = os.path.join(upload_dir, filename)
+        file.save(path)
+        image = HeroImage(
+            title=form.title.data or '',
+            image_url=url_for('static', filename=f'uploads/hero/{filename}'),
+            sort_order=form.sort_order.data or 0,
+            is_active=form.is_active.data,
+        )
+        db.session.add(image)
+        db.session.commit()
+        flash('Hero 画像已添加', 'success')
+        return redirect(url_for('admin.hero_image_list'))
+    for field, errors in form.errors.items():
+        label = field
+        f = getattr(form, field, None)
+        if f and hasattr(f, 'label') and f.label:
+            label = f.label.text
+        for err in errors:
+            flash(f'{label}: {err}', 'error')
+    return render_template('admin/hero_image_form.html', form=form, editing=False)
+
+
+@admin_bp.route('/hero-images/<int:id>/edit', methods=['GET', 'POST'])
+@admin_required
+def edit_hero_image(id):
+    """编辑 Hero 粒子画像。"""
+    image = HeroImage.query.get_or_404(id)
+    form = HeroImageForm(obj=image)
+    form.image.validators = []
+    if form.validate_on_submit():
+        image.title = form.title.data or ''
+        image.sort_order = form.sort_order.data or 0
+        image.is_active = form.is_active.data
+        file = form.image.data
+        if file:
+            ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'png'
+            filename = f'hero_{uuid.uuid4().hex}.{ext}'
+            upload_dir = os.path.join(current_app.static_folder, 'uploads', 'hero')
+            os.makedirs(upload_dir, exist_ok=True)
+            path = os.path.join(upload_dir, filename)
+            file.save(path)
+            image.image_url = url_for('static', filename=f'uploads/hero/{filename}')
+        db.session.commit()
+        flash('Hero 画像已更新', 'success')
+        return redirect(url_for('admin.hero_image_list'))
+    for field, errors in form.errors.items():
+        label = field
+        f = getattr(form, field, None)
+        if f and hasattr(f, 'label') and f.label:
+            label = f.label.text
+        for err in errors:
+            flash(f'{label}: {err}', 'error')
+    return render_template('admin/hero_image_form.html', form=form, editing=True)
+
+
+@admin_bp.route('/hero-images/<int:id>/delete', methods=['POST'])
+@admin_required
+def delete_hero_image(id):
+    """删除 Hero 粒子画像。"""
+    image = HeroImage.query.get_or_404(id)
+    db.session.delete(image)
+    db.session.commit()
+    flash('Hero 画像已删除', 'success')
+    return redirect(url_for('admin.hero_image_list'))
