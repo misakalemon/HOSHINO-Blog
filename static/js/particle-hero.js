@@ -106,22 +106,16 @@
     uTime: gl.getUniformLocation(prog, 'uTime'),
   };
 
-  // 启用属性
+  // 启用属性（指针绑定推迟到 buffer 创建后）
   gl.enableVertexAttribArray(loc.aPos);
   gl.enableVertexAttribArray(loc.aColor);
   gl.enableVertexAttribArray(loc.aSize);
   gl.enableVertexAttribArray(loc.aTw);
   gl.enableVertexAttribArray(loc.aPh);
 
-  // 插槽布局：每顶点 8 个 float
+  // 插槽布局常量
   var F = 8, STRIDE = F * 4;
-  gl.vertexAttribPointer(loc.aPos,   2, gl.FLOAT, false, STRIDE, 0);
-  gl.vertexAttribPointer(loc.aColor, 3, gl.FLOAT, false, STRIDE, 8);
-  gl.vertexAttribPointer(loc.aSize,  1, gl.FLOAT, false, STRIDE, 20);
-  gl.vertexAttribPointer(loc.aTw,    1, gl.FLOAT, false, STRIDE, 24);
-  gl.vertexAttribPointer(loc.aPh,    1, gl.FLOAT, false, STRIDE, 28);
 
-  // 混合模式（预乘 alpha）
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
@@ -266,6 +260,13 @@
     vertexBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, vertData, gl.DYNAMIC_DRAW);
+
+    // 绑定属性指针到当前 buffer
+    gl.vertexAttribPointer(loc.aPos,   2, gl.FLOAT, false, STRIDE, 0);
+    gl.vertexAttribPointer(loc.aColor, 3, gl.FLOAT, false, STRIDE, 8);
+    gl.vertexAttribPointer(loc.aSize,  1, gl.FLOAT, false, STRIDE, 20);
+    gl.vertexAttribPointer(loc.aTw,    1, gl.FLOAT, false, STRIDE, 24);
+    gl.vertexAttribPointer(loc.aPh,    1, gl.FLOAT, false, STRIDE, 28);
 
     assemble = intro ? 0 : 1;
   }
