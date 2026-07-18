@@ -393,15 +393,13 @@ def main():
     # 注册日志回调
     def on_log(line):
         try:
-            webview.windows[0].evaluate_js(f'appendLog({json.dumps(line)})')
+            if webview.windows:
+                webview.windows[0].evaluate_js(f'appendLog({json.dumps(line)})')
         except Exception:
             pass
     _log_callbacks.append(on_log)
 
     api = API()
-
-    _log('Hoshino Launcher 已启动')
-    _log(f'工作目录: {BASE_DIR}')
 
     window = webview.create_window(
         '✦ Hoshino Launcher',
@@ -412,6 +410,10 @@ def main():
         min_size=(560, 480),
         text_select=True,
     )
+
+    _log('Hoshino Launcher 已启动')
+    _log(f'工作目录: {BASE_DIR}')
+
     webview.start(debug=False, private_mode=False)
 
 
