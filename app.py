@@ -389,11 +389,11 @@ def _run_bili_incremental_check(app):
     app.scheduler.add_job(
         func=lambda: _run_bili_incremental_check(app),
         trigger='date',
-        run_date=datetime.now() + timedelta(minutes=40),
+        run_date=datetime.now() + timedelta(minutes=30),
         id='bili_incremental_check',
         replace_existing=True,
     )
-    app.logger.info('B站 增量检查完成，40 分钟后开始下一轮')
+    app.logger.info('B站 增量检查完成，30 分钟后开始下一轮')
 
 
 if __name__ == '__main__':
