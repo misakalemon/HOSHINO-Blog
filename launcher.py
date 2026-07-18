@@ -414,7 +414,12 @@ def main():
     _log('Hoshino Launcher 已启动')
     _log(f'工作目录: {BASE_DIR}')
 
-    webview.start(gui='mshtml', debug=False, private_mode=False)
+    try:
+        webview.start(debug=False, private_mode=False)
+    except Exception as e:
+        _log(f'启动失败: {e}', 'ERROR')
+        _log('请确保已安装 WebView2 Runtime: https://developer.microsoft.com/zh-cn/microsoft-edge/webview2/', 'ERROR')
+        input('按 Enter 键退出...')
 
 
 if __name__ == '__main__':
