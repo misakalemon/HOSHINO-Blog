@@ -35,18 +35,21 @@ APPS = [
         'name': 'B站 增量检查',
         'script': '-c "from blog.bili_routes import _check_new_videos; from blog import db; ..."',
         'desc': '手动触发一次 B站 新视频检查',
+        'icon': '🔄',
         'cmd': lambda env: f'conda run -n {env} python -c "import sys; sys.path.insert(0, {repr(BASE_DIR)}); from blog.bili_routes import _check_new_videos; from blog.models import BiliUp; from app import create_app; app = create_app(); ups = BiliUp.query.all(); [print(f\'Checking {u.name}\') or _check_new_videos(u.mid, app) for u in ups]"',
     },
     {
         'name': 'B站 全量刷新',
         'script': '-c "手动触发全量 B站 数据刷新"',
         'desc': '对所有 UP 主执行完整爬取',
+        'icon': '📊',
         'cmd': lambda env: f'conda run -n {env} python -c "import sys; sys.path.insert(0, {repr(BASE_DIR)}); from blog.bili_routes import _run_scrape; from blog.models import BiliUp; from app import create_app; app = create_app(); ups = BiliUp.query.all(); [print(f\'Scraping {u.name}\') or _run_scrape(u.mid, u.space_url, app) for u in ups]"',
     },
     {
         'name': '价格爬虫',
         'script': '-c "from blog.crawler import crawl_all_active_sources"',
         'desc': '手动触发价格数据爬取',
+        'icon': '💰',
         'cmd': lambda env: f'conda run -n {env} python -c "import sys; sys.path.insert(0, {repr(BASE_DIR)}); from blog.crawler import crawl_all_active_sources; from app import create_app; create_app(); crawl_all_active_sources()"',
     },
 ]
