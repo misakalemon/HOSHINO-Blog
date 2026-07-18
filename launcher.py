@@ -37,8 +37,12 @@ _envs: list[str] = []
 
 def _detect_envs() -> list[str]:
     try:
+        # 先检查 conda 是否存在
+        import shutil
+        if not shutil.which('conda'):
+            return ['base']
         r = subprocess.run(['conda', 'env', 'list', '--json'],
-                           capture_output=True, text=True, timeout=10)
+                           capture_output=True, text=True, timeout=5)
         data = json.loads(r.stdout)
         envs = [os.path.basename(p) for p in data.get('envs', [])]
         return [e for e in envs if e != 'base'] or ['base']
@@ -360,8 +364,6 @@ def main():
     _log_callbacks.append(on_log)
 
     api = API()
-    # 预加载环境列表
-    api.get_envs()
 
     _log('Hoshino Launcher 已启动')
     _log(f'工作目录: {BASE_DIR}')
