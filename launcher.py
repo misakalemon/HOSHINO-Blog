@@ -15,6 +15,7 @@ import json
 import logging
 import logging.handlers
 import os
+import signal
 import subprocess
 import sys
 import threading
@@ -53,15 +54,16 @@ APPS = [
     {'name': '博客服务', 'icon': '🚀', 'desc': 'Flask 博客主服务 (http://0.0.0.0:5000)',
      'cmd': lambda env: f'conda run -n {env} python {os.path.join(BASE_DIR, "app.py")}'},
     {'name': 'B站 增量检查', 'icon': '🔄', 'desc': '检查所有 UP 主的新视频并入库',
-     'cmd': lambda env: f'conda run -n {env} python -c "import sys; sys.path.insert(0, {repr(BASE_DIR)}); from blog.bili_routes import _check_new_videos; from blog.models import BiliUp; from app import create_app; app = create_app(); ups = BiliUp.query.all(); [print(f\'Checking {u.name}\') or _check_new_videos(u.mid, app) for u in ups]"'},
+     'cmd': lambda env: f'conda run -n {env} python {os.path.join(BASE_DIR, "scripts", "bili_incremental.py")}'},
     {'name': 'B站 全量刷新', 'icon': '📊', 'desc': '对所有 UP 主执行完整爬取',
-     'cmd': lambda env: f'conda run -n {env} python -c "import sys; sys.path.insert(0, {repr(BASE_DIR)}); from blog.bili_routes import _run_scrape; from blog.models import BiliUp; from app import create_app; app = create_app(); ups = BiliUp.query.all(); [print(f\'Scraping {u.name}\') or _run_scrape(u.mid, u.space_url, app) for u in ups]"'},
+     'cmd': lambda env: f'conda run -n {env} python {os.path.join(BASE_DIR, "scripts", "bili_daily_scrape.py")}'},
     {'name': '价格爬虫', 'icon': '💰', 'desc': '手动触发价格数据爬取',
-     'cmd': lambda env: f'conda run -n {env} python -c "import sys; sys.path.insert(0, {repr(BASE_DIR)}); from blog.crawler import crawl_all_active_sources; from app import create_app; create_app(); crawl_all_active_sources()"'},
+     'cmd': lambda env: f'conda run -n {env} python {os.path.join(BASE_DIR, "scripts", "price_crawl.py")}'},
 ]
 
 # ── 进程管理 ──────────────────────────────────────
 _processes: dict[str, subprocess.Popen] = {}
+_proc_lock = threading.Lock()
 _log_callbacks: list = []
 _envs: list[str] = []
 
@@ -94,9 +96,11 @@ class API:
         return [{'name': a['name'], 'icon': a['icon'], 'desc': a['desc']} for a in APPS]
 
     def get_status(self) -> dict:
+        with _proc_lock:
+            snap = dict(_processes)
         states = {}
         for name in [a['name'] for a in APPS]:
-            proc = _processes.get(name)
+            proc = snap.get(name)
             if proc is None:
                 states[name] = 'stopped'
             elif proc.poll() is None:
@@ -107,7 +111,6 @@ class API:
 
     def get_next_schedule(self) -> dict:
         """计算下次爬取时间"""
-        from datetime import datetime, timedelta
         now = datetime.now()
         # 每天 02:00 全量刷新
         daily = now.replace(hour=2, minute=0, second=0, microsecond=0)
@@ -116,41 +119,43 @@ class API:
         daily_remaining = int((daily - now).total_seconds())
         # 每 30 分钟增量检查
         next_inc = now + timedelta(minutes=30)
-        inc_remaining = 1800
         return {
             'daily_next': daily.strftime('%m/%d %H:%M'),
             'daily_remaining': daily_remaining,
             'incremental_next': next_inc.strftime('%m/%d %H:%M'),
-            'incremental_remaining': inc_remaining,
+            'incremental_remaining': 1800,
         }
 
     def start_app(self, name: str) -> str:
         cfg = next((a for a in APPS if a['name'] == name), None)
         if not cfg:
             return 'error: 未找到应用'
-        if name in _processes and _processes[name].poll() is None:
-            return 'error: 已在运行中'
+        with _proc_lock:
+            if name in _processes and _processes[name].poll() is None:
+                return 'error: 已在运行中'
 
         env = _envs[0] if _envs else 'base'
         cmd = cfg['cmd'](env)
         _log(f'[{name}] 启动中...')
-        _log(f'  → {cmd[:120]}...' if len(cmd) > 120 else f'  →  {cmd}')
+        _log(f'  -> {cmd[:120]}...' if len(cmd) > 120 else f'  -> {cmd}')
 
         def run():
             try:
                 proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE,
                                         stderr=subprocess.STDOUT, text=True,
                                         encoding='utf-8', errors='replace',
-                                        cwd=BASE_DIR)
-                _processes[name] = proc
+                                        cwd=BASE_DIR, start_new_session=True)
+                with _proc_lock:
+                    _processes[name] = proc
                 _log(f'[{name}] 已启动 (PID: {proc.pid})')
                 _notify_status()
                 for line in proc.stdout:
                     if line:
                         _log(f'[{name}] {line.rstrip()}')
                 proc.wait()
+                with _proc_lock:
+                    _processes.pop(name, None)
                 _log(f'[{name}] {"正常退出" if proc.returncode == 0 else f"异常退出 (code={proc.returncode})"}')
-                _processes.pop(name, None)
                 _notify_status()
             except Exception as e:
                 _log(f'[{name}] 启动失败: {e}')
@@ -160,29 +165,51 @@ class API:
         return 'ok'
 
     def stop_app(self, name: str) -> str:
-        proc = _processes.get(name)
-        if proc and proc.poll() is None:
+        with _proc_lock:
+            proc = _processes.get(name)
+            if not proc or proc.poll() is not None:
+                return 'error: 未在运行'
+        # 先杀进程组（shell=True 会创建 shell 子进程）
+        try:
+            pgid = os.getpgid(proc.pid)
+            os.killpg(pgid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError):
             proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
             try:
-                proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
+                pgid = os.getpgid(proc.pid)
+                os.killpg(pgid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
                 proc.kill()
-            _log(f'[{name}] 已停止')
+        with _proc_lock:
             _processes.pop(name, None)
-            _notify_status()
-            return 'ok'
-        return 'error: 未在运行'
+        _log(f'[{name}] 已停止')
+        _notify_status()
+        return 'ok'
 
     def stop_all(self):
-        for name, proc in list(_processes.items()):
-            if proc and proc.poll() is None:
-                proc.terminate()
+        with _proc_lock:
+            items = list(_processes.items())
+        for name, proc in items:
+            if proc.poll() is None:
+                try:
+                    pgid = os.getpgid(proc.pid)
+                    os.killpg(pgid, signal.SIGTERM)
+                except (ProcessLookupError, PermissionError):
+                    proc.terminate()
                 try:
                     proc.wait(timeout=3)
                 except subprocess.TimeoutExpired:
-                    proc.kill()
+                    try:
+                        pgid = os.getpgid(proc.pid)
+                        os.killpg(pgid, signal.SIGKILL)
+                    except (ProcessLookupError, PermissionError):
+                        proc.kill()
                 _log(f'[{name}] 已停止')
-        _processes.clear()
+        with _proc_lock:
+            _processes.clear()
         _notify_status()
         return 'ok'
 
@@ -204,9 +231,13 @@ def _log(msg: str, level: str = 'INFO'):
 def _notify_status():
     try:
         import webview
+        if not webview.windows:
+            return
+        with _proc_lock:
+            snap = dict(_processes)
         states = {}
         for name in [a['name'] for a in APPS]:
-            proc = _processes.get(name)
+            proc = snap.get(name)
             if proc is None:
                 states[name] = 'stopped'
             elif proc.poll() is None:
