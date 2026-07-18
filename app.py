@@ -253,9 +253,10 @@ def _init_scheduler(app):
       - 每天 02:00  深扫所有 B站 UP 主视频（补全 + 三层统计更新）
       - 每天 03:00  自动轮换 SECRET_KEY
       - 每天 09:00  自动爬取所有启用的商品价格
-      - 每 30 分钟   B站 增量检查（新视频发现）
+      - 增量检查     B站 新视频（跑完一轮等 40 分钟再跑下一轮）
     """
     try:
+        from datetime import datetime, timedelta
         from apscheduler.schedulers.background import BackgroundScheduler
 
         from config import rotate_secret_key
@@ -290,15 +291,13 @@ def _init_scheduler(app):
             id='daily_bili_refresh',
             replace_existing=True,
         )
-        # 每 30 分钟增量检查 B站 新视频
+        # B站 增量检查（首次 10 秒后触发，之后每轮跑完自调度 40 分钟）
         scheduler.add_job(
             func=lambda: _run_bili_incremental_check(app),
-            trigger='interval',
-            minutes=30,
+            trigger='date',
+            run_date=datetime.now() + timedelta(seconds=10),
             id='bili_incremental_check',
             replace_existing=True,
-            misfire_grace_time=600,
-            coalesce=True,
         )
         # 每天 03:00 自动清理 B站视频历史快照（按 BiliCleanupConfig 配置）
         from blog.bili_routes import auto_cleanup_history
@@ -312,7 +311,8 @@ def _init_scheduler(app):
             replace_existing=True,
         )
         scheduler.start()
-        app.logger.info('定时任务: 09:00价格 / 03:00密钥/清理 / 每30minB站增量 / 02:00B站深扫')
+        app.scheduler = scheduler
+        app.logger.info('定时任务: 09:00价格 / 03:00密钥/清理 / 每40minB站增量 / 02:00B站深扫')
     except Exception as e:
         app.logger.warning('定时任务启动失败（不影响运行）: %s', e)
 
@@ -327,7 +327,9 @@ def _run_daily_crawl(app):
 
 
 def _run_bili_incremental_check(app):
-    """每 30 分钟增量检查所有 UP 主（分批并发，每批 3 个 UP 主并行）"""
+    """增量检查所有 UP 主（分批并发）。跑完一轮后等 40 分钟再跑下一轮。"""
+    from datetime import datetime, timedelta
+
     with app.app_context():
         import logging
         import random
@@ -382,6 +384,16 @@ def _run_bili_incremental_check(app):
                     logger.warning(
                         'B站 增量检查: 线程 %s 超时 (>%ds)，跳过', t.name, THREAD_TIMEOUT
                     )
+
+    # 全部跑完 → 40 分钟后调度下一轮
+    app.scheduler.add_job(
+        func=lambda: _run_bili_incremental_check(app),
+        trigger='date',
+        run_date=datetime.now() + timedelta(minutes=40),
+        id='bili_incremental_check',
+        replace_existing=True,
+    )
+    app.logger.info('B站 增量检查完成，40 分钟后开始下一轮')
 
 
 if __name__ == '__main__':
