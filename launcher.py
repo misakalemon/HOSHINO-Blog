@@ -3,12 +3,17 @@ HOSHINO Launcher — Conda 环境管理 & Python 应用启动器 (WebView)
 
 基于 pywebview 构建，界面使用 HTML/CSS/JS，复用项目暗色粉紫主题。
 
+日志文件：logs/launcher.log（每日轮转，保留 30 天）
+日志级别：DEBUG / INFO / WARNING / ERROR
+
 打包为 EXE：
   pip install pywebview pyinstaller
   pyinstaller --onefile --windowed --name "HoshinoLauncher" launcher.py
 """
 
 import json
+import logging
+import logging.handlers
 import os
 import subprocess
 import sys
@@ -16,6 +21,32 @@ import threading
 from datetime import datetime
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# ── 日志系统 ──────────────────────────────────────
+LOG_DIR = os.path.join(BASE_DIR, 'logs')
+os.makedirs(LOG_DIR, exist_ok=True)
+LOG_FILE = os.path.join(LOG_DIR, 'launcher.log')
+
+LOG_FORMAT = '[%(asctime)s] %(levelname)-7s [%(threadName)s] %(message)s'
+LOG_DATE = '%m/%d %H:%M:%S'
+
+_logger = logging.getLogger('launcher')
+_logger.setLevel(logging.DEBUG)
+
+# 文件 handler（每日轮转，保留 30 天）
+_file_handler = logging.handlers.TimedRotatingFileHandler(
+    LOG_FILE, when='midnight', interval=1, backupCount=30,
+    encoding='utf-8'
+)
+_file_handler.setLevel(logging.DEBUG)
+_file_handler.setFormatter(logging.Formatter(LOG_FORMAT, LOG_DATE))
+_logger.addHandler(_file_handler)
+
+# 终端 handler（控制台输出）
+_console_handler = logging.StreamHandler()
+_console_handler.setLevel(logging.INFO)
+_console_handler.setFormatter(logging.Formatter(LOG_FORMAT, LOG_DATE))
+_logger.addHandler(_console_handler)
 
 # ── 应用配置 ──────────────────────────────────────
 APPS = [
@@ -156,9 +187,13 @@ class API:
         return 'ok'
 
 
-def _log(msg: str):
+def _log(msg: str, level: str = 'INFO'):
+    """统一日志输出：写入文件 + 控制台 + WebView 界面"""
     ts = datetime.now().strftime('%H:%M:%S')
     line = f'[{ts}] {msg}'
+    # 写入日志文件和控制台
+    getattr(_logger, level.lower(), _logger.info)('%s', msg)
+    # 推送到 WebView
     for cb in _log_callbacks:
         try:
             cb(line)
