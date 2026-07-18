@@ -1,3 +1,14 @@
+{#
+  Hero 粒子画像管理列表页
+  =======================
+  展示所有已上传的 PNG 画像，支持排序/状态查看/编辑/删除。
+  上传的画像会在首页被粒子引擎随机选中展示。
+
+  Template: admin/hero_image_list.html
+  Extends:  admin/base_admin.html
+  Context:
+    images — HeroImage 查询集（按 sort_order 排序）
+#}
 {% extends 'admin/base_admin.html' %}
 {% block title %}Hero 画像管理{% endblock %}
 {% block admin_content %}

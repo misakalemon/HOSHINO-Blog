@@ -498,7 +498,20 @@ class BiliCleanupConfig(db.Model):
 
 
 class HeroImage(db.Model):
-    """首页粒子画像（后台可上传多张，每次随机展示）。"""
+    """首页粒子画像模型。
+
+    __tablename__ = 'hero_images'
+
+    管理员通过后台上传透明背景 PNG 立绘，
+    首页每次刷新随机选择一张激活的画像，
+    由 particle-hero.js 引擎采样为粒子系统展示。
+
+    字段说明：
+      title      — 角色名（如"小鸟游星野"），仅后台展示用
+      image_url  — 图片文件的静态 URL（如 /static/uploads/hero/xxx.png）
+      is_active  — 是否在首页随机池中
+      sort_order — 排序权重
+    """
 
     __tablename__ = 'hero_images'
 

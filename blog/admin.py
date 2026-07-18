@@ -1413,7 +1413,13 @@ def bili_history_cleanup():
 @admin_bp.route('/hero-images')
 @admin_required
 def hero_image_list():
-    """Hero 粒子画像列表。"""
+    """Hero 粒子画像列表页。
+
+    展示所有上传的 PNG 画像，包含排序、启用状态、预览缩略图。
+    画像按 sort_order 升序排列。
+
+    Template: admin/hero_image_list.html
+    """
     images = HeroImage.query.order_by(HeroImage.sort_order).all()
     return render_template('admin/hero_image_list.html', images=images)
 
@@ -1421,7 +1427,13 @@ def hero_image_list():
 @admin_bp.route('/hero-images/new', methods=['GET', 'POST'])
 @admin_required
 def new_hero_image():
-    """新建 Hero 粒子画像。"""
+    """新建 Hero 粒子画像（上传 PNG）。
+
+    上传文件保存至 static/uploads/hero/，使用 UUID 命名避免冲突。
+    图片 URL 存入 HeroImage.image_url，供首页粒子引擎读取。
+
+    Template: admin/hero_image_form.html (editing=False)
+    """
     form = HeroImageForm()
     if form.validate_on_submit():
         file = form.image.data
@@ -1454,7 +1466,16 @@ def new_hero_image():
 @admin_bp.route('/hero-images/<int:id>/edit', methods=['GET', 'POST'])
 @admin_required
 def edit_hero_image(id):
-    """编辑 Hero 粒子画像。"""
+    """编辑 Hero 粒子画像。
+
+    可修改标题、排序、启用状态，也可上传新图片替换。
+    编辑时 image 字段为可选（留空保留原图）。
+
+    Args:
+        id: HeroImage ID
+
+    Template: admin/hero_image_form.html (editing=True)
+    """
     image = HeroImage.query.get_or_404(id)
     form = HeroImageForm(obj=image)
     form.image.validators = []
@@ -1487,7 +1508,13 @@ def edit_hero_image(id):
 @admin_bp.route('/hero-images/<int:id>/delete', methods=['POST'])
 @admin_required
 def delete_hero_image(id):
-    """删除 Hero 粒子画像。"""
+    """删除 Hero 粒子画像。
+
+    从数据库中删除记录（不删除物理文件，避免其他记录引用同一文件）。
+
+    Args:
+        id: HeroImage ID
+    """
     image = HeroImage.query.get_or_404(id)
     db.session.delete(image)
     db.session.commit()

@@ -1,3 +1,21 @@
+/**
+ * particle-hero.js — 首页 Hero 粒子画像引擎
+ *
+ * 工作流程：
+ *   1. 加载后台配置的 PNG 透明背景画像
+ *   2. 采样 RGBA 像素 → 生成 ~2 万粒子（移动端 ~1.6 万）
+ *   3. 粒子从画面外飞入 → 汇聚成画像轮廓（intro 动画）
+ *   4. 鼠标交互：拨开（斥力）+ 点击涟漪（burst）
+ *   5. 滚动页面 → 粒子从中心向外渐进散开
+ *   6. 按钮切换「散开/汇聚」模式，散开 8s 后自动汇聚
+ *   7. prefers-reduced-motion 降级：直接静态显示画像
+ *
+ * 性能优化：
+ *   - 超屏粒子跳过绘制
+ *   - 移动端粒子数减半
+ *   - 无 spark 高光层（移除冗余渲染）
+ *   - DPR 上限 1.6
+ */
 (function () {
   var canvas = document.getElementById('particleCanvas');
   if (!canvas) return;
@@ -22,7 +40,9 @@
   var MOUSE_R = 110, MOUSE_F = 2.4;
   var K_GATHER = 0.030, K_SCATTER = 0.0009;
   var DAMP_GATHER = 0.88, DAMP_SCATTER = 0.965;
+  var scrollRatio = 0;
 
+  // ── 窗口缩放：重设 Canvas 尺寸、重映射粒子目标位置 ──
   function resize() {
     DPR = Math.min(window.devicePixelRatio || 1, 1.6);
     W = window.innerWidth; H = window.innerHeight;
@@ -33,6 +53,7 @@
     buildMotes();
   }
 
+  // ── PNG 像素采样：以自适应步长提取非透明像素 ──
   function sampleImage(img) {
     var iw = img.naturalWidth, ih = img.naturalHeight;
     var off = document.createElement('canvas');
@@ -44,7 +65,8 @@
     var fg = 0;
     for (var i = 3; i < data.length; i += 64) if (data[i] > 140) fg++;
     var totalFg = fg * 16;
-    var step = Math.max(4, Math.min(9, Math.round(Math.sqrt(totalFg / 15000))));
+    var targetParticles = window.innerWidth < 900 ? 16000 : 20000;
+    var step = Math.max(2, Math.min(8, Math.round(Math.sqrt(totalFg / targetParticles))));
 
     var pts = [];
     for (var y = 0; y < ih; y += step) {
@@ -57,19 +79,21 @@
     sampleData = { pts: pts, iw: iw, ih: ih, step: step };
   }
 
+  // ── 计算画像在画面中的显示区域（居左/居中） ──
   function computeRect() {
     var iw = sampleData.iw, ih = sampleData.ih;
     var portrait = W >= 900;
-    var maxH = H * (portrait ? 0.82 : 0.55);
-    var maxW = W * (portrait ? 0.48 : 0.85);
+    var maxH = H * (portrait ? 0.95 : 0.70);
+    var maxW = W * (portrait ? 0.55 : 0.95);
     var s = Math.min(maxH / ih, maxW / iw);
     var dw = iw * s, dh = ih * s;
-    var ox = portrait ? W * 0.58 - dw / 2 : (W - dw) / 2;
-    var oy = portrait ? (H - dh) * 0.45 : H * 0.10;
+    var ox = portrait ? W * 0.55 - dw / 2 : (W - dw) / 2;
+    var oy = portrait ? (H - dh) * 0.40 : H * 0.10;
     var psize = Math.max(1.6, sampleData.step * s * 0.62);
     dispRect = { s: s, ox: ox, oy: oy, psize: psize };
   }
 
+  // ── 从采样点生成粒子数组（intro=true 时从画面外飞入） ──
   function buildParticles(intro) {
     var pts = sampleData.pts;
     var s = dispRect.s, ox = dispRect.ox, oy = dispRect.oy, psize = dispRect.psize;
@@ -98,6 +122,7 @@
     assemble = intro ? 0 : 1;
   }
 
+  // ── 窗口缩放后重新映射粒子的目标位置 ──
   function remapHomes() {
     computeRect();
     if (!particles.length) { buildParticles(true); return; }
@@ -113,6 +138,7 @@
     }
   }
 
+  // ── 背景浮游光点（环境粒子） ──
   var moteSprites = {};
   function makeSprite(color) {
     var c = document.createElement('canvas'); c.width = c.height = 64;
@@ -125,6 +151,7 @@
     return c;
   }
 
+  // ── 生成背景浮游光点 ──
   function buildMotes() {
     var palette = ['rgba(196,132,252,', 'rgba(255,138,174,', 'rgba(192,168,255,'];
     palette.forEach(function (c, i) { moteSprites[i] = makeSprite(c); });
@@ -148,10 +175,23 @@
   }, { passive: true });
   window.addEventListener('pointerleave', function () { mouse.active = false; });
 
+  window.addEventListener('scroll', function () {
+    var h = window.innerHeight;
+    scrollRatio = Math.min(window.scrollY / h, 1.0);
+    if (window.scrollY > h * 0.85) {
+      canvas.style.pointerEvents = 'none';
+      canvas.style.opacity = Math.max(0, 1 - (window.scrollY - h * 0.85) / (h * 0.15));
+    } else {
+      canvas.style.pointerEvents = 'auto';
+      canvas.style.opacity = 1;
+    }
+  }, { passive: true });
+
   canvas.addEventListener('pointerdown', function (e) {
     bursts.push({ x: e.clientX, y: e.clientY, t: 0 });
   });
 
+  // ── 切换散开/汇聚模式 ──
   function setMode(m) {
     mode = m;
     var btn = document.getElementById('btnScatter');
@@ -170,10 +210,12 @@
     }
   }
 
+  // ── 全局暴露的切换按钮回调 ──
   function toggleScatter() {
     setMode(mode === 'gather' ? 'scatter' : 'gather');
   }
 
+  // ── 物理模拟步进：引力/斥力/阻尼/鼠标交互/涟漪/滚动 ──
   function step() {
     t++;
     assemble = Math.min(1, assemble + 0.006);
@@ -210,6 +252,16 @@
         p.vx += (Math.random() - 0.5) * 0.5;
         p.vy += (Math.random() - 0.5) * 0.5;
       }
+      if (scrollRatio > 0.01) {
+        var cx = dispRect.ox + sampleData.iw * dispRect.s / 2;
+        var cy = dispRect.oy + sampleData.ih * dispRect.s / 2;
+        var sdx = p.hx - cx, sdy = p.hy - cy;
+        var sd = Math.sqrt(sdx * sdx + sdy * sdy);
+        if (sd > 1) {
+          var f = scrollRatio * 2.0;
+          p.vx += sdx / sd * f; p.vy += sdy / sd * f;
+        }
+      }
       if (mouse.active) {
         var dx = p.x - mouse.x, dy = p.y - mouse.y;
         var d2 = dx * dx + dy * dy;
@@ -224,6 +276,7 @@
     }
   }
 
+  // ── 渲染帧：背景浮游光点（lighter 混合）+ 粒子画像 ──
   function draw() {
     ctx.clearRect(0, 0, W, H);
 
@@ -243,24 +296,17 @@
 
     for (var i = 0; i < particles.length; i++) {
       var p = particles[i];
+      if (p.x < -10 || p.x > W + 10 || p.y < -10 || p.y > H + 10) continue;
       if (p.tw) ctx.globalAlpha = 0.55 + 0.45 * Math.sin(t * 0.09 + p.ph * 3);
       ctx.fillStyle = p.c;
       ctx.fillRect(p.x, p.y, p.s, p.s);
       if (p.tw) ctx.globalAlpha = 1;
     }
 
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = 'rgba(196,132,252,0.10)';
-    for (var i = 0; i < particles.length; i++) {
-      var p = particles[i];
-      if (!p.spark) continue;
-      var g = 0.5 + 0.5 * Math.sin(t * 0.05 + p.ph * 5);
-      if (g < 0.55) continue;
-      ctx.fillRect(p.x - p.s * 0.6, p.y - p.s * 0.6, p.s * 2.2, p.s * 2.2);
-    }
-    ctx.globalCompositeOperation = 'source-over';
+
   }
 
+  // ── 主循环 ──
   function loop() {
     step();
     draw();

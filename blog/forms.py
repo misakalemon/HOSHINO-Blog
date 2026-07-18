@@ -132,7 +132,14 @@ class ContactForm(FlaskForm):
 
 
 class HeroImageForm(FlaskForm):
-    """Hero 粒子画像编辑表单。"""
+    """Hero 粒子画像编辑表单。
+
+    字段：
+      title      — 角色名，可选
+      image      — PNG 文件上传，新增时必填，编辑时可空
+      sort_order — 排序权重（越小越靠前）
+      is_active  — 是否在首页随机展示
+    """
     title = StringField('角色名 (可选)', validators=[Optional(), Length(max=128)])
     image = FileField('图片文件 (PNG，透明背景)', validators=[DataRequired()])
     sort_order = IntegerField('排序', default=0)

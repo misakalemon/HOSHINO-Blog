@@ -249,6 +249,8 @@ def index():
     import random
     from blog.models import HeroImage
 
+    # 从激活的 Hero 画像中随机选一张，供粒子引擎渲染
+    # 无画像时 hero_image=None，模板降级为纯文字 hero
     hero_images = HeroImage.query.filter_by(is_active=True).order_by(HeroImage.sort_order).all()
     hero_image = random.choice(hero_images).image_url if hero_images else None
 
