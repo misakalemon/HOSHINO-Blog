@@ -414,7 +414,7 @@ def main():
     _log('Hoshino Launcher 已启动')
     _log(f'工作目录: {BASE_DIR}')
 
-    webview.start(debug=False, private_mode=False)
+    webview.start(gui='mshtml', debug=False, private_mode=False)
 
 
 if __name__ == '__main__':
