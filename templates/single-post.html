@@ -88,7 +88,7 @@
                 !function(){
                   var f = document.getElementById('pageFrame');
                   var a4 = 297/210;
-                  f.srcdoc = {{ post.html_content|tojson }};
+                  f.srcdoc = {{ post.html_content|strip_html_wrapper|tojson }};
                   function resize() {
                     try {
                       var d = f.contentDocument || f.contentWindow.document;

@@ -49,6 +49,22 @@ blueprints = {
     'admin_bp': admin_bp,
 }
 
+import re
+
+@blog_bp.app_template_filter('strip_html_wrapper')
+def strip_html_wrapper(html):
+    """移除 HTML 外层包装标签（DOCTYPE/html/head/body），只保留内部内容。
+    
+    srcdoc 中使用时避免"页面套页面"的视觉效果。
+    """
+    if not html:
+        return html
+    html = re.sub(r'<!DOCTYPE[^>]*>', '', html, flags=re.IGNORECASE)
+    html = re.sub(r'</?html[^>]*>', '', html, flags=re.IGNORECASE)
+    html = re.sub(r'</?head[^>]*>', '', html, flags=re.IGNORECASE)
+    html = re.sub(r'</?body[^>]*>', '', html, flags=re.IGNORECASE)
+    return html
+
 
 def init_db(app):
     """初始化数据库：建表 + 自动迁移 + 创建默认管理员。
