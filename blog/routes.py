@@ -325,8 +325,10 @@ def single_post(slug):
 
     comment_count = post.published_comments()
 
+    template = 'html-post.html' if post.html_content else 'single-post.html'
+
     return render_template(
-        'single-post.html',
+        template,
         post=post,
         rendered_content=rendered_content,
         categories=categories,

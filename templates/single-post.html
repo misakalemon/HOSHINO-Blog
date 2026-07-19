@@ -77,13 +77,31 @@
                 </div>
                 {% endif %}
 
-                <!-- 文章正文：HTML 页面（Shadow DOM 隔离渲染）或 Markdown 渲染 -->
-                {% if post.html_content %}
-                <div id="htmlRoot"></div>
+                <!-- 文章正文：HTML 文件（iframe）或 Markdown 渲染 -->
+                {% if post.html_file_url %}
+                <style>
+                  #pageFrame { width:100%; border:none; border-radius:12px; display:block; background:rgba(255,255,255,0.02); }
+                  #pageFrame.loaded { background:transparent; }
+                </style>
+                <iframe src="{{ url_for('static', filename=post.html_file_url) }}"
+                        id="pageFrame" title="{{ post.title }}" loading="lazy"></iframe>
                 <script>
-                  document.getElementById('htmlRoot').attachShadow({mode:'open'}).innerHTML = {{ post.html_content|tojson }};
+                !function(){
+                  var f = document.getElementById('pageFrame');
+                  var a4 = 297/210;
+                  function resize() {
+                    try {
+                      var d = f.contentDocument || f.contentWindow.document;
+                      var ch = Math.max(d.documentElement.scrollHeight, d.body.scrollHeight);
+                      var a4h = f.offsetWidth * a4;
+                      f.style.height = Math.max(ch, a4h) + 'px';
+                      f.classList.add('loaded');
+                    } catch(e) {}
+                  }
+                  f.addEventListener('load', resize);
+                  window.addEventListener('resize', function(){ requestAnimationFrame(resize); });
+                }();
                 </script>
-                {% elif post.html_file_url %}
                 <style>
                   #pageFrame { width:100%; border:none; border-radius:12px; display:block; background:rgba(255,255,255,0.02); }
                   #pageFrame.loaded { background:transparent; }

@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+{% block title %}{{ post.title }} - Hoshino{% endblock %}
+{% block content %}
+
+<div class="content" style="padding-top:80px;max-width:1600px">
+    <div class="row">
+        <div class="col-8">
+            <div class="post-detail">
+                <div style="text-align:center;margin-bottom:24px">
+                    <div style="display:flex;align-items:center;justify-content:center;gap:24px;margin-bottom:16px">
+                        <button onclick="history.back()" class="back-btn">← 返回</button>
+                        <h1 style="font-size:2.2rem;font-weight:250;letter-spacing:-0.02em;line-height:1.2;color:rgba(255,255,255,0.9);margin:0;flex-shrink:0">{{ post.title }}</h1>
+                        <button onclick="window.print()" class="back-btn" style="font-size:0.8rem">🖨️ 打印</button>
+                    </div>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px">
+                        {% for cat in post.categories %}
+                        <span class="pill-light">{{ cat.name }}</span>
+                        {% endfor %}
+                    </div>
+                    <div style="color:rgba(255,255,255,0.25);font-size:0.8rem;margin-top:12px">
+                        <span>{{ format_date(post.created_at, '%Y/%m/%d') }}</span>
+                        <span style="margin-left:12px">{{ comment_count }} 评论</span>
+                    </div>
+                </div>
+
+                {{ post.html_content|inline_html|safe }}
+
+                <div class="author-box">
+                    <img src="{{ url_for('blog.thumbnail', path=post.author.avatar, w=120) }}" alt="{{ post.author.display_name or post.author.username }}" loading="lazy" decoding="async">
+                    <div class="info">
+                        <h5>{{ post.author.display_name or post.author.username }}</h5>
+                        <p>{{ post.author.bio or '博主' }}</p>
+                    </div>
+                </div>
+
+                <div class="comments-section" id="comments">
+                    <h4>评论 · {{ comment_count }}</h4>
+                    {% set approved_comments = post.comments.filter_by(is_approved=True).all() %}
+                    {% for comment in approved_comments %}
+                    <div class="comment-item">
+                        <div>
+                            <span class="comment-author">{{ comment.author_name }}</span>
+                            <span class="comment-date">{{ format_date(comment.created_at, '%Y/%m/%d') }}</span>
+                        </div>
+                        <p class="comment-text">{{ comment.content }}</p>
+                    </div>
+                    {% else %}
+                    <p class="no-comments">暂无评论，快来抢沙发！</p>
+                    {% endfor %}
+
+                    <div class="comment-form">
+                        <h5>发表评论</h5>
+                        <form method="POST" action="{{ url_for('blog.single_post', slug=post.slug) }}#comments">
+                            {{ form.hidden_tag() if form else '' }}
+                            <div class="form-group">
+                                <input type="text" name="author_name" placeholder="您的姓名" required>
+                            </div>
+                            <div class="form-group">
+                                <input type="email" name="author_email" placeholder="邮箱（选填）">
+                            </div>
+                            <div class="form-group">
+                                <textarea name="content" rows="4" placeholder="您的评论" required></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary">发表评论</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-4">
+            <aside class="sidebar">
+                {% include '_sidebar.html' %}
+            </aside>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='vendor/prism-bundle.min.js') }}" defer></script>
+<script>document.addEventListener('DOMContentLoaded',function(){Prism.highlightAll();});</script>
+
+{% endblock %}

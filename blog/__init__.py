@@ -49,6 +49,96 @@ blueprints = {
     'admin_bp': admin_bp,
 }
 
+import re
+
+
+@blog_bp.app_template_filter('inline_html')
+def inline_html(html):
+    """剥离外壳 + CSS 作用域化 + 包裹 #html-scope，实现内联渲染无样式冲突。"""
+    if not html:
+        return html
+    # 1. 剥离 DOCTYPE/html/head/body 外壳标签（保留内部全部内容）
+    html = re.sub(r'<!DOCTYPE[^>]*>', '', html, flags=re.IGNORECASE)
+    html = re.sub(r'</?html[^>]*>', '', html, flags=re.IGNORECASE)
+    html = re.sub(r'</?head[^>]*>', '', html, flags=re.IGNORECASE)
+    html = re.sub(r'</?body[^>]*>', '', html, flags=re.IGNORECASE)
+
+    # 2. 作用域化 <style> 内的 CSS
+    def _scope_css(match):
+        css = match.group(1)
+        SEL = '#html-scope'
+
+        def _scope_one(sel):
+            s = sel.strip()
+            if not s or SEL in s:
+                return s
+            if s in ('body', 'html'):
+                return SEL
+            if s == '*':
+                return f'{SEL} *'
+            return f'{SEL} {s}'
+
+        # 按顶级花括号深度拆块
+        chunks = []
+        depth = 0
+        buf = []
+        for ch in css:
+            buf.append(ch)
+            if ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0:
+                    chunks.append(''.join(buf).strip())
+                    buf = []
+        if buf and ''.join(buf).strip():
+            chunks.append(''.join(buf).strip())
+
+        out = []
+        for chunk in chunks:
+            if not chunk:
+                continue
+            if chunk.startswith('@'):
+                if chunk.startswith(('@keyframes', '@font-face')):
+                    out.append(chunk)
+                    continue
+                m = re.match(r'(@[^{]+)\{(.*)\}$', chunk, re.DOTALL)
+                if m:
+                    head = m.group(1)
+                    inner = m.group(2)
+                    scoped = re.sub(
+                        r'([^{}]+)(\s*\{)',
+                        lambda m: ', '.join(
+                            _scope_one(s) for s in m.group(1).split(',')
+                        )
+                        + m.group(2),
+                        inner,
+                    )
+                    out.append(f'{head}{{{scoped}}}')
+                else:
+                    out.append(chunk)
+            elif '{' in chunk:
+                idx = chunk.index('{')
+                sel_part = chunk[:idx]
+                rest = chunk[idx:]
+                scoped_sel = ', '.join(
+                    _scope_one(s) for s in sel_part.split(',')
+                )
+                out.append(f'{scoped_sel} {rest}')
+            else:
+                out.append(chunk)
+        return '\n'.join(out)
+
+    html = re.sub(
+        r'<style[^>]*>(.*?)</style>',
+        lambda m: '<style>' + _scope_css(m) + '</style>',
+        html,
+        flags=re.DOTALL,
+    )
+
+    # 3. 包裹作用域容器
+    return f'<div id="html-scope">{html}</div>'
+
 
 def init_db(app):
     """初始化数据库：建表 + 自动迁移 + 创建默认管理员。
