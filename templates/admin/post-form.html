@@ -596,28 +596,22 @@ function rteImportFile() {
     } else if (ext === 'html' || ext === 'htm') {
       var reader = new FileReader();
       reader.onload = function(e) {
-        fetch('{{ url_for("admin.upload_html_page") }}', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'text/html; charset=utf-8',
-            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-          },
-          body: e.target.result
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-          if (data.url) {
-            document.getElementById('htmlFileName').textContent = file.name;
-            document.getElementById('htmlPlaceholder').style.display = 'none';
-            document.getElementById('htmlPreview').style.display = 'block';
-            document.getElementById('htmlRemove').style.display = 'block';
-            document.getElementById('importedHtmlUrl').value = data.url;
-            var existing = document.getElementById('htmlExisting');
-            if (existing) existing.style.display = 'none';
-            showToast('HTML 页面已导入');
-          }
-        })
-        .catch(function() { showToast('HTML 导入失败', 'error'); });
+        var textarea = document.getElementById('htmlContentInput');
+        if (!textarea) {
+          textarea = document.createElement('textarea');
+          textarea.id = 'htmlContentInput';
+          textarea.name = 'html_content';
+          textarea.style.display = 'none';
+          document.getElementById('post-form').appendChild(textarea);
+        }
+        textarea.value = e.target.result;
+        document.getElementById('htmlFileName').textContent = file.name + ' (' + (file.size/1024).toFixed(0) + 'KB)';
+        document.getElementById('htmlPlaceholder').style.display = 'none';
+        document.getElementById('htmlPreview').style.display = 'block';
+        document.getElementById('htmlRemove').style.display = 'block';
+        var existing = document.getElementById('htmlExisting');
+        if (existing) existing.style.display = 'none';
+        showToast('HTML 页面已导入');
       };
       reader.readAsText(file, 'UTF-8');
     }
@@ -1032,6 +1026,25 @@ function removeCover(e) {
   var removeHidden = document.getElementById('removeHtmlHidden');
   var existing = document.getElementById('htmlExisting');
 
+  // 编辑模式：加载已有 HTML 源码
+  var existingContent = {{ (form.html_content.data or '')|tojson }};
+  if (existingContent) {
+    var ta = document.getElementById('htmlContentInput');
+    if (!ta) {
+      ta = document.createElement('textarea');
+      ta.id = 'htmlContentInput';
+      ta.name = 'html_content';
+      ta.style.display = 'none';
+      document.getElementById('post-form').appendChild(ta);
+    }
+    ta.value = existingContent;
+    fileName.textContent = 'HTML 源码 (' + (existingContent.length/1024).toFixed(0) + 'KB)';
+    placeholder.style.display = 'none';
+    preview.style.display = 'block';
+    removeBtn.style.display = 'block';
+    if (existing) existing.style.display = 'none';
+  }
+
   if (!input) return;
   input.addEventListener('change', function() {
     var file = this.files[0];
@@ -1052,6 +1065,8 @@ function removeHtmlFile(e) {
   document.getElementById('htmlRemove').style.display = 'none';
   document.getElementById('removeHtmlHidden').value = '1';
   document.getElementById('importedHtmlUrl').value = '';
+  var hc = document.getElementById('htmlContentInput');
+  if (hc) hc.value = '';
   var existing = document.getElementById('htmlExisting');
   if (existing) existing.style.display = 'none';
 }

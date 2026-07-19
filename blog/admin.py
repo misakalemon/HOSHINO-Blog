@@ -546,17 +546,19 @@ def new_post():
         form.content.data = bleach.clean(
             form.content.data or '', tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS
         )
-        # ── HTML 文件上传（导入按钮 / 表单上传） ─
+        # ── HTML 源码写入（优先于文件上传） ────
+        html_content = request.form.get('html_content', '')
         html_file_url = request.form.get('imported_html_url', '')
-        if not html_file_url:
-            html_file = form.html_file.data
-            if html_file and html_file.filename and (html_file.filename.endswith('.html') or html_file.filename.endswith('.htm')):
-                ext = os.path.splitext(html_file.filename)[1]
-                filename = str(uuid.uuid4()) + ext
-                save_dir = os.path.join(current_app.static_folder, 'uploads', 'pages')
-                os.makedirs(save_dir, exist_ok=True)
-                html_file.save(os.path.join(save_dir, filename))
-                html_file_url = os.path.join('uploads', 'pages', filename)
+        if not html_content:
+            if not html_file_url:
+                html_file = form.html_file.data
+                if html_file and html_file.filename and (html_file.filename.endswith('.html') or html_file.filename.endswith('.htm')):
+                    ext = os.path.splitext(html_file.filename)[1]
+                    filename = str(uuid.uuid4()) + ext
+                    save_dir = os.path.join(current_app.static_folder, 'uploads', 'pages')
+                    os.makedirs(save_dir, exist_ok=True)
+                    html_file.save(os.path.join(save_dir, filename))
+                    html_file_url = os.path.join('uploads', 'pages', filename)
 
         post = Post(
             title=form.title.data,
@@ -564,6 +566,7 @@ def new_post():
             summary=form.summary.data,
             content=form.content.data,
             cover_image=form.cover_image.data or '',
+            html_content=html_content,
             html_file_url=html_file_url,
             author_id=current_user.id,
             is_published=form.is_published.data,
@@ -674,12 +677,22 @@ def edit_post(id):
                 if os.path.isfile(old_path):
                     os.remove(old_path)
             post.html_file_url = imported_url
+        # ── HTML 源码处理（优先于文件） ────────
+        html_content = request.form.get('html_content', '')
+        if html_content:
+            post.html_content = html_content
+            if post.html_file_url:
+                old_path = os.path.join(current_app.static_folder, post.html_file_url)
+                if os.path.isfile(old_path):
+                    os.remove(old_path)
+                post.html_file_url = ''
         elif request.form.get('remove_html'):
             if post.html_file_url:
                 old_path = os.path.join(current_app.static_folder, post.html_file_url)
                 if os.path.isfile(old_path):
                     os.remove(old_path)
             post.html_file_url = ''
+            post.html_content = ''
         else:
             html_file = form.html_file.data
             if html_file and html_file.filename and (html_file.filename.endswith('.html') or html_file.filename.endswith('.htm')):

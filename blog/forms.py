@@ -62,6 +62,7 @@ class PostForm(FlaskForm):
     categories = SelectMultipleField('分类（最多15个）', coerce=int, validators=[Optional()])
     cover_image = StringField('封面图片 URL', validators=[Optional()])                 # 封面图链接，选填
     html_file = FileField('上传 HTML 文件', validators=[Optional()])                   # 自定义 HTML 页面文件，选填
+    html_content = TextAreaField('HTML 源码', validators=[Optional()])                 # 自定义 HTML 源码（优先于 html_file）
     is_published = BooleanField('发布')                                                # 是否公开可见
 
 

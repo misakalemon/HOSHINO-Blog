@@ -127,6 +127,8 @@ def init_db(app):
 
         _migrate_post_html_file_url(app)
 
+        _migrate_post_html_content(app)
+
 
 def _migrate_post_html_file_url(app):
     """迁移：为 Post 表添加 html_file_url 字段。"""
@@ -144,6 +146,24 @@ def _migrate_post_html_file_url(app):
         except Exception as e:
             db.session.rollback()
             app.logger.warning('迁移: 添加 posts.html_file_url 列失败: %s', e)
+
+
+def _migrate_post_html_content(app):
+    """迁移：为 Post 表添加 html_content 列。"""
+    engine = db.get_engine()
+    dialect = engine.dialect.name
+    if dialect != 'mysql':
+        return
+    inspector = db.inspect(engine)
+    cols = {c['name'] for c in inspector.get_columns('posts')}
+    if 'html_content' not in cols:
+        try:
+            db.session.execute(db.text("ALTER TABLE posts ADD COLUMN html_content MEDIUMTEXT"))
+            db.session.commit()
+            app.logger.info('迁移: 已添加 posts.html_content 列')
+        except Exception as e:
+            db.session.rollback()
+            app.logger.warning('迁移: 添加 posts.html_content 列失败: %s', e)
 
 
 def _migrate_category_to_many2many(app):
