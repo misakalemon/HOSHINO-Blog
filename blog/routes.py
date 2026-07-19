@@ -30,7 +30,7 @@ import threading
 import time
 
 import bleach
-from flask import Response, abort, current_app, redirect, render_template, request, url_for
+from flask import Response, abort, current_app, make_response, redirect, render_template, request, url_for
 
 from sqlalchemy import func
 from sqlalchemy.orm import load_only
@@ -82,17 +82,36 @@ ALLOWED_TAGS = [
     'u',
     's',
 ]
-ALLOWED_ATTRS = {
-    'a': ['href', 'title', 'rel'],
-    'img': ['src', 'alt', 'title', 'style'],
-    'th': ['align'],
-    'td': ['align'],
-    'code': ['class'],
-    'span': ['class', 'style'],
-    'div': ['class'],
-    'pre': ['class'],
-    'abbr': ['title'],
+def _is_safe_url(url):
+    """Reject javascript: and similar dangerous URL protocols."""
+    if not url:
+        return False
+    return not ''.join(url.strip().lower().split()).startswith('javascript:')
+
+
+_ATTRS_BY_TAG = {
+    'a': ('href', 'title', 'rel'),
+    'img': ('src', 'alt', 'title', 'style'),
+    'th': ('align',),
+    'td': ('align',),
+    'code': ('class',),
+    'span': ('class', 'style'),
+    'div': ('class',),
+    'pre': ('class',),
+    'abbr': ('title',),
 }
+
+
+def _allow_attrs(tag, name, value):
+    allowed = _ATTRS_BY_TAG.get(tag)
+    if not allowed:
+        return False
+    if tag == 'a' and name == 'href':
+        return _is_safe_url(value)
+    return name in allowed
+
+
+ALLOWED_ATTRS = _allow_attrs
 
 # 缩略图缓存版本号（修改此值使旧缓存自动失效并清理）
 THUMB_CACHE_VER = 'v3'
@@ -273,6 +292,45 @@ def index():
 # ═══════════════════════════════════════════════
 # 文章详情页
 # ═══════════════════════════════════════════════
+@blog_bp.route('/post/<slug>/html-frame')
+def post_html_frame(slug):
+    """HTML 报告独立帧路由：返回原始 html_content，无父页面上下文。
+
+    专为 sandboxed iframe 设计，返回纯 HTML + 严格安全头。
+    不包含 allow-same-origin，iframe 内脚本无法访问父页面 DOM/Cookie。
+    """
+    post = (
+        Post.query.options(db.joinedload(Post.author), db.joinedload(Post.categories))
+        .filter_by(slug=slug, is_published=True)
+        .first_or_404()
+    )
+    if not post.html_content:
+        abort(404)
+
+    AUTO_HEIGHT_SCRIPT = '''<script>
+(function(){function h(){parent.postMessage({type:'hoshino-iframe-resize',height:document.documentElement.scrollHeight},'*')}
+window.addEventListener('load',h);window.addEventListener('resize',h);
+new ResizeObserver(h).observe(document.body);})();
+</script>'''
+
+    return Response(
+        post.html_content + AUTO_HEIGHT_SCRIPT,
+        mimetype='text/html',
+        headers={
+            'Content-Security-Policy': (
+                "default-src 'self'; "
+                "script-src 'unsafe-inline' 'unsafe-eval'; "
+                "style-src 'unsafe-inline' 'self'; "
+                "img-src 'self' data:; "
+                "connect-src 'self'; "
+                "frame-src 'none'; "
+                "object-src 'none'"
+            ),
+            'X-Content-Type-Options': 'nosniff',
+        }
+    )
+
+
 @blog_bp.route('/post/<slug>', methods=['GET', 'POST'])
 def single_post(slug):
     """文章详情：渲染 Markdown 正文 + 评论列表 + 评论表单。

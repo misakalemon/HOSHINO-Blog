@@ -23,7 +23,12 @@
                     </div>
                 </div>
 
-                {{ post.html_content|inline_html|safe }}
+                <iframe
+                  sandbox="allow-scripts"
+                  src="{{ url_for('blog.post_html_frame', slug=post.slug) }}"
+                  style="width:100%;height:0;min-height:400px;border:none;border-radius:12px;"
+                  title="{{ post.title }}"
+                ></iframe>
 
                 <div class="author-box">
                     <img src="{{ url_for('blog.thumbnail', path=post.author.avatar, w=120) }}" alt="{{ post.author.display_name or post.author.username }}" loading="lazy" decoding="async">
@@ -78,5 +83,13 @@
 
 <script src="{{ url_for('static', filename='vendor/prism-bundle.min.js') }}" defer></script>
 <script>document.addEventListener('DOMContentLoaded',function(){Prism.highlightAll();});</script>
+<script>
+window.addEventListener('message',function(e){
+  if(e.data&&e.data.type==='hoshino-iframe-resize'){
+    var iframe=document.querySelector('iframe');
+    if(iframe)iframe.style.height=e.data.height+'px';
+  }
+});
+</script>
 
 {% endblock %}

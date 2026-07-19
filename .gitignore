@@ -28,6 +28,7 @@ HarmonyOS_Icons.zip
 
 # Logs
 blog/logs/
+logs/
 
 # Uploads (用户上传文件)
 static/uploads/*
@@ -40,4 +41,8 @@ static/.thumb_cache/
 blog/bilibili/cookies.txt
 blog/bilibili/.bili_credential.json
 blog/bilibili/.bili_cookies.txt
+
+# Root B站凭证
+.bili_cookies.txt
+.bili_credential.json
 

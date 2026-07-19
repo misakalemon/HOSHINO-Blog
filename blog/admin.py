@@ -66,7 +66,10 @@ from flask import (
 )
 from flask_login import current_user, login_required, login_user, logout_user
 
+import bleach
+
 from . import admin_bp
+from .routes import ALLOWED_TAGS, ALLOWED_ATTRS
 from .forms import (
     CategoryForm,
     FeaturedCardForm,
@@ -490,75 +493,23 @@ def new_post():
             flash('最多选择15个分类', 'error')
             return render_template('admin/post-form.html', form=form, editing=False)
         # ── XSS 过滤：净化富文本编辑器内容 ─────
-        import bleach
-
-        ALLOWED_TAGS = [
-            'p',
-            'br',
-            'strong',
-            'em',
-            'a',
-            'code',
-            'pre',
-            'span',
-            'div',
-            'h1',
-            'h2',
-            'h3',
-            'h4',
-            'h5',
-            'h6',
-            'ul',
-            'ol',
-            'li',
-            'blockquote',
-            'table',
-            'thead',
-            'tbody',
-            'tr',
-            'th',
-            'td',
-            'img',
-            'hr',
-            'sup',
-            'sub',
-            'del',
-            'ins',
-            'kbd',
-            'samp',
-            'var',
-            'abbr',
-            'dfn',
-            'u',
-            's',
-        ]
-        ALLOWED_ATTRS = {
-            'a': ['href', 'title', 'rel'],
-            'img': ['src', 'alt', 'title', 'style'],
-            'th': ['align'],
-            'td': ['align'],
-            'code': ['class'],
-            'span': ['class', 'style'],
-            'div': ['class'],
-            'pre': ['class'],
-            'abbr': ['title'],
-        }
         form.content.data = bleach.clean(
             form.content.data or '', tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS
         )
-        # ── HTML 源码写入（优先于文件上传） ────
+        # ── HTML 源码写入（优先于文件上传，原始存储，沙箱 iframe 隔离） ─
         html_content = request.form.get('html_content', '')
-        html_file_url = request.form.get('imported_html_url', '')
         if not html_content:
-            if not html_file_url:
-                html_file = form.html_file.data
-                if html_file and html_file.filename and (html_file.filename.endswith('.html') or html_file.filename.endswith('.htm')):
-                    ext = os.path.splitext(html_file.filename)[1]
-                    filename = str(uuid.uuid4()) + ext
-                    save_dir = os.path.join(current_app.static_folder, 'uploads', 'pages')
-                    os.makedirs(save_dir, exist_ok=True)
-                    html_file.save(os.path.join(save_dir, filename))
-                    html_file_url = os.path.join('uploads', 'pages', filename)
+            html_file = form.html_file.data
+            if html_file and html_file.filename and (html_file.filename.endswith('.html') or html_file.filename.endswith('.htm')):
+                raw = html_file.read()
+                try:
+                    raw = raw.decode('utf-8')
+                except UnicodeDecodeError:
+                    try:
+                        raw = raw.decode('gbk')
+                    except UnicodeDecodeError:
+                        raw = raw.decode('utf-8', errors='replace')
+                html_content = raw
 
         post = Post(
             title=form.title.data,
@@ -567,7 +518,7 @@ def new_post():
             content=form.content.data,
             cover_image=form.cover_image.data or '',
             html_content=html_content,
-            html_file_url=html_file_url,
+            html_file_url='',
             author_id=current_user.id,
             is_published=form.is_published.data,
         )
@@ -613,99 +564,32 @@ def edit_post(id):
             flash('最多选择15个分类', 'error')
             return render_template('admin/post-form.html', form=form, editing=True, post=post)
         # ── XSS 过滤：净化富文本编辑器内容 ─────
-        import bleach
-
-        ALLOWED_TAGS = [
-            'p',
-            'br',
-            'strong',
-            'em',
-            'a',
-            'code',
-            'pre',
-            'span',
-            'div',
-            'h1',
-            'h2',
-            'h3',
-            'h4',
-            'h5',
-            'h6',
-            'ul',
-            'ol',
-            'li',
-            'blockquote',
-            'table',
-            'thead',
-            'tbody',
-            'tr',
-            'th',
-            'td',
-            'img',
-            'hr',
-            'sup',
-            'sub',
-            'del',
-            'ins',
-            'kbd',
-            'samp',
-            'var',
-            'abbr',
-            'dfn',
-            'u',
-            's',
-        ]
-        ALLOWED_ATTRS = {
-            'a': ['href', 'title', 'rel'],
-            'img': ['src', 'alt', 'title', 'style'],
-            'th': ['align'],
-            'td': ['align'],
-            'code': ['class'],
-            'span': ['class', 'style'],
-            'div': ['class'],
-            'pre': ['class'],
-            'abbr': ['title'],
-        }
         form.content.data = bleach.clean(
             form.content.data or '', tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS
         )
-        # ── HTML 文件处理（导入按钮 / 表单上传 / 移除） ─
-        imported_url = request.form.get('imported_html_url', '')
-        if imported_url:
-            if post.html_file_url:
-                old_path = os.path.join(current_app.static_folder, post.html_file_url)
-                if os.path.isfile(old_path):
-                    os.remove(old_path)
-            post.html_file_url = imported_url
-        # ── HTML 源码处理（优先于文件） ────────
+        # ── HTML 源码处理（优先于文件，原始存储，沙箱 iframe 隔离） ─
         html_content = request.form.get('html_content', '')
         if html_content:
             post.html_content = html_content
-            if post.html_file_url:
-                old_path = os.path.join(current_app.static_folder, post.html_file_url)
-                if os.path.isfile(old_path):
-                    os.remove(old_path)
-                post.html_file_url = ''
         elif request.form.get('remove_html'):
-            if post.html_file_url:
-                old_path = os.path.join(current_app.static_folder, post.html_file_url)
-                if os.path.isfile(old_path):
-                    os.remove(old_path)
-            post.html_file_url = ''
             post.html_content = ''
         else:
             html_file = form.html_file.data
             if html_file and html_file.filename and (html_file.filename.endswith('.html') or html_file.filename.endswith('.htm')):
-                ext = os.path.splitext(html_file.filename)[1]
-                filename = str(uuid.uuid4()) + ext
-                save_dir = os.path.join(current_app.static_folder, 'uploads', 'pages')
-                os.makedirs(save_dir, exist_ok=True)
-                html_file.save(os.path.join(save_dir, filename))
-                if post.html_file_url:
-                    old_path = os.path.join(current_app.static_folder, post.html_file_url)
-                    if os.path.isfile(old_path):
-                        os.remove(old_path)
-                post.html_file_url = os.path.join('uploads', 'pages', filename)
+                raw = html_file.read()
+                try:
+                    raw = raw.decode('utf-8')
+                except UnicodeDecodeError:
+                    try:
+                        raw = raw.decode('gbk')
+                    except UnicodeDecodeError:
+                        raw = raw.decode('utf-8', errors='replace')
+                post.html_content = raw
+        if post.html_file_url:
+            old_path = os.path.join(current_app.static_folder, post.html_file_url)
+            if os.path.isfile(old_path):
+                os.remove(old_path)
+            post.html_file_url = ''
 
         post.title = form.title.data
         post.slug = form.slug.data
@@ -1115,7 +999,9 @@ def profile():
             current_user.set_password(form.password.data)
 
         # ── 关于页面内容 ──────────────────────
-        current_user.about_content = form.about_content.data or ''
+        current_user.about_content = bleach.clean(
+            form.about_content.data or '', tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS
+        )
 
         db.session.commit()
         flash('个人资料已更新', 'success')
@@ -1208,30 +1094,6 @@ def upload_image():
     )
     url = url_for('static', filename='uploads/' + filename)
     return jsonify({'url': url})
-
-
-@admin_bp.route('/upload-html-page', methods=['POST'])
-@author_required
-def upload_html_page():
-    """HTML 页面文件上传接口（供导入文件按钮调用）。
-
-    接收纯文本 HTML 内容，存入 static/uploads/pages/<uuid>.html。
-    返回 JSON: {"url": "uploads/pages/xxx.html"}
-
-    Returns:
-        JSON: 成功 → {"url": "..."}
-              失败 → {"error": "..."}, 400
-    """
-    html_content = request.get_data(as_text=True)
-    if not html_content or not html_content.strip():
-        return jsonify({'error': '内容为空'}), 400
-    filename = str(uuid.uuid4()) + '.html'
-    save_dir = os.path.join(current_app.static_folder, 'uploads', 'pages')
-    os.makedirs(save_dir, exist_ok=True)
-    with open(os.path.join(save_dir, filename), 'w', encoding='utf-8') as f:
-        f.write(html_content)
-    logger.info('HTML 页面上传: %s (%dKB)', filename, len(html_content) // 1024)
-    return jsonify({'url': os.path.join('uploads', 'pages', filename)})
 
 
 # ═══════════════════════════════════════════════

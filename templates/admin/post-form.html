@@ -252,11 +252,11 @@
                     <div class="form-group">
                         <label>自定义 HTML 页面</label>
                         <div class="cover-upload" id="htmlUpload" onclick="document.getElementById('htmlInput').click()" style="min-height:100px;padding:20px">
-                            <input type="file" id="htmlInput" accept=".html,.htm">
+                            <input type="file" id="htmlInput" name="html_file" accept=".html,.htm">
                             <div class="placeholder" id="htmlPlaceholder">
                                 <svg viewBox="0 0 24 24" fill="none" style="width:32px;height:32px;opacity:0.4;margin:0 auto 8px;display:block"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M14 2v6h6" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M9 15l-3 3 3 3" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 15l3 3-3 3" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
                                 上传 HTML 文件
-                                <div style="font-size:12px;margin-top:4px;color:var(--text-muted)">上传后正文编辑器内容将不显示</div>
+                                <div style="font-size:12px;margin-top:4px;color:var(--text-muted)">上传后内容将经安全过滤存入数据库</div>
                             </div>
                             <div id="htmlPreview" style="display:none;text-align:center">
                                 <svg viewBox="0 0 24 24" fill="none" style="width:32px;height:32px;opacity:0.6;margin:0 auto 8px;display:block"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M14 2v6h6" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M9 15l-3 3 3 3" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 15l3 3-3 3" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -265,12 +265,11 @@
                             <button type="button" class="cover-remove" id="htmlRemove" style="display:none" onclick="removeHtmlFile(event)"> 移除</button>
                             <input type="hidden" name="remove_html" id="removeHtmlHidden" value="">
                         </div>
-                        <div style="font-size:12px;margin-top:4px;color:var(--text-muted)">仅支持 .html / .htm 文件</div>
+                        <div style="font-size:12px;margin-top:4px;color:var(--text-muted)">仅支持 .html / .htm 文件，内容将直接存入数据库并以沙箱 iframe 渲染，脚本安全隔离</div>
                         {% if editing and post and post.html_file_url %}
                         <div id="htmlExisting" style="font-size:12px;margin-top:6px;color:var(--accent-green)">当前文件: {{ post.html_file_url.split('/')[-1] }}</div>
                         {% endif %}
-                        <input type="hidden" name="imported_html_url" id="importedHtmlUrl" value="">
-                    </div>
+                        </div>
                 </div>
                 <div style="flex:1;min-width:280px">
                     <div class="form-group">
@@ -1064,7 +1063,6 @@ function removeHtmlFile(e) {
   document.getElementById('htmlPreview').style.display = 'none';
   document.getElementById('htmlRemove').style.display = 'none';
   document.getElementById('removeHtmlHidden').value = '1';
-  document.getElementById('importedHtmlUrl').value = '';
   var hc = document.getElementById('htmlContentInput');
   if (hc) hc.value = '';
   var existing = document.getElementById('htmlExisting');
