@@ -42,6 +42,7 @@
                 <td>
                     <a href="{{ url_for('admin.edit_hero_image', id=img.id) }}" class="btn-pill">编辑</a>
                     <form method="POST" action="{{ url_for('admin.delete_hero_image', id=img.id) }}" style="display:inline" onsubmit="return confirm('确定删除这张画像？')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button class="btn-pill" style="background:rgba(242,90,90,0.1);color:#f25a5a;border-color:rgba(242,90,90,0.2)">删除</button>
                     </form>
                 </td>

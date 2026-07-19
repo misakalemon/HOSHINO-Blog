@@ -215,6 +215,43 @@ class API:
         _notify_status()
         return 'ok'
 
+_api = API()
+
+
+@eel.expose
+def get_envs():
+    return _api.get_envs()
+
+
+@eel.expose
+def get_apps():
+    return _api.get_apps()
+
+
+@eel.expose
+def get_status():
+    return _api.get_status()
+
+
+@eel.expose
+def get_next_schedule():
+    return _api.get_next_schedule()
+
+
+@eel.expose
+def start_app(name):
+    return _api.start_app(name)
+
+
+@eel.expose
+def stop_app(name):
+    return _api.stop_app(name)
+
+
+@eel.expose
+def stop_all():
+    return _api.stop_all()
+
 
 def _log(msg: str, level: str = 'INFO'):
     """统一日志输出：写入文件 + 控制台 + WebView 界面"""
