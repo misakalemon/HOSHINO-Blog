@@ -125,6 +125,26 @@ def init_db(app):
         # ── 迁移 BiliSubscription.token 唯一约束 → 普通索引 ─
         _migrate_bili_sub_token_index(app)
 
+        _migrate_post_html_file_url(app)
+
+
+def _migrate_post_html_file_url(app):
+    """迁移：为 Post 表添加 html_file_url 字段。"""
+    engine = db.get_engine()
+    dialect = engine.dialect.name
+    if dialect != 'mysql':
+        return
+    inspector = db.inspect(engine)
+    cols = {c['name'] for c in inspector.get_columns('posts')}
+    if 'html_file_url' not in cols:
+        try:
+            db.session.execute(db.text("ALTER TABLE posts ADD COLUMN html_file_url VARCHAR(512) DEFAULT ''"))
+            db.session.commit()
+            app.logger.info('迁移: 已添加 posts.html_file_url 列')
+        except Exception as e:
+            db.session.rollback()
+            app.logger.warning('迁移: 添加 posts.html_file_url 列失败: %s', e)
+
 
 def _migrate_category_to_many2many(app):
     """自动迁移：v1 (category_id 单分类) → v2 (post_categories 多对多)。

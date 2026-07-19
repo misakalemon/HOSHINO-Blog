@@ -211,7 +211,7 @@
                     <button type="button" onclick="rteImage('left')" title="图片左浮动" style="font-size:10px">◀ 🖼</button>
                     <button type="button" onclick="rteImage('center')" title="图片居中" style="font-size:10px">≡ 🖼</button>
                     <button type="button" onclick="rteImage('right')" title="图片右浮动" style="font-size:10px">🖼 ▶</button>
-                    <button type="button" onclick="rteImportFile()" title="导入文件 (Markdown/PDF/DOCX)">📄</button>
+                    <button type="button" onclick="rteImportFile()" title="导入文件 (Markdown/PDF/DOCX/HTML)">📄</button>
                     <span class="sep"></span>
                     <button type="button" onclick="rte('removeFormat')" title="清除格式">✕</button>
                 </div>
@@ -231,8 +231,8 @@
     <!-- ===== Step 3: 封面与发布 ===== -->
     <div class="step-panel" id="panel3">
         <div class="admin-card">
-            <div class="admin-row">
-                <div style="flex:1.2;min-width:0">
+            <div class="admin-row" style="flex-wrap:wrap;gap:16px">
+                <div style="flex:1.2;min-width:280px">
                     <div class="form-group">
                         <label>封面图片</label>
                         <div class="cover-upload" id="coverUpload" onclick="document.getElementById('coverInput').click()">
@@ -248,7 +248,31 @@
                         </div>
                     </div>
                 </div>
-                <div style="flex:1">
+                <div style="flex:1;min-width:280px">
+                    <div class="form-group">
+                        <label>自定义 HTML 页面</label>
+                        <div class="cover-upload" id="htmlUpload" onclick="document.getElementById('htmlInput').click()" style="min-height:100px;padding:20px">
+                            <input type="file" id="htmlInput" accept=".html,.htm">
+                            <div class="placeholder" id="htmlPlaceholder">
+                                <svg viewBox="0 0 24 24" fill="none" style="width:32px;height:32px;opacity:0.4;margin:0 auto 8px;display:block"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M14 2v6h6" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M9 15l-3 3 3 3" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 15l3 3-3 3" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                上传 HTML 文件
+                                <div style="font-size:12px;margin-top:4px;color:var(--text-muted)">上传后正文编辑器内容将不显示</div>
+                            </div>
+                            <div id="htmlPreview" style="display:none;text-align:center">
+                                <svg viewBox="0 0 24 24" fill="none" style="width:32px;height:32px;opacity:0.6;margin:0 auto 8px;display:block"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M14 2v6h6" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M9 15l-3 3 3 3" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 15l3 3-3 3" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                <div id="htmlFileName" style="font-size:13px;color:var(--text-secondary);word-break:break-all"></div>
+                            </div>
+                            <button type="button" class="cover-remove" id="htmlRemove" style="display:none" onclick="removeHtmlFile(event)"> 移除</button>
+                            <input type="hidden" name="remove_html" id="removeHtmlHidden" value="">
+                        </div>
+                        <div style="font-size:12px;margin-top:4px;color:var(--text-muted)">仅支持 .html / .htm 文件</div>
+                        {% if editing and post and post.html_file_url %}
+                        <div id="htmlExisting" style="font-size:12px;margin-top:6px;color:var(--accent-green)">当前文件: {{ post.html_file_url.split('/')[-1] }}</div>
+                        {% endif %}
+                        <input type="hidden" name="imported_html_url" id="importedHtmlUrl" value="">
+                    </div>
+                </div>
+                <div style="flex:1;min-width:280px">
                     <div class="form-group">
                         <label>分类（可多选）</label>
                         <div class="glow-select-wrap" data-multiple>
@@ -554,7 +578,7 @@ function loadPrismLang(lang) {
 function rteImportFile() {
   var input = document.createElement('input');
   input.type = 'file';
-  input.accept = '.md,.markdown,.pdf,.docx';
+  input.accept = '.md,.markdown,.pdf,.docx,.html,.htm';
   input.onchange = function() {
     var file = input.files[0];
     if (!file) return;
@@ -569,6 +593,33 @@ function rteImportFile() {
       importPDFStyled(file);
     } else if (ext === 'docx') {
       importDOCX(file);
+    } else if (ext === 'html' || ext === 'htm') {
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        fetch('{{ url_for("admin.upload_html_page") }}', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'text/html; charset=utf-8',
+            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+          },
+          body: e.target.result
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.url) {
+            document.getElementById('htmlFileName').textContent = file.name;
+            document.getElementById('htmlPlaceholder').style.display = 'none';
+            document.getElementById('htmlPreview').style.display = 'block';
+            document.getElementById('htmlRemove').style.display = 'block';
+            document.getElementById('importedHtmlUrl').value = data.url;
+            var existing = document.getElementById('htmlExisting');
+            if (existing) existing.style.display = 'none';
+            showToast('HTML 页面已导入');
+          }
+        })
+        .catch(function() { showToast('HTML 导入失败', 'error'); });
+      };
+      reader.readAsText(file, 'UTF-8');
     }
   };
   input.click();
@@ -970,6 +1021,40 @@ function removeCover(e) {
     highlightEditorCode();
   });
 })();
+
+// === HTML 文件上传 ===
+(function() {
+  var input = document.getElementById('htmlInput');
+  var placeholder = document.getElementById('htmlPlaceholder');
+  var preview = document.getElementById('htmlPreview');
+  var fileName = document.getElementById('htmlFileName');
+  var removeBtn = document.getElementById('htmlRemove');
+  var removeHidden = document.getElementById('removeHtmlHidden');
+  var existing = document.getElementById('htmlExisting');
+
+  if (!input) return;
+  input.addEventListener('change', function() {
+    var file = this.files[0];
+    if (!file) return;
+    fileName.textContent = file.name;
+    placeholder.style.display = 'none';
+    preview.style.display = 'block';
+    removeBtn.style.display = 'block';
+    removeHidden.value = '';
+    if (existing) existing.style.display = 'none';
+  });
+})();
+function removeHtmlFile(e) {
+  e.stopPropagation();
+  document.getElementById('htmlInput').value = '';
+  document.getElementById('htmlPlaceholder').style.display = 'block';
+  document.getElementById('htmlPreview').style.display = 'none';
+  document.getElementById('htmlRemove').style.display = 'none';
+  document.getElementById('removeHtmlHidden').value = '1';
+  document.getElementById('importedHtmlUrl').value = '';
+  var existing = document.getElementById('htmlExisting');
+  if (existing) existing.style.display = 'none';
+}
 
 </script>
 {% endblock %}

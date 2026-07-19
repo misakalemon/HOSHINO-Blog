@@ -546,16 +546,28 @@ def new_post():
         form.content.data = bleach.clean(
             form.content.data or '', tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS
         )
+        # ── HTML 文件上传（导入按钮 / 表单上传） ─
+        html_file_url = request.form.get('imported_html_url', '')
+        if not html_file_url:
+            html_file = form.html_file.data
+            if html_file and html_file.filename and (html_file.filename.endswith('.html') or html_file.filename.endswith('.htm')):
+                ext = os.path.splitext(html_file.filename)[1]
+                filename = str(uuid.uuid4()) + ext
+                save_dir = os.path.join(current_app.static_folder, 'uploads', 'pages')
+                os.makedirs(save_dir, exist_ok=True)
+                html_file.save(os.path.join(save_dir, filename))
+                html_file_url = os.path.join('uploads', 'pages', filename)
+
         post = Post(
             title=form.title.data,
             slug=form.slug.data,
             summary=form.summary.data,
             content=form.content.data,
             cover_image=form.cover_image.data or '',
-            author_id=current_user.id,  # 当前登录的管理员为作者
+            html_file_url=html_file_url,
+            author_id=current_user.id,
             is_published=form.is_published.data,
         )
-        # ── 多对多关联：设置分类 ─────────────
         post.categories = Category.query.filter(Category.id.in_(form.categories.data)).all()
         db.session.add(post)
         db.session.commit()
@@ -654,7 +666,34 @@ def edit_post(id):
         form.content.data = bleach.clean(
             form.content.data or '', tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS
         )
-        # ── 更新字段 ────────────────────────
+        # ── HTML 文件处理（导入按钮 / 表单上传 / 移除） ─
+        imported_url = request.form.get('imported_html_url', '')
+        if imported_url:
+            if post.html_file_url:
+                old_path = os.path.join(current_app.static_folder, post.html_file_url)
+                if os.path.isfile(old_path):
+                    os.remove(old_path)
+            post.html_file_url = imported_url
+        elif request.form.get('remove_html'):
+            if post.html_file_url:
+                old_path = os.path.join(current_app.static_folder, post.html_file_url)
+                if os.path.isfile(old_path):
+                    os.remove(old_path)
+            post.html_file_url = ''
+        else:
+            html_file = form.html_file.data
+            if html_file and html_file.filename and (html_file.filename.endswith('.html') or html_file.filename.endswith('.htm')):
+                ext = os.path.splitext(html_file.filename)[1]
+                filename = str(uuid.uuid4()) + ext
+                save_dir = os.path.join(current_app.static_folder, 'uploads', 'pages')
+                os.makedirs(save_dir, exist_ok=True)
+                html_file.save(os.path.join(save_dir, filename))
+                if post.html_file_url:
+                    old_path = os.path.join(current_app.static_folder, post.html_file_url)
+                    if os.path.isfile(old_path):
+                        os.remove(old_path)
+                post.html_file_url = os.path.join('uploads', 'pages', filename)
+
         post.title = form.title.data
         post.slug = form.slug.data
         post.summary = form.summary.data
@@ -662,7 +701,6 @@ def edit_post(id):
         post.cover_image = form.cover_image.data or ''
         post.is_published = form.is_published.data
         post.updated_at = datetime.datetime.utcnow()
-        # ── 更新多对多分类关联 ───────────────
         post.categories = Category.query.filter(Category.id.in_(form.categories.data)).all()
         db.session.commit()
         _invalidate_sidebar_cache()
@@ -691,7 +729,11 @@ def delete_post(id):
     post = Post.query.get_or_404(id)
     if not current_user.is_editor and post.author_id != current_user.id:
         abort(403)
-    # 先删除关联评论，避免外键约束
+    # 删除关联的 HTML 文件（如有）
+    if post.html_file_url:
+        html_path = os.path.join(current_app.static_folder, post.html_file_url)
+        if os.path.isfile(html_path):
+            os.remove(html_path)
     Comment.query.filter_by(post_id=post.id).delete()
     db.session.delete(post)
     db.session.commit()
@@ -1153,6 +1195,30 @@ def upload_image():
     )
     url = url_for('static', filename='uploads/' + filename)
     return jsonify({'url': url})
+
+
+@admin_bp.route('/upload-html-page', methods=['POST'])
+@author_required
+def upload_html_page():
+    """HTML 页面文件上传接口（供导入文件按钮调用）。
+
+    接收纯文本 HTML 内容，存入 static/uploads/pages/<uuid>.html。
+    返回 JSON: {"url": "uploads/pages/xxx.html"}
+
+    Returns:
+        JSON: 成功 → {"url": "..."}
+              失败 → {"error": "..."}, 400
+    """
+    html_content = request.get_data(as_text=True)
+    if not html_content or not html_content.strip():
+        return jsonify({'error': '内容为空'}), 400
+    filename = str(uuid.uuid4()) + '.html'
+    save_dir = os.path.join(current_app.static_folder, 'uploads', 'pages')
+    os.makedirs(save_dir, exist_ok=True)
+    with open(os.path.join(save_dir, filename), 'w', encoding='utf-8') as f:
+        f.write(html_content)
+    logger.info('HTML 页面上传: %s (%dKB)', filename, len(html_content) // 1024)
+    return jsonify({'url': os.path.join('uploads', 'pages', filename)})
 
 
 # ═══════════════════════════════════════════════

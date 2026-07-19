@@ -57,10 +57,11 @@ class PostForm(FlaskForm):
     title = StringField('标题', validators=[DataRequired(), Length(max=256)])          # 文章标题，必填
     slug = StringField('链接标识 (URL)', validators=[DataRequired(), Length(max=256)]) # URL 友好标识，必填
     summary = TextAreaField('摘要', validators=[Optional()])                           # 文章摘要，选填
-    content = TextAreaField('正文 (Markdown)', validators=[DataRequired()])            # Markdown 格式正文，必填
+    content = TextAreaField('正文 (Markdown)', validators=[Optional()])                 # Markdown 格式正文（HTML 页面模式可不填）
     # 多选分类（最多 15 个，choices 在视图函数中动态填充）
     categories = SelectMultipleField('分类（最多15个）', coerce=int, validators=[Optional()])
     cover_image = StringField('封面图片 URL', validators=[Optional()])                 # 封面图链接，选填
+    html_file = FileField('上传 HTML 文件', validators=[Optional()])                   # 自定义 HTML 页面文件，选填
     is_published = BooleanField('发布')                                                # 是否公开可见
 
 

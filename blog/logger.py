@@ -147,8 +147,9 @@ def log_request(response):
     作为 Flask after_request 处理器执行，在每次请求完成后调用。
     同时负责：
       - 给 text/* 类型响应添加 charset=utf-8（统一编码）
-      - 添加 X-Content-Type-Options: nosniff（安全头）
       - 按状态码级别记录日志（≥500 → error, ≥400 → warning, 其他 → info）
+
+    安全响应头由 app.py 的 add_security_headers 统一设置。
 
     Args:
         response: Flask Response 对象
@@ -160,19 +161,6 @@ def log_request(response):
     content_type = response.content_type or ''
     if 'charset' not in content_type and 'text/' in content_type:
         response.headers['Content-Type'] = content_type + '; charset=utf-8'
-    # ── 安全响应头 ──────────────────────────────
-    response.headers['X-Content-Type-Options'] = 'nosniff'
-    response.headers['X-Frame-Options'] = 'DENY'
-    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
-    response.headers['Content-Security-Policy'] = (
-        "default-src 'self';"
-        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;"
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net;"
-        "img-src 'self' data: https:;"
-        "font-src 'self' https://fonts.gstatic.com;"
-        "connect-src 'self';"
-        "frame-ancestors 'none'"
-    )
 
     logger = logging.getLogger()
     # 静态文件和图标不记录，减少日志噪音
