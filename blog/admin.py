@@ -1436,9 +1436,14 @@ def new_hero_image():
     """
     form = HeroImageForm()
     if form.validate_on_submit():
+        raw_url = form.image_url.data or ''
+        if raw_url and not raw_url.startswith('/static/'):
+            image_url = url_for('static', filename=raw_url)
+        else:
+            image_url = raw_url
         image = HeroImage(
             title=form.title.data or '',
-            image_url=form.image_url.data or '',
+            image_url=image_url,
             sort_order=form.sort_order.data or 0,
             is_active=form.is_active.data,
         )
@@ -1478,7 +1483,11 @@ def edit_hero_image(id):
         image.sort_order = form.sort_order.data or 0
         image.is_active = form.is_active.data
         if form.image_url.data:
-            image.image_url = form.image_url.data
+            raw_url = form.image_url.data
+            if raw_url and not raw_url.startswith('/static/'):
+                image.image_url = url_for('static', filename=raw_url)
+            else:
+                image.image_url = raw_url
         db.session.commit()
         flash('Hero 画像已更新', 'success')
         return redirect(url_for('admin.hero_image_list'))
