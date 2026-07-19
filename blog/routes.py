@@ -313,15 +313,25 @@ window.addEventListener('load',h);window.addEventListener('resize',h);
 new ResizeObserver(h).observe(document.body);})();
 </script>'''
 
+    content = post.html_content
+    # 在 </body> 前注入自适应高度脚本（浏览器忽略 </html> 后的内容）
+    if '</body>' in content:
+        content = content.replace('</body>', AUTO_HEIGHT_SCRIPT + '</body>', 1)
+    elif '</html>' in content:
+        content = content.replace('</html>', AUTO_HEIGHT_SCRIPT + '</html>', 1)
+    else:
+        content += AUTO_HEIGHT_SCRIPT
+
     return Response(
-        post.html_content + AUTO_HEIGHT_SCRIPT,
+        content,
         mimetype='text/html',
         headers={
             'Content-Security-Policy': (
                 "default-src 'self'; "
-                "script-src 'unsafe-inline' 'unsafe-eval'; "
-                "style-src 'unsafe-inline' 'self'; "
-                "img-src 'self' data:; "
+                "script-src 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; "
+                "style-src 'unsafe-inline' 'self' https://fonts.googleapis.com https://cdnjs.cloudflare.com; "
+                "img-src 'self' data: https:; "
+                "font-src 'self' https://fonts.gstatic.com; "
                 "connect-src 'self'; "
                 "frame-src 'none'; "
                 "object-src 'none'"
