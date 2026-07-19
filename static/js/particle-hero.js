@@ -143,9 +143,9 @@
   var vertexBuffer = null;
   var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  var MOUSE_R = 110, MOUSE_F = 1.2;
-  var K_GATHER = 0.015, K_SCATTER = 0.0009;
-  var DAMP_GATHER = 0.82, DAMP_SCATTER = 0.965;
+  var MOUSE_R = 110, MOUSE_F = 0.5;
+  var K_GATHER = 0.006, K_SCATTER = 0.0009;
+  var DAMP_GATHER = 0.75, DAMP_SCATTER = 0.965;
   var scrollRatio = 0;
 
   // ── 窗口缩放 ─────────────────────────────────
@@ -354,7 +354,7 @@
   // ── 物理模拟步进 ─────────────────────────────
   function step() {
     t++;
-    assemble = Math.min(1, assemble + 0.003);
+    assemble = Math.min(1, assemble + 0.001);
     var ease = 1 - Math.pow(1 - assemble, 3);
     var K = mode === 'gather' ? (0.004 + (K_GATHER - 0.004) * ease) : K_SCATTER;
     var DAMP = mode === 'gather' ? DAMP_GATHER : DAMP_SCATTER;
