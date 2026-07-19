@@ -136,12 +136,15 @@ class HeroImageForm(FlaskForm):
 
     字段：
       title      — 角色名，可选
-      image      — PNG 文件上传，新增时必填，编辑时可空
+      image_url  — 裁剪上传后的图片路径（由前端 bindCropUpload 填充）
       sort_order — 排序权重（越小越靠前）
       is_active  — 是否在首页随机展示
+
+    注意：图片通过前端裁剪 → upload_image API → WebP 重编码后存入，
+    表单本身不处理文件上传。
     """
     title = StringField('角色名 (可选)', validators=[Optional(), Length(max=128)])
-    image = FileField('图片文件 (PNG，透明背景)', validators=[DataRequired()])
+    image_url = StringField('图片 URL', validators=[Optional(), Length(max=512)])
     sort_order = IntegerField('排序', default=0)
     is_active = BooleanField('启用')
 

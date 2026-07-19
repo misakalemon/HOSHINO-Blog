@@ -16,11 +16,11 @@
     <h1>Hero 粒子画像</h1>
     <p>上传透明背景 PNG 作为首页粒子画像素材，每次刷新随机展示一张</p>
     <div style="margin-top:12px">
-        <a href="{{ url_for('admin.new_hero_image') }}" class="btn-pill">+ 新增画像</a>
+        <a href="{{ url_for('admin.new_hero_image') }}" class="btn btn-primary">+ 新增画像</a>
     </div>
 </div>
-<div class="admin-table" style="margin-top:20px">
-    <table>
+<div class="admin-table-wrapper" style="margin-top:20px">
+    <table class="admin-table">
         <thead>
             <tr>
                 <th>排序</th>
@@ -40,10 +40,10 @@
                 <td>{{ '启用' if img.is_active else '禁用' }}</td>
                 <td>{{ img.created_at.strftime('%Y-%m-%d') if img.created_at else '-' }}</td>
                 <td>
-                    <a href="{{ url_for('admin.edit_hero_image', id=img.id) }}" class="btn-pill">编辑</a>
+                    <a href="{{ url_for('admin.edit_hero_image', id=img.id) }}" class="btn btn-primary btn-sm">编辑</a>
                     <form method="POST" action="{{ url_for('admin.delete_hero_image', id=img.id) }}" style="display:inline" onsubmit="return confirm('确定删除这张画像？')">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button class="btn-pill" style="background:rgba(242,90,90,0.1);color:#f25a5a;border-color:rgba(242,90,90,0.2)">删除</button>
+                        <button class="btn btn-danger btn-sm">删除</button>
                     </form>
                 </td>
             </tr>

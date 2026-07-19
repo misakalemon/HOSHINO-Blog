@@ -1427,25 +1427,18 @@ def hero_image_list():
 @admin_bp.route('/hero-images/new', methods=['GET', 'POST'])
 @admin_required
 def new_hero_image():
-    """新建 Hero 粒子画像（上传 PNG）。
+    """新建 Hero 粒子画像。
 
-    上传文件保存至 static/uploads/hero/，使用 UUID 命名避免冲突。
-    图片 URL 存入 HeroImage.image_url，供首页粒子引擎读取。
+    图片通过前端裁剪 → upload_image API 处理后传入 URL，
+    此路由仅负责入库，不处理文件。
 
     Template: admin/hero_image_form.html (editing=False)
     """
     form = HeroImageForm()
     if form.validate_on_submit():
-        file = form.image.data
-        ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'png'
-        filename = f'hero_{uuid.uuid4().hex}.{ext}'
-        upload_dir = os.path.join(current_app.static_folder, 'uploads', 'hero')
-        os.makedirs(upload_dir, exist_ok=True)
-        path = os.path.join(upload_dir, filename)
-        file.save(path)
         image = HeroImage(
             title=form.title.data or '',
-            image_url=url_for('static', filename=f'uploads/hero/{filename}'),
+            image_url=form.image_url.data or '',
             sort_order=form.sort_order.data or 0,
             is_active=form.is_active.data,
         )
@@ -1468,8 +1461,9 @@ def new_hero_image():
 def edit_hero_image(id):
     """编辑 Hero 粒子画像。
 
-    可修改标题、排序、启用状态，也可上传新图片替换。
-    编辑时 image 字段为可选（留空保留原图）。
+    可修改标题、排序、启用状态、图片。
+    图片通过前端裁剪 → upload_image API 处理后传入 URL，
+    此处仅读取 image_url 字段更新记录，有值则替换，无值保留原图。
 
     Args:
         id: HeroImage ID
@@ -1478,20 +1472,13 @@ def edit_hero_image(id):
     """
     image = HeroImage.query.get_or_404(id)
     form = HeroImageForm(obj=image)
-    form.image.validators = []
+    form.image_url.validators = []
     if form.validate_on_submit():
         image.title = form.title.data or ''
         image.sort_order = form.sort_order.data or 0
         image.is_active = form.is_active.data
-        file = form.image.data
-        if file:
-            ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'png'
-            filename = f'hero_{uuid.uuid4().hex}.{ext}'
-            upload_dir = os.path.join(current_app.static_folder, 'uploads', 'hero')
-            os.makedirs(upload_dir, exist_ok=True)
-            path = os.path.join(upload_dir, filename)
-            file.save(path)
-            image.image_url = url_for('static', filename=f'uploads/hero/{filename}')
+        if form.image_url.data:
+            image.image_url = form.image_url.data
         db.session.commit()
         flash('Hero 画像已更新', 'success')
         return redirect(url_for('admin.hero_image_list'))

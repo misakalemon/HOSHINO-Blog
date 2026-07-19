@@ -1,8 +1,8 @@
 {#
   Hero 粒子画像新增/编辑表单页
   =============================
-  上传透明背景 PNG，推荐宽度 400-800px。
-  新增时 image 字段必填，编辑时可选（留空则不更新图片）。
+  图片通过前端裁剪 → upload_image API 处理后传入 URL，
+  此处仅提供文件选择和裁剪交互，不再直接处理文件上传。
 
   Template: admin/hero_image_form.html
   Extends:  admin/base_admin.html
@@ -12,31 +12,85 @@
 #}
 {% extends 'admin/base_admin.html' %}
 {% block title %}{{ '编辑' if editing else '新增' }} Hero 画像{% endblock %}
+{% block extra_head %}
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<style>
+.icon-upload { border:2px dashed var(--border-subtle); border-radius:16px; padding:24px; text-align:center; cursor:pointer; transition:all 0.3s; position:relative; min-height:100px; display:flex; align-items:center; justify-content:center; touch-action:manipulation; }
+.icon-upload:hover { border-color:var(--accent); background:rgba(108,66,209,0.03); }
+.icon-upload.has-image { padding:0; border-style:solid; }
+.icon-upload img { max-width:100%; max-height:120px; border-radius:12px; display:block; }
+.icon-upload input { position:absolute;left:-9999px;opacity:0;width:1px;height:1px;pointer-events:none; }
+.icon-upload .placeholder { color:var(--text-muted); font-size:13px; }
+.icon-remove { position:absolute; top:6px; right:6px; background:rgba(255,45,120,0.8); color:#fff; border:none; border-radius:6px; padding:2px 10px; font-size:11px; cursor:pointer; display:none; }
+.icon-upload.has-image .icon-remove { display:block; }
+</style>
+{% endblock %}
 {% block admin_content %}
-<div class="page-header">
-    <h1>{{ '编辑' if editing else '新增' }} Hero 粒子画像</h1>
-    <p>上传透明背景 PNG 立绘，建议尺寸 400-800px 宽</p>
+<div class="admin-header">
+    <h3>{{ '编辑' if editing else '新增' }} Hero 粒子画像</h3>
+    <a href="{{ url_for('admin.hero_image_list') }}" class="btn btn-ghost">← 返回</a>
 </div>
-<form method="POST" enctype="multipart/form-data" style="max-width:500px;margin-top:20px">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div style="margin-bottom:16px">
-        <label style="display:block;font-size:0.85rem;color:rgba(255,255,255,0.5);margin-bottom:6px">角色名 (可选)</label>
-        {{ form.title(class='form-control', placeholder='例: 小鸟游星野') }}
-    </div>
-    <div style="margin-bottom:16px">
-        <label style="display:block;font-size:0.85rem;color:rgba(255,255,255,0.5);margin-bottom:6px">图片文件 (PNG)</label>
-        {{ form.image(class='form-control', accept='.png,image/png') }}
-    </div>
-    <div style="margin-bottom:16px">
-        <label style="display:block;font-size:0.85rem;color:rgba(255,255,255,0.5);margin-bottom:6px">排序</label>
-        {{ form.sort_order(class='form-control', type='number') }}
-    </div>
-    <div style="margin-bottom:16px">
-        <label>{{ form.is_active() }} 启用</label>
-    </div>
-    <div style="display:flex;gap:10px">
-        <button type="submit" class="btn-pill">{{ '保存' if editing else '创建' }}</button>
-        <a href="{{ url_for('admin.hero_image_list') }}" class="btn-pill" style="background:rgba(255,255,255,0.02)">取消</a>
-    </div>
-</form>
+<div class="admin-card">
+    <form method="POST">
+        {{ form.hidden_tag() }}
+        <div class="form-group">
+            <label>角色名 (可选)</label>
+            {{ form.title(class='form-control', placeholder='例: 小鸟游星野') }}
+        </div>
+        <div class="form-group">
+            <label>角色立绘</label>
+            <div class="icon-upload" id="heroUpload" onclick="document.getElementById('heroImageInput').click()">
+                <input type="file" id="heroImageInput" accept="image/*">
+                <input type="hidden" name="image_url" id="imageUrlHidden" value="{{ form.image_url.data or '' }}">
+                <div class="placeholder" id="heroPlaceholder">
+                    <div style="font-size:28px;margin-bottom:6px;opacity:0.4">🖼️</div>
+                    点击上传图片<br><span style="font-size:11px;color:var(--text-muted)">支持 JPG / PNG / WebP</span>
+                </div>
+                <div id="heroPreview" style="display:none"></div>
+                <button type="button" class="icon-remove" id="heroRemove" onclick="removeHeroImage(event)">✕ 移除</button>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>排序（数字越小越靠前）</label>
+            {{ form.sort_order(class='form-control', type='number') }}
+        </div>
+        <div class="form-group">
+            <label class="glow-checkbox">
+                {{ form.is_active() }}
+                <span class="cb-box"></span>
+                <span>启用</span>
+            </label>
+        </div>
+        <button type="submit" class="btn btn-primary">{{ '更新' if editing else '创建' }}</button>
+    </form>
+</div>
+
+<script>
+(function() {
+  var existingUrl = '{{ form.image_url.data or "" }}';
+  if (existingUrl) {
+    var url = existingUrl.startsWith('/static/') ? existingUrl : '/static/' + existingUrl;
+    document.getElementById('heroPreview').innerHTML = '<img src="' + url + '" alt="hero">';
+    document.getElementById('heroPreview').style.display = 'block';
+    document.getElementById('heroPlaceholder').style.display = 'none';
+    document.getElementById('heroUpload').classList.add('has-image');
+  }
+})();
+
+(function() {
+  var input = document.getElementById('heroImageInput');
+  if (!input) return;
+  bindCropUpload('heroImageInput', '{{ url_for("admin.upload_image") }}', '#imageUrlHidden', '#heroPreview');
+})();
+
+function removeHeroImage(e) {
+  e.stopPropagation();
+  document.getElementById('imageUrlHidden').value = '';
+  document.getElementById('heroPreview').innerHTML = '';
+  document.getElementById('heroPreview').style.display = 'none';
+  document.getElementById('heroPlaceholder').style.display = 'block';
+  document.getElementById('heroUpload').classList.remove('has-image');
+  document.getElementById('heroImageInput').value = '';
+}
+</script>
 {% endblock %}
