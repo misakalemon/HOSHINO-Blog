@@ -15,6 +15,7 @@ HOSHINO Blog — 应用配置
 import os
 import json
 import secrets
+import urllib.parse
 from datetime import timedelta
 from dotenv import load_dotenv
 
@@ -47,12 +48,31 @@ def _load_secret_keys():
 
 
 def _save_secret_keys(keys):
-    """将密钥列表持久化到文件。"""
+    """原子写入密钥列表到文件（临时文件 + rename，防崩溃）。"""
+    import tempfile
+    tmp = None
     try:
-        with open(SECRET_KEYS_FILE, 'w') as f:
-            json.dump(keys, f)
-    except OSError:
-        pass
+        tmp = tempfile.NamedTemporaryFile(
+            mode='w', dir=os.path.dirname(SECRET_KEYS_FILE),
+            prefix='.secret_keys_tmp_', delete=False, encoding='utf-8'
+        )
+        json.dump(keys, tmp)
+        tmp.flush()
+        os.fsync(tmp.fileno())
+        tmp.close()
+        tmp = None
+        os.replace(tmp.name, SECRET_KEYS_FILE) if tmp else os.replace(
+            tmp.name, SECRET_KEYS_FILE
+        )
+    except OSError as e:
+        import logging
+        logging.getLogger(__name__).warning('写入密钥文件失败: %s', e)
+    finally:
+        if tmp is not None:
+            try:
+                os.unlink(tmp.name)
+            except OSError:
+                pass
 
 
 def _ensure_initial_key():
@@ -105,8 +125,11 @@ def _build_database_uri():
     dbname = os.environ.get('DB_NAME', 'hoshino_blog')
 
     # 默认使用 pymysql 驱动连接 MySQL，UTF-8 编码 + 10 秒连接超时
+    # 注意：密码等字段需要 URL 编码，防止特殊字符破坏 URI 结构
     return (
-        f'mysql+pymysql://{user}:{passwd}@{host}:{port}/{dbname}?charset=utf8mb4&connect_timeout=10'
+        f'mysql+pymysql://{urllib.parse.quote(user, safe="")}:{urllib.parse.quote(passwd, safe="")}'
+        f'@{urllib.parse.quote(host, safe="")}:{port}/{urllib.parse.quote(dbname, safe="")}'
+        f'?charset=utf8mb4&connect_timeout=10'
     )
 
 
@@ -173,11 +196,17 @@ class Config:
     # 用户上传文件存放目录（相对于项目根目录）
     UPLOAD_FOLDER = os.path.join(basedir, 'static', 'uploads')
     # 单次上传最大字节数（默认 16MB，可通过 .env 覆盖）
-    MAX_CONTENT_LENGTH = int(os.environ.get('MAX_CONTENT_LENGTH', 16 * 1024 * 1024))
+    try:
+        MAX_CONTENT_LENGTH = int(os.environ.get('MAX_CONTENT_LENGTH', 16 * 1024 * 1024))
+    except (ValueError, TypeError):
+        MAX_CONTENT_LENGTH = 16 * 1024 * 1024
 
     # ── 分页 ──────────────────────────────────────
     # 每页文章数（默认 6），可通过 .env 的 POSTS_PER_PAGE 覆盖
-    POSTS_PER_PAGE = int(os.environ.get('POSTS_PER_PAGE', 6))
+    try:
+        POSTS_PER_PAGE = int(os.environ.get('POSTS_PER_PAGE', 6))
+    except (ValueError, TypeError):
+        POSTS_PER_PAGE = 6
     # 前端每页下拉选择器的可选值。
     # 自动包含 POSTS_PER_PAGE 并去重排序，例如设为 10 时选项为 [6, 10, 12, 24, 48]
     PER_PAGE_OPTIONS = sorted(set([POSTS_PER_PAGE, 6, 12, 24, 48]))
@@ -215,9 +244,18 @@ class Config:
     #   侧边栏数据          → 300s（5 分钟）
     #   仪表盘统计数据      → 60s（1 分钟）
     #   RSS 输出            → 600s（10 分钟）
-    CACHE_TTL_SIDEBAR = int(os.environ.get('CACHE_TTL_SIDEBAR', 300))
-    CACHE_TTL_DASHBOARD = int(os.environ.get('CACHE_TTL_DASHBOARD', 60))
-    CACHE_TTL_RSS = int(os.environ.get('CACHE_TTL_RSS', 600))
+    def _safe_int_env(key, default):
+        val = os.environ.get(key)
+        if val is not None:
+            try:
+                return int(val)
+            except (ValueError, TypeError):
+                pass
+        return default
+
+    CACHE_TTL_SIDEBAR = _safe_int_env('CACHE_TTL_SIDEBAR', 300)
+    CACHE_TTL_DASHBOARD = _safe_int_env('CACHE_TTL_DASHBOARD', 60)
+    CACHE_TTL_RSS = _safe_int_env('CACHE_TTL_RSS', 600)
 
     # ── Amazon 直爬代理（可选）─────────────────────
     # curl_cffi 直爬 Amazon 时使用的 HTTP 代理。
@@ -227,13 +265,13 @@ class Config:
 
     # ── 邮件（SMTP 邮件订阅）─────────────────────────
     MAIL_SERVER = os.environ.get('MAIL_SERVER', '')
-    MAIL_PORT = int(os.environ.get('MAIL_PORT', 587))
+    MAIL_PORT = _safe_int_env('MAIL_PORT', 587)
     MAIL_USE_SSL = os.environ.get('MAIL_USE_SSL', 'false').lower() in ('true', '1')
     MAIL_USE_TLS = os.environ.get('MAIL_USE_TLS', 'true').lower() in ('true', '1')
     MAIL_USERNAME = os.environ.get('MAIL_USERNAME', '')
     MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD', '')
     MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER', '')
-    MAIL_TIMEOUT = int(os.environ.get('MAIL_TIMEOUT', 10))
+    MAIL_TIMEOUT = _safe_int_env('MAIL_TIMEOUT', 10)
 
 
 # 导出给 app.py 使用的活动配置

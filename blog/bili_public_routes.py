@@ -2,14 +2,19 @@
 
 import logging
 import secrets
+import time
 
-from flask import Blueprint, jsonify, render_template, request, url_for
+from flask import Blueprint, current_app, jsonify, render_template, request, url_for
 
 from blog.models import BiliSubscription, BiliUp, BiliUpHistory, BiliVideo, BiliVideoHistory, db
 
 logger = logging.getLogger(__name__)
 
 bili_public_bp = Blueprint('bili_public', __name__, url_prefix='/bilibili')
+
+# 订阅速率限制：每 IP 每分钟最多 5 次
+_subscribe_limits: dict[str, list[float]] = {}
+_SUBSCRIBE_MAX_PER_MIN = 5
 
 
 @bili_public_bp.route('/')
@@ -192,10 +197,26 @@ def subscribe():
     前端传入 email + up_ids[]，同一个批次内所有订阅共用
     一个 token，验证/取消订阅时整批操作。
     """
-    email = (request.form.get('email') or '').strip().lower()
-    up_ids = request.form.getlist('up_ids[]', type=int)
+    # 每 IP 速率限制：最多 5 次/分钟
+    ip = request.remote_addr or 'unknown'
+    now = time.time()
+    _subscribe_limits.setdefault(ip, [])
+    _subscribe_limits[ip] = [t for t in _subscribe_limits[ip] if now - t < 60]
+    if len(_subscribe_limits[ip]) >= _SUBSCRIBE_MAX_PER_MIN:
+        logger.warning('订阅请求过频 IP=%s', ip)
+        return jsonify({'ok': False, 'error': '操作太频繁，请稍后再试'}), 429
+    _subscribe_limits[ip].append(now)
 
-    if not email or '@' not in email:
+    email = (request.form.get('email') or '').strip().lower()
+    raw_ids = request.form.getlist('up_ids[]')
+    up_ids = []
+    for rid in raw_ids:
+        try:
+            up_ids.append(int(rid))
+        except (ValueError, TypeError):
+            continue
+
+    if not email or '@' not in email or len(email) > 254:
         return jsonify({'ok': False, 'error': '请输入有效的邮箱地址'}), 400
     if not up_ids:
         return jsonify({'ok': False, 'error': '请至少选择一个 UP 主'}), 400
@@ -234,7 +255,11 @@ def subscribe():
         else:
             sub = BiliSubscription(email=email, up_id=uid, token=token)
             db.session.add(sub)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': f'订阅失败: {e}'}), 500
 
     selected_ups = BiliUp.query.filter(BiliUp.id.in_(new_up_ids)).all()
     up_names = [u.name or str(u.mid) for u in selected_ups]

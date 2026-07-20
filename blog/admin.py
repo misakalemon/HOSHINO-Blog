@@ -1132,7 +1132,18 @@ def new_featured_card():
         return redirect(url_for('admin.category_list'))
     form = FeaturedCardForm()
     form.tag.choices = [(c.slug, c.name) for c in categories]
+    def _validate_url_protocol(val):
+        if val:
+            val_lower = val.strip().lower()
+            for scheme in ('javascript:', 'data:', 'vbscript:', 'file:'):
+                if val_lower.startswith(scheme):
+                    flash(f'不安全的 URL 协议: {val}', 'error')
+                    return False
+        return True
+
     if form.validate_on_submit():
+        if not _validate_url_protocol(form.link.data) or not _validate_url_protocol(form.image_url.data):
+            return render_template('admin/featured-card-form.html', form=form, editing=False)
         card = FeaturedCard(
             title=form.title.data,
             description=form.description.data or '',
@@ -1144,7 +1155,12 @@ def new_featured_card():
             is_active=form.is_active.data,
         )
         db.session.add(card)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            flash(f'创建失败: {e}', 'error')
+            return render_template('admin/featured-card-form.html', form=form, editing=False)
         flash('特色卡片已创建', 'success')
         return redirect(url_for('admin.featured_card_list'))
     for field, errors in form.errors.items():
@@ -1170,7 +1186,18 @@ def edit_featured_card(id):
     card = FeaturedCard.query.get_or_404(id)
     form = FeaturedCardForm(obj=card)
     form.tag.choices = [(c.slug, c.name) for c in Category.query.order_by(Category.name).all()]
+    def _validate_url_protocol(val):
+        if val:
+            val_lower = val.strip().lower()
+            for scheme in ('javascript:', 'data:', 'vbscript:', 'file:'):
+                if val_lower.startswith(scheme):
+                    flash(f'不安全的 URL 协议: {val}', 'error')
+                    return False
+        return True
+
     if form.validate_on_submit():
+        if not _validate_url_protocol(form.link.data) or not _validate_url_protocol(form.image_url.data):
+            return render_template('admin/featured-card-form.html', form=form, editing=True)
         card.title = form.title.data
         card.description = form.description.data or ''
         card.icon = form.icon.data or '✦'
@@ -1179,7 +1206,12 @@ def edit_featured_card(id):
         card.image_url = form.image_url.data or ''
         card.sort_order = form.sort_order.data or 0
         card.is_active = form.is_active.data
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            flash(f'更新失败: {e}', 'error')
+            return render_template('admin/featured-card-form.html', form=form, editing=True)
         flash('特色卡片已更新', 'success')
         return redirect(url_for('admin.featured_card_list'))
     for field, errors in form.errors.items():

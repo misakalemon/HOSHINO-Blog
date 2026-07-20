@@ -13,5 +13,10 @@ app = create_app()
 with app.app_context():
     ups = BiliUp.query.all()
     for u in ups:
-        print(f'Checking {u.name}')
-        _check_new_videos(u.mid, app)
+        try:
+            print(f'Checking {u.name}')
+            _check_new_videos(u.mid, app)
+        except Exception as e:
+            print(f'Error checking {u.name}: {e}')
+            import logging
+            logging.getLogger(__name__).exception('Incremental check failed for %s', u.name)

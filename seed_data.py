@@ -208,8 +208,8 @@ COMMENTERS = [
 
 
 def seed():
-    confirm = input('此操作将清空现有测试数据并重新生成，是否继续？(y/N): ').strip().lower()
-    if confirm != 'y':
+    confirm = input('⚠️ 此操作将清空所有测试数据并重新生成！\n  输入 YES 确认: ').strip()
+    if confirm != 'YES':
         print('已取消')
         return
 
@@ -222,8 +222,8 @@ def seed():
         db.session.execute(db.text('DELETE FROM post_categories'))
         Post.query.delete()
         Category.query.delete()
-        # 保留 admin 用户，不清除
-        User.query.filter(User.username != 'admin').delete()
+        # 保护所有 admin 角色用户，不清除
+        User.query.filter(User.role != 'admin').delete()
         db.session.commit()
 
         # ── 1. 创建分类 ──
@@ -236,16 +236,19 @@ def seed():
         db.session.commit()
         print(f'  ✓ 创建了 {len(cats)} 个分类')
 
-        # ── 2. 获取作者 ──
-        admin = User.query.filter_by(username='admin').first()
+        # ── 2. 获取作者（任意 admin 角色用户）──
+        admin = User.query.filter_by(role='admin').first()
         if not admin:
+            import secrets
+            tmp_pass = secrets.token_urlsafe(12)
             admin = User(
                 username='admin', email='admin@localhost',
                 display_name='Admin', is_admin=True, is_active=True
             )
-            admin.set_password('admin123')
+            admin.set_password(tmp_pass)
             db.session.add(admin)
             db.session.commit()
+            print(f'  ⚠️ 已创建临时管理员，密码: {tmp_pass}（请立即修改）')
 
         # ── 3. 创建 100 篇文章 ──
         all_cat_slugs = list(cats.keys())

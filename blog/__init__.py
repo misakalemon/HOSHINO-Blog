@@ -149,8 +149,11 @@ def init_db(app):
     3. _migrate_category_to_many2many() — 兼容旧版单分类数据
     4. 检查 admin 用户是否已存在 → 不存在则创建默认管理员
     """
-    db.init_app(app)
-    Migrate(app, db)
+    # 防止重复初始化
+    if 'sqlalchemy' not in app.extensions:
+        db.init_app(app)
+    if 'migrate' not in app.extensions:
+        Migrate(app, db)
     with app.app_context():
         # ── 建表 ──────────────────────────────────
         # SQLAlchemy 根据 Model 定义自动 CREATE TABLE IF NOT EXISTS
@@ -287,15 +290,19 @@ def _migrate_category_to_many2many(app):
     ignore_keyword = 'OR IGNORE' if 'sqlite' in driver else 'IGNORE'
 
     # 执行迁移 SQL：将所有有分类的文章关联写入 post_categories 表
-    sql = f"""
-        INSERT {ignore_keyword} INTO post_categories (post_id, category_id)
-        SELECT id, category_id FROM posts WHERE category_id IS NOT NULL
-    """
-    result = db.session.execute(db.text(sql))
-    rowcount = result.rowcount
-    if rowcount > 0:
-        app.logger.info('迁移: 已迁移 %d 条分类关联记录 (category_id → post_categories)', rowcount)
-    db.session.commit()
+    try:
+        sql = f"""
+            INSERT {ignore_keyword} INTO post_categories (post_id, category_id)
+            SELECT id, category_id FROM posts WHERE category_id IS NOT NULL
+        """
+        result = db.session.execute(db.text(sql))
+        rowcount = result.rowcount
+        if rowcount > 0:
+            app.logger.info('迁移: 已迁移 %d 条分类关联记录 (category_id → post_categories)', rowcount)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        app.logger.warning('迁移: category_id 迁移失败: %s', e)
 
 
 def _migrate_is_admin_to_role(app):
@@ -383,10 +390,14 @@ def _migrate_author_to_user(app):
     """
     from sqlalchemy import text
 
-    result = db.session.execute(text("UPDATE users SET role = 'user' WHERE role = 'author'"))
-    if result.rowcount > 0:
-        app.logger.info('迁移: 已将 %d 个用户从 author 角色合并到 user 角色', result.rowcount)
-    db.session.commit()
+    try:
+        result = db.session.execute(text("UPDATE users SET role = 'user' WHERE role = 'author'"))
+        if result.rowcount > 0:
+            app.logger.info('迁移: 已将 %d 个用户从 author 角色合并到 user 角色', result.rowcount)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        app.logger.warning('迁移: author→user 合并失败: %s', e)
 
 
 def _migrate_user_profile_fields(app):

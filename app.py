@@ -24,7 +24,9 @@ HOSHINO Blog — Flask 应用入口
     waitress-serve --port=5000 app:create_app  # Windows 生产部署
 """
 
+import atexit
 import os
+import signal
 import time
 
 from dotenv import load_dotenv
@@ -106,7 +108,11 @@ def create_app():
     #   4. 创建默认管理员        —— 首次启动时
     from blog import db, init_db
 
-    init_db(app)
+    try:
+        init_db(app)
+    except Exception as e:
+        logger.critical('数据库初始化失败: %s', e, exc_info=True)
+        raise
     migrate = Migrate(app, db)
     logger.info('数据库初始化完成')
 
@@ -276,7 +282,7 @@ def _init_scheduler(app):
         from blog.bili_routes import auto_cleanup_history
 
         scheduler.add_job(
-            func=lambda: auto_cleanup_history(),
+            func=lambda: auto_cleanup_history(app),
             trigger='cron',
             hour=3,
             minute=0,
@@ -285,6 +291,15 @@ def _init_scheduler(app):
         )
         scheduler.start()
         app.scheduler = scheduler
+
+        # 注册进程退出时的清理函数
+        def _shutdown_scheduler():
+            try:
+                scheduler.shutdown(wait=False)
+            except Exception:
+                pass
+        atexit.register(_shutdown_scheduler)
+
         app.logger.info('定时任务: 03:00密钥/清理 / 每30minB站增量 / 02:00B站深扫')
     except Exception as e:
         app.logger.warning('定时任务启动失败（不影响运行）: %s', e)

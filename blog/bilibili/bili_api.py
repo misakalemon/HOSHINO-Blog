@@ -12,8 +12,10 @@ import logging
 import re
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Generator
+
+import random
 
 from bilibili_api import Credential
 from bilibili_api import sync as _bili_sync
@@ -24,18 +26,23 @@ from .config import PAGE_SIZE, REQUEST_INTERVAL
 
 logger = logging.getLogger(__name__)
 
+CST = timezone(timedelta(hours=8))
+
 _credential: Credential | None = None
 
 # IP 级封禁追踪 — 任意线程检测到 412 后记录在此，供调用方决定是否熔断
 _last_412_time: float = 0.0
+_last_412_lock = threading.Lock()
 
 
 def was_recently_blocked(cooldown: float = 0) -> bool:
     """检查最近是否被 B站 IP 级封禁（412）"""
     global _last_412_time
+    with _last_412_lock:
+        t = _last_412_time
     if cooldown <= 0:
-        return _last_412_time > 0
-    return time.time() - _last_412_time < cooldown
+        return t > 0
+    return time.time() - t < cooldown
 
 
 # 按线程隔离的事件循环（每个线程独立，不互相干扰）
@@ -218,7 +225,8 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
                 continue
             if _is_ip_blocked(e):
                 global _last_412_time
-                _last_412_time = time.time()
+                with _last_412_lock:
+                    _last_412_time = time.time()
                 logger.error('IP 被安全封禁(412)，停止爬取')
                 break
             if _is_risk_control(e):
@@ -245,7 +253,7 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
         page_info = data.get('page', {})
         first_pubdate = vlist[0].get('created', 0)
         first_pubdate_str = (
-            datetime.fromtimestamp(first_pubdate, tz=timezone.utc).strftime('%Y-%m-%d %H:%M')
+            datetime.fromtimestamp(first_pubdate, tz=CST).strftime('%Y-%m-%d %H:%M')
             if first_pubdate
             else '?'
         )
@@ -270,12 +278,12 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
                 'duration': _parse_duration(item.get('length', '00:00')),
                 'pubdate': pubdate_ts,
                 'pub_date': (
-                    datetime.fromtimestamp(pubdate_ts, tz=timezone.utc).date()
+                    datetime.fromtimestamp(pubdate_ts, tz=CST).date()
                     if pubdate_ts
                     else None
                 ),
                 'pub_datetime': (
-                    datetime.fromtimestamp(pubdate_ts, tz=timezone.utc) if pubdate_ts else None
+                    datetime.fromtimestamp(pubdate_ts, tz=CST) if pubdate_ts else None
                 ),
                 'view_count': item.get('play', 0),
                 'comment_count': item.get('comment', 0),
@@ -291,7 +299,6 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
         if total_pages == 0 and len(vlist) < PAGE_SIZE:
             break
         pn += 1
-        import random
 
         # 匿名访问时翻倍间隔，降低风控概率
         sleep_base = REQUEST_INTERVAL * 4 if _credential is None else REQUEST_INTERVAL * 2
@@ -381,12 +388,12 @@ def get_video_list_from_dynamics(mid: int) -> list[dict]:
                 'duration': info.get('duration', 0),
                 'pubdate': pubdate_ts,
                 'pub_date': (
-                    datetime.fromtimestamp(pubdate_ts, tz=timezone.utc).date()
+                    datetime.fromtimestamp(pubdate_ts, tz=CST).date()
                     if pubdate_ts
                     else None
                 ),
                 'pub_datetime': (
-                    datetime.fromtimestamp(pubdate_ts, tz=timezone.utc) if pubdate_ts else None
+                    datetime.fromtimestamp(pubdate_ts, tz=CST) if pubdate_ts else None
                 ),
                 'view_count': stat.get('view', 0),
                 'like_count': stat.get('like', 0),
@@ -403,17 +410,26 @@ def get_video_list_from_dynamics(mid: int) -> list[dict]:
 
 
 def get_video_stat(bvid: str) -> dict:
-    """获取单个视频的详细统计数据，Cookie 过期时自动降级为匿名"""
-    try:
-        v = _video_mod.Video(bvid=bvid, credential=_credential)
-        info = _sync(v.get_info())
-    except Exception as e:
-        if _credential and _is_auth_error(e):
-            logger.warning('视频统计获取凭证过期，使用匿名: %s', e)
-            v = _video_mod.Video(bvid=bvid)
+    """获取单个视频的详细统计数据，Cookie 过期时自动降级为匿名，风控时指数退避重试"""
+    retry_delay = 30
+    for attempt in range(4):
+        try:
+            v = _video_mod.Video(bvid=bvid, credential=_credential)
             info = _sync(v.get_info())
-        else:
+        except Exception as e:
+            if _credential and _is_auth_error(e) and attempt == 0:
+                logger.warning('视频统计获取凭证过期，使用匿名: %s', e)
+                v = _video_mod.Video(bvid=bvid)
+                continue
+            if _is_risk_control(e) and attempt < 3:
+                logger.warning('视频 %s 触发风控，等待 %ds 后重试 (第 %d/3 次)', bvid, retry_delay, attempt + 1)
+                time.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, 600)
+                continue
             raise
+        break
+    else:
+        raise RuntimeError(f'视频 {bvid} 统计获取重试耗尽')
     stat = info.get('stat', {})
     return {
         'view_count': stat.get('view', 0),

@@ -37,8 +37,8 @@ db = SQLAlchemy()
 post_categories = db.Table(
     'post_categories',
     # post_id 和 category_id 组成联合主键，确保同一对关系不重复
-    db.Column('post_id', db.Integer, db.ForeignKey('posts.id'), primary_key=True),
-    db.Column('category_id', db.Integer, db.ForeignKey('categories.id'), primary_key=True),
+    db.Column('post_id', db.Integer, db.ForeignKey('posts.id', ondelete='CASCADE'), primary_key=True),
+    db.Column('category_id', db.Integer, db.ForeignKey('categories.id', ondelete='CASCADE'), primary_key=True),
 )
 
 
@@ -97,7 +97,7 @@ class User(UserMixin, db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     # ── 关联关系 ────────────────────────────────
-    posts = db.relationship('Post', backref='author', lazy='dynamic')
+    posts = db.relationship('Post', backref='author', lazy='dynamic', cascade='all, delete-orphan')
 
     # ── 属性 ────────────────────────────────────
     @property
@@ -207,7 +207,7 @@ class Post(db.Model):
     html_file_url = db.Column(db.String(512), default='')  # 自定义 HTML 页面文件路径（可选，兼容旧数据）
     html_content = db.Column(MEDIUMTEXT, default='')  # 自定义 HTML 页面源码（可选，优先于 html_file_url）
     author_id = db.Column(  # 作者（外键 → users.id）
-        db.Integer, db.ForeignKey('users.id'), nullable=False
+        db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False
     )
     is_published = db.Column(db.Boolean, default=False, index=True)  # 是否已发布
 
@@ -265,7 +265,7 @@ class Comment(db.Model):
     author_name = db.Column(db.String(128), nullable=False)  # 评论者昵称
     author_email = db.Column(db.String(120), nullable=True)  # 评论者邮箱（选填）
     content = db.Column(db.Text, nullable=False)  # 评论正文
-    is_approved = db.Column(db.Boolean, default=False)  # 管理员审核标记
+    is_approved = db.Column(db.Boolean, default=False, index=True)  # 管理员审核标记
     created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
 
@@ -298,7 +298,7 @@ class FeaturedCard(db.Model):
     link = db.Column(db.String(256), default='')
     image_url = db.Column(db.String(256), default='')
     sort_order = db.Column(db.Integer, default=0)
-    is_active = db.Column(db.Boolean, default=True)
+    is_active = db.Column(db.Boolean, default=True, index=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
     updated_at = db.Column(
         db.DateTime,
@@ -369,7 +369,7 @@ class BiliVideo(db.Model):
     )
 
     id = db.Column(db.Integer, primary_key=True)
-    up_id = db.Column(db.Integer, db.ForeignKey('bili_ups.id'), nullable=False, index=True)
+    up_id = db.Column(db.Integer, db.ForeignKey('bili_ups.id', ondelete='CASCADE'), nullable=False, index=True)
     bvid = db.Column(db.String(64), unique=True, nullable=False, index=True, comment='BV 号')
     aid = db.Column(db.BigInteger, unique=True, nullable=False, comment='稿件 ID')
     title = db.Column(db.Text, nullable=True, comment='视频标题')
@@ -418,13 +418,13 @@ class BiliUpHistory(db.Model):
     __tablename__ = 'bili_up_history'
 
     id = db.Column(db.Integer, primary_key=True)
-    up_id = db.Column(db.Integer, db.ForeignKey('bili_ups.id'), nullable=False, index=True)
+    up_id = db.Column(db.Integer, db.ForeignKey('bili_ups.id', ondelete='CASCADE'), nullable=False, index=True)
     follower_count = db.Column(db.Integer, default=0, comment='粉丝数')
     recorded_at = db.Column(
         db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True
     )
 
-    up = db.relationship('BiliUp', backref='history_records', lazy='joined')
+    up = db.relationship('BiliUp', backref='history_records', lazy='joined', passive_deletes=True)
 
 
 class BiliVideoHistory(db.Model):
@@ -434,7 +434,7 @@ class BiliVideoHistory(db.Model):
     __table_args__ = (db.Index('ix_bili_video_history_video_recorded', 'video_id', 'recorded_at'),)
 
     id = db.Column(db.Integer, primary_key=True)
-    video_id = db.Column(db.Integer, db.ForeignKey('bili_videos.id'), nullable=False, index=True)
+    video_id = db.Column(db.Integer, db.ForeignKey('bili_videos.id', ondelete='CASCADE'), nullable=False, index=True)
     view_count = db.Column(db.Integer, default=0, comment='播放数')
     like_count = db.Column(db.Integer, default=0, comment='点赞数')
     coin_count = db.Column(db.Integer, default=0, comment='投币数')
@@ -478,14 +478,14 @@ class BiliSubscription(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), nullable=False, index=True)
-    up_id = db.Column(db.Integer, db.ForeignKey('bili_ups.id'), nullable=False, index=True)
+    up_id = db.Column(db.Integer, db.ForeignKey('bili_ups.id', ondelete='CASCADE'), nullable=False, index=True)
     token = db.Column(
         db.String(64), nullable=False, index=True, comment='验证/取消订阅 token（同批次相同）'
     )
     verified = db.Column(db.Boolean, default=False, comment='是否已通过邮件验证')
     created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
-    up = db.relationship('BiliUp', backref=db.backref('subscriptions', lazy='dynamic'))
+    up = db.relationship('BiliUp', backref=db.backref('subscriptions', lazy='dynamic'), passive_deletes=True)
 
 
 class BiliCleanupConfig(db.Model):
@@ -520,6 +520,6 @@ class HeroImage(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(128), default='')
     image_url = db.Column(db.String(512), nullable=False)
-    is_active = db.Column(db.Boolean, default=True)
+    is_active = db.Column(db.Boolean, default=True, index=True)
     sort_order = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))

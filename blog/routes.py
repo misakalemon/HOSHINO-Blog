@@ -83,10 +83,14 @@ ALLOWED_TAGS = [
     's',
 ]
 def _is_safe_url(url):
-    """Reject javascript: and similar dangerous URL protocols."""
+    """Block dangerous URL protocols (only http/https allowed in href)."""
     if not url:
         return False
-    return not ''.join(url.strip().lower().split()).startswith('javascript:')
+    url_lower = ''.join(url.strip().lower().split())
+    for scheme in ('javascript:', 'data:', 'vbscript:', 'file:', 'blob:'):
+        if url_lower.startswith(scheme):
+            return False
+    return True
 
 
 _ATTRS_BY_TAG = {
@@ -496,11 +500,15 @@ def contact():
         msg = ContactMessage(
             name=form.name.data,
             email=form.email.data,
-            subject=form.subject.data or '',
-            content=form.content.data,
+            subject='',
+            content=form.message.data or '',
         )
         db.session.add(msg)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            message_sent = False
         message_sent = True
     categories, recent_posts, cat_post_counts = _get_sidebar_data()
     return render_template(

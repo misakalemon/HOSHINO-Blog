@@ -1,5 +1,6 @@
 import logging
 import re
+import time
 from urllib.parse import quote
 
 from bs4 import BeautifulSoup
@@ -9,6 +10,9 @@ logger = logging.getLogger(__name__)
 
 _AMAZON_SEARCH = 'https://www.amazon.com/s?k={}'
 _AMAZON_PRODUCT = 'https://www.amazon.com/dp/{}'
+_MAX_RETRIES = 3
+_RETRY_DELAY = 5
+_REQUEST_DELAY = 2.0
 
 
 class AmazonScraper:
@@ -21,19 +25,34 @@ class AmazonScraper:
     def set_proxy(self, proxy_url):
         self._proxy = proxy_url
 
-    def _get(self, url, timeout=5):
+    def _get(self, url, timeout=10):
         kwargs = {'impersonate': 'chrome', 'timeout': timeout}
         if self._proxy:
             kwargs['proxies'] = {'http': self._proxy, 'https': self._proxy}
-        return curl_requests.get(url, **kwargs)
+        for attempt in range(_MAX_RETRIES):
+            try:
+                r = curl_requests.get(url, **kwargs)
+                if r.status_code == 200:
+                    return r
+                logger.warning('Amazon 请求失败 (尝试 %d/%d): %s → %s',
+                               attempt + 1, _MAX_RETRIES, url[:60], r.status_code)
+            except Exception as e:
+                logger.warning('Amazon 请求异常 (尝试 %d/%d): %s: %s',
+                               attempt + 1, _MAX_RETRIES, url[:60], e)
+            if attempt < _MAX_RETRIES - 1:
+                time.sleep(_RETRY_DELAY * (attempt + 1))
+        return None
 
     def _search(self, keyword):
         url = _AMAZON_SEARCH.format(quote(keyword))
         r = self._get(url)
-        if r.status_code != 200:
-            logger.warning('Amazon 搜索失败: %s → %s', keyword[:30], r.status_code)
+        if r is None:
             return None
-        soup = BeautifulSoup(r.text, 'lxml')
+        try:
+            soup = BeautifulSoup(r.text, 'html.parser')
+        except Exception as e:
+            logger.warning('Amazon 搜索页解析失败: %s', e)
+            return None
         results = []
         for item in soup.select('div[data-component-type="s-search-result"]'):
             asin = item.get('data-asin', '')
@@ -49,9 +68,13 @@ class AmazonScraper:
     def _parse_price(self, asin):
         url = _AMAZON_PRODUCT.format(asin)
         r = self._get(url)
-        if r.status_code != 200:
+        if r is None:
             return None
-        soup = BeautifulSoup(r.text, 'lxml')
+        try:
+            soup = BeautifulSoup(r.text, 'html.parser')
+        except Exception as e:
+            logger.warning('Amazon 商品页解析失败 %s: %s', asin, e)
+            return None
 
         for sel in ['.a-price .a-offscreen', '#priceblock_ourprice',
                      '#priceblock_dealprice', '.a-price-whole']:
@@ -83,6 +106,7 @@ class AmazonScraper:
             return None
         for item in results:
             if self._title_matches(item['title'], product_name):
+                time.sleep(_REQUEST_DELAY)
                 price = self._parse_price(item['asin'])
                 if price:
                     return price

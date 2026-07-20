@@ -23,7 +23,12 @@ from flask import request
 
 # 日志目录（位于 blog/logs/）
 LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
-os.makedirs(LOG_DIR, exist_ok=True)
+try:
+    os.makedirs(LOG_DIR, exist_ok=True)
+except OSError as e:
+    import sys
+    print(f'无法创建日志目录 {LOG_DIR}: {e}', file=sys.stderr)
+    raise
 
 # 日志文件路径
 LOG_FILE = os.path.join(LOG_DIR, 'hoshino.log')
@@ -184,9 +189,18 @@ def log_request(response):
     if len(short_path) > 36:
         short_path = short_path[:33] + '...'
     console_msg = f'{extra["status"]} {extra["method"]:<6} {short_path}'
+    # 清理敏感信息：移除 URL 中的 token/secret/key 等参数
+    safe_path = extra['path']
+    if '?' in safe_path:
+        base, qs = safe_path.split('?', 1)
+        safe_qs = '&'.join(
+            p for p in qs.split('&')
+            if not any(p.lower().startswith(k) for k in ('token=', 'secret=', 'key=', 'password=', 'api_key='))
+        )
+        safe_path = base + ('?' + safe_qs if safe_qs else '')
     file_msg = (
         f'{extra["ip"]:>15} {extra["method"]:<7} '
-        f'{extra["status"]}  {extra["path"]:<40} '
+        f'{extra["status"]}  {safe_path:<40} '
         f'{extra["user_agent"]}'
     )
 

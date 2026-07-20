@@ -13,5 +13,10 @@ app = create_app()
 with app.app_context():
     ups = BiliUp.query.all()
     for u in ups:
-        print(f'Scraping {u.name}')
-        _run_scrape(u.mid, u.space_url, app)
+        try:
+            print(f'Scraping {u.name}')
+            _run_scrape(u.mid, u.space_url, app)
+        except Exception as e:
+            print(f'Error scraping {u.name}: {e}')
+            import logging
+            logging.getLogger(__name__).exception('Scrape failed for %s', u.name)

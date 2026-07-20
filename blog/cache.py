@@ -90,7 +90,10 @@ def init_redis(app):
 
     _redis_client = _get_redis(redis_url)
     if _redis_client is not None:
-        logger.info('Redis 缓存已连接: %s', redis_url)
+        from urllib.parse import urlparse
+        parsed = urlparse(redis_url)
+        safe_url = f'{parsed.scheme}://{parsed.hostname}:{parsed.port}{parsed.path}'
+        logger.info('Redis 缓存已连接: %s', safe_url)
 
 
 def _make_key(key):

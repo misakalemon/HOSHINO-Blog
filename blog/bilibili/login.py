@@ -9,7 +9,6 @@ import logging
 import os
 import time
 import urllib.parse
-from urllib.parse import unquote
 
 import requests
 from bilibili_api import sync
@@ -102,9 +101,8 @@ def poll_qr_v2(qrcode_key: str) -> dict:
         save_credential(cred)
         # 同时保存 Cookie 字符串（向后兼容）
         cookie_dict = cred.get_cookies()
-        from urllib.parse import unquote
 
-        decoded = {k: unquote(v) for k, v in cookie_dict.items()}
+        decoded = {k: urllib.parse.unquote(v) for k, v in cookie_dict.items()}
         cookie_str = '; '.join([f'{k}={v}' for k, v in decoded.items()])
         save_cookies(cookie_str)
         logger.info('✅ B站登录成功，Credential 已设置，Cookie 已保存')

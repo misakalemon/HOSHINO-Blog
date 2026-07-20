@@ -24,7 +24,7 @@ from wtforms import (
     StringField,
     TextAreaField,
 )
-from wtforms.validators import DataRequired, Email, EqualTo, Length, Optional
+from wtforms.validators import DataRequired, Email, EqualTo, Length, Optional, Regexp, URL as URLValidator
 
 
 class LoginForm(FlaskForm):
@@ -55,12 +55,13 @@ class PostForm(FlaskForm):
       is_published  — 是否发布，勾选后在前台可见
     """
     title = StringField('标题', validators=[DataRequired(), Length(max=256)])          # 文章标题，必填
-    slug = StringField('链接标识 (URL)', validators=[DataRequired(), Length(max=256)]) # URL 友好标识，必填
+    from wtforms.validators import Regexp
+    slug = StringField('链接标识 (URL)', validators=[DataRequired(), Length(max=256), Regexp(r'^[a-z0-9\-]+$', message='只允许小写字母、数字和连字符')])
     summary = TextAreaField('摘要', validators=[Optional()])                           # 文章摘要，选填
-    content = TextAreaField('正文 (Markdown)', validators=[Optional()])                 # Markdown 格式正文（HTML 页面模式可不填）
+    content = TextAreaField('正文 (Markdown)', validators=[Optional(), Length(max=500000)])  # Markdown 格式正文（HTML 页面模式可不填）
     # 多选分类（最多 15 个，choices 在视图函数中动态填充）
     categories = SelectMultipleField('分类（最多15个）', coerce=int, validators=[Optional()])
-    cover_image = StringField('封面图片 URL', validators=[Optional()])                 # 封面图链接，选填
+    cover_image = StringField('封面图片 URL', validators=[Optional(), URLValidator(), Length(max=512)])  # 封面图链接，选填
     html_file = FileField('上传 HTML 文件', validators=[Optional()])                   # 自定义 HTML 页面文件，选填
     html_content = TextAreaField('HTML 源码', validators=[Optional()])                 # 自定义 HTML 源码（优先于 html_file）
     is_published = BooleanField('发布')                                                # 是否公开可见
@@ -101,10 +102,10 @@ class ProfileForm(FlaskForm):
     display_name = StringField('显示名', validators=[Optional(), Length(max=128)])     # 显示昵称，选填
     bio = TextAreaField('个人简介', validators=[Optional()])                            # 个人简介，选填
     website = StringField('个人网站', validators=[Optional(), Length(max=256)])         # 个人网站链接，选填
-    gitcode_url = StringField('GitCode', validators=[Optional(), Length(max=256)])     # GitCode 主页
-    github_url = StringField('GitHub', validators=[Optional(), Length(max=256)])       # GitHub 主页
-    gitee_url = StringField('Gitee', validators=[Optional(), Length(max=256)])         # Gitee 主页
-    bilibili_url = StringField('Bilibili', validators=[Optional(), Length(max=256)])   # B站主页
+    gitcode_url = StringField('GitCode', validators=[Optional(), URLValidator(), Length(max=256)])  # GitCode 主页
+    github_url = StringField('GitHub', validators=[Optional(), URLValidator(), Length(max=256)])    # GitHub 主页
+    gitee_url = StringField('Gitee', validators=[Optional(), URLValidator(), Length(max=256)])      # Gitee 主页
+    bilibili_url = StringField('Bilibili', validators=[Optional(), URLValidator(), Length(max=256)])  # B站主页
     email = StringField('邮箱', validators=[Optional(), Email(), Length(max=120)])     # 邮箱，选填
     current_password = PasswordField('当前密码', validators=[Optional()])                # 当前密码，改密码时需要
     password = PasswordField('新密码', validators=[Optional(), Length(min=6)])          # 新密码，选填
@@ -119,7 +120,7 @@ class CommentForm(FlaskForm):
     """
     author_name = StringField('昵称', validators=[DataRequired(), Length(max=128)])    # 评论者昵称，必填
     author_email = StringField('邮箱', validators=[Optional(), Email(), Length(max=120)])  # 评论者邮箱，选填
-    content = TextAreaField('评论内容', validators=[DataRequired()])                    # 评论正文，必填
+    content = TextAreaField('评论内容', validators=[DataRequired(), Length(max=50000)]) # 评论正文，必填
 
 
 class ContactForm(FlaskForm):
@@ -130,7 +131,7 @@ class ContactForm(FlaskForm):
     """
     name = StringField('姓名', validators=[DataRequired(), Length(max=128)])           # 联系人姓名，必填
     email = StringField('邮箱', validators=[DataRequired(), Email(), Length(max=120)]) # 联系人邮箱，必填
-    message = TextAreaField('留言', validators=[DataRequired()])                       # 留言内容，必填
+    message = TextAreaField('留言', validators=[DataRequired(), Length(max=50000)])     # 留言内容，必填
 
 
 class HeroImageForm(FlaskForm):
@@ -147,7 +148,7 @@ class HeroImageForm(FlaskForm):
     """
     title = StringField('角色名 (可选)', validators=[Optional(), Length(max=128)])
     image_url = StringField('图片 URL', validators=[Optional(), Length(max=512)])
-    sort_order = IntegerField('排序', default=0)
+    sort_order = IntegerField('排序', default=0, validators=[Optional()])
     is_active = BooleanField('启用')
 
 
@@ -157,7 +158,8 @@ class FeaturedCardForm(FlaskForm):
     description = StringField('描述', validators=[Optional(), Length(max=256)])        # 卡片描述，选填
     icon = StringField('图标', validators=[Optional(), Length(max=256)])               # 图标符号/类名，选填
     tag = SelectField('标签', coerce=str, default='')                                  # 卡片标签，下拉选择
-    link = StringField('链接 (可选)', validators=[Optional(), Length(max=256)])        # 点击跳转链接，选填
-    image_url = StringField('图片 URL (可选)', validators=[Optional(), Length(max=256)])  # 背景图片链接，选填
-    sort_order = IntegerField('排序', default=0)                                       # 排序权重（越小越靠前）
+    from wtforms.validators import URL as URLValidator
+    link = StringField('链接 (可选)', validators=[Optional(), URLValidator(), Length(max=256)])  # 点击跳转链接，选填
+    image_url = StringField('图片 URL (可选)', validators=[Optional(), URLValidator(), Length(max=256)])  # 背景图片链接，选填
+    sort_order = IntegerField('排序', default=0, validators=[Optional()])             # 排序权重（越小越靠前）
     is_active = BooleanField('启用')                                                    # 是否在前台显示

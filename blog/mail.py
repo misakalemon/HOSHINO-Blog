@@ -2,6 +2,7 @@ import logging
 import re
 import smtplib
 import threading
+import time
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -68,8 +69,8 @@ def send_email(to: str, subject: str, html_body: str, to_name: str = ''):
     """
     app = current_app._get_current_object()
     config = app.config
-    if not config['MAIL_SERVER'] or not config['MAIL_USERNAME']:
-        logger.warning('SMTP 未配置，跳过邮件发送 → %s', to)
+    if not config['MAIL_SERVER'] or not config['MAIL_USERNAME'] or not config['MAIL_PASSWORD']:
+        logger.warning('SMTP 未完整配置，跳过邮件发送 → %s', to)
         return
 
     msg = MIMEMultipart('alternative')
@@ -85,8 +86,18 @@ def send_email(to: str, subject: str, html_body: str, to_name: str = ''):
     site_name = config.get('SITE_NAME', 'Hoshino')
     logger.info('邮件队列: %s → %s【%s】: %s', msg['From'], to_name or to, site_name, subject)
 
+    # 限制并发邮件线程数（最多 10 个），超出时等待
+    _MAX_MAIL_THREADS = 10
+    _active_mail_threads = []
+    _active_mail_threads[:] = [
+        t for t in _active_mail_threads if t.is_alive()
+    ]
+    if len(_active_mail_threads) >= _MAX_MAIL_THREADS:
+        _active_mail_threads.pop(0).join(timeout=30)
+
     t = threading.Thread(target=_send_email_async, args=(app, msg), daemon=True)
     t.start()
+    _active_mail_threads.append(t)
 
 
 def send_verify_email(to: str, up_name: str, verify_url: str, unsubscribe_url: str, to_name: str = ''):

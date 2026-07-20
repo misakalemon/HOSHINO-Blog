@@ -420,6 +420,7 @@ def _check_new_videos(mid: int, app):
             except Exception as e:
                 logger.warning('动态发现失败 mid=%d: %s', mid, e)
                 dyn_videos = []
+            _batch_count = 0
             for video_info in dyn_videos:
                 bvid = video_info['bvid']
                 aid = video_info['aid']
@@ -728,7 +729,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             if should_fill:
                 from blog.bilibili.bili_api import get_video_list as _get_video_list
 
-                need = (total_in_api - total_in_db) if total_in_api > 0 else -1
+                need = (total_in_api - total_in_db) if total_in_api is not None and total_in_api > 0 else -1
                 if need > 0:
                     emit(f'[补全] 发现 {need} 个缺失视频，开始补齐...')
                 else:
@@ -776,6 +777,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             except Exception as e:
                 logger.warning('补全动态发现失败 mid=%d: %s', mid, e)
                 dyn_videos = []
+            _batch_count = 0
             for video_info in dyn_videos:
                 bvid = video_info['bvid']
                 aid = video_info['aid']
@@ -811,7 +813,8 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             warm_done = 0
             cold_done = 0
             retry_delay = 30
-            now = datetime.datetime.utcnow()
+            CST = datetime.timezone(datetime.timedelta(hours=8))
+            now = datetime.datetime.now(CST)
             cutoff_hot = now - datetime.timedelta(days=7)
             cutoff_warm = now - datetime.timedelta(days=30)
 
@@ -859,7 +862,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
 
                 for key, val in stat.items():
                     setattr(v, key, val)
-                v.updated_at = datetime.datetime.utcnow()
+                v.updated_at = datetime.datetime.now(datetime.timezone.utc)
                 db.session.commit()
                 count += 1
                 if label.startswith('Hot'):
@@ -1045,6 +1048,7 @@ def run_daily_scrape(app):
                     )
 
         logger.info('B站 每日刷新完成')
+    db.session.remove()
 
 
 def cleanup_old_history(days=90):
@@ -1062,12 +1066,16 @@ def cleanup_old_history(days=90):
 
 def auto_cleanup_history(app=None):
     """定时任务入口：读取 BiliCleanupConfig 并执行清理"""
-    from blog.models import BiliCleanupConfig, db as _db
+    if app is None:
+        logger.warning('auto_cleanup_history: 未传入 app 实例')
+        return 0
+    with app.app_context():
+        from blog.models import BiliCleanupConfig, db as _db
 
-    cfg = BiliCleanupConfig.query.first()
-    if cfg and cfg.enabled:
-        deleted = cleanup_old_history(days=cfg.days)
-        if deleted:
-            logger.info('自动清理完成: 删除了 %d 条 %d 天前的记录', deleted, cfg.days)
-        return deleted
+        cfg = BiliCleanupConfig.query.first()
+        if cfg and cfg.enabled:
+            deleted = cleanup_old_history(days=cfg.days)
+            if deleted:
+                logger.info('自动清理完成: 删除了 %d 条 %d 天前的记录', deleted, cfg.days)
+            return deleted
     return 0
