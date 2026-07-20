@@ -295,7 +295,7 @@ def _insert_or_update_video(up, video_info, aid, bvid, title_short):
             ):
                 if key in video_info:
                     setattr(existing, key, video_info[key])
-            existing.updated_at = datetime.datetime.utcnow()
+            existing.updated_at = datetime.datetime.now(datetime.timezone.utc)
             video = existing
             is_new = False
         else:
@@ -832,7 +832,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                 if (
                     not force
                     and v.updated_at
-                    and (datetime.datetime.utcnow() - v.updated_at).total_seconds()
+                    and (datetime.datetime.now(datetime.timezone.utc) - v.updated_at).total_seconds()
                     < min_age_hours * 3600
                 ):
                     title_short = (v.title or '')[:30]

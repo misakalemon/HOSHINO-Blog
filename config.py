@@ -15,6 +15,7 @@ HOSHINO Blog — 应用配置
 import os
 import json
 import secrets
+import threading
 import urllib.parse
 from datetime import timedelta
 from dotenv import load_dotenv
@@ -46,31 +47,34 @@ def _load_secret_keys():
             pass
     return []
 
+_secret_keys_lock = threading.Lock()
+
 
 def _save_secret_keys(keys):
     """原子写入密钥列表到文件（临时文件 + rename，防崩溃）。"""
-    import tempfile
-    tmp = None
-    try:
-        tmp = tempfile.NamedTemporaryFile(
-            mode='w', dir=os.path.dirname(SECRET_KEYS_FILE),
-            prefix='.secret_keys_tmp_', delete=False, encoding='utf-8'
-        )
-        json.dump(keys, tmp)
-        tmp.flush()
-        os.fsync(tmp.fileno())
-        tmp_name = tmp.name
-        tmp.close()
-        os.replace(tmp_name, SECRET_KEYS_FILE)
-    except OSError as e:
-        import logging
-        logging.getLogger(__name__).warning('写入密钥文件失败: %s', e)
-    finally:
-        if tmp is not None:
-            try:
-                os.unlink(tmp.name)
-            except OSError:
-                pass
+    with _secret_keys_lock:
+        import tempfile
+        tmp = None
+        try:
+            tmp = tempfile.NamedTemporaryFile(
+                mode='w', dir=os.path.dirname(SECRET_KEYS_FILE),
+                prefix='.secret_keys_tmp_', delete=False, encoding='utf-8'
+            )
+            json.dump(keys, tmp)
+            tmp.flush()
+            os.fsync(tmp.fileno())
+            tmp_name = tmp.name
+            tmp.close()
+            os.replace(tmp_name, SECRET_KEYS_FILE)
+        except OSError as e:
+            import logging
+            logging.getLogger(__name__).warning('写入密钥文件失败: %s', e)
+        finally:
+            if tmp is not None:
+                try:
+                    os.unlink(tmp.name)
+                except OSError:
+                    pass
 
 
 def _ensure_initial_key():

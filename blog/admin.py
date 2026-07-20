@@ -70,8 +70,52 @@ import bleach
 
 from . import admin_bp
 from .routes import ALLOWED_TAGS, ALLOWED_ATTRS
+
+
+_HTML_STRIP_ATTRS = {
+    '*': ['id', 'class', 'style', 'title', 'lang', 'dir'],
+    'a': ['href', 'title', 'rel', 'target'],
+    'img': ['src', 'alt', 'title', 'width', 'height', 'style', 'loading'],
+    'video': ['src', 'controls', 'width', 'height', 'autoplay', 'loop', 'muted', 'poster'],
+    'audio': ['src', 'controls', 'autoplay', 'loop'],
+    'source': ['src', 'type'],
+    'iframe': ['src', 'width', 'height', 'allowfullscreen', 'frameborder', 'allow'],
+    'form': ['action', 'method', 'enctype'],
+    'input': ['type', 'name', 'value', 'placeholder', 'required', 'checked', 'maxlength'],
+    'button': ['type', 'name', 'value'],
+    'select': ['name'],
+    'option': ['value', 'selected'],
+    'textarea': ['name', 'rows', 'cols', 'maxlength'],
+    'td': ['colspan', 'rowspan'],
+    'th': ['colspan', 'rowspan'],
+    'col': ['span'],
+    'colgroup': ['span'],
+    'meta': ['charset', 'name', 'content'],
+    'link': ['href', 'rel', 'type'],
+    'script': ['src', 'type', 'async', 'defer'],
+    'style': ['type', 'media'],
+}
+_HTML_CLEAN_TAGS = [
+    'div', 'span', 'section', 'header', 'footer', 'nav', 'main', 'article',
+    'aside', 'figure', 'figcaption', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'p', 'br', 'hr', 'ul', 'ol', 'li', 'dl', 'dt', 'dd', 'blockquote',
+    'pre', 'code', 'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td',
+    'caption', 'colgroup', 'col', 'img', 'a', 'video', 'audio', 'source',
+    'iframe', 'form', 'input', 'button', 'select', 'option', 'textarea',
+    'label', 'script', 'style', 'link', 'meta', 'noscript',
+    'svg', 'path', 'circle', 'rect', 'line', 'polyline', 'polygon',
+    'text', 'g', 'defs', 'use', 'clipPath', 'mask', 'linearGradient',
+    'radialGradient', 'stop',
+]
+
+
+def _sanitize_html(html: str) -> str:
+    if not html:
+        return html
+    return bleach.clean(html, tags=_HTML_CLEAN_TAGS, attributes=_HTML_STRIP_ATTRS, strip=True)
+
+
 from .forms import (
-    CategoryForm,
     FeaturedCardForm,
     HeroImageForm,
     LoginForm,
@@ -239,7 +283,7 @@ class _LRUDict(OrderedDict):
             self.popitem(last=False)
 
 
-_login_attempts = _LRUDict(maxsize=1000)
+_login_attempts = _LRUDict(maxsize=10000)
 _login_attempts_lock = threading.Lock()
 LOGIN_RATE_LIMIT = 10
 LOGIN_RATE_WINDOW = 60
@@ -267,7 +311,13 @@ def login():
             return redirect(url_for('admin.dashboard'))
         return redirect(url_for('admin.profile'))
 
+    import ipaddress
+
     ip = request.access_route[0] if request.access_route else request.remote_addr or 'unknown'
+    try:
+        ip = ipaddress.ip_address(ip).compressed
+    except ValueError:
+        pass
     now = time.time()
     with _login_attempts_lock:
         _login_attempts[ip] = [
@@ -314,6 +364,9 @@ def register():
     """
     if current_user.is_authenticated:
         return redirect(url_for('admin.profile'))
+
+    if not current_app.config.get('ENABLE_REGISTRATION', False):
+        abort(404)
 
     form = RegisterForm()
     if form.validate_on_submit():
@@ -511,6 +564,8 @@ def new_post():
                         raw = raw.decode('utf-8', errors='replace')
                 html_content = raw
 
+        html_content = _sanitize_html(html_content)
+
         post = Post(
             title=form.title.data,
             slug=form.slug.data,
@@ -570,7 +625,7 @@ def edit_post(id):
         # ── HTML 源码处理（优先于文件，原始存储，沙箱 iframe 隔离） ─
         html_content = request.form.get('html_content', '')
         if html_content:
-            post.html_content = html_content
+            post.html_content = _sanitize_html(html_content)
         elif request.form.get('remove_html'):
             post.html_content = ''
         else:
@@ -584,7 +639,7 @@ def edit_post(id):
                         raw = raw.decode('gbk')
                     except UnicodeDecodeError:
                         raw = raw.decode('utf-8', errors='replace')
-                post.html_content = raw
+                post.html_content = _sanitize_html(raw)
         if post.html_file_url:
             old_path = os.path.join(current_app.static_folder, post.html_file_url)
             if os.path.isfile(old_path):
@@ -669,6 +724,12 @@ def new_category():
     """
     form = CategoryForm()
     if form.validate_on_submit():
+        if Category.query.filter_by(slug=form.slug.data).first():
+            flash('该链接标识已存在', 'error')
+            return render_template('admin/category-form.html', form=form, editing=False)
+        if Category.query.filter_by(name=form.name.data).first():
+            flash('该分类名称已存在', 'error')
+            return render_template('admin/category-form.html', form=form, editing=False)
         cat = Category(name=form.name.data, slug=form.slug.data, description=form.description.data)
         db.session.add(cat)
         db.session.commit()
@@ -890,6 +951,7 @@ def delete_user(id):
         Post.query.filter(Post.id.in_(post_ids)).delete(synchronize_session=False)
     db.session.delete(user)
     db.session.commit()
+    db.session.expire_all()
     flash('用户已删除', 'success')
     return redirect(url_for('admin.user_list'))
 

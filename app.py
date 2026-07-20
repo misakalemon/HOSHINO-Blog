@@ -179,24 +179,22 @@ def create_app():
     # ── 413 请求过大处理 ──────────────────────────
     from werkzeug.exceptions import RequestEntityTooLarge
 
-    app.register_error_handler(
-        RequestEntityTooLarge,
-        lambda e: (
-            logger.error(
-                '413 REQUEST TOO LARGE: Content-Length=%s  Remote=%s  Path=%s',
-                request.content_length,
-                request.remote_addr,
-                request.path,
-            ),
-            (
-                f'<h1>413 Request Entity Too Large</h1><p>请求体过大 (Content-Length: {request.content_length})，'
-                f'当前限制: {app.config["MAX_CONTENT_LENGTH"] // 1024 // 1024}MB。'
-                f'请减小文件或联系管理员。</p>',
-                413,
-                {'Content-Type': 'text/html; charset=utf-8'},
-            ),
-        )[1],
-    )
+    def _handle_413(e):
+        logger.error(
+            '413 REQUEST TOO LARGE: Content-Length=%s  Remote=%s  Path=%s',
+            request.content_length,
+            request.remote_addr,
+            request.path,
+        )
+        return (
+            f'<h1>413 Request Entity Too Large</h1><p>请求体过大 (Content-Length: {request.content_length})，'
+            f'当前限制: {app.config["MAX_CONTENT_LENGTH"] // 1024 // 1024}MB。'
+            f'请减小文件或联系管理员。</p>',
+            413,
+            {'Content-Type': 'text/html; charset=utf-8'},
+        )
+
+    app.register_error_handler(RequestEntityTooLarge, _handle_413)
 
     # ── 全局请求日志中间件 ───────────────────────
     # 每次 HTTP 响应返回到客户端之前执行 log_request()
@@ -299,6 +297,15 @@ def _init_scheduler(app):
             except Exception:
                 pass
         atexit.register(_shutdown_scheduler)
+
+        import signal
+        import sys
+
+        def _scheduler_sigterm(signum, frame):
+            _shutdown_scheduler()
+            sys.exit(0)
+
+        signal.signal(signal.SIGTERM, _scheduler_sigterm)
 
         app.logger.info('定时任务: 03:00密钥/清理 / 每30minB站增量 / 02:00B站深扫')
     except Exception as e:

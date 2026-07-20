@@ -330,6 +330,9 @@ def _migrate_is_admin_to_role(app):
         for col, col_type in new_columns.items():
             if col not in cols:
                 try:
+                    if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', col):
+                        app.logger.warning('迁移: 跳过非法列名 %s', col)
+                        continue
                     db.session.execute(text(f'ALTER TABLE users ADD COLUMN {col} {col_type}'))
                     db.session.commit()
                     app.logger.info('迁移: 已添加 users.%s 列', col)
@@ -420,6 +423,9 @@ def _migrate_user_profile_fields(app):
     for col, col_type in new_columns.items():
         if col not in cols:
             try:
+                if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', col):
+                    app.logger.warning('迁移: 跳过非法列名 %s', col)
+                    continue
                 db.session.execute(text(f'ALTER TABLE users ADD COLUMN {col} {col_type}'))
                 db.session.commit()
                 app.logger.info('迁移: 已添加 users.%s 列', col)
@@ -541,7 +547,7 @@ def _migrate_bili_sub_token_index(app):
             app.logger.warning('迁移: 添加 bili_subscriptions.token 索引失败: %s', e)
 
     # 如果 token 列仍存在 UNIQUE 约束（非索引方式），删除它
-    if not dropped:
+    if not dropped and 'token' in inspector.get_columns('bili_subscriptions'):
         try:
             db.session.execute(text('ALTER TABLE bili_subscriptions DROP INDEX token'))
             db.session.commit()

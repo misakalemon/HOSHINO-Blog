@@ -26,6 +26,7 @@ HOSHINO Blog — 前台路由
 import datetime
 import logging
 import os
+import random
 import threading
 import time
 
@@ -87,6 +88,8 @@ ALLOWED_TAGS = [
 def _is_safe_url(url):
     """Block dangerous URL protocols (only http/https allowed in href)."""
     if not url:
+        return False
+    if url.startswith('//'):
         return False
     url_lower = ''.join(url.strip().lower().split())
     for scheme in ('javascript:', 'data:', 'vbscript:', 'file:', 'blob:'):
@@ -283,7 +286,6 @@ def index():
     featured_cards = _cached_featured_cards()
     cat_lookup = {c.slug: c.name for c in categories}
 
-    import random
     from blog.models import HeroImage
 
     # 从激活的 Hero 画像中随机选一张，供粒子引擎渲染
@@ -579,7 +581,21 @@ def search():
     safe_q = q.replace('%', '\\%').replace('_', '\\_')
     per_page = request.args.get('per_page', current_app.config['POSTS_PER_PAGE'], type=int)
     categories, recent_posts, cat_post_counts = _get_sidebar_data()
-    # 使用 MATCH AGAINST 全文搜索（需 FULLTEXT 索引）
+    # 使用全文搜索（需 FULLTEXT 索引），防 tsquery 语法错误
+    engine = db.get_engine()
+    dialect = engine.dialect.name
+    if dialect == 'postgresql':
+        match_exprs = [
+            func.to_tsvector('simple', Post.title).op('@@')(func.plainto_tsquery('simple', q)),
+            func.to_tsvector('simple', Post.summary).op('@@')(func.plainto_tsquery('simple', q)),
+            func.to_tsvector('simple', Post.content).op('@@')(func.plainto_tsquery('simple', q)),
+        ]
+    else:
+        match_exprs = [
+            Post.title.match(q),
+            Post.summary.match(q),
+            Post.content.match(q),
+        ]
     results = (
         Post.query.options(
             db.joinedload(Post.categories),
@@ -589,11 +605,7 @@ def search():
         )
         .filter(
             Post.is_published == True,
-            db.or_(
-                Post.title.match(q, postgresql_regconfig='simple'),
-                Post.summary.match(q, postgresql_regconfig='simple'),
-                Post.content.match(q, postgresql_regconfig='simple'),
-            ),
+            db.or_(*match_exprs),
         )
         .order_by(Post.created_at.desc())
         .paginate(page=page, per_page=per_page, error_out=False)
@@ -815,7 +827,11 @@ def _cleanup_old_cache(cache_dir, current_ver):
         _last_cache_cleanup = now
         if not os.path.isdir(cache_dir):
             return
-        for fname in os.listdir(cache_dir):
+        try:
+            entries = os.listdir(cache_dir)
+        except FileNotFoundError:
+            return
+        for fname in entries:
             # 保留当前版本和未知版本，只删除 v0_ / v1_ 开头的老文件
             if fname.startswith(current_ver + '_'):
                 continue

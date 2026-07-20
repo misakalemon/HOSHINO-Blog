@@ -10,6 +10,8 @@ from flask import current_app, render_template
 
 logger = logging.getLogger(__name__)
 
+_mail_lock = threading.Lock()
+
 
 def _parse_sender(sender: str) -> str:
     """解析发信人配置，返回 RFC 5322 格式的 From 地址。
@@ -92,15 +94,17 @@ def send_email(to: str, subject: str, html_body: str, to_name: str = ''):
 
     # 限制并发邮件线程数（最多 10 个），超出时等待
     global _active_mail_threads
-    _active_mail_threads[:] = [
-        t for t in _active_mail_threads if t.is_alive()
-    ]
-    if len(_active_mail_threads) >= _MAX_MAIL_THREADS:
-        _active_mail_threads.pop(0).join(timeout=30)
+    with _mail_lock:
+        _active_mail_threads[:] = [
+            t for t in _active_mail_threads if t.is_alive()
+        ]
+        if len(_active_mail_threads) >= _MAX_MAIL_THREADS:
+            _active_mail_threads.pop(0).join(timeout=30)
 
     t = threading.Thread(target=_send_email_async, args=(app, msg), daemon=True)
     t.start()
-    _active_mail_threads.append(t)
+    with _mail_lock:
+        _active_mail_threads.append(t)
 
 
 def send_verify_email(to: str, up_name: str, verify_url: str, unsubscribe_url: str, to_name: str = ''):

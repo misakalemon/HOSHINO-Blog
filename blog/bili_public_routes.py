@@ -222,7 +222,7 @@ def subscribe():
         except (ValueError, TypeError):
             continue
 
-    if not email or '@' not in email or len(email) > 254:
+    if not email or not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email) or len(email) > 254:
         return jsonify({'ok': False, 'error': '请输入有效的邮箱地址'}), 400
     if not up_ids:
         return jsonify({'ok': False, 'error': '请至少选择一个 UP 主'}), 400
