@@ -26,8 +26,10 @@ from .config import PAGE_SIZE, REQUEST_INTERVAL
 
 logger = logging.getLogger(__name__)
 
+# 东八区（CST，中国标准时间）
 CST = timezone(timedelta(hours=8))
 
+# 全局 Credential 对象，初始为 None（匿名模式）
 _credential: Credential | None = None
 
 # IP 级封禁追踪 — 任意线程检测到 412 后记录在此，供调用方决定是否熔断
@@ -36,7 +38,14 @@ _last_412_lock = threading.Lock()
 
 
 def was_recently_blocked(cooldown: float = 0) -> bool:
-    """检查最近是否被 B站 IP 级封禁（412）"""
+    """检查最近是否被 B站 IP 级封禁（412）
+
+    用于调用方在爬取前快速判断，避免继续请求浪费资源。
+
+        cooldown: 冷却阈值（秒）。0 表示只检查是否有过封禁记录；
+                  正值表示距离上次封禁是否在 cooldown 秒内。
+        returns:  True 表示处于封禁状态，应暂停爬取。
+    """
     global _last_412_time
     with _last_412_lock:
         t = _last_412_time
@@ -51,7 +60,7 @@ _loop_local = threading.local()
 # 并发信号量 — 限制同时发往 B 站 API 的请求数，防风控
 _api_semaphore = threading.Semaphore(5)
 
-
+# 单次 API 调用超时时间（秒）
 _API_TIMEOUT = 30.0
 
 
@@ -60,10 +69,15 @@ def _sync(coro):
 
     每个线程拥有独立的 asyncio 事件循环（threading.local 隔离）。
     超时或异常后关闭循环并重建，防止 fd/异步生成器资源泄漏。
+
+        coro:     要执行的 asyncio 协程对象。
+        returns:  协程执行结果。
+        raises:   TimeoutError — 请求超时（30s 未返回）。
     """
     with _api_semaphore:
         loop = getattr(_loop_local, 'loop', None)
         if loop is None or loop.is_closed():
+            # 如果已有但已关闭的循环，先清理再新建
             if loop is not None and loop.is_closed():
                 try:
                     loop.close()
@@ -72,6 +86,7 @@ def _sync(coro):
             loop = asyncio.new_event_loop()
             _loop_local.loop = loop
         try:
+            # 带超时的协程执行
             return loop.run_until_complete(asyncio.wait_for(coro, timeout=_API_TIMEOUT))
         except asyncio.TimeoutError:
             logger.error('B站 API 请求超时 (%ds)', _API_TIMEOUT)
@@ -84,6 +99,7 @@ def _sync(coro):
             _loop_local.loop = None
             raise TimeoutError(f'B站 API 请求超时 ({_API_TIMEOUT}s)')
         except Exception:
+            # 任何其他异常也需清理循环资源
             try:
                 if not loop.is_closed():
                     loop.run_until_complete(loop.shutdown_asyncgens())
@@ -95,14 +111,26 @@ def _sync(coro):
 
 
 def _is_risk_control(e: Exception) -> bool:
-    """判断异常是否为 B站 风控/限流（可重试）"""
+    """判断异常是否为 B站 风控/限流（可重试）
+
+    匹配常见风控状态码和错误关键词，命中后调用方可执行指数退避重试。
+
+        e:         捕获的异常对象。
+        returns:   True 表示是风控/限流，可重试。
+    """
     err_str = str(e).lower()
     codes = ['429', '-509', '-352', 'too many requests', 'ratelimit', '被拒绝']
     return any(c in err_str for c in codes)
 
 
 def _is_ip_blocked(e: Exception) -> bool:
-    """判断异常是否为 IP 级安全封禁（412 验证页，不可重试）"""
+    """判断异常是否为 IP 级安全封禁（412 验证页，不可重试）
+
+    412 表示 B 站要求浏览器验证，IP 已被临时封禁，重试无意义。
+
+        e:         捕获的异常对象。
+        returns:   True 表示 IP 被封禁，应停止爬取。
+    """
     if hasattr(e, 'status_code') and e.status_code == 412:
         return True
     if hasattr(e, 'response') and hasattr(e.response, 'status_code') and e.response.status_code == 412:
@@ -111,14 +139,25 @@ def _is_ip_blocked(e: Exception) -> bool:
 
 
 def _is_auth_error(e: Exception) -> bool:
-    """判断异常是否为登录凭证过期/未登录"""
+    """判断异常是否为登录凭证过期/未登录
+
+    匹配 B 站 API 的鉴权错误码和关键词，命中后调用方可降级为匿名访问。
+
+        e:         捕获的异常对象。
+        returns:   True 表示凭证失效，应切换匿名模式。
+    """
     err_str = str(e).lower()
     codes = ['-401', '未登录', '请先登录', 'credential', 'session expired']
     return any(c in err_str for c in codes)
 
 
 def set_cookies(cookie_str: str):
-    """设置登录态 Cookie（SESSDATA=abc; bili_jct=def; buvid3=ghi）"""
+    """设置登录态 Cookie（SESSDATA=abc; bili_jct=def; buvid3=ghi）
+
+    解析分号分隔的 Cookie 字符串，构造 Credential 对象并设为全局。
+
+        cookie_str: 形如 "SESSDATA=xxx; bili_jct=xxx; buvid3=xxx" 的原始 Cookie 字符串。
+    """
     global _credential
     cookies = {}
     for item in cookie_str.split(';'):
@@ -137,12 +176,24 @@ def set_cookies(cookie_str: str):
 
 
 def set_credential(cred: Credential):
-    """直接设置全局 Credential 对象（用于官方库登录，保留完整状态）"""
+    """直接设置全局 Credential 对象（用于官方库登录，保留完整状态）
+
+    推荐使用此方法而非 set_cookies，因为 Credential 包含 refresh_token 等字段，
+    支持 B 站官方库的自动 token 续期机制。
+
+        cred: bilibili_api.Credential 实例（含 sessdata/bili_jct/refresh_token 等）。
+    """
     global _credential
     _credential = cred
 
 
 def is_logged_in() -> bool:
+    """检查当前登录态是否有效
+
+    通过调用 Credential.verify() 向 B 站验证当前凭证是否可用。
+
+        returns: True 表示凭证有效且已登录，False 表示未登录或凭证失效。
+    """
     if _credential is None:
         return False
     try:
@@ -152,7 +203,14 @@ def is_logged_in() -> bool:
 
 
 def extract_mid(space_url: str) -> int:
-    """从 UP 主空间 URL 中提取 mid"""
+    """从 UP 主空间 URL 中提取 mid
+
+    支持形如 https://space.bilibili.com/1234567 的 URL。
+
+        space_url: UP 主个人空间完整 URL。
+        returns:   提取到的 mid（数字用户 ID）。
+        raises:    ValueError — URL 格式不匹配，无法提取 mid。
+    """
     m = re.search(r'space\.bilibili\.com/(\d+)', space_url)
     if not m:
         raise ValueError(f'无法从 URL 中提取 mid: {space_url}')
@@ -163,8 +221,16 @@ def get_user_info(mid: int) -> dict:
     """获取 UP 主基本信息。
 
     主 API: x/space/wbi/acc/info（名称/头像/视频数）
-    Cookie 过期 → 自动降级匿名
-    粉丝数 fallback: x/relation/stat（匿名 acc/info 不返回 follower 字段）
+    Cookie 过期 → 自动降级匿名。
+    粉丝数 fallback: x/relation/stat（匿名 acc/info 不返回 follower 字段）。
+
+        mid:      UP 主用户 ID。
+        returns:  {
+                    'name': str,            # UP 主昵称
+                    'avatar': str,          # 头像 URL（已转 https）
+                    'follower_count': int,  # 粉丝数
+                    'video_count': int,     # 视频总数
+                  }
     """
     try:
         u = _user_mod.User(mid, credential=_credential)
@@ -176,6 +242,7 @@ def get_user_info(mid: int) -> dict:
             info = _sync(u.get_user_info())
         else:
             raise
+    # acc/info 在匿名模式或某些账号下不返回 follower 字段，需 fallback 查询 relation/stat
     follower = info.get('follower')
     if follower is None:
         try:
@@ -205,13 +272,17 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
     pagination 策略：
       - 有 page.count 时按 total_pages 计算翻页数
       - page.count==0 或缺失时按 vlist 长度判断（len < PAGE_SIZE 即最后一页）
+
+        mid:       UP 主用户 ID。
+        max_pages: 最大翻页数，None 表示无限制（直到 API 返回空或页数耗尽）。
+        yields:    视频信息 dict，包含 aid/bvid/title/description/duration/pubdate 等字段。
     """
     u = _user_mod.User(mid, credential=_credential)
-    pn = 1
-    retry_delay = 30
-    auth_retried = False
-    page_retries = 0
-    MAX_PAGE_RETRIES = 3
+    pn = 1                     # 当前页码，从第 1 页开始
+    retry_delay = 30           # 风控指数退避初始等待时间（秒）
+    auth_retried = False       # 标记是否已降级为匿名（仅重试一次）
+    page_retries = 0           # 当前页风控重试计数
+    MAX_PAGE_RETRIES = 3       # 每页最大风控重试次数
 
     while True:
         if max_pages is not None and pn > max_pages:
@@ -222,17 +293,20 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
             page_retries = 0  # 成功则重置本页重试计数
         except Exception as e:
             logger.error('获取第 %d 页视频列表失败: %s', pn, e)
+            # 路径 1: 凭证过期 → 降级为匿名重试
             if _credential and _is_auth_error(e) and not auth_retried:
                 logger.warning('凭证过期，切换为匿名访问后重试第 %d 页', pn)
                 auth_retried = True
                 u = _user_mod.User(mid)
                 continue
+            # 路径 2: IP 级封禁 412 → 记录时间并停止
             if _is_ip_blocked(e):
                 global _last_412_time
                 with _last_412_lock:
                     _last_412_time = time.time()
                 logger.error('IP 被安全封禁(412)，停止爬取')
                 break
+            # 路径 3: 风控限流 → 指数退避重试
             if _is_risk_control(e):
                 page_retries += 1
                 if page_retries > MAX_PAGE_RETRIES:
@@ -245,8 +319,9 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
                     MAX_PAGE_RETRIES,
                 )
                 time.sleep(retry_delay)
-                retry_delay = min(retry_delay * 2, 600)
+                retry_delay = min(retry_delay * 2, 600)  # 每次翻倍，上限 600s（10 分钟）
                 continue
+            # 路径 4: 其他异常 → 终止
             break
 
         vlist = data.get('list', {}).get('vlist', [])
@@ -256,6 +331,7 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
 
         page_info = data.get('page', {})
         first_pubdate = vlist[0].get('created', 0)
+        # 将时间戳转为 CST 可读字符串，便于日志对比
         first_pubdate_str = (
             datetime.fromtimestamp(first_pubdate, tz=CST).strftime('%Y-%m-%d %H:%M')
             if first_pubdate
@@ -296,6 +372,7 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
 
         page = data.get('page', {})
         total_count = page.get('count', 0)
+        # 根据总视频数计算总页数（向上取整）
         total_pages = (total_count + PAGE_SIZE - 1) // PAGE_SIZE if total_count > 0 else 0
         if pn >= total_pages and total_pages > 0:
             break
@@ -319,6 +396,10 @@ def get_video_list_from_dynamics(mid: int) -> list[dict]:
     过滤 owner_mid != 目标 mid 的转发视频。
 
     返回 list[dict]，字段格式与 get_video_list 对齐。
+
+        mid:      UP 主用户 ID。
+        returns:  视频信息 dict 列表，包含 aid/bvid/title/duration/stat 等统计字段
+                  （比 arc/search 返回多了 like/coin/favorite/share 数据）。
     """
     u = _user_mod.User(mid, credential=_credential)
     try:
@@ -342,11 +423,13 @@ def get_video_list_from_dynamics(mid: int) -> list[dict]:
     results: list[dict] = []
 
     for item in items:
+        # 处理转发类型：若当前项是转发，则深入 orig 获取原始投稿
         work = item
         if item.get('type') == 'DYNAMIC_TYPE_FORWARD':
             orig = item.get('orig')
             if orig:
                 work = orig
+        # 从动态模块嵌套结构中提取 archive（投稿）信息
         modules = work.get('modules') or {}
         mod_dyn = modules.get('module_dynamic') or {}
         major = mod_dyn.get('major') or {}
@@ -356,12 +439,14 @@ def get_video_list_from_dynamics(mid: int) -> list[dict]:
             continue
         seen_bvids.add(bvid)
 
+        # 获取视频完整信息，如有 credential 则优先使用
         try:
             if _credential is not None:
                 info = _sync(_video_mod.Video(bvid=bvid, credential=_credential).get_info())
             else:
                 info = _sync(_video_mod.Video(bvid=bvid).get_info())
         except Exception as e:
+            # 首次失败后匿名重试（可能是 credential 过期导致）
             try:
                 info = _sync(_video_mod.Video(bvid=bvid).get_info())
             except Exception as e2:
@@ -414,7 +499,20 @@ def get_video_list_from_dynamics(mid: int) -> list[dict]:
 
 
 def get_video_stat(bvid: str) -> dict:
-    """获取单个视频的详细统计数据，Cookie 过期时自动降级为匿名，风控时指数退避重试"""
+    """获取单个视频的详细统计数据，Cookie 过期时自动降级为匿名，风控时指数退避重试
+
+        bvid:     视频 BV 号（如 "BV1xx411c7mD"）。
+        returns:  {
+                    'view_count': int,      # 播放量
+                    'like_count': int,      # 点赞数
+                    'coin_count': int,      # 投币数
+                    'favorite_count': int,  # 收藏数
+                    'share_count': int,     # 转发数
+                    'comment_count': int,   # 评论数
+                    'danmaku_count': int,   # 弹幕数
+                  }
+        raises:   RuntimeError — 重试耗尽后仍失败。
+    """
     retry_delay = 30
     for attempt in range(4):
         try:
@@ -433,6 +531,7 @@ def get_video_stat(bvid: str) -> dict:
             raise
         break
     else:
+        # for 循环正常结束（未 break），说明重试耗尽
         raise RuntimeError(f'视频 {bvid} 统计获取重试耗尽')
     stat = info.get('stat', {})
     return {
@@ -447,6 +546,15 @@ def get_video_stat(bvid: str) -> dict:
 
 
 def _parse_duration(length_str: str) -> int:
+    """将 B 站视频时长字符串解析为秒数
+
+    支持格式：
+      - "mm:ss" → 分:秒
+      - "hh:mm:ss" → 时:分:秒
+
+        length_str: B 站 API 返回的时长字符串（如 "12:34" 或 "1:02:34"）。
+        returns:    时长总秒数。解析失败返回 0。
+    """
     if not length_str or not length_str.strip():
         return 0
     try:

@@ -72,6 +72,8 @@ from . import admin_bp
 from .routes import ALLOWED_TAGS, ALLOWED_ATTRS
 
 
+# bleach HTML 白名单：定义允许保留的标签属性
+# '*' 表示所有标签通用的属性，其他键为具体标签名 → 允许的属性列表
 _HTML_STRIP_ATTRS = {
     '*': ['id', 'class', 'style', 'title', 'lang', 'dir'],
     'a': ['href', 'title', 'rel', 'target'],
@@ -95,6 +97,7 @@ _HTML_STRIP_ATTRS = {
     'script': ['src', 'type', 'async', 'defer'],
     'style': ['type', 'media'],
 }
+# bleach HTML 白名单：允许保留的 HTML 标签（含常用的富文本标签和 SVG 标签）
 _HTML_CLEAN_TAGS = [
     'div', 'span', 'section', 'header', 'footer', 'nav', 'main', 'article',
     'aside', 'figure', 'figcaption', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
@@ -110,6 +113,19 @@ _HTML_CLEAN_TAGS = [
 
 
 def _sanitize_html(html: str) -> str:
+    """净化用户提交的 HTML 内容，移除不安全的标签、属性和协议。
+
+    使用 bleach 库对 HTML 进行白名单过滤：
+      - _HTML_CLEAN_TAGS: 允许保留的标签列表
+      - _HTML_STRIP_ATTRS: 每个标签允许保留的属性
+      - strip=True: 移除不在白名单中的标签及其内容
+
+    Args:
+        html: 原始 HTML 字符串
+
+    Returns:
+        净化后的安全 HTML 字符串
+    """
     if not html:
         return html
     return bleach.clean(html, tags=_HTML_CLEAN_TAGS, attributes=_HTML_STRIP_ATTRS, strip=True)
@@ -276,6 +292,12 @@ from collections import OrderedDict
 
 
 class _LRUDict(OrderedDict):
+    """基于 OrderedDict 的简易 LRU 字典，达到 maxsize 时淘汰最早插入的条目。
+
+    用于登录频率限制的记录存储，避免无限增长导致内存泄漏。
+    默认 maxsize=1000，超过上限时自动弹出最早插入的键值对。
+    """
+
     def __init__(self, maxsize=1000, *args, **kwargs):
         self.maxsize = maxsize
         super().__init__(*args, **kwargs)
@@ -283,13 +305,13 @@ class _LRUDict(OrderedDict):
     def __setitem__(self, key, value):
         super().__setitem__(key, value)
         if len(self) > self.maxsize:
-            self.popitem(last=False)
+            self.popitem(last=False)  # 淘汰最早插入的条目（FIFO 策略）
 
 
-_login_attempts = _LRUDict(maxsize=10000)
-_login_attempts_lock = threading.Lock()
-LOGIN_RATE_LIMIT = 10
-LOGIN_RATE_WINDOW = 60
+_login_attempts = _LRUDict(maxsize=10000)      # IP → [尝试时间戳列表]，记录每个 IP 的登录尝试
+_login_attempts_lock = threading.Lock()        # 保护 _login_attempts 的并发访问
+LOGIN_RATE_LIMIT = 10                          # 每个时间窗口内允许的最大尝试次数
+LOGIN_RATE_WINDOW = 60                         # 时间窗口长度（秒）
 
 
 @admin_bp.route('/login', methods=['GET', 'POST'])
@@ -316,13 +338,16 @@ def login():
 
     import ipaddress
 
+    # ── 获取客户端真实 IP（支持反向代理，取 access_route 第一跳） ─
     ip = request.access_route[0] if request.access_route else request.remote_addr or 'unknown'
     try:
-        ip = ipaddress.ip_address(ip).compressed
+        ip = ipaddress.ip_address(ip).compressed  # 标准化 IPv6 格式
     except ValueError:
         pass
     now = time.time()
+    # ── 滑动窗口频率限制：清理超出窗口的旧记录，检查是否超限 ─
     with _login_attempts_lock:
+        # 保留当前时间窗口内的尝试记录
         _login_attempts[ip] = [
             t for t in _login_attempts.get(ip, []) if now - t < LOGIN_RATE_WINDOW
         ]
@@ -337,17 +362,20 @@ def login():
             if not user.is_active:
                 flash('账号已被禁用，请联系管理员', 'error')
                 return render_template('admin/login.html', form=form)
+            # ── 登录成功：清除该 IP 的失败记录，更新用户统计信息 ─
             with _login_attempts_lock:
                 _login_attempts[ip] = []
             user.last_login_at = datetime.datetime.now(datetime.timezone.utc)
             user.last_login_ip = ip
             user.login_count = (user.login_count or 0) + 1
             db.session.commit()
-            session.permanent = True
+            session.permanent = True  # 会话持久化（关闭浏览器不清除）
             login_user(user)
+            # 编辑及以上角色跳转仪表盘，普通用户跳转个人资料页
             if user.is_editor:
                 return redirect(url_for('admin.dashboard'))
             return redirect(url_for('admin.profile'))
+        # ── 登录失败：记录本次尝试时间戳 ─
         with _login_attempts_lock:
             _login_attempts[ip].append(now)
         flash('用户名或密码错误', 'error')
@@ -369,11 +397,11 @@ def register():
         return redirect(url_for('admin.profile'))
 
     if not current_app.config.get('ENABLE_REGISTRATION', False):
-        abort(404)
+        abort(404)  # 注册功能默认关闭，返回 404 避免暴露注册入口
 
     form = RegisterForm()
     if form.validate_on_submit():
-        # 检查注册功能是否启用
+        # 双重检查：防止在表单提交窗口期内配置被关闭
         if not current_app.config.get('ENABLE_REGISTRATION', False):
             flash('注册功能已关闭', 'error')
             return render_template('admin/register.html', form=form)
@@ -440,21 +468,24 @@ def dashboard():
 
     from concurrent.futures import ThreadPoolExecutor
 
+    # 获取 Flask 应用实例（非代理对象），用于子线程中创建应用上下文
     app = current_app._get_current_object()
 
     def _run(fn):
+        """在子线程中创建 Flask 应用上下文后执行查询"""
         with app.app_context():
             return fn()
 
+    # 使用最多 6 个线程并行执行 6 个独立统计查询
     with ThreadPoolExecutor(max_workers=6) as pool:
-        fut_pc = pool.submit(_run, lambda: Post.query.count())
-        fut_pub = pool.submit(_run, lambda: Post.query.filter_by(is_published=True).count())
-        fut_cc = pool.submit(_run, lambda: Comment.query.filter_by(is_approved=False).count())
-        fut_uc = pool.submit(_run, lambda: User.query.count())
-        fut_rp = pool.submit(
+        fut_pc = pool.submit(_run, lambda: Post.query.count())                          # 文章总数
+        fut_pub = pool.submit(_run, lambda: Post.query.filter_by(is_published=True).count())  # 已发布文章数
+        fut_cc = pool.submit(_run, lambda: Comment.query.filter_by(is_approved=False).count())  # 待审核评论数
+        fut_uc = pool.submit(_run, lambda: User.query.count())                          # 用户总数
+        fut_rp = pool.submit(                                                            # 最近 5 篇文章
             _run, lambda: Post.query.order_by(Post.created_at.desc()).limit(5).all()
         )
-        fut_rc = pool.submit(
+        fut_rc = pool.submit(                                                            # 最近 5 条待审核评论（含文章信息）
             _run,
             lambda: (
                 Comment.query.options(db.joinedload(Comment.post))
@@ -515,6 +546,7 @@ def post_list():
         joinedload(Post.author),
     )
     if q:
+        # 转义 LIKE 通配符，防止用户通过 % 或 _ 触发非预期的模糊匹配
         safe_q = q.replace('%', '\\%').replace('_', '\\_')
         query = query.filter(Post.title.ilike(f'%{safe_q}%'))
     if not current_user.is_editor:
@@ -552,12 +584,16 @@ def new_post():
         form.content.data = bleach.clean(
             form.content.data or '', tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS
         )
-        # ── HTML 源码写入（优先于文件上传，原始存储，沙箱 iframe 隔离） ─
+        # ── HTML 源码处理策略（按优先级）：
+        #   1. 优先取 form 中提交的 textarea 内容（富文本编辑器直接编辑）
+        #   2. 回退到上传的 .html/.htm 文件内容
+        #   3. 原始 HTML 存储后通过沙箱 iframe 隔离展示，避免样式冲突 ─
         html_content = request.form.get('html_content', '')
         if not html_content:
             html_file = form.html_file.data
             if html_file and html_file.filename and (html_file.filename.endswith('.html') or html_file.filename.endswith('.htm')):
                 raw = html_file.read()
+                # 尝试 UTF-8 → GBK → 容错 UTF-8 的编码探测
                 try:
                     raw = raw.decode('utf-8')
                 except UnicodeDecodeError:
@@ -625,7 +661,11 @@ def edit_post(id):
         form.content.data = bleach.clean(
             form.content.data or '', tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS
         )
-        # ── HTML 源码处理（优先于文件，原始存储，沙箱 iframe 隔离） ─
+        # ── HTML 源码处理策略（编辑时）：
+        #   1. 优先取 textarea 提交的 HTML 内容（覆盖旧内容）
+        #   2. 如果标记了 remove_html，清空 HTML 字段
+        #   3. 回退到上传的 .html/.htm 文件内容
+        #   4. 未提供新内容时保留 post 已有 html_content ─
         html_content = request.form.get('html_content', '')
         if html_content:
             post.html_content = _sanitize_html(html_content)
@@ -689,6 +729,7 @@ def delete_post(id):
         html_path = os.path.join(current_app.static_folder, post.html_file_url)
         if os.path.isfile(html_path):
             os.remove(html_path)
+    # 先删除关联评论再删文章，避免外键约束冲突
     Comment.query.filter_by(post_id=post.id).delete()
     db.session.delete(post)
     db.session.commit()
@@ -780,6 +821,8 @@ def delete_category(id):
     # 遍历所有包含此分类的文章，解除关联
     from sqlalchemy.orm import joinedload
 
+    # 遍历所有关联了该分类的文章，使用列表推导式移除目标分类
+    # 注意：joinedload 确保 post.categories 已预加载，避免 N+1 查询
     for post in (
         Post.query.options(joinedload(Post.categories)).filter(Post.categories.any(id=id)).all()
     ):
@@ -812,6 +855,7 @@ def comment_list():
     """
     from sqlalchemy.orm import joinedload
 
+    # 待审核和已通过评论使用独立的翻页参数，可在同一页面分别翻页
     pending_page = request.args.get('pending_page', 1, type=int)
     approved_page = request.args.get('approved_page', 1, type=int)
     pending = (
@@ -1011,13 +1055,14 @@ def profile():
         current_user.bilibili_url = form.bilibili_url.data
 
         # ── 头像上传 ──────────────────────────
+        # 优先级：avatar_url（外部URL）> avatar 文件上传
         avatar_url = request.form.get('avatar_url', '')
         if avatar_url:
             current_user.avatar = avatar_url
         elif 'avatar' in request.files:
             file = request.files['avatar']
             if file and file.filename:
-                # 判断文件扩展名
+                # 从文件名提取扩展名，用于后续格式判断和保存
                 ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'png'
                 if ext in ('png', 'jpg', 'jpeg', 'gif', 'webp'):
                     import io as _io
@@ -1025,16 +1070,17 @@ def profile():
                     from PIL import Image
 
                     img = Image.open(file)
-                    # 缩放到 200px 宽（保持宽高比）
+                    # 缩放到 200px 宽（保持宽高比），仅缩小不放大
                     ratio = min(200 / img.width, 1.0)
                     if ratio < 1:
                         h = int(img.height * ratio)
                         img = img.resize((200, h), Image.LANCZOS)
                     buf = _io.BytesIO()
+                    # JPEG 格式使用较高压缩率（quality=85 + optimize）
                     fmt = 'JPEG' if ext in ('jpg', 'jpeg') else 'PNG'
                     img.save(buf, fmt, quality=85, optimize=True)
                     buf.seek(0)
-                    # 生成唯一文件名，避免覆盖
+                    # 生成 UUID 文件名，避免用户间头像覆盖
                     filename = 'avatar_' + str(uuid.uuid4()) + '.' + ext
                     from flask import current_app
 
@@ -1104,15 +1150,16 @@ def upload_image():
     file = request.files['file']
     if not file.filename:
         return jsonify({'error': '空文件'}), 400
-    # 校验文件扩展名
+    # 校验文件扩展名白名单
     ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'png'
     if ext not in ('png', 'jpg', 'jpeg', 'gif', 'webp'):
         return jsonify({'error': '不支持的格式'}), 400
-    # 校验 Magic Bytes（防止改名绕过）
+    # 校验 Magic Bytes（文件头签名），防止通过改名绕过后缀检查
     import io as _io
 
     magic = file.read(8)
     file.seek(0)
+    # 各格式魔数签名：PNG(‰PNG), JPEG(ÿØ), GIF87a/GIF89a, WEBP(RIFF...WEBP)
     is_valid_magic = (
         magic.startswith(b'\x89PNG')
         or magic.startswith(b'\xff\xd8')
@@ -1122,7 +1169,7 @@ def upload_image():
     )
     if not is_valid_magic:
         return jsonify({'error': '文件内容不是有效的图片'}), 400
-    # 使用 PIL 重新编码图片（统一质量控制）
+    # 使用 PIL 重新编码图片（统一质量控制，同时阻断二次构造的恶意图片）
     try:
         from PIL import Image
 
@@ -1135,13 +1182,13 @@ def upload_image():
     try:
         buf = _io.BytesIO()
         if ext == 'gif':
-            img.save(buf, 'GIF')
+            img.save(buf, 'GIF')  # GIF 保持原格式（保留动画）
         else:
-            img.save(buf, 'WEBP', quality=85, method=6)
+            img.save(buf, 'WEBP', quality=85, method=6)  # 非 GIF 统一转 WebP，减小体积
         buf.seek(0)
     except Exception:
         return jsonify({'error': '图片处理失败'}), 400
-    # 生成 UUID 文件名，避免路径冲突
+    # 生成 UUID 文件名，避免路径冲突和文件名猜测
     filename = str(uuid.uuid4()) + ('.webp' if ext != 'gif' else '.gif')
     from flask import current_app
 
@@ -1198,6 +1245,14 @@ def new_featured_card():
     form = FeaturedCardForm()
     form.tag.choices = [(c.slug, c.name) for c in categories]
     def _validate_url_protocol(val):
+        """检查 URL 协议是否安全，阻止 javascript:/data:/vbscript:/file: 等危险协议。
+
+        Args:
+            val: 待检查的 URL 字符串
+
+        Returns:
+            True 表示安全，False 表示包含危险协议
+        """
         if val:
             val_lower = val.strip().lower()
             for scheme in ('javascript:', 'data:', 'vbscript:', 'file:'):
@@ -1252,6 +1307,14 @@ def edit_featured_card(id):
     form = FeaturedCardForm(obj=card)
     form.tag.choices = [(c.slug, c.name) for c in Category.query.order_by(Category.name).all()]
     def _validate_url_protocol(val):
+        """检查 URL 协议是否安全，阻止 javascript:/data:/vbscript:/file: 等危险协议。
+
+        Args:
+            val: 待检查的 URL 字符串
+
+        Returns:
+            True 表示安全，False 表示包含危险协议
+        """
         if val:
             val_lower = val.strip().lower()
             for scheme in ('javascript:', 'data:', 'vbscript:', 'file:'):
@@ -1312,7 +1375,11 @@ def delete_featured_card(id):
 @admin_bp.route('/bili-subscriptions')
 @admin_required
 def bili_subscriptions():
-    """B站 邮件订阅管理列表"""
+    """B站 邮件订阅管理列表（分页 + 搜索）。
+
+    支持按邮箱或 UP 主名称模糊搜索。
+    Template: admin/bili_subscriptions.html
+    """
     page = request.args.get('page', 1, type=int)
     per_page = 20
     q = request.args.get('q', '').strip()
@@ -1335,7 +1402,11 @@ def bili_subscriptions():
 @admin_bp.route('/bili-subscriptions/<int:id>/delete', methods=['POST'])
 @admin_required
 def delete_bili_subscription(id):
-    """删除单条订阅记录"""
+    """删除单条订阅记录。
+
+    Args:
+        id: 订阅记录 ID
+    """
     sub = BiliSubscription.query.get_or_404(id)
     db.session.delete(sub)
     db.session.commit()
@@ -1346,7 +1417,10 @@ def delete_bili_subscription(id):
 @admin_bp.route('/bili-subscriptions/batch', methods=['POST'])
 @admin_required
 def batch_bili_subscriptions():
-    """批量管理订阅记录"""
+    """批量管理订阅记录（删除 / 标记已验证 / 取消验证）。
+
+    通过表单字段 action 指定操作类型，ids 为选中的订阅 ID 列表。
+    """
     action = request.form.get('action', '')
     ids = request.form.getlist('ids', type=int)
     if not ids:
@@ -1372,14 +1446,18 @@ def batch_bili_subscriptions():
         db.session.commit()
         flash(f'已取消 {count} 条订阅的验证状态', 'success')
     else:
-        flash(f'未知操作: {action}', 'warning')
+        flash(f'未知操作: {action}', 'warning')  # 兜底处理：表单提交了无效的 action 值
     return redirect(url_for('admin.bili_subscriptions'))
 
 
 @admin_bp.route('/bili-subscriptions/cleanup-unverified', methods=['POST'])
 @admin_required
 def cleanup_unverified_subscriptions():
-    """清理 24 小时未验证的订阅记录"""
+    """清理超过 24 小时仍未验证的订阅记录。
+
+    删除 created_at 早于当前时间 24 小时前且 verified=False 的订阅，
+    避免数据库中积累大量未验证的过期订阅数据。
+    """
     import datetime
 
     cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=24)
@@ -1394,7 +1472,16 @@ def cleanup_unverified_subscriptions():
 @admin_bp.route('/bili-history-cleanup', methods=['GET', 'POST'])
 @admin_required
 def bili_history_cleanup():
-    """B站视频历史记录清理（配置自动清理 + 手动执行）"""
+    """B站视频历史记录清理（配置自动清理 + 手动执行）。
+
+    GET  — 显示清理配置页面（自动清理开关、保留天数、手动清理表单）
+    POST — 处理两种操作：
+       action=manual:  手动执行清理（指定保留天数）
+       action=config:  更新自动清理配置（启用/禁用 + 保留天数）
+
+    自动清理通过定时任务调用 cleanup_old_history() 实现。
+    Template: admin/bili_history_cleanup.html
+    """
     from blog.bili_routes import cleanup_old_history
     from blog.models import BiliCleanupConfig, BiliVideoHistory
 
@@ -1418,7 +1505,7 @@ def bili_history_cleanup():
                 flash('天数必须大于 0', 'error')
             else:
                 total = BiliVideoHistory.query.count()
-                deleted = cleanup_old_history(days=days_used)
+                deleted = cleanup_old_history(days=days_used)  # 执行清理，返回删除条数
                 flash(
                     f'已清理 {deleted} 条 {days_used} 天前的记录（剩余 {total - deleted} 条）',
                     'success',
@@ -1429,7 +1516,7 @@ def bili_history_cleanup():
             if cfg.days < 1:
                 flash('天数必须大于 0', 'error')
             else:
-                cfg.enabled = request.form.get('enabled') == '1'
+                cfg.enabled = request.form.get('enabled') == '1'  # 表单值为 '1' 时启用
                 db.session.commit()
                 flash(
                     f'自动清理已{"启用" if cfg.enabled else "禁用"}，保留最近 {cfg.days} 天数据',

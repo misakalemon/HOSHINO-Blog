@@ -27,7 +27,15 @@ _BILI_LOGGED_IN = False
 
 
 def _get_qr_key(qr):
-    """兼容获取 QR 内部属性（库版本不同时属性名可能变化）"""
+    """兼容获取 QR 内部属性（库版本不同时属性名可能变化）
+
+    因 bilibili-api-python 不同版本中 QrCodeLogin 的内部属性名不一致，
+    此函数逐一尝试常见属性名以确保兼容性。
+
+        qr:       QrCodeLogin 实例。
+        returns:  二维码 key（字符串）。
+        raises:   RuntimeError — 所有已知属性名均不匹配。
+    """
     try:
         return qr.get_qrcode_key()
     except AttributeError:
@@ -40,7 +48,12 @@ def _get_qr_key(qr):
 
 
 def _get_qr_link(qr):
-    """兼容获取 QR 链接"""
+    """兼容获取 QR 链接
+
+        qr:       QrCodeLogin 实例。
+        returns:  二维码完整 URL（字符串）。
+        raises:   RuntimeError — 所有已知属性名均不匹配。
+    """
     try:
         return qr.get_qrcode_link()
     except AttributeError:
@@ -53,7 +66,14 @@ def _get_qr_link(qr):
 
 
 def _set_qr_key(qr, key):
-    """兼容设置 QR key"""
+    """兼容设置 QR key
+
+    轮询阶段需要将之前生成的 key 设回新的 QrCodeLogin 实例。
+
+        qr:        QrCodeLogin 实例。
+        key:       二维码 key 字符串。
+        raises:    RuntimeError — 所有已知属性名均不匹配。
+    """
     for attr in ('_QrCodeLogin__qr_key', '_QrLogin__qr_key', '_qr_key'):
         if hasattr(qr, attr):
             setattr(qr, attr, key)
@@ -62,7 +82,18 @@ def _set_qr_key(qr, key):
 
 
 def generate_qr_v2() -> dict:
-    """使用官方库生成二维码，返回 { qrcode_key, img }"""
+    """使用官方库生成二维码，返回 { qrcode_key, img }
+
+    内部流程：
+      1. 创建 QrCodeLogin 实例并调用 generate_qrcode()
+      2. 提取 qrcode_key（用于轮询）和 qr_url（用于生成图片）
+      3. 使用 qrcode 库生成 base64 编码的 PNG 图片
+
+        returns: {
+                    'qrcode_key': str,      # 二维码 key，供 poll_qr_v2 轮询
+                    'img': str,              # base64 data URI 格式的二维码图片
+                  }
+    """
     import io, base64, qrcode as qrcode_lib
 
     qr = QrCodeLogin()
@@ -79,7 +110,18 @@ def generate_qr_v2() -> dict:
 
 
 def poll_qr_v2(qrcode_key: str) -> dict:
-    """轮询扫码状态，使用官方库"""
+    """轮询扫码状态，使用官方库
+
+    每 1-2 秒由调用方定期调用此函数，根据返回的 status 决定下一步操作。
+
+        qrcode_key: generate_qr_v2 返回的二维码 key。
+        returns:    {
+                      'ok': bool,              # 是否正常完成轮询（无异常）
+                      'status': str,           # 'success' | 'scanned' | 'waiting' | 'expired' | 'unknown'
+                      'msg': str,              # 人类可读的状态描述
+                      'error': str (可选),     # 异常时存在，包含错误信息
+                    }
+    """
     qr = QrCodeLogin()
     _set_qr_key(qr, qrcode_key)
     try:
@@ -101,7 +143,7 @@ def poll_qr_v2(qrcode_key: str) -> dict:
         save_credential(cred)
         # 同时保存 Cookie 字符串（向后兼容）
         cookie_dict = cred.get_cookies()
-
+        # Cookie 值可能被 URL 编码，统一 decode 后再保存
         decoded = {k: urllib.parse.unquote(v) for k, v in cookie_dict.items()}
         cookie_str = '; '.join([f'{k}={v}' for k, v in decoded.items()])
         save_cookies(cookie_str)
@@ -117,7 +159,12 @@ def poll_qr_v2(qrcode_key: str) -> dict:
 
 
 def save_cookies(cookie_str: str):
-    """保存 Cookie 到文件"""
+    """保存 Cookie 到文件
+
+    向后兼容存储：仅保存纯 Cookie 字符串，用于旧流程加载。
+
+        cookie_str: 形如 "SESSDATA=xxx; bili_jct=xxx; buvid3=xxx" 的 Cookie 字符串。
+    """
     path = COOKIE_FILE
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, 'w', encoding='utf-8') as f:
@@ -126,7 +173,10 @@ def save_cookies(cookie_str: str):
 
 
 def load_cookies() -> str | None:
-    """从文件加载 Cookie，如果文件不存在返回 None"""
+    """从文件加载 Cookie，如果文件不存在返回 None
+
+        returns: Cookie 字符串，文件不存在或读取失败返回 None。
+    """
     path = COOKIE_FILE
     if not os.path.exists(path):
         return None
@@ -139,12 +189,19 @@ def load_cookies() -> str | None:
 
 
 def save_credential(cred):
-    """保存完整 Credential（含 refresh_token，支持自动续期）"""
+    """保存完整 Credential（含 refresh_token，支持自动续期）
+
+    优先存储方式：JSON 序列化 Credential 对象的所有非空字段，
+    包括 refresh_token、ac_time_value 等关键字段。
+
+        cred: bilibili_api.Credential 实例。
+    """
     import json
 
     path = CREDENTIAL_FILE
     os.makedirs(os.path.dirname(path), exist_ok=True)
     try:
+        # 仅序列化非 None 字段，减少冗余
         data = {k: v for k, v in cred.__dict__.items() if v is not None}
         with open(path, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
@@ -154,7 +211,10 @@ def save_credential(cred):
 
 
 def load_credential():
-    """从文件加载 Credential（含 refresh_token），失败返回 None"""
+    """从文件加载 Credential（含 refresh_token），失败返回 None
+
+        returns: bilibili_api.Credential 实例，失败返回 None。
+    """
     from bilibili_api import Credential
     import json
 
@@ -180,7 +240,20 @@ def load_credential():
 
 
 def apply_cookies():
-    """尝试从文件加载 Credential 或 Cookie 并设置到 API 模块"""
+    """尝试从文件加载 Credential 或 Cookie 并设置到 API 模块
+
+    加载优先级：
+      1. 如果已通过 V2 登录（_BILI_LOGGED_IN），直接返回 True
+      2. 如果全局 _credential 已验证有效，直接返回 True
+      3. 尝试加载完整 Credential JSON（含 refresh_token，可自动续期）
+         - 有效 → 设置并返回 True
+         - 过期 → 日志警告，继续尝试 Cookie
+      4. 回退加载纯 Cookie 字符串（向后兼容）
+         - 有效 → 设置并返回 True
+         - 过期 → 返回 False（提示用户重新登录）
+
+        returns: True 表示已成功设置有效凭证，False 表示无可用凭证。
+    """
     global _BILI_LOGGED_IN
     if _BILI_LOGGED_IN:
         logger.info('✅ 已通过 V2 登录，直接使用')

@@ -42,6 +42,7 @@ from flask_migrate import Migrate
 load_dotenv()
 
 # Gzip 压缩实例（让静态资源和 API 响应更小）
+# 在 create_app() 外部创建，确保全局唯一实例
 compress = Compress()
 
 
@@ -49,7 +50,24 @@ _startup_time = time.time()
 
 
 def create_app():
-    """创建并配置 Flask 应用。"""
+    """创建并配置完整的 Flask 应用实例。
+
+    按顺序完成以下初始化步骤：
+        1. 应用基础配置（config + 上传限制 + 连接池）
+        2. CSRF 保护 & Gzip 参数
+        3. 日志系统（文件 + 终端）
+        4. 数据库（建表 + 迁移 + 默认管理员）
+        5. Redis 缓存连接池
+        6. 外部 API 爬虫（Amazon / B站）
+        7. 定时任务（APScheduler）
+        8. Flask-Login 登录管理
+        9. 蓝图注册（前台 / 后台 / B站路由）
+        10. 安全响应头 & 错误处理器
+        11. 全局请求日志中间件
+
+    返回:
+        Flask: 配置完毕的应用实例
+    """
     app = Flask(__name__)
 
     # ── 基础配置 ────────────────────────────────
@@ -126,12 +144,14 @@ def create_app():
     # ── Amazon 直爬（curl_cffi 模拟浏览器） ────
     from blog.apify_client import scraper
 
+    # 配置爬虫代理（服务器在国内时必须使用海外代理才能访问 Amazon）
     scraper._proxy = app.config.get('SCRAPING_PROXY') or None
     logger.info(
         'Amazon 爬虫已就绪%s', '，代理: ' + scraper._proxy if scraper._proxy else '（无代理）'
     )
 
     # ── 加载 B站 持久化登录凭证 ──
+    # 从本地文件读取 B站 cookie，确保爬虫使用已登录的账号身份
     from blog.bilibili.login import apply_cookies as _bili_apply_cookies
 
     _bili_apply_cookies()
@@ -180,6 +200,10 @@ def create_app():
     from werkzeug.exceptions import RequestEntityTooLarge
 
     def _handle_413(e):
+        """处理上传文件超出大小限制的请求。
+
+        记录错误日志（含来源 IP 和路径）后返回友好的 HTML 提示页面。
+        """
         logger.error(
             '413 REQUEST TOO LARGE: Content-Length=%s  Remote=%s  Path=%s',
             request.content_length,
@@ -203,6 +227,11 @@ def create_app():
     # ── 安全响应头 ───────────────────────────────
     @app.after_request
     def add_security_headers(response):
+        """为所有 HTTP 响应添加安全相关的响应头。
+
+        包括：X-Content-Type-Options、X-Frame-Options、
+        HSTS、Content-Security-Policy，防范常见 Web 攻击。
+        """
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['X-Frame-Options'] = 'SAMEORIGIN'
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
@@ -222,6 +251,7 @@ def create_app():
 
     @app.teardown_appcontext
     def shutdown_session(exception=None):
+        """每次请求结束后自动关闭数据库 session，释放连接回连接池。"""
         db.session.remove()
 
     elapsed = time.time() - _startup_time
@@ -240,6 +270,9 @@ def _init_scheduler(app):
       - 每天 02:00  深扫所有 B站 UP 主视频（补全 + 三层统计更新）
       - 每天 03:00  自动轮换 SECRET_KEY
       - 增量检查     B站 新视频（跑完一轮等 30 分钟再跑下一轮）
+      - 每天 03:00  自动清理 B站 视频历史快照
+
+    同时在进程退出和 SIGTERM 信号时执行安全关闭，避免挂起任务被杀死。
     """
     try:
         from datetime import datetime, timedelta
@@ -291,7 +324,9 @@ def _init_scheduler(app):
         app.scheduler = scheduler
 
         # 注册进程退出时的清理函数
+        # 在 Python 解释器正常退出时调用 scheduler.shutdown()
         def _shutdown_scheduler():
+            """安全关闭调度器（忽略关闭过程中的异常）。"""
             try:
                 scheduler.shutdown(wait=False)
             except Exception:
@@ -302,6 +337,7 @@ def _init_scheduler(app):
         import sys
 
         def _scheduler_sigterm(signum, frame):
+            """SIGTERM 信号处理：关闭调度器后退出进程。"""
             _shutdown_scheduler()
             sys.exit(0)
 
@@ -313,7 +349,14 @@ def _init_scheduler(app):
 
 
 def _run_bili_incremental_check(app):
-    """增量检查所有 UP 主（分批并发）。跑完一轮后等 40 分钟再跑下一轮。"""
+    """增量检查所有 B站 UP 主是否有新视频发布。
+
+    分批并发执行，每批 _BATCH_SIZE 个 UP 主同时检查。
+    线程之间通过 _scrape_lock 互斥，避免同一个 UP 主被重复检查。
+    如果全局熔断（_circuit_open_until）未到期，则跳过本轮检查。
+
+    跑完一轮后自动调度下一轮（间隔 30 分钟），形成持续的增量检查循环。
+    """
     from datetime import datetime, timedelta
 
     with app.app_context():

@@ -36,40 +36,60 @@ SECRET_KEY_MAX_HISTORY = 10  # 最多保留 10 个历史密钥
 
 
 def _load_secret_keys():
-    """从文件加载所有历史密钥，返回列表（最新在前）。"""
+    """从文件加载所有历史密钥，返回列表（最新在前）。
+
+    文件格式为 JSON 字符串数组，如 ["key1", "key2", ...]。
+    文件不存在、格式非法或内容不是字符串数组时返回空列表。
+
+    返回:
+        list[str]: 历史密钥列表，空列表表示无历史密钥
+    """
     if os.path.exists(SECRET_KEYS_FILE):
         try:
             with open(SECRET_KEYS_FILE) as f:
                 keys = json.load(f)
+                # 严格校验格式：必须是字符串列表
                 if isinstance(keys, list) and all(isinstance(k, str) for k in keys):
                     return keys
         except (json.JSONDecodeError, OSError):
             pass
     return []
 
+# 保护密钥文件写入操作的线程锁
+# 因为定时任务可能在其他线程中执行 rotate_secret_key()
 _secret_keys_lock = threading.Lock()
 
 
 def _save_secret_keys(keys):
-    """原子写入密钥列表到文件（临时文件 + rename，防崩溃）。"""
+    """原子写入密钥列表到文件（临时文件 + rename，防崩溃）。
+
+    采用 写入临时文件 → fsync 刷盘 → os.replace 原子重命名 的策略，
+    确保写入过程中即使进程崩溃也不会损坏原文件。
+
+    参数:
+        keys: list[str] — 要写入的密钥列表
+    """
     with _secret_keys_lock:
         import tempfile
         tmp = None
         try:
+            # 在目标目录下创建临时文件（同一文件系统，rename 才能保证原子性）
             tmp = tempfile.NamedTemporaryFile(
                 mode='w', dir=os.path.dirname(SECRET_KEYS_FILE),
                 prefix='.secret_keys_tmp_', delete=False, encoding='utf-8'
             )
             json.dump(keys, tmp)
             tmp.flush()
-            os.fsync(tmp.fileno())
+            os.fsync(tmp.fileno())  # 强制刷新到磁盘
             tmp_name = tmp.name
             tmp.close()
-            os.replace(tmp_name, SECRET_KEYS_FILE)
+            os.replace(tmp_name, SECRET_KEYS_FILE)  # 原子替换
         except OSError as e:
             import logging
             logging.getLogger(__name__).warning('写入密钥文件失败: %s', e)
         finally:
+            # 清理临时文件（正常流程中 tmp 已被 close + replace，
+            # 异常流程中需要确保残留临时文件被删除）
             if tmp is not None:
                 try:
                     os.unlink(tmp.name)
@@ -78,7 +98,14 @@ def _save_secret_keys(keys):
 
 
 def _ensure_initial_key():
-    """确保至少有一个密钥存在，没有则自动生成。"""
+    """确保至少有一个密钥存在，没有则自动生成。
+
+    首次运行或 .secret_keys 文件被误删时，自动生成一个
+    64 位 hex 密钥（secrets.token_hex(32)），写入文件后返回。
+
+    返回:
+        list[str]: 包含所有历史密钥的列表
+    """
     keys = _load_secret_keys()
     if not keys:
         keys = [secrets.token_hex(32)]
@@ -89,7 +116,14 @@ def _ensure_initial_key():
 def rotate_secret_key(app):
     """生成新密钥轮换当前 SECRET_KEY，旧密钥移入 SECRET_KEY_FALLBACKS。
 
-    如果 .env 中显式设置了 SECRET_KEY，则不执行轮换。
+    如果 .env 中显式设置了 SECRET_KEY，则不执行轮换
+    （用户显式指定的密钥优先级最高，不应被自动覆盖）。
+
+    轮换逻辑：
+        1. 生成新 64 位 hex 密钥
+        2. 插入到密钥列表头部（最新在前）
+        3. 截断到 SECRET_KEY_MAX_HISTORY 个
+        4. 写入文件 & 更新 app.config
     """
     if os.environ.get('SECRET_KEY'):
         return
@@ -109,9 +143,13 @@ def _build_database_uri():
 
     优先级：
     1. DATABASE_URL 环境变量（完整连接串，如 mysql+pymysql://...）
+       — 用于生产环境或 Docker Compose 中直接指定
     2. 拆分变量自动拼接（DB_HOST + DB_PORT + DB_USER + DB_PASS + DB_NAME）
+       — 用于开发环境或分散管理配置的场景
 
-    Returns:
+    密码和用户名中的特殊字符会经过 URL 编码，防止破坏 URI 结构。
+
+    返回:
         str: SQLAlchemy 数据库 URI
     """
     direct_url = os.environ.get('DATABASE_URL')
@@ -140,6 +178,10 @@ class Config:
 
     所有 Flask 扩展的配置（SQLAlchemy、LoginManager、Compress 等）
     均通过此类集中管理，通过 app.config.from_object('config.ActiveConfig') 加载。
+
+    配置加载优先级（从高到低）：
+        1. 环境变量（.env 文件或系统环境变量）
+        2. Python 代码中的默认值
     """
 
     # ── Flask 核心 ──────────────────────────────
@@ -247,6 +289,18 @@ class Config:
     #   仪表盘统计数据      → 60s（1 分钟）
     #   RSS 输出            → 600s（10 分钟）
     def _safe_int_env(key, default):
+        """安全地从环境变量读取整数值。
+
+        环境变量不存在或无法解析为整数时返回默认值。
+        避免直接使用 int(os.environ.get(...)) 在非法值时抛出异常。
+
+        参数:
+            key: str — 环境变量名
+            default: int — 默认值
+
+        返回:
+            int: 解析后的整数值，或默认值
+        """
         val = os.environ.get(key)
         if val is not None:
             try:

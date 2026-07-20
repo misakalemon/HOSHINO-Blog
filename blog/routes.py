@@ -86,11 +86,23 @@ ALLOWED_TAGS = [
     's',
 ]
 def _is_safe_url(url):
-    """Block dangerous URL protocols (only http/https allowed in href)."""
+    """检查 URL 是否为安全的 HTTP/HTTPS 链接，阻止危险协议注入。
+
+    用于过滤用户提交的链接（如评论中的 URL），
+    防止 javascript:/data:/vbscript: 等协议被注入到 <a href> 中。
+
+    Args:
+        url: 待检查的 URL 字符串
+
+    Returns:
+        bool: True 表示安全可用，False 表示包含危险协议
+    """
     if not url:
         return False
+    # 跳过以 // 开头的协议相对 URL
     if url.startswith('//'):
         return False
+    # 去除空白后检查是否以危险协议开头
     url_lower = ''.join(url.strip().lower().split())
     for scheme in ('javascript:', 'data:', 'vbscript:', 'file:', 'blob:'):
         if url_lower.startswith(scheme):
@@ -98,6 +110,7 @@ def _is_safe_url(url):
     return True
 
 
+# 标签→允许属性映射表，bleach 清理 HTML 时据此保留安全的属性
 _ATTRS_BY_TAG = {
     'a': ('href', 'title', 'rel'),
     'img': ('src', 'alt', 'title', 'style'),
@@ -112,9 +125,20 @@ _ATTRS_BY_TAG = {
 
 
 def _allow_attrs(tag, name, value):
+    """bleach 属性白名单回调：判断指定标签的某个属性是否允许保留。
+
+    Args:
+        tag: HTML 标签名
+        name: 属性名
+        value: 属性值
+
+    Returns:
+        bool: True 表示该属性允许保留
+    """
     allowed = _ATTRS_BY_TAG.get(tag)
     if not allowed:
         return False
+    # 对 <a href> 做额外安全校验
     if tag == 'a' and name == 'href':
         return _is_safe_url(value)
     return name in allowed
@@ -137,6 +161,14 @@ _thumbnail_locks_lock = threading.Lock()
 
 
 def _get_thumbnail_lock(cache_path: str) -> threading.Lock:
+    """获取或创建与缓存路径关联的线程锁，防止同一缩略图的并发写入。
+
+    Args:
+        cache_path: 缩略图缓存文件的绝对路径
+
+    Returns:
+        与 cache_path 一一对应的 threading.Lock 对象
+    """
     with _thumbnail_locks_lock:
         if cache_path not in _thumbnail_locks:
             _thumbnail_locks[cache_path] = threading.Lock()
@@ -155,6 +187,9 @@ def _get_sidebar_data():
 
     Returns:
         tuple: (categories, recent_posts, cat_post_counts)
+            categories       — 全部分类列表（按名称排序）
+            recent_posts     — 最新 4 篇已发布文章的摘要信息
+            cat_post_counts  — dict { category_id: 已发布文章数 }
     """
     from concurrent.futures import ThreadPoolExecutor
 
@@ -167,16 +202,19 @@ def _get_sidebar_data():
         with _sidebar_executor_lock:
             if _sidebar_executor is None:
                 _sidebar_executor = ThreadPoolExecutor(max_workers=3)
+                # 进程退出时自动关闭线程池，避免资源泄漏
                 atexit.register(lambda: _sidebar_executor.shutdown(wait=False))
 
     ttl = current_app.config.get('CACHE_TTL_SIDEBAR', 300)
     app = current_app._get_current_object()
 
     def _fetch_categories():
+        """子任务 1：获取所有分类（按名称排序）。"""
         with app.app_context():
             return Category.query.order_by(Category.name).all()
 
     def _fetch_cat_post_counts():
+        """子任务 2：统计每个分类下已发布文章的数量。"""
         with app.app_context():
             return dict(
                 db.session.query(
@@ -189,6 +227,7 @@ def _get_sidebar_data():
             )
 
     def _fetch_recent_posts():
+        """子任务 3：获取最新 4 篇已发布文章（优先走 Redis 缓存）。"""
         with app.app_context():
             cached = cache_get('sidebar:recent_posts')
             if cached is not None:
@@ -202,6 +241,7 @@ def _get_sidebar_data():
                 .limit(4)
                 .all()
             )
+            # 序列化为纯 Python 结构以兼容 Redis 存储
             result = [
                 {
                     'id': p.id,
@@ -215,6 +255,7 @@ def _get_sidebar_data():
             cache_set('sidebar:recent_posts', result, ttl)
             return result
 
+    # 并行提交三个独立查询任务
     fut_cat = _sidebar_executor.submit(_fetch_categories)
     fut_counts = _sidebar_executor.submit(_fetch_cat_post_counts)
     fut_recent = _sidebar_executor.submit(_fetch_recent_posts)
@@ -226,6 +267,14 @@ def _get_sidebar_data():
 
 
 def _cached_featured_cards():
+    """获取首页展示的特色卡片列表，带 Redis 缓存（5 分钟 TTL）。
+
+    从 FeaturedCard 表中读取所有激活的卡片，按 sort_order 排序，
+    结果序列化后缓存在 Redis 中，减少数据库查询。
+
+    Returns:
+        list[dict]: 每个元素包含 title / description / icon / tag / link / image_url
+    """
     from .cache import cache_get, cache_set
 
     cached = cache_get('home:featured_cards')
@@ -264,14 +313,14 @@ def index():
     page = request.args.get('page', 1, type=int)
     category_slug = request.args.get('category', None)
 
-    # 基础查询：只取已发布的文章，同时使用 joinedload 预加载作者信息
-    # 避免 N+1 查询问题
+    # 基础查询：只取已发布的文章，同时使用 joinedload 预加载作者和分类信息
+    # 避免 N+1 查询问题（遍历文章时不再逐条查询关联表）
     query = Post.query.options(
         db.joinedload(Post.author),
         db.joinedload(Post.categories),
         load_only(Post.id, Post.title, Post.slug, Post.summary, Post.cover_image, Post.created_at),
     ).filter_by(is_published=True)
-    # 按分类筛选（多对多关联）
+    # 按分类筛选（多对多关联：通过中间表 post_categories 关联）
     if category_slug:
         cat = Category.query.filter_by(slug=category_slug).first_or_404()
         query = query.filter(Post.categories.any(id=cat.id))
@@ -318,6 +367,12 @@ def post_html_frame(slug):
 
     专为 sandboxed iframe 设计，返回纯 HTML + 严格安全头。
     不包含 allow-same-origin，iframe 内脚本无法访问父页面 DOM/Cookie。
+
+    Args:
+        slug: 文章的唯一 URL 标识
+
+    Returns:
+        Response: 包含完整 HTML 的响应，带有严格 CSP 安全头
     """
     post = (
         Post.query.options(db.joinedload(Post.author), db.joinedload(Post.categories))
@@ -327,6 +382,8 @@ def post_html_frame(slug):
     if not post.html_content:
         abort(404)
 
+    # 注入 iframe 自适应高度的 JavaScript 脚本
+    # 通过 postMessage 通知父页面调整 iframe 高度
     AUTO_HEIGHT_SCRIPT = '''<script>
 (function(){function h(){parent.postMessage({type:'hoshino-iframe-resize',height:document.documentElement.scrollHeight},'*')}
 window.addEventListener('load',h);window.addEventListener('resize',h);
@@ -396,14 +453,16 @@ def single_post(slug):
         # 提交后重定向到文章页的 #comments 锚点
         return redirect(url_for('blog.single_post', slug=slug) + '#comments')
 
-    # ── 渲染缓存（内容不变时跳过 markdown + bleach）──
+    # ── 渲染缓存（内容不变时跳过 markdown + bleach 重复渲染）──
     from .cache import cache_get, cache_set
 
+    # 缓存键包含 updated_at 时间戳，文章更新后自动失效
     cache_key = f'post:rendered:{post.id}:{post.updated_at.timestamp() if post.updated_at else ""}'
     rendered_content = cache_get(cache_key)
     if rendered_content is None:
         from markdown import markdown
 
+        # Markdown → HTML → 清理 XSS（三步流水线）
         rendered_content = bleach.clean(
             markdown(post.content, extensions=['fenced_code', 'codehilite', 'tables']),
             tags=ALLOWED_TAGS,
@@ -413,6 +472,7 @@ def single_post(slug):
 
     comment_count = post.published_comments()
 
+    # 优先使用手动编写的 html_content（如报告），否则渲染 Markdown
     template = 'html-post.html' if post.html_content else 'single-post.html'
 
     return render_template(
@@ -510,7 +570,7 @@ def contact():
     form = ContactForm()
     message_sent = False
     if form.validate_on_submit():
-        # 表单有效：留存留言至 session 供页面显示（未来可改为发邮件）
+        # 表单有效：将留言写入 ContactMessage 表（未来可改为发邮件通知）
         from .models import ContactMessage
 
         msg = ContactMessage(
@@ -523,6 +583,7 @@ def contact():
         try:
             db.session.commit()
         except Exception:
+            # 数据库写入失败时回滚，保持 message_sent = False
             db.session.rollback()
             message_sent = False
         message_sent = True
@@ -568,7 +629,10 @@ def search():
     URL 参数：
       q — 搜索关键词（必填，为空时重定向到首页）
 
-    搜索方式：使用 SQL ILIKE 模糊匹配，不区分大小写。
+    搜索方式：
+      1. 优先使用数据库全文索引（PostgreSQL tsvector 或 SQLite FTS）
+      2. 全文搜索无结果时，回退到 ILIKE 模糊匹配（不区分大小写）
+
     结果按创建时间倒序排列，支持分页。
 
     Template: index.html（与首页共用）
@@ -577,20 +641,22 @@ def search():
     page = request.args.get('page', 1, type=int)
     if not q:
         return redirect(url_for('blog.index'))
-    # 转义 SQL 通配符，防止 DoS
+    # 转义 SQL 通配符（% 和 _），防止恶意构造的搜索词导致 DoS
     safe_q = q.replace('%', '\\%').replace('_', '\\_')
     per_page = request.args.get('per_page', current_app.config['POSTS_PER_PAGE'], type=int)
     categories, recent_posts, cat_post_counts = _get_sidebar_data()
-    # 使用全文搜索（需 FULLTEXT 索引），防 tsquery 语法错误
+    # 根据数据库方言选择不同的全文搜索语法
     engine = db.get_engine()
     dialect = engine.dialect.name
     if dialect == 'postgresql':
+        # PostgreSQL: 使用 to_tsvector + plainto_tsquery（防 tsquery 语法错误）
         match_exprs = [
             func.to_tsvector('simple', Post.title).op('@@')(func.plainto_tsquery('simple', q)),
             func.to_tsvector('simple', Post.summary).op('@@')(func.plainto_tsquery('simple', q)),
             func.to_tsvector('simple', Post.content).op('@@')(func.plainto_tsquery('simple', q)),
         ]
     else:
+        # SQLite / 其他: 使用 match 谓词
         match_exprs = [
             Post.title.match(q),
             Post.summary.match(q),
@@ -704,7 +770,7 @@ def thumbnail():
 
     from flask import current_app
 
-    # 路径安全检查：禁止目录遍历（规范化后验证前缀）
+    # 路径安全检查：禁止目录遍历（规范化后验证前缀是否为 static_dir）
     safe_path = os.path.realpath(os.path.normpath(os.path.join(current_app.root_path, 'static', path)))
     static_dir = os.path.realpath(os.path.normpath(os.path.join(current_app.root_path, 'static')))
     if not safe_path.startswith(static_dir):
@@ -713,7 +779,7 @@ def thumbnail():
     img_path = safe_path
     if not os.path.isfile(img_path):
         logger.warning('缩略图不存在: %s', path)
-        # 返回 1×1 透明 GIF（避免页面布局塌陷）
+        # 返回 1×1 透明 GIF（避免页面布局塌陷）而非 404 错误页
         return Response(
             b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff'
             b'\x00\x00\x00!\xf9\x04\x00\x00\x00\x00\x00,\x00\x00\x00\x00'
@@ -739,6 +805,7 @@ def thumbnail():
             'image/png',
         )
     else:
+        # 默认输出 WebP（体积小，质量高）
         output_fmt, ext, save_kwargs, mime_type = (
             'WEBP',
             '.webp',
@@ -746,7 +813,7 @@ def thumbnail():
             'image/webp',
         )
 
-    # 生成缓存文件路径
+    # 生成缓存文件路径（包含版本号，升级时自动失效）
     cache_key = f'{THUMB_CACHE_VER}_{path.replace("/", "_")}_{w}{ext}'
     cache_dir = os.path.join(current_app.root_path, 'static', '.thumb_cache')
     cache_path = os.path.join(cache_dir, cache_key)
@@ -755,7 +822,7 @@ def thumbnail():
     # 清理旧版本缓存（每小时最多执行一次）
     _cleanup_old_cache(cache_dir, THUMB_CACHE_VER)
 
-    # 缓存命中且未过时（图片源文件未修改）
+    # 缓存命中且未过时（图片源文件未修改）— 直接返回缓存文件
     if os.path.isfile(cache_path):
         img_mtime = os.path.getmtime(img_path)
         cache_mtime = os.path.getmtime(cache_path)
@@ -770,6 +837,7 @@ def thumbnail():
     try:
         from PIL import Image
 
+        # 使用线程锁防止同一缩略图的并发写入
         lock = _get_thumbnail_lock(cache_path)
         with lock:
             # 双重检查：获取锁后再次检查缓存是否已被其他线程写入
@@ -784,13 +852,13 @@ def thumbnail():
                             headers={'Cache-Control': 'public, max-age=2592000'},
                         )
             img = Image.open(img_path)
-            # 只缩小不放大（ratio 最大为 1.0）
+            # 只缩小不放大（ratio 最大为 1.0），保持原始宽高比
             ratio = min(w / img.width, 1.0)
             if ratio < 1:
                 new_w = int(img.width * ratio)
                 new_h = int(img.height * ratio)
                 img = img.resize((new_w, new_h), Image.LANCZOS)
-            # JPEG 不支持 RGBA，先转换
+            # JPEG 不支持 RGBA 模式，先转换为 RGB
             if output_fmt == 'JPEG' and img.mode in ('RGBA', 'P'):
                 img = img.convert('RGB')
             img.save(cache_path, output_fmt, **save_kwargs)
@@ -799,7 +867,7 @@ def thumbnail():
                     f.read(), mimetype=mime_type, headers={'Cache-Control': 'public, max-age=2592000'}
                 )
     except Exception as e:
-        # 缩略图生成失败时，返回原始图片
+        # 缩略图生成失败时，降级返回原始图片（避免页面图片缺失）
         logger.error('缩略图失败: %s w=%d error=%s', path, w, e)
         with open(img_path, 'rb') as f:
             return Response(f.read(), mimetype=mimetypes.guess_type(path)[0] or 'image/jpeg')
@@ -814,6 +882,9 @@ _cache_cleanup_lock = threading.Lock()
 def _cleanup_old_cache(cache_dir, current_ver):
     """清除旧版本的缩略图缓存。每小时最多执行一次。
 
+    遍历缓存目录，删除文件名以 `v0_`、`v1_`、`v2_` 开头的旧缓存文件，
+    保留当前版本（current_ver）前缀的文件。
+
     Args:
         cache_dir: 缓存目录路径
         current_ver: 当前版本号（如 'v2'），以此判断哪些文件是旧的
@@ -821,7 +892,7 @@ def _cleanup_old_cache(cache_dir, current_ver):
     global _last_cache_cleanup
     with _cache_cleanup_lock:
         now = time.time()
-        # 频率限制：每小时最多清理一次
+        # 频率限制：每小时最多清理一次，避免每次请求都遍历磁盘
         if now - _last_cache_cleanup < 3600:
             return
         _last_cache_cleanup = now
@@ -832,7 +903,7 @@ def _cleanup_old_cache(cache_dir, current_ver):
         except FileNotFoundError:
             return
         for fname in entries:
-            # 保留当前版本和未知版本，只删除 v0_ / v1_ 开头的老文件
+            # 保留当前版本和未知版本的文件，只删除已知旧版本前缀的文件
             if fname.startswith(current_ver + '_'):
                 continue
             if fname.startswith('v2_') or fname.startswith('v1_') or fname.startswith('v0_'):
@@ -860,7 +931,7 @@ def format_date(dt, fmt='%Y/%m/%d'):
     if dt is None:
         return ''
     if isinstance(dt, str):
-        # 兼容 Redis 缓存返回的 ISO 字符串
+        # 兼容 Redis 缓存返回的 ISO 格式字符串
         try:
             dt = datetime.datetime.fromisoformat(dt)
         except (ValueError, TypeError):
@@ -888,7 +959,14 @@ def now():
 def admin_social():
     """获取管理员社交链接，供页脚显示。
 
+    从 User 表中读取第一个管理员账号的社交媒体 URL，
+    结果缓存在 Redis 中 5 分钟（避免每次渲染页脚都查库）。
+
     返回 dict: { website, gitcode_url, github_url, gitee_url, bilibili_url }
+    每个值为字符串，无对应数据时为空字符串。
+
+    Returns:
+        dict: 包含所有社交链接 URL 的字典
     """
     from .cache import cache_get, cache_set
 

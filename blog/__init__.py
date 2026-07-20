@@ -12,6 +12,10 @@ HOSHINO Blog — 蓝图注册与数据库初始化
 Blueprint 路由前缀：
   blog_bp  → / （前台，无前缀）
   admin_bp → /admin （后台，自动追加前缀）
+
+导入顺序约定：
+  创建蓝图 → 导入模型 → 导入路由
+  这个顺序是打破 Flask 循环导入的关键模式。
 """
 
 from flask import Blueprint
@@ -44,6 +48,7 @@ from .models import (
 )
 
 # ── 蓝图集合 ──────────────────────────────────────
+# 将所有 blueprint 放入字典，供 create_app() 批量注册
 blueprints = {
     'blog_bp': blog_bp,
     'admin_bp': admin_bp,
@@ -54,10 +59,31 @@ import re
 
 @blog_bp.app_template_filter('inline_html')
 def inline_html(html):
-    """剥离外壳 + CSS 作用域化 + 包裹 #html-scope，实现内联渲染无样式冲突。"""
+    """剥离外壳 + CSS 作用域化 + 包裹 #html-scope，实现内联渲染无样式冲突。
+
+    处理流程（三步）：
+      1. 剥离：移除 DOCTYPE / html / head / body 外壳标签，保留内部全部内容
+      2. 作用域化：将 <style> 内的每条 CSS 选择器前加上 #html-scope 前缀
+      3. 包裹：在最外层套上 <div id="html-scope">，使作用域选择器生效
+
+    作用域化处理了以下场景：
+      - 普通 CSS 规则：添加前缀（.foo → #html-scope .foo）
+      - body/html 选择器：替换为 #html-scope
+      - * 选择器：替换为 #html-scope *
+      - @media / @supports 规则：内部子规则递归作用域化
+      - @keyframes/font-face：完整保留，不做作用域化
+      - 已包含 #html-scope 的选择器：保持原样
+
+    Args:
+        html: 原始 HTML 字符串（可选含 DOCTYPE 的完整文档）
+
+    Returns:
+        作用域化的内联 HTML，或原始输入（输入为空时）
+    """
     if not html:
         return html
     # 1. 剥离 DOCTYPE/html/head/body 外壳标签（保留内部全部内容）
+    # 使用 re.IGNORECASE 兼容大小写混用的情况
     html = re.sub(r'<!DOCTYPE[^>]*>', '', html, flags=re.IGNORECASE)
     html = re.sub(r'</?html[^>]*>', '', html, flags=re.IGNORECASE)
     html = re.sub(r'</?head[^>]*>', '', html, flags=re.IGNORECASE)
@@ -65,10 +91,37 @@ def inline_html(html):
 
     # 2. 作用域化 <style> 内的 CSS
     def _scope_css(match):
-        css = match.group(1)
+        """对单个 <style> 标签内的 CSS 文本做作用域化处理。
+
+        内部实现说明：
+          - 按顶级花括号深度将 CSS 拆解为块（chunks）
+          - 每个块独立判断 → 作用域化 or 跳过
+          - 支持嵌套的 @ 规则（如 @media 中的 @keyframes）
+
+        Args:
+            match: re.sub 传入的匹配对象，match.group(1) 为 CSS 文本
+
+        Returns:
+            作用域化后的 CSS 文本
+        """
+        css = match.group(1)  # <style>...</style> 之间的原始 CSS
         SEL = '#html-scope'
 
         def _scope_one(sel):
+            """为单个选择器添加作用域前缀。
+
+            规则：
+              - 空字符串或已含 #html-scope → 不变
+              - body/html → #html-scope（视为根元素）
+              - * → #html-scope *（全局选择器限定在作用域内）
+              - 其他选择器 → #html-scope <原始选择器>
+
+            Args:
+                sel: 单个 CSS 选择器字符串
+
+            Returns:
+                作用域化后的选择器字符串
+            """
             s = sel.strip()
             if not s or SEL in s:
                 return s
@@ -79,6 +132,8 @@ def inline_html(html):
             return f'{SEL} {s}'
 
         # 按顶级花括号深度拆块
+        # 一个"块"是一条完整的 CSS 规则（选择器 + { 声明 }）
+        # 或一个完整的 @ 规则
         chunks = []
         depth = 0
         buf = []
@@ -89,8 +144,10 @@ def inline_html(html):
             elif ch == '}':
                 depth -= 1
                 if depth == 0:
+                    # depth 回到 0 表示一个完整的顶级块结束
                     chunks.append(''.join(buf).strip())
                     buf = []
+        # 处理末尾未闭合的文本（如尾部注释或多余空格）
         if buf and ''.join(buf).strip():
             chunks.append(''.join(buf).strip())
 
@@ -99,13 +156,18 @@ def inline_html(html):
             if not chunk:
                 continue
             if chunk.startswith('@'):
+                # 处理 @ 规则（@media, @keyframes, @font-face, @supports 等）
                 if chunk.startswith(('@keyframes', '@font-face')):
+                    # @keyframes 和 @font-face 中的选择器是非标准的，
+                    # 作用域化会导致动画/字体失效，完整保留
                     out.append(chunk)
                     continue
+                # 其他 @ 规则（如 @media, @supports）：对外层不处理，
+                # 对内层子规则递归作用域化
                 m = re.match(r'(@[^{]+)\{(.*)\}$', chunk, re.DOTALL)
                 if m:
-                    head = m.group(1)
-                    inner = m.group(2)
+                    head = m.group(1)  # @media (max-width: 768px)
+                    inner = m.group(2)  # 内部规则集
                     scoped = re.sub(
                         r'([^{}]+)(\s*\{)',
                         lambda m: ', '.join(
@@ -118,14 +180,16 @@ def inline_html(html):
                 else:
                     out.append(chunk)
             elif '{' in chunk:
+                # 普通 CSS 规则：选择器 { 声明 }
                 idx = chunk.index('{')
-                sel_part = chunk[:idx]
-                rest = chunk[idx:]
+                sel_part = chunk[:idx]  # 选择器部分（逗号分隔）
+                rest = chunk[idx:]       # { 声明 }
                 scoped_sel = ', '.join(
                     _scope_one(s) for s in sel_part.split(',')
                 )
                 out.append(f'{scoped_sel} {rest}')
             else:
+                # 无花括号的片段（如注释、空白），原样保留
                 out.append(chunk)
         return '\n'.join(out)
 
@@ -137,6 +201,8 @@ def inline_html(html):
     )
 
     # 3. 包裹作用域容器
+    # 使用 <div id="html-scope"> 作为作用域根元素，
+    # 配合第二步中添加的 #html-scope 前缀选择器实现样式隔离
     return f'<div id="html-scope">{html}</div>'
 
 
@@ -148,8 +214,14 @@ def init_db(app):
     2. db.create_all()          — 创建所有未存在的表
     3. _migrate_category_to_many2many() — 兼容旧版单分类数据
     4. 检查 admin 用户是否已存在 → 不存在则创建默认管理员
+
+    注意：
+      - 所有 _migrate_* 函数在每次启动时都会执行，
+        它们内部会通过 inspector 检查列是否存在，确保幂等性。
+      - 迁移仅对 MySQL 数据库执行，SQLite 不会执行 ALTER TABLE。
     """
     # 防止重复初始化
+    # app.extensions 记录了已注册的 Flask 扩展，避免重复注册
     if 'sqlalchemy' not in app.extensions:
         db.init_app(app)
     if 'migrate' not in app.extensions:
@@ -224,9 +296,14 @@ def init_db(app):
 
 
 def _migrate_post_html_file_url(app):
-    """迁移：为 Post 表添加 html_file_url 字段。"""
+    """迁移：为 Post 表添加 html_file_url 字段。
+
+    该字段用于存储自定义 HTML 页面的文件路径（相对于 static 目录），
+    使得文章可以展示独立设计的 HTML 页面而非 Markdown 渲染。
+    """
     engine = db.get_engine()
     dialect = engine.dialect.name
+    # SQLite 不支持动态 ADD COLUMN 带 DEFAULT，跳过
     if dialect != 'mysql':
         return
     inspector = db.inspect(engine)
@@ -242,7 +319,11 @@ def _migrate_post_html_file_url(app):
 
 
 def _migrate_post_html_content(app):
-    """迁移：为 Post 表添加 html_content 列。"""
+    """迁移：为 Post 表添加 html_content 列。
+
+    该字段存储直接编写的 HTML 源码（优先于 html_file_url），
+    用于内联 HTML 页面模式，不需要额外的文件托管。
+    """
     engine = db.get_engine()
     dialect = engine.dialect.name
     if dialect != 'mysql':
@@ -270,6 +351,9 @@ def _migrate_category_to_many2many(app):
     为什么需要：
       项目早期版本中 Post 模型只有单个分类字段 category_id，
       v2 改为多对多关联后，旧数据需要迁移到新的关联表。
+
+    INSERT IGNORE / INSERT OR IGNORE 确保幂等性：
+      即使已存在相同的 (post_id, category_id) 对也不会报错。
     """
     engine = db.get_engine()
     inspector = db.inspect(engine)
@@ -282,6 +366,7 @@ def _migrate_category_to_many2many(app):
     # 根据数据库类型选择兼容的 INSERT 语法
     #   SQLite → INSERT OR IGNORE
     #   MySQL  → INSERT IGNORE
+    # 两种语法语义相同：遇到唯一键冲突时静默跳过
     driver = ''
     try:
         driver = engine.url.get_driver_name()
@@ -308,9 +393,17 @@ def _migrate_category_to_many2many(app):
 def _migrate_is_admin_to_role(app):
     """迁移：添加 role 字段 + 将 is_admin 布尔值转换为 role 字符串。
 
-    1. 检查并添加 role / last_login_at / last_login_ip / login_count / website 列
-    2. 将 is_admin=True 的用户设为 role='admin'
-    3. 删除旧的 is_admin 列
+    背景：
+      早期版本使用 is_admin (Boolean) 来标记管理员，
+      新版本改用 role (String) 来支持更多角色层次。
+    执行步骤：
+      1. 检查并添加 role / last_login_at / last_login_ip / login_count / website 列
+      2. 将 is_admin=True 的用户设为 role='admin'
+      3. 删除旧的 is_admin 列
+
+    注意：
+      - 仅 MySQL 执行 ALTER TABLE（SQLite 不运行）
+      - 列名使用正则校验，防止 SQL 注入（避免 col 参数直接被拼接）
     """
     engine = db.get_engine()
     inspector = db.inspect(engine)
@@ -330,6 +423,7 @@ def _migrate_is_admin_to_role(app):
         for col, col_type in new_columns.items():
             if col not in cols:
                 try:
+                    # 安全性检查：只允许合法的 MySQL 标识符
                     if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', col):
                         app.logger.warning('迁移: 跳过非法列名 %s', col)
                         continue
@@ -342,6 +436,7 @@ def _migrate_is_admin_to_role(app):
 
     # ── 数据迁移：is_admin → role ────────────
     if 'is_admin' in cols and 'role' in cols:
+        # 将 is_admin 为 TRUE/1 的用户角色设为 admin
         result = db.session.execute(
             text("UPDATE users SET role = 'admin' WHERE is_admin = 1 OR is_admin = TRUE")
         )
@@ -349,6 +444,7 @@ def _migrate_is_admin_to_role(app):
             app.logger.info('迁移: 已将 %d 个用户从 is_admin 迁移到 role', result.rowcount)
         db.session.commit()
 
+        # 迁移完成后删除旧列 is_admin
         if dialect == 'mysql':
             try:
                 db.session.execute(text('ALTER TABLE users DROP COLUMN is_admin'))
@@ -359,7 +455,10 @@ def _migrate_is_admin_to_role(app):
 
 
 def _migrate_featured_icon(app):
-    """迁移 FeaturedCard.icon 从 VARCHAR(16) 到 VARCHAR(256)。"""
+    """迁移 FeaturedCard.icon 从 VARCHAR(16) 到 VARCHAR(256)。
+
+    早期版本限制图标为 16 字符，更新后支持更长的 CSS Class 或图标符号。
+    """
     engine = db.get_engine()
     dialect = engine.dialect.name
     if dialect == 'mysql':
@@ -373,7 +472,11 @@ def _migrate_featured_icon(app):
 
 
 def _migrate_post_content(app):
-    """迁移 Post.content 从 TEXT 到 MEDIUMTEXT（支持长文）。"""
+    """迁移 Post.content 从 TEXT 到 MEDIUMTEXT（支持长文）。
+
+    TEXT 类型最大 65535 字节，对于长篇文章不够，
+    MEDIUMTEXT 最大 16MB，满足绝大多数场景。
+    """
     engine = db.get_engine()
     dialect = engine.dialect.name
     if dialect == 'mysql':
@@ -404,7 +507,17 @@ def _migrate_author_to_user(app):
 
 
 def _migrate_user_profile_fields(app):
-    """迁移：为 User 表添加社交链接和关于页面字段（仅 MySQL 需 ALTER）。"""
+    """迁移：为 User 表添加社交链接和关于页面字段（仅 MySQL 需 ALTER）。
+
+    新增字段：
+      gitcode_url     — GitCode 个人主页
+      github_url      — GitHub 个人主页
+      gitee_url       — Gitee 个人主页
+      bilibili_url    — Bilibili 个人主页
+      about_content   — 关于页面富文本内容（MEDIUMTEXT 支持长文）
+
+    每个字段通过 inspector 检查是否已存在，确保幂等性。
+    """
     engine = db.get_engine()
     inspector = db.inspect(engine)
     cols = {c['name'] for c in inspector.get_columns('users')}
@@ -435,7 +548,11 @@ def _migrate_user_profile_fields(app):
 
 
 def _migrate_bili_up_fields(app):
-    """迁移：为 BiliUp 表添加 follower_count 字段。"""
+    """迁移：为 BiliUp 表添加 follower_count 字段。
+
+    在后续开发中增加了 UP 主粉丝数记录功能，
+    需要对已有数据库结构进行扩展。
+    """
     engine = db.get_engine()
     inspector = db.inspect(engine)
     cols = {c['name'] for c in inspector.get_columns('bili_ups')}
@@ -457,7 +574,12 @@ def _migrate_bili_up_fields(app):
 
 
 def _migrate_bili_video_fields(app):
-    """迁移：为 BiliVideo 表添加 pub_datetime 字段。"""
+    """迁移：为 BiliVideo 表添加 pub_datetime 字段。
+
+    原有 pubdate 字段为 Unix 时间戳（INT），
+    新字段 pub_datetime 为 DATETIME 类型，便于 SQL 查询和 ORM 使用。
+    迁移时会用已有 pubdate 回填新字段。
+    """
     engine = db.get_engine()
     inspector = db.inspect(engine)
     cols = {c['name'] for c in inspector.get_columns('bili_videos')}
@@ -470,6 +592,7 @@ def _migrate_bili_video_fields(app):
         try:
             db.session.execute(text('ALTER TABLE bili_videos ADD COLUMN pub_datetime DATETIME'))
             # 用已有 pubdate 时间戳回填 pub_datetime
+            # FROM_UNIXTIME() 是 MySQL 内置函数，将秒级时间戳转为 DATETIME
             db.session.execute(
                 text(
                     'UPDATE bili_videos SET pub_datetime = FROM_UNIXTIME(pubdate) WHERE pubdate IS NOT NULL AND pub_datetime IS NULL'
@@ -483,7 +606,19 @@ def _migrate_bili_video_fields(app):
 
 
 def _migrate_bili_indexes(app):
-    """迁移：为 BiliVideo/BiliVideoHistory 表添加复合索引。"""
+    """迁移：为 BiliVideo/BiliVideoHistory 表添加复合索引。
+
+    添加的索引：
+      ix_bili_video_up_pubdatetime    — bili_videos (up_id, pub_datetime)
+        加速按 UP 主和时间排序的视频查询
+      ix_bili_video_up_updated        — bili_videos (up_id, updated_at)
+        加速按 UP 主和更新时间排序的视频查询
+      ix_bili_video_history_video_recorded — bili_video_history (video_id, recorded_at)
+        加速按视频 ID 和时间范围的历史快照查询
+
+    先检查索引是否已存在（inspector.get_indexes），
+    避免重复创建导致错误。
+    """
     engine = db.get_engine()
     inspector = db.inspect(engine)
     dialect = engine.dialect.name
@@ -513,7 +648,17 @@ def _migrate_bili_indexes(app):
 
 
 def _migrate_bili_sub_token_index(app):
-    """迁移：BiliSubscription.token 从 UNIQUE 改为普通 INDEX（支持批量共用 token）。"""
+    """迁移：BiliSubscription.token 从 UNIQUE 改为普通 INDEX（支持批量共用 token）。
+
+    背景：
+      早期设计为每封订阅邮件生成唯一 token，
+      改为批量订阅后，同一批次的多条订阅共用同一个 token，
+      因此 UNIQUE 约束不再适用。
+    操作：
+      1. 查找 token 列上的 UNIQUE 索引并删除
+      2. 添加同名的普通索引（如果不存在）
+      3. 尝试回退方案：直接 DROP INDEX token
+    """
     engine = db.get_engine()
     dialect = engine.dialect.name
     if dialect != 'mysql':
@@ -547,6 +692,7 @@ def _migrate_bili_sub_token_index(app):
             app.logger.warning('迁移: 添加 bili_subscriptions.token 索引失败: %s', e)
 
     # 如果 token 列仍存在 UNIQUE 约束（非索引方式），删除它
+    # 这是一个回退方案，处理某些 MySQL 版本中 UNIQUE 约束的表现形式差异
     if not dropped and 'token' in inspector.get_columns('bili_subscriptions'):
         try:
             db.session.execute(text('ALTER TABLE bili_subscriptions DROP INDEX token'))
