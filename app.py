@@ -359,70 +359,76 @@ def _run_bili_incremental_check(app):
     """
     from datetime import datetime, timedelta
 
-    with app.app_context():
-        import logging
-        import random
-        import threading
-        import time
+    try:
+        with app.app_context():
+            import logging
+            import random
+            import threading
+            import time
 
-        logger = logging.getLogger(__name__)
-        from blog.models import BiliUp
-        from blog.bili_routes import (
-            _BATCH_SIZE,
-            _check_new_videos,
-            _scrape_progress,
-            _incremental_running,
-            _scrape_running,
-            _scrape_lock,
-            _circuit_open_until,
-        )
+            logger = logging.getLogger(__name__)
+            from blog.models import BiliUp
+            from blog.bili_routes import (
+                _BATCH_SIZE,
+                _check_new_videos,
+                _scrape_progress,
+                _incremental_running,
+                _scrape_running,
+                _scrape_lock,
+                _circuit_open_until,
+            )
 
-        if time.time() < _circuit_open_until:
-            remaining = int(_circuit_open_until - time.time()) // 60
-            logger.warning('B站 增量检查取消: 全局熔断中，剩余 %d 分钟', remaining)
-            return
+            if time.time() < _circuit_open_until:
+                remaining = int(_circuit_open_until - time.time()) // 60
+                logger.warning('B站 增量检查取消: 全局熔断中，剩余 %d 分钟', remaining)
+                return
 
-        THREAD_TIMEOUT = 10 * 60
+            THREAD_TIMEOUT = 10 * 60
 
-        ups = BiliUp.query.all()
-        active: list = []
-        for up in ups:
-            mid = up.mid
-            with _scrape_lock:
-                if mid in _incremental_running or mid in _scrape_running:
-                    continue
-                _scrape_progress[mid] = []
-                _incremental_running.add(mid)
-            active.append(up)
+            ups = BiliUp.query.all()
+            active: list = []
+            for up in ups:
+                mid = up.mid
+                with _scrape_lock:
+                    if mid in _incremental_running or mid in _scrape_running:
+                        continue
+                    _scrape_progress[mid] = []
+                    _incremental_running.add(mid)
+                active.append(up)
 
-        for i in range(0, len(active), _BATCH_SIZE):
-            batch = active[i : i + _BATCH_SIZE]
-            threads = []
-            for up in batch:
-                t = threading.Thread(
-                    target=_check_new_videos,
-                    args=(up.mid, app),
-                    daemon=True,
-                )
-                t.start()
-                threads.append(t)
-                time.sleep(random.uniform(0.5, 2.0))
-            for t in threads:
-                t.join(timeout=THREAD_TIMEOUT)
-                if t.is_alive():
-                    logger.warning(
-                        'B站 增量检查: 线程 %s 超时 (>%ds)，跳过', t.name, THREAD_TIMEOUT
+            for i in range(0, len(active), _BATCH_SIZE):
+                batch = active[i : i + _BATCH_SIZE]
+                threads = []
+                for up in batch:
+                    t = threading.Thread(
+                        target=_check_new_videos,
+                        args=(up.mid, app),
+                        daemon=True,
                     )
-
-    # 全部跑完 → 40 分钟后调度下一轮
-    app.scheduler.add_job(
-        func=lambda: _run_bili_incremental_check(app),
-        trigger='date',
-        run_date=datetime.now() + timedelta(minutes=30),
-        id='bili_incremental_check',
-        replace_existing=True,
-    )
-    app.logger.info('B站 增量检查完成，30 分钟后开始下一轮')
+                    t.start()
+                    threads.append(t)
+                    time.sleep(random.uniform(0.5, 2.0))
+                for t in threads:
+                    t.join(timeout=THREAD_TIMEOUT)
+                    if t.is_alive():
+                        logger.warning(
+                            'B站 增量检查: 线程 %s 超时 (>%ds)，跳过', t.name, THREAD_TIMEOUT
+                        )
+    except Exception as e:
+        app.logger.error('B站 增量检查异常: %s', e, exc_info=True)
+    finally:
+        # 即使熔断早退或抛出异常，也要重新调度下一轮，避免检查永久停止
+        try:
+            app.scheduler.add_job(
+                func=lambda: _run_bili_incremental_check(app),
+                trigger='date',
+                run_date=datetime.now() + timedelta(minutes=30),
+                id='bili_incremental_check',
+                replace_existing=True,
+            )
+            app.logger.info('B站 增量检查完成（或跳过），30 分钟后开始下一轮')
+        except Exception:
+            app.logger.warning('B站 增量检查无法重新调度（调度器可能已关闭）')
 
 
 if __name__ == '__main__':
