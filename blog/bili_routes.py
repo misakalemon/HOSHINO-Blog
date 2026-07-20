@@ -864,7 +864,6 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                 for key, val in stat.items():
                     setattr(v, key, val)
                 v.updated_at = datetime.datetime.now(datetime.timezone.utc)
-                db.session.commit()
                 count += 1
                 if label.startswith('Hot'):
                     hot_done += 1

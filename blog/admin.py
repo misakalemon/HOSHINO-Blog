@@ -235,20 +235,23 @@ def bili_debug(mid):
 
 
 @admin_bp.route('/_debug')
+@admin_required
 def debug_info():
     """诊断端点：查看当前请求的 session、cookie、请求头等信息。
 
     帮助排查 CSRF 403 等远程访问问题。仅管理员可访问。
     """
-    if not current_user.is_authenticated or not current_user.is_admin:
-        abort(403)
     from flask import jsonify
 
     headers = dict(request.headers)
     headers.pop('Cookie', None)
+    safe_session = {
+        k: v for k, v in session.items()
+        if k not in ('csrf_token', '_fresh', '_id', '_user_id', '_permanent')
+    }
     return jsonify(
         {
-            'session': dict(session),
+            'session': safe_session,
             'session_permanent': session.permanent,
             'remote_addr': request.remote_addr,
             'host': request.host,
