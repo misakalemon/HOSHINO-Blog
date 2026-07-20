@@ -4,6 +4,8 @@ import logging
 import secrets
 import time
 
+from collections import OrderedDict
+
 from flask import Blueprint, current_app, jsonify, render_template, request, url_for
 
 from blog.models import BiliSubscription, BiliUp, BiliUpHistory, BiliVideo, BiliVideoHistory, db
@@ -12,8 +14,21 @@ logger = logging.getLogger(__name__)
 
 bili_public_bp = Blueprint('bili_public', __name__, url_prefix='/bilibili')
 
+
+class _RateLimitDict(OrderedDict):
+    """固定大小的速率限制字典，超出自动淘汰最久未访问的条目。"""
+    def __init__(self, maxsize=2000):
+        self.maxsize = maxsize
+        super().__init__()
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        if len(self) > self.maxsize:
+            self.popitem(last=False)
+
+
 # 订阅速率限制：每 IP 每分钟最多 5 次
-_subscribe_limits: dict[str, list[float]] = {}
+_subscribe_limits = _RateLimitDict(maxsize=2000)
 _SUBSCRIBE_MAX_PER_MIN = 5
 
 
@@ -200,14 +215,9 @@ def subscribe():
     # 每 IP 速率限制：最多 5 次/分钟
     ip = request.remote_addr or 'unknown'
     now = time.time()
-    _subscribe_limits.setdefault(ip, [])
-    _subscribe_limits[ip] = [t for t in _subscribe_limits[ip] if now - t < 60]
-    # 定期清理过期 IP 条目
-    if len(_subscribe_limits) > 100:
-        cutoff = now - 120
-        stale = [k for k, v in _subscribe_limits.items() if not v or max(v) < cutoff]
-        for k in stale:
-            del _subscribe_limits[k]
+    entries = _subscribe_limits.get(ip, [])
+    entries = [t for t in entries if now - t < 60]
+    _subscribe_limits[ip] = entries
     if len(_subscribe_limits[ip]) >= _SUBSCRIBE_MAX_PER_MIN:
         logger.warning('订阅请求过频 IP=%s', ip)
         return jsonify({'ok': False, 'error': '操作太频繁，请稍后再试'}), 429
@@ -222,8 +232,13 @@ def subscribe():
         except (ValueError, TypeError):
             continue
 
-    if not email or not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email) or len(email) > 254:
+    if not email or len(email) > 254:
         return jsonify({'ok': False, 'error': '请输入有效的邮箱地址'}), 400
+    try:
+        from email_validator import validate_email as _validate_email
+        _validate_email(email, check_deliverability=False)
+    except Exception:
+        return jsonify({'ok': False, 'error': '邮箱格式不正确'}), 400
     if not up_ids:
         return jsonify({'ok': False, 'error': '请至少选择一个 UP 主'}), 400
 

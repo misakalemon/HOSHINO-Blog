@@ -282,6 +282,7 @@ def _insert_or_update_video(up, video_info, aid, bvid, title_short):
         db.session.flush()
     except IntegrityError:
         db.session.rollback()
+        db.session.remove()
         existing = BiliVideo.query.filter_by(aid=aid).first()
         if existing:
             for key in (

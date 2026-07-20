@@ -103,6 +103,10 @@ def _is_risk_control(e: Exception) -> bool:
 
 def _is_ip_blocked(e: Exception) -> bool:
     """判断异常是否为 IP 级安全封禁（412 验证页，不可重试）"""
+    if hasattr(e, 'status_code') and e.status_code == 412:
+        return True
+    if hasattr(e, 'response') and hasattr(e.response, 'status_code') and e.response.status_code == 412:
+        return True
     return '412' in str(e).lower()
 
 
