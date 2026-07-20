@@ -1341,7 +1341,8 @@ def cleanup_old_history(days=90):
     from blog.models import BiliVideoHistory, db as _db
     import datetime
 
-    cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=days)
+    CST = datetime.timezone(datetime.timedelta(hours=8))
+    cutoff = datetime.datetime.now(CST) - datetime.timedelta(days=days)
     deleted = BiliVideoHistory.query.filter(BiliVideoHistory.recorded_at < cutoff).delete()
     _db.session.commit()
     if deleted:

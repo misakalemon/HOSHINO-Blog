@@ -42,11 +42,15 @@ HOSHINO Blog — 数据模型
 """
 
 import datetime
+from datetime import timezone, timedelta
 
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.dialects.mysql import MEDIUMTEXT
 from werkzeug.security import check_password_hash, generate_password_hash
+
+# 东八区（CST，中国标准时间）— 全站 B站 数据统一使用时区
+CST = timezone(timedelta(hours=8))
 
 # SQLAlchemy 实例，所有模型共享
 # 采用延迟初始化模式：先创建 db 实例，然后在 create_app() 中 db.init_app(app)
@@ -554,7 +558,7 @@ class BiliUpHistory(db.Model):
     up_id = db.Column(db.Integer, db.ForeignKey('bili_ups.id', ondelete='CASCADE'), nullable=False, index=True)
     follower_count = db.Column(db.Integer, default=0, comment='采样时的粉丝数')
     recorded_at = db.Column(
-        db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True
+        db.DateTime, default=lambda: datetime.datetime.now(CST), index=True
     )
 
     # lazy='joined'：查询时使用 JOIN 一次性加载关联的 BiliUp，减少 N+1 查询
@@ -586,7 +590,7 @@ class BiliVideoHistory(db.Model):
     comment_count = db.Column(db.Integer, default=0, comment='评论数')
     danmaku_count = db.Column(db.Integer, default=0, comment='弹幕数')
     recorded_at = db.Column(
-        db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True
+        db.DateTime, default=lambda: datetime.datetime.now(CST), index=True
     )
 
     # lazy='joined'：查询时 JOIN BiliVideo，避免 N+1
