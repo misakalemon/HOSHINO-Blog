@@ -743,10 +743,16 @@ def _check_new_videos(mid: int, app):
             except Exception as e:
                 logger.error('重点视频追踪失败 mid=%d: %s', mid, e)
 
+            # 检查 B站 API 层是否已检测到 412（可能在 get_video_list 内部处理，未抛异常到此处）
+            from blog.bilibili.bili_api import was_recently_blocked
+            if was_recently_blocked(cooldown=300) and time.time() >= _circuit_open_until:
+                _circuit_open_until = time.time() + _CIRCUIT_COOLDOWN
+                logger.error('API 层检测到 412 封禁，全局熔断 %d 分钟', _CIRCUIT_COOLDOWN // 60)
+
         except Exception as e:
             logger.error('增量检查失败 mid=%d: %s', mid, e)
-            # 检测到 412 IP 封禁 → 打开全局熔断，暂停后续所有爬取
-            if '412' in str(e).lower():
+            from blog.bilibili.bili_api import _is_ip_blocked
+            if _is_ip_blocked(e):
                 _circuit_open_until = time.time() + _CIRCUIT_COOLDOWN
                 logger.error('检测到 412 封禁，全局熔断 %d 分钟', _CIRCUIT_COOLDOWN // 60)
         finally:
@@ -1090,9 +1096,8 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                     retry_delay = 30  # 成功后重置退避延迟
                     time.sleep(_VIDEO_SLEEP_BASE + random.random() * _VIDEO_SLEEP_JITTER)
                 except Exception as e:
-                    # 风控处理：指数退避重试
                     if _is_risk_control(e):
-                        logger.warning('触发风控，等待 %ds 后重试...', retry_delay)
+                        logger.warning('触发风控，等待 %ds 后跳过...', retry_delay)
                         time.sleep(retry_delay)
                         retry_delay = min(retry_delay * 2, 600)
                         return False
@@ -1220,16 +1225,22 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                     emit(f'完整性检查: {db_total}/{total_in_api} ✅ 全部视频已入库')
                 else:
                     emit(
-                        f'完整性检查: {db_total}/{total_in_api} ⚠️ 缺失 {total_in_api - db_total} 个视频）'
+                        f'完整性检查: {db_total}/{total_in_api} ⚠️ 缺失 {total_in_api - db_total} 个视频'
                     )
             elif total_in_api is not None and total_in_api == 0 and total_in_db > 0:
                 emit(f'完整性检查: Cookie 可能过期，API 返回 video_count=0')
 
+            # 检查 B站 API 层是否已检测到 412（可能在 get_video_list 内部处理，未抛异常到此处）
+            from blog.bilibili.bili_api import was_recently_blocked
+            if was_recently_blocked(cooldown=300) and time.time() >= _circuit_open_until:
+                _circuit_open_until = time.time() + _CIRCUIT_COOLDOWN
+                logger.error('API 层检测到 412 封禁，全局熔断 %d 分钟', _CIRCUIT_COOLDOWN // 60)
+
         except Exception as e:
             emit(f'爬取失败: {e}')
             logger.exception('爬取失败 mid=%d', mid)
-            # 检测到 412 IP 封禁 → 打开全局熔断
-            if '412' in str(e).lower():
+            from blog.bilibili.bili_api import _is_ip_blocked
+            if _is_ip_blocked(e):
                 _circuit_open_until = time.time() + _CIRCUIT_COOLDOWN
                 logger.error('检测到 412 封禁，全局熔断 %d 分钟', _CIRCUIT_COOLDOWN // 60)
         finally:
