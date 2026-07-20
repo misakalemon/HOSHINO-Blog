@@ -506,7 +506,6 @@ def _check_new_videos(mid: int, app):
                     stat = get_video_stat(v.bvid)
                     for key, val in stat.items():
                         setattr(v, key, val)
-                    db.session.commit()
                     db.session.add(
                         BiliVideoHistory(
                             video_id=v.id,
@@ -551,7 +550,6 @@ def _check_new_videos(mid: int, app):
                     stat = get_video_stat(v.bvid)
                     for key, val in stat.items():
                         setattr(v, key, val)
-                    db.session.commit()
                     db.session.add(
                         BiliVideoHistory(
                             video_id=v.id,
@@ -655,6 +653,9 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
     global _circuit_open_until
     if not force and time.time() < _circuit_open_until:
         logger.warning('全局熔断中，跳过深扫 mid=%d', mid)
+        with _scrape_lock:
+            _scrape_running.discard(mid)
+            _scrape_progress.pop(mid, None)
         return
 
     prog = _scrape_progress.get(mid, [])
@@ -1048,7 +1049,7 @@ def run_daily_scrape(app):
                     )
 
         logger.info('B站 每日刷新完成')
-    db.session.remove()
+        db.session.remove()
 
 
 def cleanup_old_history(days=90):

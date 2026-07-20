@@ -85,7 +85,7 @@
                   #pageFrame { width:100%; border:none; border-radius:12px; display:block; background:rgba(255,255,255,0.02); }
                   #pageFrame.loaded { background:transparent; }
                 </style>
-                <iframe src="{{ url_for('static', filename=post.html_file_url) }}" sandbox="allow-same-origin allow-forms"
+                <iframe src="{{ url_for('static', filename=post.html_file_url) }}" sandbox="allow-forms"
                         id="pageFrame" title="{{ post.title }}" loading="lazy"></iframe>
                 <script>
                 !function(){

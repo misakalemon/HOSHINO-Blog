@@ -59,11 +59,9 @@ def _save_secret_keys(keys):
         json.dump(keys, tmp)
         tmp.flush()
         os.fsync(tmp.fileno())
+        tmp_name = tmp.name
         tmp.close()
-        tmp = None
-        os.replace(tmp.name, SECRET_KEYS_FILE) if tmp else os.replace(
-            tmp.name, SECRET_KEYS_FILE
-        )
+        os.replace(tmp_name, SECRET_KEYS_FILE)
     except OSError as e:
         import logging
         logging.getLogger(__name__).warning('写入密钥文件失败: %s', e)

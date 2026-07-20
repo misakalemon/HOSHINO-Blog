@@ -58,6 +58,10 @@ def _send_email_async(app, msg: MIMEMultipart):
             logger.error('邮件发送失败 → %s: %s', msg['To'], e)
 
 
+_active_mail_threads: list[threading.Thread] = []
+_MAX_MAIL_THREADS = 10
+
+
 def send_email(to: str, subject: str, html_body: str, to_name: str = ''):
     """发送邮件（非阻塞，后台线程执行）
 
@@ -87,8 +91,7 @@ def send_email(to: str, subject: str, html_body: str, to_name: str = ''):
     logger.info('邮件队列: %s → %s【%s】: %s', msg['From'], to_name or to, site_name, subject)
 
     # 限制并发邮件线程数（最多 10 个），超出时等待
-    _MAX_MAIL_THREADS = 10
-    _active_mail_threads = []
+    global _active_mail_threads
     _active_mail_threads[:] = [
         t for t in _active_mail_threads if t.is_alive()
     ]

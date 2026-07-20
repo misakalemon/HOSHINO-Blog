@@ -29,6 +29,8 @@ import os
 import threading
 import time
 
+import atexit
+
 import bleach
 from flask import Response, abort, current_app, make_response, redirect, render_template, request, url_for
 
@@ -126,6 +128,17 @@ THUMB_CACHE_VER = 'v3'
 _sidebar_executor = None
 _sidebar_executor_lock = threading.Lock()
 
+# 缩略图生成并发写锁
+_thumbnail_locks: dict[str, threading.Lock] = {}
+_thumbnail_locks_lock = threading.Lock()
+
+
+def _get_thumbnail_lock(cache_path: str) -> threading.Lock:
+    with _thumbnail_locks_lock:
+        if cache_path not in _thumbnail_locks:
+            _thumbnail_locks[cache_path] = threading.Lock()
+        return _thumbnail_locks[cache_path]
+
 
 def _get_sidebar_data():
     """获取侧边栏数据（分类列表 + 最新文章），带 Redis 缓存。
@@ -151,6 +164,7 @@ def _get_sidebar_data():
         with _sidebar_executor_lock:
             if _sidebar_executor is None:
                 _sidebar_executor = ThreadPoolExecutor(max_workers=3)
+                atexit.register(lambda: _sidebar_executor.shutdown(wait=False))
 
     ttl = current_app.config.get('CACHE_TTL_SIDEBAR', 300)
     app = current_app._get_current_object()
@@ -679,8 +693,8 @@ def thumbnail():
     from flask import current_app
 
     # 路径安全检查：禁止目录遍历（规范化后验证前缀）
-    safe_path = os.path.normpath(os.path.join(current_app.root_path, 'static', path))
-    static_dir = os.path.normpath(os.path.join(current_app.root_path, 'static'))
+    safe_path = os.path.realpath(os.path.normpath(os.path.join(current_app.root_path, 'static', path)))
+    static_dir = os.path.realpath(os.path.normpath(os.path.join(current_app.root_path, 'static')))
     if not safe_path.startswith(static_dir):
         logger.warning('缩略图路径非法: %s', path)
         abort(404)
@@ -744,21 +758,34 @@ def thumbnail():
     try:
         from PIL import Image
 
-        img = Image.open(img_path)
-        # 只缩小不放大（ratio 最大为 1.0）
-        ratio = min(w / img.width, 1.0)
-        if ratio < 1:
-            new_w = int(img.width * ratio)
-            new_h = int(img.height * ratio)
-            img = img.resize((new_w, new_h), Image.LANCZOS)
-        # JPEG 不支持 RGBA，先转换
-        if output_fmt == 'JPEG' and img.mode in ('RGBA', 'P'):
-            img = img.convert('RGB')
-        img.save(cache_path, output_fmt, **save_kwargs)
-        with open(cache_path, 'rb') as f:
-            return Response(
-                f.read(), mimetype=mime_type, headers={'Cache-Control': 'public, max-age=2592000'}
-            )
+        lock = _get_thumbnail_lock(cache_path)
+        with lock:
+            # 双重检查：获取锁后再次检查缓存是否已被其他线程写入
+            if os.path.isfile(cache_path):
+                img_mtime = os.path.getmtime(img_path)
+                cache_mtime = os.path.getmtime(cache_path)
+                if cache_mtime >= img_mtime:
+                    with open(cache_path, 'rb') as f:
+                        return Response(
+                            f.read(),
+                            mimetype=mime_type,
+                            headers={'Cache-Control': 'public, max-age=2592000'},
+                        )
+            img = Image.open(img_path)
+            # 只缩小不放大（ratio 最大为 1.0）
+            ratio = min(w / img.width, 1.0)
+            if ratio < 1:
+                new_w = int(img.width * ratio)
+                new_h = int(img.height * ratio)
+                img = img.resize((new_w, new_h), Image.LANCZOS)
+            # JPEG 不支持 RGBA，先转换
+            if output_fmt == 'JPEG' and img.mode in ('RGBA', 'P'):
+                img = img.convert('RGB')
+            img.save(cache_path, output_fmt, **save_kwargs)
+            with open(cache_path, 'rb') as f:
+                return Response(
+                    f.read(), mimetype=mime_type, headers={'Cache-Control': 'public, max-age=2592000'}
+                )
     except Exception as e:
         # 缩略图生成失败时，返回原始图片
         logger.error('缩略图失败: %s w=%d error=%s', path, w, e)
@@ -792,7 +819,7 @@ def _cleanup_old_cache(cache_dir, current_ver):
             # 保留当前版本和未知版本，只删除 v0_ / v1_ 开头的老文件
             if fname.startswith(current_ver + '_'):
                 continue
-            if fname.startswith('v1_') or fname.startswith('v0_'):
+            if fname.startswith('v2_') or fname.startswith('v1_') or fname.startswith('v0_'):
                 try:
                     os.remove(os.path.join(cache_dir, fname))
                 except Exception:

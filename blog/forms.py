@@ -158,7 +158,6 @@ class FeaturedCardForm(FlaskForm):
     description = StringField('描述', validators=[Optional(), Length(max=256)])        # 卡片描述，选填
     icon = StringField('图标', validators=[Optional(), Length(max=256)])               # 图标符号/类名，选填
     tag = SelectField('标签', coerce=str, default='')                                  # 卡片标签，下拉选择
-    from wtforms.validators import URL as URLValidator
     link = StringField('链接 (可选)', validators=[Optional(), URLValidator(), Length(max=256)])  # 点击跳转链接，选填
     image_url = StringField('图片 URL (可选)', validators=[Optional(), URLValidator(), Length(max=256)])  # 背景图片链接，选填
     sort_order = IntegerField('排序', default=0, validators=[Optional()])             # 排序权重（越小越靠前）

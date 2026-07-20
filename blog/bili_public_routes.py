@@ -202,6 +202,12 @@ def subscribe():
     now = time.time()
     _subscribe_limits.setdefault(ip, [])
     _subscribe_limits[ip] = [t for t in _subscribe_limits[ip] if now - t < 60]
+    # 定期清理过期 IP 条目
+    if len(_subscribe_limits) > 100:
+        cutoff = now - 120
+        stale = [k for k, v in _subscribe_limits.items() if not v or max(v) < cutoff]
+        for k in stale:
+            del _subscribe_limits[k]
     if len(_subscribe_limits[ip]) >= _SUBSCRIBE_MAX_PER_MIN:
         logger.warning('订阅请求过频 IP=%s', ip)
         return jsonify({'ok': False, 'error': '操作太频繁，请稍后再试'}), 429
@@ -241,10 +247,7 @@ def subscribe():
 
     if not new_up_ids:
         if already_verified:
-            existing_ups = BiliUp.query.filter(BiliUp.id.in_(already_verified)).all()
-            up_map = {u.id: u for u in existing_ups}
-            names = [up_map[uid].name or str(uid) for uid in already_verified]
-            return jsonify({'ok': False, 'error': f'已订阅: {", ".join(names)}'}), 400
+            return jsonify({'ok': False, 'error': '部分 UP 主已被订阅，请前往邮箱查收确认邮件'}), 400
         return jsonify({'ok': False, 'error': '没有可订阅的 UP 主'}), 400
 
     token = secrets.token_urlsafe(32)

@@ -32,6 +32,7 @@ HOSHINO Blog — Redis 缓存层
 
 import json
 import logging
+import re
 import time
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,8 @@ def _get_redis(redis_url, max_retries=3, retry_delay=1):
     """
     import redis
 
+    safe_url = re.sub(r'://[^@]+@', '://***@', redis_url) if redis_url else redis_url
+
     for attempt in range(max_retries):
         try:
             client = redis.from_url(
@@ -63,10 +66,10 @@ def _get_redis(redis_url, max_retries=3, retry_delay=1):
             return client
         except Exception as e:
             if attempt < max_retries - 1:
-                logger.warning('Redis 连接失败 (尝试 %d/%d): %s', attempt + 1, max_retries, e)
+                logger.warning('Redis 连接失败 (尝试 %d/%d): %s', attempt + 1, max_retries, safe_url)
                 time.sleep(retry_delay)
             else:
-                logger.warning('Redis 连接失败，缓存已降级: %s', e)
+                logger.warning('Redis 连接失败，缓存已降级: %s', safe_url)
                 return None
 
 
