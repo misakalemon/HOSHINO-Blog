@@ -365,7 +365,7 @@ def login():
             # ── 登录成功：清除该 IP 的失败记录，更新用户统计信息 ─
             with _login_attempts_lock:
                 _login_attempts[ip] = []
-            user.last_login_at = datetime.datetime.now(datetime.timezone.utc)
+            user.last_login_at = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8)))
             user.last_login_ip = ip
             user.login_count = (user.login_count or 0) + 1
             db.session.commit()
@@ -695,7 +695,7 @@ def edit_post(id):
         post.content = form.content.data
         post.cover_image = form.cover_image.data or ''
         post.is_published = form.is_published.data
-        post.updated_at = datetime.datetime.now(datetime.timezone.utc)
+        post.updated_at = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8)))
         post.categories = Category.query.filter(Category.id.in_(form.categories.data)).all()
         db.session.commit()
         _invalidate_sidebar_cache()
@@ -1460,7 +1460,7 @@ def cleanup_unverified_subscriptions():
     """
     import datetime
 
-    cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=24)
+    cutoff = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))) - datetime.timedelta(hours=24)
     deleted = BiliSubscription.query.filter(
         BiliSubscription.verified == False, BiliSubscription.created_at < cutoff
     ).delete()

@@ -438,7 +438,7 @@ def _insert_or_update_video(up, video_info, aid, bvid, title_short):
             ):
                 if key in video_info:
                     setattr(existing, key, video_info[key])
-            existing.updated_at = datetime.datetime.now(datetime.timezone.utc)
+            existing.updated_at = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8)))
             video = existing
             is_new = False
         else:
@@ -1075,7 +1075,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                 if (
                     not force
                     and v.updated_at
-                    and (datetime.datetime.now(datetime.timezone.utc) - v.updated_at).total_seconds()
+                    and (datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))) - v.updated_at).total_seconds()
                     < min_age_hours * 3600
                 ):
                     title_short = (v.title or '')[:30]
@@ -1108,7 +1108,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                 # 更新视频统计字段
                 for key, val in stat.items():
                     setattr(v, key, val)
-                v.updated_at = datetime.datetime.now(datetime.timezone.utc)
+                v.updated_at = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8)))
                 count += 1
                 if label.startswith('Hot'):
                     hot_done += 1
