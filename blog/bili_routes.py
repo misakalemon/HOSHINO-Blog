@@ -231,6 +231,60 @@ def refresh_up_all(up_id):
     return redirect(url_for('bili.up_detail', up_id=up_id))
 
 
+@bili_bp.route('/up/<int:up_id>/refresh-comments', methods=['POST'])
+@editor_required
+def refresh_up_comments(up_id):
+    """刷新指定 UP 主的评论并重新生成词云。
+
+    后台线程执行：
+      1. 取该 UP 主最新 50 个视频
+      2. 逐个爬取评论（补缺 + 刷新）
+      3. 重新生成该 UP 主的单视频词云
+
+    Args:
+        up_id (int): UP 主数据库 ID
+
+    Returns:
+        HTTP 重定向到 up_detail 页
+    """
+    up = BiliUp.query.get_or_404(up_id)
+    with _scrape_lock:
+        if up.mid in _scrape_running:
+            flash('该 UP 主正在爬取中，请等待完成', 'error')
+            return redirect(url_for('bili.up_detail', up_id=up_id))
+        _scrape_running.add(up.mid)
+
+    app = current_app._get_current_object()
+
+    def _run():
+        try:
+            from blog.wordcloud import precompute_up_wordclouds
+
+            with app.app_context():
+                videos = BiliVideo.query.filter_by(up_id=up_id).order_by(
+                    BiliVideo.pubdate.desc()
+                ).limit(50).all()
+                for v in videos:
+                    try:
+                        n = _crawl_video_comments(v)
+                        if n:
+                            logger.info('评论 [%s] 爬取 %d 条', v.bvid[:8], n)
+                        time.sleep(3.0 + random.random() * 2.0)
+                    except Exception as e:
+                        logger.warning('视频 %s 评论失败: %s', v.bvid, e)
+
+                precompute_up_wordclouds(up_id)
+                logger.info('UP主 %s 词云已刷新', up_id)
+        finally:
+            with _scrape_lock:
+                _scrape_running.discard(up.mid)
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    flash(f'已开始刷新「{up.name or up.mid}」的评论与词云', 'success')
+    return redirect(url_for('bili.up_detail', up_id=up_id))
+
+
 @bili_bp.route('/delete/<int:up_id>', methods=['POST'])
 @editor_required
 def delete_up(up_id):

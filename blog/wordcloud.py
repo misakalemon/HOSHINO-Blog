@@ -526,3 +526,60 @@ def precompute_video_wordclouds():
             logger.warning('视频 %s 词云生成失败: %s', video.bvid, e)
 
     db.session.commit()
+
+
+def precompute_up_wordclouds(up_id: int):
+    """为指定 UP 主的所有视频生成词云。
+
+    复用 precompute_video_wordclouds 的单视频词云逻辑，
+    只处理某一 UP 主的视频，避免全量刷新。
+
+    Args:
+        up_id (int): UP 主数据库 ID
+    """
+    from . import db
+    from .models import BiliVideo, WordCloudConfig, WordCloudData
+
+    top_n = WordCloudConfig.get_or_create().top_n_bili
+    videos = BiliVideo.query.filter_by(up_id=up_id).all()
+
+    for video in videos:
+        try:
+            parts = []
+            if video.title:
+                parts.append(video.title)
+            if video.description:
+                parts.append(video.description)
+            if video.tags:
+                parts.extend(video.tags)
+
+            comment_texts = [
+                c.content for c in video.comments.all()
+                if c.content
+            ]
+            if comment_texts:
+                parts.extend(comment_texts)
+
+            text = ' '.join(parts)
+            if not text.strip():
+                continue
+
+            data = compute_word_frequencies(text, top_n=top_n) or []
+            if not data:
+                continue
+
+            period = f'bvid_{video.bvid}'
+            record = WordCloudData.query.filter_by(
+                post_id=None, source='bili_video', period=period
+            ).first()
+            if record is None:
+                record = WordCloudData(
+                    post_id=None, source='bili_video', period=period, data=data
+                )
+                db.session.add(record)
+            else:
+                record.data = data
+        except Exception as e:
+            logger.warning('视频 %s 词云生成失败: %s', video.bvid, e)
+
+    db.session.commit()
