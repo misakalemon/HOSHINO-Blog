@@ -157,6 +157,7 @@
     var colorScheme = opts.colorScheme || 'glow';
     var padding = opts.padding || 20;
     var dpr = opts.dpr || (window.devicePixelRatio || 1);
+    var searchUrl = opts.searchUrl || '/search?q=';
 
     // 计算画布尺寸
     var rect = canvas.parentElement.getBoundingClientRect();
@@ -293,7 +294,7 @@
       for (var i = 0; i < data.placed.length; i++) {
         var p = data.placed[i];
         if (mx >= p.x && mx <= p.x + p.w && my >= p.y && my <= p.y + p.h) {
-          if (p.word) window.location.href = '/search?q=' + encodeURIComponent(p.word);
+          if (p.word) window.location.href = searchUrl + encodeURIComponent(p.word);
           return;
         }
       }
@@ -332,6 +333,7 @@
         opts.minFont = cfg.minFont || opts.minFont || 14;
       } catch(e) {}
     }
+    opts.searchUrl = canvas.getAttribute('data-wc-search-url') || opts.searchUrl;
 
     // 支持 data-wc-periods（多时段词云字典）和 data-wc/data-wordcloud（单数据）
     var periodsRaw = canvas.getAttribute('data-wc-periods');

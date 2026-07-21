@@ -100,7 +100,8 @@
         <canvas id="videoWordCloud"
             style="width:100%;height:350px"
             data-wc='{{ wc_data | tojson | safe }}'
-            data-wc-config='{{ wc_config | tojson }}'></canvas>
+            data-wc-config='{{ wc_config | tojson }}'
+            data-wc-search-url="/bilibili?q="></canvas>
     </div>
     {% endif %}
 
