@@ -714,7 +714,7 @@ def _migrate_wordcloud_data_fields(app):
     dialect = engine.dialect.name
     if dialect != 'mysql':
         return
-    inspector = inspect(engine)
+    inspector = db.inspect(engine)
     cols = {c['name'] for c in inspector.get_columns('wordcloud_data')}
     for col_name, col_type in [
         ('period', "VARCHAR(16) DEFAULT 'all'"),
