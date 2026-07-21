@@ -222,6 +222,8 @@ def init_db(app):
     """
     # 防止重复初始化
     # app.extensions 记录了已注册的 Flask 扩展，避免重复注册
+    if 'sqlalchemy' not in app.extensions:
+        db.init_app(app)
     if 'migrate' not in app.extensions:
         Migrate(app, db)
     with app.app_context():
