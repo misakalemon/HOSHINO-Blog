@@ -377,20 +377,8 @@ def precompute_all_wordclouds():
             logger.warning('预计算词云失败 post_id=%d: %s', post.id, e)
 
 
-def precompute_bili_wordclouds():
-    """为 B站视频标题+简介预计算词云并存入数据库。
-
-    汇总所有 B站视频的 title + description，分词后计算词频，
-    写入 WordCloudData 表（source='bili'），同时按月分段。
-    """
-    from . import db
-    from .models import BiliVideo, WordCloudData, WordCloudConfig
-    from sqlalchemy import func
-
-    top_n = WordCloudConfig.get_or_create().top_n_bili
-
-    # ── 全量 B站词云 ──
-    videos = BiliVideo.query.all()
+def _bili_texts_from_videos(videos):
+    """从 B站视频列表提取 title + description 文本列表。"""
     texts = []
     for v in videos:
         parts = []
@@ -399,9 +387,26 @@ def precompute_bili_wordclouds():
         if v.description:
             parts.append(v.description)
         texts.append(' '.join(parts))
+    return texts
+
+
+def precompute_bili_wordclouds():
+    """为 B站视频标题+简介预计算词云并存入数据库。
+
+    汇总所有 B站视频的 title + description，分词后计算词频，
+    写入 WordCloudData 表（source='bili'），同时按月分段和按 UP 主分段。
+    """
+    from . import db
+    from .models import BiliUp, BiliVideo, WordCloudData, WordCloudConfig
+    from sqlalchemy import func
+
+    top_n = WordCloudConfig.get_or_create().top_n_bili
+
+    # ── 全量 B站词云 ──
+    videos = BiliVideo.query.all()
+    texts = _bili_texts_from_videos(videos)
     full_text = ' '.join(texts)
     data = compute_word_frequencies(full_text, top_n=top_n) or []
-
     _save_bili_record('all', data)
 
     # ── 按月分段 ──
@@ -416,17 +421,26 @@ def precompute_bili_wordclouds():
         month_videos = BiliVideo.query.filter(
             func.date_format(BiliVideo.pubdate, '%Y-%m') == month_pubdate,
         ).all()
-        month_texts = []
-        for v in month_videos:
-            parts = []
-            if v.title:
-                parts.append(v.title)
-            if v.description:
-                parts.append(v.description)
-            month_texts.append(' '.join(parts))
+        month_texts = _bili_texts_from_videos(month_videos)
         month_full = ' '.join(month_texts)
         month_data = compute_word_frequencies(month_full, top_n=top_n) or []
         _save_bili_record(month_pubdate, month_data)
+
+    # ── 按 UP 主分段 ──
+    for up in BiliUp.query.all():
+        up_videos = BiliVideo.query.filter_by(up_id=up.id).all()
+        up_texts = _bili_texts_from_videos(up_videos)
+        up_full = ' '.join(up_texts)
+        if not up_full.strip():
+            continue
+        up_data = compute_word_frequencies(up_full, top_n=top_n) or []
+        period = f'up_{up.id}'
+        record = WordCloudData.query.filter_by(post_id=None, source='bili', period=period).first()
+        if record is None:
+            record = WordCloudData(post_id=None, source='bili', period=period, data=up_data)
+            db.session.add(record)
+        else:
+            record.data = up_data
 
     db.session.commit()
 

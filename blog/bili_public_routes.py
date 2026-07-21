@@ -166,16 +166,16 @@ def up_videos(up_id):
             for h in follower_history
         ]
     )
-    # 读取 B站词云（兼容旧表缺少 period/source 列的情况）
+    # 读取该 UP 主的专属词云
     bili_wordcloud = None
     from .models import WordCloudConfig
     wc_config = WordCloudConfig.get_or_create().to_dict()
     try:
-        wc = WordCloudData.query.filter_by(post_id=None, source='bili', period='all').first()
+        wc = WordCloudData.query.filter_by(post_id=None, source='bili', period=f'up_{up_id}').first()
         if wc and wc.data:
             bili_wordcloud = wc.data
     except Exception as e:
-        logger.warning('读取 B站词云失败(up_videos): %s', e)
+        logger.warning('读取 UP主词云失败(up_videos): %s', e)
     return render_template(
         'bilibili_up.html',
         up=up,
