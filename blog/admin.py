@@ -1670,3 +1670,32 @@ def delete_hero_image(id):
     db.session.commit()
     flash('Hero 画像已删除', 'success')
     return redirect(url_for('admin.hero_image_list'))
+
+
+# ═══════════════════════════════════════════════
+# 词云配置
+# ═══════════════════════════════════════════════
+@admin_bp.route('/wordcloud-config', methods=['GET', 'POST'])
+@admin_required
+def wordcloud_config():
+    """词云配置页面。
+
+    管理员可调整词云渲染参数（形状、字号、词数、配色等）。
+    首次访问时自动创建默认配置行。
+
+    Template: admin/wordcloud_config.html
+    """
+    from .forms import WordCloudConfigForm
+    from .models import WordCloudConfig
+
+    config = WordCloudConfig.get_or_create()
+    form = WordCloudConfigForm(obj=config)
+
+    if form.validate_on_submit():
+        form.populate_obj(config)
+        config.updated_at = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8)))
+        db.session.commit()
+        flash('词云配置已保存', 'success')
+        return redirect(url_for('admin.wordcloud_config'))
+
+    return render_template('admin/wordcloud_config.html', form=form)

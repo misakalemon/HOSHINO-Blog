@@ -245,3 +245,29 @@ class FeaturedCardForm(FlaskForm):
     image_url = StringField('图片 URL (可选)', validators=[Optional(), URLValidator(), Length(max=256)])  # 背景图片链接，选填
     sort_order = IntegerField('排序', default=0, validators=[Optional()])             # 排序权重（越小越靠前）
     is_active = BooleanField('启用')                                                    # 是否在前台显示
+
+
+class WordCloudConfigForm(FlaskForm):
+    """词云配置表单。
+
+    管理员可在此调整词云渲染参数，包括形状、字号、词数、配色等。
+    所有字段均有默认值，首次保存时自动创建配置行。
+    """
+    shape = SelectField('词云形状', choices=[
+        ('circle', '圆形 ○'),
+        ('star', '星形 ★'),
+        ('heart', '心形 ♥'),
+        ('cloud', '云朵 ☁'),
+        ('rectangle', '矩形 ▭'),
+    ], default='circle')
+    max_font = IntegerField('最大字号（px）', default=48, validators=[Optional()])
+    min_font = IntegerField('最小字号（px）', default=14, validators=[Optional()])
+    top_n_article = IntegerField('文章详情词数', default=60, validators=[Optional()])
+    top_n_site = IntegerField('首页全站词数', default=50, validators=[Optional()])
+    color_scheme = SelectField('配色方案', choices=[
+        ('glow', '粉紫 Glow'),
+        ('ocean', '蓝青 Ocean'),
+        ('forest', '绿植 Forest'),
+    ], default='glow')
+    enabled_article = BooleanField('文章详情页显示词云', default=True)
+    enabled_site = BooleanField('首页显示全站词云', default=True)

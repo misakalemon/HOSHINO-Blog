@@ -691,3 +691,67 @@ class HeroImage(db.Model):
     is_active = db.Column(db.Boolean, default=True, index=True)  # 是否启用（首页随机展示）
     sort_order = db.Column(db.Integer, default=0)  # 排序权重
     created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))))
+
+
+class WordCloudConfig(db.Model):
+    """词云配置模型。
+
+    单行配置表，存储词云渲染参数（形状、字号、配色等）。
+    通过 get_or_create() 惰性初始化，确保始终只有一行数据。
+
+    __tablename__ = 'wordcloud_config'
+    """
+    __tablename__ = 'wordcloud_config'
+
+    id = db.Column(db.Integer, primary_key=True)
+    # 词云形状：circle / star / heart / cloud / rectangle
+    shape = db.Column(db.String(20), default='circle', nullable=False)
+    max_font = db.Column(db.Integer, default=48, nullable=False)
+    min_font = db.Column(db.Integer, default=14, nullable=False)
+    # 文章详情页显示的词数
+    top_n_article = db.Column(db.Integer, default=60, nullable=False)
+    # 首页全站词云显示的词数
+    top_n_site = db.Column(db.Integer, default=50, nullable=False)
+    # 配色方案：glow / ocean / forest
+    color_scheme = db.Column(db.String(20), default='glow', nullable=False)
+    # 是否在文章详情页显示词云
+    enabled_article = db.Column(db.Boolean, default=True, nullable=False)
+    # 是否在首页显示全站词云
+    enabled_site = db.Column(db.Boolean, default=True, nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))),
+        onupdate=lambda: datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))),
+    )
+
+    @classmethod
+    def get_or_create(cls):
+        """获取配置（单行），不存在时自动创建默认配置。
+
+        Returns:
+            WordCloudConfig: 配置实例
+        """
+        config = cls.query.first()
+        if config is None:
+            config = cls()
+            from . import db
+            db.session.add(config)
+            db.session.commit()
+        return config
+
+    def to_dict(self):
+        """将配置转为字典，供模板和前端使用。
+
+        Returns:
+            dict: 配置字典
+        """
+        return {
+            'shape': self.shape,
+            'maxFont': self.max_font,
+            'minFont': self.min_font,
+            'top_n_article': self.top_n_article,
+            'top_n_site': self.top_n_site,
+            'color_scheme': self.color_scheme,
+            'enabled_article': self.enabled_article,
+            'enabled_site': self.enabled_site,
+        }

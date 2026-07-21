@@ -122,7 +122,8 @@
         <span class="site-wordcloud-hint">所有文章高频词 · 自动更新</span>
     </div>
     <div class="site-wordcloud-canvas-wrap">
-        <canvas id="wcSite" data-wc="{{ wordcloud_data | tojson | forceescape }}"></canvas>
+        <canvas id="wcSite" data-wc="{{ wordcloud_data | tojson | forceescape }}"
+                data-wc-config="{{ wc_config | tojson | forceescape }}"></canvas>
     </div>
 </div>
 {% endif %}
@@ -297,9 +298,20 @@ document.addEventListener('DOMContentLoaded', function(){
   if (!c) return;
   var raw = c.getAttribute('data-wc');
   if (!raw) return;
+  var cfgRaw = c.getAttribute('data-wc-config');
+  var opts = { maxFont: 42, minFont: 13 };
+  if (cfgRaw) {
+    try {
+      var cfg = JSON.parse(cfgRaw);
+      opts.shape = cfg.shape || 'circle';
+      opts.colorScheme = cfg.color_scheme || 'glow';
+      opts.maxFont = cfg.maxFont || 42;
+      opts.minFont = cfg.minFont || 13;
+    } catch(e) {}
+  }
   try {
     var data = JSON.parse(raw);
-    if (data && data.length) renderWordCloud(c, data, { maxFont: 42, minFont: 13 });
+    if (data && data.length) renderWordCloud(c, data, opts);
   } catch(e) { console.warn('词云渲染失败', e); }
 });
 </script>

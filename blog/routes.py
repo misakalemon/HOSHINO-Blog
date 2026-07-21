@@ -311,6 +311,7 @@ def _get_site_wordcloud():
     """
     from .cache import cache_get, cache_set
     from .wordcloud import compute_word_frequencies
+    from .models import WordCloudConfig
 
     cached = cache_get('wordcloud:site')
     if cached is not None:
@@ -321,7 +322,8 @@ def _get_site_wordcloud():
     if not full_text.strip():
         return None
 
-    data = compute_word_frequencies(full_text, top_n=50)
+    top_n = WordCloudConfig.get_or_create().top_n_site
+    data = compute_word_frequencies(full_text, top_n=top_n)
     if data:
         cache_set('wordcloud:site', data, 3600)
     return data
@@ -371,6 +373,8 @@ def index():
     hero_image = random.choice(hero_images).image_url if hero_images else None
 
     wordcloud_data = _get_site_wordcloud()
+    from .models import WordCloudConfig
+    wc_config = WordCloudConfig.get_or_create().to_dict()
 
     return render_template(
         'index.html',
@@ -386,6 +390,7 @@ def index():
         blog_subtitle=current_app.config['BLOG_SUBTITLE'],
         hero_image=hero_image,
         wordcloud_data=wordcloud_data,
+        wc_config=wc_config,
     )
 
 
@@ -506,13 +511,18 @@ def single_post(slug):
     # ── 词云数据（仅对 Markdown 文章计算，html_content 文章跳过）──
     wordcloud_data = None
     if not post.html_content:
+        from .models import WordCloudConfig
+        wc_config = WordCloudConfig.get_or_create()
+        top_n = wc_config.top_n_article
         wc_cache_key = f'wordcloud:post:{post.id}:{post.updated_at.timestamp() if post.updated_at else ""}'
         wordcloud_data = cache_get(wc_cache_key)
         if wordcloud_data is None:
             from .wordcloud import compute_word_frequencies
-            wordcloud_data = compute_word_frequencies(post.content, top_n=60)
+            wordcloud_data = compute_word_frequencies(post.content, top_n=top_n)
             if wordcloud_data:
                 cache_set(wc_cache_key, wordcloud_data, 3600)
+    else:
+        wc_config = None
 
     # 优先使用手动编写的 html_content（如报告），否则渲染 Markdown
     template = 'html-post.html' if post.html_content else 'single-post.html'
@@ -527,6 +537,7 @@ def single_post(slug):
         form=form,
         comment_count=comment_count,
         wordcloud_data=wordcloud_data,
+        wc_config=wc_config,
     )
 
 
