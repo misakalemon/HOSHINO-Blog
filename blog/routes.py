@@ -510,10 +510,11 @@ def single_post(slug):
 
     # ── 词云数据（仅对 Markdown 文章计算，html_content 文章跳过）──
     wordcloud_data = None
+    wc_config = None
     if not post.html_content:
         from .models import WordCloudConfig
-        wc_config = WordCloudConfig.get_or_create()
-        top_n = wc_config.top_n_article
+        wc_config = WordCloudConfig.get_or_create().to_dict()
+        top_n = wc_config['top_n_article']
         wc_cache_key = f'wordcloud:post:{post.id}:{post.updated_at.timestamp() if post.updated_at else ""}'
         wordcloud_data = cache_get(wc_cache_key)
         if wordcloud_data is None:
@@ -521,8 +522,6 @@ def single_post(slug):
             wordcloud_data = compute_word_frequencies(post.content, top_n=top_n)
             if wordcloud_data:
                 cache_set(wc_cache_key, wordcloud_data, 3600)
-    else:
-        wc_config = None
 
     # 优先使用手动编写的 html_content（如报告），否则渲染 Markdown
     template = 'html-post.html' if post.html_content else 'single-post.html'

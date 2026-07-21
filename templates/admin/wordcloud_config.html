@@ -25,7 +25,22 @@
 
         <div class="form-group">
             <label>{{ form.shape.label }}</label>
-            {{ form.shape(class='form-control') }}
+            <div class="glow-select-wrap">
+                <div class="glow-select-trigger" onclick="toggleGlowSelect(this)">
+                    <span class="glow-select-value">{{ dict(form.shape.choices).get(form.shape.data, '圆形 ○') }}</span>
+                    <span class="glow-select-arrow">▼</span>
+                </div>
+                <select name="shape" style="display:none">
+                    {% for val, label in form.shape.choices %}
+                    <option value="{{ val }}" {% if form.shape.data == val %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <div class="glow-select-menu">
+                    {% for val, label in form.shape.choices %}
+                    <div class="glow-select-option{% if form.shape.data == val %} is-selected{% endif %}" data-value="{{ val }}">{{ label }}</div>
+                    {% endfor %}
+                </div>
+            </div>
             <span class="form-hint">词云形状，影响词语的布局范围</span>
         </div>
 
@@ -55,7 +70,22 @@
 
         <div class="form-group">
             <label>{{ form.color_scheme.label }}</label>
-            {{ form.color_scheme(class='form-control') }}
+            <div class="glow-select-wrap">
+                <div class="glow-select-trigger" onclick="toggleGlowSelect(this)">
+                    <span class="glow-select-value">{{ dict(form.color_scheme.choices).get(form.color_scheme.data, '粉紫 Glow') }}</span>
+                    <span class="glow-select-arrow">▼</span>
+                </div>
+                <select name="color_scheme" style="display:none">
+                    {% for val, label in form.color_scheme.choices %}
+                    <option value="{{ val }}" {% if form.color_scheme.data == val %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <div class="glow-select-menu">
+                    {% for val, label in form.color_scheme.choices %}
+                    <div class="glow-select-option{% if form.color_scheme.data == val %} is-selected{% endif %}" data-value="{{ val }}">{{ label }}</div>
+                    {% endfor %}
+                </div>
+            </div>
             <span class="form-hint">词云文字配色方案</span>
         </div>
 
