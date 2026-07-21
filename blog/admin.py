@@ -770,6 +770,9 @@ def delete_post(id):
     from .cache import cache_delete
 
     cache_delete('dashboard:stats')
+    # 重新计算全站词云
+    from .wordcloud import precompute_site_wordcloud
+    precompute_site_wordcloud()
     flash('文章已删除', 'success')
     return redirect(url_for('admin.post_list'))
 

@@ -364,10 +364,10 @@ def index():
     hero_images = HeroImage.query.filter_by(is_active=True).order_by(HeroImage.sort_order).all()
     hero_image = random.choice(hero_images).image_url if hero_images else None
 
-    wordcloud_periods = _get_site_wordcloud()
     # 读取词云配置（单行，惰性初始化）
     from .models import WordCloudConfig
     wc_config = WordCloudConfig.get_or_create().to_dict()
+    wordcloud_periods = _get_site_wordcloud() if wc_config.get('enabled_site', True) else None
 
     return render_template(
         'index.html',

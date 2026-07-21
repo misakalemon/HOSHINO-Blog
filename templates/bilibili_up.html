@@ -61,7 +61,7 @@
         </div>
         <div class="site-wordcloud-canvas-wrap">
             <canvas id="wcBiliUp" data-wc="{{ bili_wordcloud | tojson }}"
-                    data-wc-config='{"shape":"circle","colorScheme":"glow"}'></canvas>
+                    data-wc-config="{{ wc_config | tojson }}"></canvas>
         </div>
     </div>
     {% endif %}
@@ -237,4 +237,13 @@
     };
 })();
 </script>
+
+{% if bili_wordcloud and not q %}
+<script src="{{ url_for('static', filename='js/wordcloud.js') }}?v=2" defer></script>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  initWordCloud('wcBiliUp', { maxFont: 42, minFont: 13 });
+});
+</script>
+{% endif %}
 {% endblock %}

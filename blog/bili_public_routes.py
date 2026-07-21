@@ -111,13 +111,15 @@ def index():
         )
         # 读取 B站词云（兼容旧表缺少 period/source 列的情况）
         bili_wordcloud = None
+        from .models import WordCloudConfig
+        wc_config = WordCloudConfig.get_or_create().to_dict()
         try:
             wc = WordCloudData.query.filter_by(post_id=None, source='bili', period='all').first()
             if wc and wc.data:
                 bili_wordcloud = wc.data
         except Exception as e:
             logger.warning('读取 B站词云失败: %s', e)
-        return render_template('bilibili.html', pagination=pagination, q='', all_ups=all_ups, bili_wordcloud=bili_wordcloud)
+        return render_template('bilibili.html', pagination=pagination, q='', all_ups=all_ups, bili_wordcloud=bili_wordcloud, wc_config=wc_config)
 
 
 @bili_public_bp.route('/up/<int:up_id>')
@@ -166,6 +168,8 @@ def up_videos(up_id):
     )
     # 读取 B站词云（兼容旧表缺少 period/source 列的情况）
     bili_wordcloud = None
+    from .models import WordCloudConfig
+    wc_config = WordCloudConfig.get_or_create().to_dict()
     try:
         wc = WordCloudData.query.filter_by(post_id=None, source='bili', period='all').first()
         if wc and wc.data:
@@ -180,6 +184,7 @@ def up_videos(up_id):
         follower_history=follower_history,
         follower_chart_data=follower_chart_data,
         bili_wordcloud=bili_wordcloud,
+        wc_config=wc_config,
     )
 
 

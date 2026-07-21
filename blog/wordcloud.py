@@ -86,7 +86,7 @@ _STOP_WORDS: set = {
     '叫', '把', '将', '被', '让', '给', '对', '对于', '关于', '至于',
     '作为', '当作', '叫做', '称为', '可谓', '便是',
     # ── 副词/语气 ──
-    '已经', '曾经', '正在', '刚刚', '刚刚', '马上', '立刻', '突然', '逐渐',
+    '已经', '曾经', '正在', '刚刚', '马上', '立刻', '突然', '逐渐',
     '终于', '始终', '一直', '从来', '往往', '常常', '经常', '有时',
     '偶尔', '忽然', '仍然', '依然', '依旧', '还是', '当然', '其实',
     '的确', '确实', '根本', '完全', '十分', '非常', '特别', '尤其',
@@ -337,24 +337,27 @@ def precompute_site_wordcloud():
         .all()
     )
     for (month,) in months:
-        month_posts = Post.query.filter(
-            Post.is_published == True,
-            func.date_format(Post.created_at, '%Y-%m') == month,
-        ).all()
-        month_texts = []
-        for p in month_posts:
-            t = extract_text_for_post(p)
-            if t.strip():
-                month_texts.append(t)
-        month_full = ' '.join(month_texts)
-        month_data = compute_word_frequencies(month_full, top_n=top_n) or []
+        try:
+            month_posts = Post.query.filter(
+                Post.is_published == True,
+                func.date_format(Post.created_at, '%Y-%m') == month,
+            ).all()
+            month_texts = []
+            for p in month_posts:
+                t = extract_text_for_post(p)
+                if t.strip():
+                    month_texts.append(t)
+            month_full = ' '.join(month_texts)
+            month_data = compute_word_frequencies(month_full, top_n=top_n) or []
 
-        m_record = WordCloudData.query.filter_by(post_id=None, period=month).first()
-        if m_record is None:
-            m_record = WordCloudData(post_id=None, period=month, data=month_data)
-            db.session.add(m_record)
-        else:
-            m_record.data = month_data
+            m_record = WordCloudData.query.filter_by(post_id=None, period=month).first()
+            if m_record is None:
+                m_record = WordCloudData(post_id=None, period=month, data=month_data)
+                db.session.add(m_record)
+            else:
+                m_record.data = month_data
+        except Exception as e:
+            logger.warning('预计算 %s 月词云失败: %s', month, e)
 
     db.session.commit()
 

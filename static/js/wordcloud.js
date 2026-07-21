@@ -215,8 +215,6 @@
       var color = randomColor(colorScheme);
 
       var localAngle = angle;
-      var placedOk = false;
-
       for (var a = 0; a < maxAttempts; a++) {
         localAngle += angleStep;
         var r = radiusStep * localAngle / (Math.PI * 2);
@@ -259,7 +257,6 @@
           pendingDraws.push({ word: item.word, x: x, y: y, fontSize: fontSize, color: color, fontStyle: FONT_STYLE });
           placedWords.push({ word: item.word, x: x, y: y, w: size.w, h: size.h });
           angle = localAngle;
-          placedOk = true;
           break;
         }
       }
