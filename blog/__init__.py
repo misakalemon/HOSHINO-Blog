@@ -304,6 +304,15 @@ def init_db(app):
         # ── 迁移 posts 表 FULLTEXT 索引 ───────
         _migrate_post_fulltext_index(app)
 
+        # ── 迁移 bili_videos.tags 列 ──────────
+        _migrate_bili_video_tags(app)
+
+        # ── 迁移 bili_video_comments 表 ───────
+        _migrate_bili_video_comments_table(app)
+
+        # ── 迁移 wordcloud_data.source 长度 ───
+        _migrate_wordcloud_source_length(app)
+
 
 def _migrate_post_html_file_url(app):
     """迁移：为 Post 表添加 html_file_url 字段。
@@ -813,6 +822,77 @@ def _migrate_post_fulltext_index(app):
         except Exception as e:
             db.session.rollback()
             app.logger.warning('迁移: 添加 FULLTEXT 索引失败: %s', e)
+
+
+def _migrate_bili_video_tags(app):
+    """迁移：为 bili_videos 表添加 tags JSON 列。"""
+    from sqlalchemy import text
+
+    engine = db.get_engine()
+    dialect = engine.dialect.name
+    if dialect != 'mysql':
+        return
+    inspector = db.inspect(engine)
+    cols = {c['name'] for c in inspector.get_columns('bili_videos')}
+    if 'tags' not in cols:
+        try:
+            db.session.execute(text('ALTER TABLE bili_videos ADD COLUMN tags JSON NULL COMMENT "视频标签名数组" AFTER created_at'))
+            db.session.commit()
+            app.logger.info('迁移: 已添加 bili_videos.tags 列')
+        except Exception as e:
+            db.session.rollback()
+            app.logger.warning('迁移: 添加 bili_videos.tags 列失败: %s', e)
+
+
+def _migrate_bili_video_comments_table(app):
+    """迁移：创建 bili_video_comments 表（如不存在）。"""
+    from sqlalchemy import text
+
+    engine = db.get_engine()
+    dialect = engine.dialect.name
+    if dialect != 'mysql':
+        return
+    inspector = db.inspect(engine)
+    tables = inspector.get_table_names()
+    if 'bili_video_comments' not in tables:
+        try:
+            db.session.execute(text('''
+                CREATE TABLE bili_video_comments (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    video_id INT NOT NULL,
+                    content TEXT NOT NULL,
+                    author VARCHAR(64) DEFAULT '',
+                    ctime INT DEFAULT 0,
+                    like_count INT DEFAULT 0,
+                    INDEX idx_video_id (video_id),
+                    FOREIGN KEY (video_id) REFERENCES bili_videos(id) ON DELETE CASCADE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            '''))
+            db.session.commit()
+            app.logger.info('迁移: 已创建 bili_video_comments 表')
+        except Exception as e:
+            db.session.rollback()
+            app.logger.warning('迁移: 创建 bili_video_comments 表失败: %s', e)
+
+
+def _migrate_wordcloud_source_length(app):
+    """迁移：扩展 wordcloud_data.source 从 VARCHAR(8) 到 VARCHAR(16)。"""
+    from sqlalchemy import text
+
+    engine = db.get_engine()
+    dialect = engine.dialect.name
+    if dialect != 'mysql':
+        return
+    inspector = db.inspect(engine)
+    cols = {c['name'] for c in inspector.get_columns('wordcloud_data')}
+    if 'source' in cols:
+        try:
+            db.session.execute(text('ALTER TABLE wordcloud_data MODIFY source VARCHAR(16) DEFAULT "blog"'))
+            db.session.commit()
+            app.logger.info('迁移: 已扩展 wordcloud_data.source 到 VARCHAR(16)')
+        except Exception as e:
+            db.session.rollback()
+            app.logger.warning('迁移: 扩展 wordcloud_data.source 失败: %s', e)
 
 
 # ── 后导入路由（延迟导入） ─────────────────────
