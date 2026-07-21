@@ -613,7 +613,7 @@ class BiliWatchedVideo(db.Model):
     video_id = db.Column(
         db.Integer, db.ForeignKey('bili_videos.id', ondelete='CASCADE'), unique=True, nullable=False
     )
-    added_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))))
+    added_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(CST))
 
     # lazy='joined'：查询时 JOIN BiliVideo
     video = db.relationship('BiliVideo', backref='watched_entry', lazy='joined')
