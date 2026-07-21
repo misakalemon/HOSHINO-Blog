@@ -710,6 +710,8 @@ def _migrate_wordcloud_data_fields(app):
 
     这两个字段在后续开发中新增，用于按月分段词云和区分 B站来源。
     """
+    from sqlalchemy import text
+
     engine = db.get_engine()
     dialect = engine.dialect.name
     if dialect != 'mysql':
