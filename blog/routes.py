@@ -696,10 +696,9 @@ def search():
             func.to_tsvector('simple', Post.content).op('@@')(func.plainto_tsquery('simple', q)),
         ]
     else:
-        # SQLite / 其他: 使用 match 谓词
+        # SQLite / MySQL: 使用 match 谓词（summary 不走 FULLTEXT，由 ILIKE 回退覆盖）
         match_exprs = [
             Post.title.match(q),
-            Post.summary.match(q),
             Post.content.match(q),
         ]
     results = (

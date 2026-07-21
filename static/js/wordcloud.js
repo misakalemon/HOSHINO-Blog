@@ -226,10 +226,22 @@
 
         if (x < padding || y < padding || x + size.w > w - padding || y + size.h > h - padding) continue;
 
-        // 形状边界检测
+        // 形状边界检测（检查词条矩形四个角，任一在形状内即通过）
         if (shape !== 'rectangle') {
-          var cx = (size.w / 2) | 0, cy = (size.h / 2) | 0;
-          if (!isInsideShape(x + cx, y + cy, shape, centerX, centerY, maxR, w, h)) continue;
+          var corners = [
+            [x, y],                                   // 左上
+            [x + size.w, y],                           // 右上
+            [x, y + size.h],                           // 左下
+            [x + size.w, y + size.h],                  // 右下
+          ];
+          var inside = false;
+          for (var k = 0; k < corners.length; k++) {
+            if (isInsideShape(corners[k][0], corners[k][1], shape, centerX, centerY, maxR, w, h)) {
+              inside = true;
+              break;
+            }
+          }
+          if (!inside) continue;
         }
 
         // 碰撞检测（提前退出：已放置越多，越容易碰撞）

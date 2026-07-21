@@ -115,8 +115,8 @@ def index():
             wc = WordCloudData.query.filter_by(post_id=None, source='bili', period='all').first()
             if wc and wc.data:
                 bili_wordcloud = wc.data
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning('读取 B站词云失败: %s', e)
         return render_template('bilibili.html', pagination=pagination, q='', all_ups=all_ups, bili_wordcloud=bili_wordcloud)
 
 
@@ -170,8 +170,8 @@ def up_videos(up_id):
         wc = WordCloudData.query.filter_by(post_id=None, source='bili', period='all').first()
         if wc and wc.data:
             bili_wordcloud = wc.data
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning('读取 B站词云失败(up_videos): %s', e)
     return render_template(
         'bilibili_up.html',
         up=up,
