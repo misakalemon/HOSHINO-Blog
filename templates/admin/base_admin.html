@@ -46,8 +46,8 @@
     {% endif %}
     {% if current_user.is_admin %}
     <a href="{{ url_for('admin.featured_card_list') }}" {% if request.endpoint and 'featured_card' in request.endpoint %}class="active"{% endif %}><i class="hm-public-highlights"></i>特色卡片</a>
-    <a href="{{ url_for('admin.hero_image_list') }}" {% if request.endpoint and 'hero_image' in request.endpoint %}class="active"{% endif %}><i class="hm-public-magic"></i>Hero 画像</a>
-    <a href="{{ url_for('admin.wordcloud_config') }}" {% if request.endpoint and 'wordcloud' in request.endpoint %}class="active"{% endif %}><i class="hm-public-magic"></i>词云设置</a>
+    <a href="{{ url_for('admin.hero_image_list') }}" {% if request.endpoint and 'hero_image' in request.endpoint %}class="active"{% endif %}><i class="hm-portrait"></i>Hero 画像</a>
+    <a href="{{ url_for('admin.wordcloud_config') }}" {% if request.endpoint and 'wordcloud' in request.endpoint %}class="active"{% endif %}><i class="hm-edit"></i>词云设置</a>
     {% endif %}
     {% if current_user.is_editor %}
     <a href="{{ url_for('admin.comment_list') }}" {% if request.endpoint and 'comment' in request.endpoint %}class="active"{% endif %}><i class="hm-comments"></i>评论</a>
@@ -58,7 +58,7 @@
     <a href="{{ url_for('bili.index') }}" {% if request.endpoint and 'bili' in request.endpoint and 'bili_subscription' not in (request.endpoint or '') and 'bili_history_cleanup' not in (request.endpoint or '') %}class="active"{% endif %}><i class="hm-bilibili"></i>Bilibili</a>
     {% if current_user.is_admin %}
     <a href="{{ url_for('admin.bili_subscriptions') }}" style="padding-left:36px;font-size:0.8rem" {% if request.endpoint and 'bili_subscription' in request.endpoint %}class="active"{% endif %}><i class="hm-comments"></i>邮件订阅</a>
-    <a href="{{ url_for('admin.bili_history_cleanup') }}" style="padding-left:36px;font-size:0.8rem" {% if request.endpoint and 'bili_history_cleanup' in request.endpoint %}class="active"{% endif %}><i class="hm-public-delete"></i>历史清理</a>
+    <a href="{{ url_for('admin.bili_history_cleanup') }}" style="padding-left:36px;font-size:0.8rem" {% if request.endpoint and 'bili_history_cleanup' in request.endpoint %}class="active"{% endif %}><i class="hm-public-history"></i>历史清理</a>
     {% endif %}
     <a href="{{ url_for('admin.profile') }}" {% if request.endpoint == 'admin.profile' %}class="active"{% endif %}><i class="hm-set"></i>个人资料</a>
     <a href="{{ url_for('blog.index') }}" style="color:rgba(255,255,255,0.25);margin-top:20px;font-size:0.75rem">← 查看网站</a>
