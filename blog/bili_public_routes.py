@@ -245,12 +245,13 @@ def video_detail(video_id):
         # 历史不足 2 条时增量均为 0
         growth = {m: {'total': 0, 'last': 0} for m in metrics}
 
-    from .models import BiliVideoComment, WordCloudData
+    from .models import BiliVideoComment, WordCloudConfig, WordCloudData
 
     wc_record = WordCloudData.query.filter_by(
         post_id=None, source='bili_video', period=f'bvid_{video.bvid}'
     ).first()
     wc_data = wc_record.data if wc_record and wc_record.data else []
+    wc_config = WordCloudConfig.get_or_create().to_dict()
 
     comments = (
         BiliVideoComment.query.filter_by(video_id=video.id)
@@ -268,6 +269,7 @@ def video_detail(video_id):
         chart_data=chart_data,
         growth=growth,
         wc_data=wc_data,
+        wc_config=wc_config,
         comments=comments,
     )
 
