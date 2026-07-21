@@ -10,9 +10,12 @@ HOSHINO Blog — 博文词云模块
 """
 
 import logging
+import os
 import re
 from collections import Counter
 from typing import List, Optional
+
+from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
@@ -225,3 +228,104 @@ def compute_word_frequencies(text: str, top_n: int = 60) -> Optional[list]:
     most_common = freq.most_common(top_n)
 
     return [{'word': w, 'weight': c} for w, c in most_common]
+
+
+def extract_text_for_post(post):
+    """从 Post 对象提取可用于分词的纯文本。
+
+    同时处理 content 和 html_content/html_file_url，
+    内嵌 HTML 中的标签会被 BeautifulSoup 剥离为纯文本。
+
+    Args:
+        post: Post ORM 实例
+
+    Returns:
+        str: 清洗后的纯文本，各来源用空格拼接
+    """
+    texts = []
+    if post.content:
+        texts.append(post.content)
+    if post.html_content:
+        soup = BeautifulSoup(post.html_content, 'html.parser')
+        texts.append(soup.get_text(separator=' ', strip=True))
+    elif post.html_file_url:
+        # 尝试读取磁盘上的 HTML 文件（兼容旧数据）
+        try:
+            from flask import current_app
+            filepath = os.path.join(
+                current_app.root_path, 'static',
+                post.html_file_url.lstrip('/'),
+            )
+            if os.path.exists(filepath):
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    soup = BeautifulSoup(f.read(), 'html.parser')
+                    texts.append(soup.get_text(separator=' ', strip=True))
+        except Exception:
+            pass
+    return ' '.join(texts)
+
+
+def precompute_post_wordcloud(post_id):
+    """为单篇文章预计算词云并存入数据库。
+
+    从 content + html_content 提取文本，分词后计算词频，
+    写入 WordCloudData 表（post_id 索引）。
+
+    Args:
+        post_id: 文章 ID
+    """
+    from . import db
+    from .models import Post, WordCloudData, WordCloudConfig
+
+    post = Post.query.get(post_id)
+    if not post:
+        return
+
+    text = extract_text_for_post(post)
+    top_n = WordCloudConfig.get_or_create().top_n_article
+    data = compute_word_frequencies(text, top_n=top_n) or []
+
+    record = WordCloudData.query.filter_by(post_id=post_id).first()
+    if record is None:
+        record = WordCloudData(post_id=post_id, data=data)
+        db.session.add(record)
+    else:
+        record.data = data
+    db.session.commit()
+
+
+def precompute_site_wordcloud():
+    """为全站预计算词云并存入数据库。
+
+    汇总所有已发布文章的文本（content + html_content），
+    分词后计算词频，写入 WordCloudData 表（post_id = NULL）。
+    """
+    from . import db
+    from .models import Post, WordCloudData, WordCloudConfig
+
+    texts = []
+    for post in Post.query.filter_by(is_published=True).all():
+        text = extract_text_for_post(post)
+        if text.strip():
+            texts.append(text)
+
+    full_text = ' '.join(texts)
+    top_n = WordCloudConfig.get_or_create().top_n_site
+    data = compute_word_frequencies(full_text, top_n=top_n) or []
+
+    record = WordCloudData.query.filter_by(post_id=None).first()
+    if record is None:
+        record = WordCloudData(post_id=None, data=data)
+        db.session.add(record)
+    else:
+        record.data = data
+    db.session.commit()
+
+
+def precompute_all_wordclouds():
+    """重新计算所有词云（全站 + 每篇已发布文章）。"""
+    precompute_site_wordcloud()
+    from .models import Post
+
+    for post in Post.query.filter_by(is_published=True).all():
+        precompute_post_wordcloud(post.id)

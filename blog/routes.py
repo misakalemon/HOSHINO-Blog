@@ -300,38 +300,18 @@ def _cached_featured_cards():
 # 首页：文章瀑布流
 # ═══════════════════════════════════════════════
 
-def _get_site_wordcloud(top_n=None):
-    """计算全站词频（所有已发布文章），带 Redis 缓存。
-
-    缓存键 wordcloud:site 固定不变，缓存 TTL 3600 秒。
-    发布新文章或编辑已有文章后，最多 1 小时自动刷新。
-
-    Args:
-        top_n: 返回词数，None 时从 WordCloudConfig 读取
+def _get_site_wordcloud():
+    """获取全站词云数据（从预计算数据库读取）。
 
     Returns:
         list | None: [{word, weight}, ...] 词频列表，或 None
     """
-    from .cache import cache_get, cache_set
-    from .wordcloud import compute_word_frequencies
+    from .models import WordCloudData
 
-    cached = cache_get('wordcloud:site')
-    if cached is not None:
-        return cached
-
-    posts = Post.query.filter_by(is_published=True).with_entities(Post.content).all()
-    full_text = ' '.join(p.content for p in posts if p.content)
-    if not full_text.strip():
-        return None
-
-    if top_n is None:
-        from .models import WordCloudConfig
-        top_n = WordCloudConfig.get_or_create().top_n_site
-
-    data = compute_word_frequencies(full_text, top_n=top_n)
-    if data:
-        cache_set('wordcloud:site', data, 3600)
-    return data
+    record = WordCloudData.query.filter_by(post_id=None).first()
+    if record and record.data:
+        return record.data
+    return None
 
 
 @blog_bp.route('/')
@@ -514,20 +494,14 @@ def single_post(slug):
 
     comment_count = post.published_comments()
 
-    # ── 词云数据（仅对 Markdown 文章计算，html_content 文章跳过）──
+    # ── 词云数据（从预计算数据库读取，不再实时分词）──
     wordcloud_data = None
     wc_config = None
-    if not post.html_content:
-        from .models import WordCloudConfig
-        wc_config = WordCloudConfig.get_or_create().to_dict()
-        top_n = wc_config['top_n_article']
-        wc_cache_key = f'wordcloud:post:{post.id}:{post.updated_at.timestamp() if post.updated_at else ""}'
-        wordcloud_data = cache_get(wc_cache_key)
-        if wordcloud_data is None:
-            from .wordcloud import compute_word_frequencies
-            wordcloud_data = compute_word_frequencies(post.content, top_n=top_n)
-            if wordcloud_data:
-                cache_set(wc_cache_key, wordcloud_data, 3600)
+    from .models import WordCloudConfig, WordCloudData
+    wc_config = WordCloudConfig.get_or_create().to_dict()
+    wc_record = WordCloudData.query.filter_by(post_id=post.id).first()
+    if wc_record and wc_record.data:
+        wordcloud_data = wc_record.data
 
     # 优先使用手动编写的 html_content（如报告），否则渲染 Markdown
     template = 'html-post.html' if post.html_content else 'single-post.html'

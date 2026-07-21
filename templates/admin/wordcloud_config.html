@@ -107,5 +107,8 @@
 
         <button type="submit" class="btn btn-primary">保存配置</button>
     </form>
+    <hr style="border-color:rgba(255,255,255,0.06);margin:24px 0">
+    <p class="admin-desc">词云数据预计算存储于数据库，修改配置后需重新计算才能生效。</p>
+    <a href="{{ url_for('admin.refresh_wordcloud') }}" class="btn btn-ghost" onclick="return confirm('确定重新计算所有词云？此操作可能需要几秒钟。')">⟳ 重新计算词云</a>
 </div>
 {% endblock %}

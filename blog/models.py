@@ -755,3 +755,29 @@ class WordCloudConfig(db.Model):
             'enabled_article': self.enabled_article,
             'enabled_site': self.enabled_site,
         }
+
+
+class WordCloudData(db.Model):
+    """预计算词云数据。
+
+    每篇文章一行（post_id 有值），全站词云一行（post_id 为 NULL）。
+    数据在发布/更新文章时触发重新计算，或由定时任务每日刷新。
+
+    __tablename__ = 'wordcloud_data'
+    """
+    __tablename__ = 'wordcloud_data'
+
+    id = db.Column(db.Integer, primary_key=True)
+    post_id = db.Column(
+        db.Integer, db.ForeignKey('posts.id', ondelete='CASCADE'),
+        nullable=True, unique=True, index=True,
+        comment='文章 ID，NULL 表示全站词云',
+    )
+    data = db.Column(db.JSON, nullable=False, comment='词频数据 [{word, weight}, ...]')
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))),
+        onupdate=lambda: datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))),
+    )
+
+    post = db.relationship('Post', backref=db.backref('wordcloud_data', uselist=False, cascade='all, delete-orphan'))
