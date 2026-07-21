@@ -313,6 +313,9 @@ def init_db(app):
         # ── 迁移 wordcloud_data.source 长度 ───
         _migrate_wordcloud_source_length(app)
 
+        # ── 迁移 wordcloud_data.period 长度 ───
+        _migrate_wordcloud_period_length(app)
+
 
 def _migrate_post_html_file_url(app):
     """迁移：为 Post 表添加 html_file_url 字段。
@@ -893,6 +896,26 @@ def _migrate_wordcloud_source_length(app):
         except Exception as e:
             db.session.rollback()
             app.logger.warning('迁移: 扩展 wordcloud_data.source 失败: %s', e)
+
+
+def _migrate_wordcloud_period_length(app):
+    """迁移：扩展 wordcloud_data.period 从 VARCHAR(16) 到 VARCHAR(32)。"""
+    from sqlalchemy import text
+
+    engine = db.get_engine()
+    dialect = engine.dialect.name
+    if dialect != 'mysql':
+        return
+    inspector = db.inspect(engine)
+    cols = {c['name'] for c in inspector.get_columns('wordcloud_data')}
+    if 'period' in cols:
+        try:
+            db.session.execute(text('ALTER TABLE wordcloud_data MODIFY period VARCHAR(32) DEFAULT "all"'))
+            db.session.commit()
+            app.logger.info('迁移: 已扩展 wordcloud_data.period 到 VARCHAR(32)')
+        except Exception as e:
+            db.session.rollback()
+            app.logger.warning('迁移: 扩展 wordcloud_data.period 失败: %s', e)
 
 
 # ── 后导入路由（延迟导入） ─────────────────────

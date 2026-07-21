@@ -41,8 +41,23 @@ def upgrade():
             existing_nullable=True,
         )
 
+    # Extend WordCloudData.period column length (16 → 32)
+    with op.batch_alter_table('wordcloud_data', schema=None) as batch_op:
+        batch_op.alter_column('period',
+            existing_type=sa.String(length=16),
+            type_=sa.String(length=32),
+            existing_nullable=True,
+        )
+
 
 def downgrade():
+    with op.batch_alter_table('wordcloud_data', schema=None) as batch_op:
+        batch_op.alter_column('period',
+            existing_type=sa.String(length=32),
+            type_=sa.String(length=16),
+            existing_nullable=True,
+        )
+
     with op.batch_alter_table('wordcloud_data', schema=None) as batch_op:
         batch_op.alter_column('source',
             existing_type=sa.String(length=16),

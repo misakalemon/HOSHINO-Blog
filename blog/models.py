@@ -798,8 +798,8 @@ class WordCloudData(db.Model):
         comment='文章 ID，NULL 表示全站词云',
     )
     period = db.Column(
-        db.String(16), default='all', index=True,
-        comment='时间周期: all=全部, 2026-01=某月',
+        db.String(32), default='all', index=True,
+        comment='时间周期: all=全部, 2026-01=某月, bvid_xxx=单视频, up_id=单UP',
     )
     source = db.Column(
         db.String(16), default='blog', index=True,
