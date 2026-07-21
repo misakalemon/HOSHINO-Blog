@@ -24,6 +24,9 @@
 """
 
 import datetime
+
+CST = datetime.timezone(datetime.timedelta(hours=8))  # 东八区（中国标准时间）
+
 import json
 import logging
 import os
@@ -1043,7 +1046,6 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             cold_done = 0
             retry_delay = 30  # 风控退避初始延迟（秒）
             # 使用东八区时间计算三层截止日期
-            CST = datetime.timezone(datetime.timedelta(hours=8))
             now = datetime.datetime.now(CST)
             cutoff_hot = now - datetime.timedelta(days=7)   # 7 天内 → Hot
             cutoff_warm = now - datetime.timedelta(days=30)  # 8~30 天 → Warm
@@ -1341,7 +1343,6 @@ def cleanup_old_history(days=90):
     from blog.models import BiliVideoHistory, db as _db
     import datetime
 
-    CST = datetime.timezone(datetime.timedelta(hours=8))
     cutoff = datetime.datetime.now(CST) - datetime.timedelta(days=days)
     deleted = BiliVideoHistory.query.filter(BiliVideoHistory.recorded_at < cutoff).delete()
     _db.session.commit()

@@ -646,7 +646,7 @@ class BiliSubscription(db.Model):
         db.String(64), nullable=False, index=True, comment='验证/取消订阅 token（同批次相同）'
     )
     verified = db.Column(db.Boolean, default=False, comment='是否已通过邮件验证')
-    created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(CST))
 
     # passive_deletes=True：不主动加载关联对象，让数据库级联删除
     up = db.relationship('BiliUp', backref=db.backref('subscriptions', lazy='dynamic'), passive_deletes=True)
@@ -664,7 +664,7 @@ class BiliCleanupConfig(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     days = db.Column(db.Integer, default=90, nullable=False, comment='清理几天前的数据')
     enabled = db.Column(db.Boolean, default=False, comment='是否启用自动清理')
-    updated_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(CST))
 
 
 class HeroImage(db.Model):
