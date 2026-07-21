@@ -294,6 +294,9 @@ def init_db(app):
 
         _migrate_post_html_content(app)
 
+        # ── 迁移 wordcloud_data 表新增字段 ───────
+        _migrate_wordcloud_data_fields(app)
+
 
 def _migrate_post_html_file_url(app):
     """迁移：为 Post 表添加 html_file_url 字段。
@@ -700,6 +703,33 @@ def _migrate_bili_sub_token_index(app):
             app.logger.info('迁移: 已删除 bili_subscriptions 的 token 索引（回退方案）')
         except Exception:
             db.session.rollback()
+
+
+def _migrate_wordcloud_data_fields(app):
+    """迁移：为 wordcloud_data 表添加 period 和 source 字段。
+
+    这两个字段在后续开发中新增，用于按月分段词云和区分 B站来源。
+    """
+    engine = db.get_engine()
+    dialect = engine.dialect.name
+    if dialect != 'mysql':
+        return
+    inspector = inspect(engine)
+    cols = {c['name'] for c in inspector.get_columns('wordcloud_data')}
+    for col_name, col_type in [
+        ('period', "VARCHAR(16) DEFAULT 'all'"),
+        ('source', "VARCHAR(8) DEFAULT 'blog'"),
+    ]:
+        if col_name not in cols:
+            try:
+                db.session.execute(
+                    text(f'ALTER TABLE wordcloud_data ADD COLUMN {col_name} {col_type} AFTER id')
+                )
+                db.session.commit()
+                app.logger.info('迁移: 已添加 wordcloud_data.%s 列', col_name)
+            except Exception as e:
+                db.session.rollback()
+                app.logger.warning('迁移: 添加 wordcloud_data.%s 列失败: %s', col_name, e)
 
 
 # ── 后导入路由（延迟导入） ─────────────────────
