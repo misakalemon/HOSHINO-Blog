@@ -735,7 +735,7 @@ class WordCloudConfig(db.Model):
     # 词云画布高度（px）
     canvas_height = db.Column(db.Integer, default=350, nullable=False)
     # B站视频标题词云显示的词数
-    top_n_bili = db.Column(db.Integer, default=50, nullable=False)
+    top_n_bili = db.Column(db.Integer, default=100, nullable=False)
     # 配色方案：glow / ocean / forest
     color_scheme = db.Column(db.String(20), default='glow', nullable=False)
     # 是否在文章详情页显示词云

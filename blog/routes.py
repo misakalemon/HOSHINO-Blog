@@ -719,7 +719,8 @@ def search():
             .order_by(Post.created_at.desc())
             .paginate(page=page, per_page=per_page, error_out=False)
         )
-    except Exception:
+    except Exception as e:
+        logger.warning('FULLTEXT 搜索降级到 ILIKE: %s', e)
         results = None
     # 若全文搜索无结果或无索引，回退到 ILIKE 模糊匹配（转义后的安全版本）
     if not results or results.total == 0:

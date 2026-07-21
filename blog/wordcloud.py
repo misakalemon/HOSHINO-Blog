@@ -108,7 +108,7 @@ _STOP_WORDS: set = {
     '零', '百', '千', '万', '亿', '两', '第', '每', '各', '某', '任何',
     '整个', '全部', '所有', '一切', '部分', '一些', '许多', '大量',
     '很多', '少数', '不少', '任何', '每个', '各自', '别的',
-    '之一', '其中', '之一',
+    '之一', '其中',
     # ── 时间/方位 ──
     '年', '月', '日', '时', '分', '秒', '天', '周', '小时', '分钟',
     '今天', '明天', '昨天', '前天', '后天',
@@ -173,8 +173,8 @@ def _is_valid_word(word: str) -> bool:
     word = word.strip()
     if not word:
         return False
-    if len(word) < 2:
-        return False  # 过滤单字
+    if len(word) < 2 and not (len(word) == 1 and '\u4e00' <= word <= '\u9fff'):
+        return False  # 过滤非中文单字
     if word.lower() in _STOP_WORDS:
         return False
     if _RE_PURE_DIGIT.match(word):

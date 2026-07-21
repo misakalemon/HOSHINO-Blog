@@ -23,7 +23,9 @@ import signal
 import subprocess
 import sys
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
+
+import eel
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 

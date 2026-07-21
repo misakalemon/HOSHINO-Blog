@@ -435,7 +435,6 @@ def _insert_or_update_video(up, video_info, aid, bvid, title_short):
     except IntegrityError:
         # aid 冲突 → 已有记录，回退并更新统计字段
         db.session.rollback()
-        db.session.remove()
         existing = BiliVideo.query.filter_by(aid=aid).first()
         if existing:
             # 仅更新统计字段，不覆盖标题/发布时间等元信息
