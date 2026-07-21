@@ -127,7 +127,7 @@
                         <span class="wordcloud-hint">文章高频词</span>
                     </div>
                     <div class="wordcloud-canvas-wrap">
-                        <canvas id="wordcloudCanvas" data-wordcloud="{{ wordcloud_data | tojson | forceescape }}"
+                        <canvas id="wordcloudCanvas" data-wordcloud="{{ wordcloud_data | tojson }}"
                                 data-wc-config="{{ wc_config | tojson }}"></canvas>
                     </div>
                 </div>

@@ -696,12 +696,12 @@ def search():
             func.to_tsvector('simple', Post.content).op('@@')(func.plainto_tsquery('simple', q)),
         ]
     else:
-        # MySQL / SQLite: 使用单条 MATCH (title, content) 匹配复合 FULLTEXT 索引
-        # 注意：MySQL 要求 MATCH 列必须与 FULLTEXT 索引定义完全一致
+        # MySQL: 使用原生 MATCH ... AGAINST 语法匹配复合 FULLTEXT 索引
+        # SQLite: 使用 FTS match 谓词
         if dialect == 'mysql':
-            match_expr = func.match(Post.title, Post.content).against(q)
+            from sqlalchemy import text
+            match_expr = text("MATCH (title, content) AGAINST (:q IN BOOLEAN MODE)").bindparams(q=q)
         else:
-            # SQLite: 使用 FTS match 谓词
             match_expr = Post.title.match(q) | Post.content.match(q)
         match_exprs = [match_expr]
     results = (

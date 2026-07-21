@@ -124,7 +124,7 @@
         <span class="site-wordcloud-hint" id="wcPeriodLabel">所有文章</span>
     </div>
     <div class="site-wordcloud-canvas-wrap">
-        <canvas id="wcSite" data-wc-periods="{{ wordcloud_periods | tojson | forceescape }}"
+        <canvas id="wcSite" data-wc-periods="{{ wordcloud_periods | tojson }}"
                 data-wc-config="{{ wc_config | tojson }}"></canvas>
     </div>
     {% if wc_keys | length > 1 %}
