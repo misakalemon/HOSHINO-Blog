@@ -143,7 +143,7 @@
     var centerAngle = Math.PI * 2 / 10; // 18度
     var offset = sectorAngle - centerAngle;
     // 星形边界半径随角度变化
-    var starR = maxR * (0.4 + 0.6 * Math.pow(Math.cos(offset * 2.5), 2));
+    var starR = maxR * (1.0 - 0.6 * Math.pow(Math.cos(offset * 2.5), 2));
     return dist <= starR;
   }
 

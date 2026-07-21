@@ -128,7 +128,7 @@
                     </div>
                     <div class="wordcloud-canvas-wrap">
                         <canvas id="wordcloudCanvas" data-wordcloud="{{ wordcloud_data | tojson | forceescape }}"
-                                data-wc-config="{{ wc_config | tojson | forceescape }}"></canvas>
+                                data-wc-config="{{ wc_config | tojson }}"></canvas>
                     </div>
                 </div>
                 {% endif %}
