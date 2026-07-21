@@ -300,18 +300,20 @@ def _cached_featured_cards():
 # 首页：文章瀑布流
 # ═══════════════════════════════════════════════
 
-def _get_site_wordcloud():
+def _get_site_wordcloud(top_n=None):
     """计算全站词频（所有已发布文章），带 Redis 缓存。
 
     缓存键 wordcloud:site 固定不变，缓存 TTL 3600 秒。
     发布新文章或编辑已有文章后，最多 1 小时自动刷新。
+
+    Args:
+        top_n: 返回词数，None 时从 WordCloudConfig 读取
 
     Returns:
         list | None: [{word, weight}, ...] 词频列表，或 None
     """
     from .cache import cache_get, cache_set
     from .wordcloud import compute_word_frequencies
-    from .models import WordCloudConfig
 
     cached = cache_get('wordcloud:site')
     if cached is not None:
@@ -322,7 +324,10 @@ def _get_site_wordcloud():
     if not full_text.strip():
         return None
 
-    top_n = WordCloudConfig.get_or_create().top_n_site
+    if top_n is None:
+        from .models import WordCloudConfig
+        top_n = WordCloudConfig.get_or_create().top_n_site
+
     data = compute_word_frequencies(full_text, top_n=top_n)
     if data:
         cache_set('wordcloud:site', data, 3600)
@@ -373,6 +378,7 @@ def index():
     hero_image = random.choice(hero_images).image_url if hero_images else None
 
     wordcloud_data = _get_site_wordcloud()
+    # 读取词云配置（单行，惰性初始化）
     from .models import WordCloudConfig
     wc_config = WordCloudConfig.get_or_create().to_dict()
 

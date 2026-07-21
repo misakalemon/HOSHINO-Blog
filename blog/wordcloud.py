@@ -11,18 +11,66 @@ HOSHINO Blog — 博文词云模块
 
 import logging
 import re
-from typing import List
+from collections import Counter
+from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
-# ── 中文停用词表（~200 个高频虚词/代词/语气词/连词）────────
+# ── jieba 延迟初始化（只在首次调用时加载）──
+_jieba_initialized = False
+
+
+def _init_jieba():
+    """初始化 jieba：添加领域词典 + 启用并行分词（4 核）。
+
+    仅在首次调用 compute_word_frequencies 时执行一次。
+    """
+    global _jieba_initialized
+    if _jieba_initialized:
+        return
+    import jieba
+    # 启用并行分词（多核加速）
+    try:
+        jieba.enable_parallel(4)
+    except Exception:
+        pass  # 并行不可用时静默降级
+    # 添加博客领域词汇，提高分词准确率
+    domain_words = [
+        'Hoshino', 'Bilibili', 'GitCode', 'GitHub', 'Gitee',
+        'Markdown', 'Redis', 'MySQL', 'Flask', 'SQLAlchemy',
+        '前端', '后端', '博客', '开源', 'API', 'CSS', 'HTML', 'JavaScript',
+        'Python', 'Docker', 'Linux', 'Windows', 'macOS',
+    ]
+    for w in domain_words:
+        jieba.add_word(w)
+    _jieba_initialized = True
+
+
+# ── 预编译正则（模块级，避免重复编译）────────────────
+_RE_CODE_BLOCK = re.compile(r'```[\s\S]*?```')
+_RE_INLINE_CODE = re.compile(r'`[^`]+`')
+_RE_HTML_TAG = re.compile(r'<[^>]+>')
+_RE_URL = re.compile(r'https?://\S+|www\.\S+')
+_RE_EMAIL = re.compile(r'\S+@\S+\.\S+')
+_RE_MD_LINK = re.compile(r'!?\[([^\]]*)\]\([^)]+\)')
+_RE_MD_HEADING = re.compile(r'^#{1,6}\s+', re.MULTILINE)
+_RE_MD_ULIST = re.compile(r'^[\s]*[-*+]\s+', re.MULTILINE)
+_RE_MD_OLIST = re.compile(r'^[\s]*\d+\.\s+', re.MULTILINE)
+_RE_MD_HR = re.compile(r'^-{3,}\s*$', re.MULTILINE)
+_RE_MD_EM = re.compile(r'[*_]{1,3}')
+_RE_PURE_DIGIT = re.compile(r'^\d+(\.\d+)?$')
+_RE_PURE_PUNCT = re.compile(r'^[^\w\s]+$')
+
+# ── 中文停用词表（~300 个高频虚词/代词/语气词/连词）────
 _STOP_WORDS: set = {
-    # 代词
+    # ── 代词 ──
     '我', '你', '他', '她', '它', '我们', '你们', '他们', '她们', '它们',
-    '自己', '别人', '大家', '这', '那', '这个', '那个', '这些', '那些',
+    '自己', '别人', '大家', '各位', '诸位',
+    '这', '那', '这个', '那个', '这些', '那些',
     '这里', '那里', '这儿', '那儿', '这样', '那样', '这么', '那么',
-    '什么', '谁', '哪', '怎么', '为什么', '如何', '怎样',
-    # 系词/助词
+    '什么', '谁', '哪', '怎么', '为什么', '如何', '怎样', '怎么样',
+    '多少', '几', '何', '孰', '啥', '咋', '干嘛',
+    # ── 系词/助词 ──
     '的', '了', '在', '是', '有', '和', '就', '不', '都', '也',
     '到', '说', '要', '去', '会', '着', '没有', '看', '好', '上',
     '很', '能', '下', '用', '让', '被', '把', '对', '还', '但',
@@ -33,8 +81,9 @@ _STOP_WORDS: set = {
     '之', '以', '为', '于', '其', '中', '个', '所', '从', '将',
     '向', '往', '当', '比', '跟', '同', '被', '给', '由', '让',
     '叫', '把', '将', '被', '让', '给', '对', '对于', '关于', '至于',
-    # 副词/语气
-    '已经', '曾经', '正在', '刚刚', '马上', '立刻', '突然', '逐渐',
+    '作为', '当作', '叫做', '称为', '可谓', '便是',
+    # ── 副词/语气 ──
+    '已经', '曾经', '正在', '刚刚', '刚刚', '马上', '立刻', '突然', '逐渐',
     '终于', '始终', '一直', '从来', '往往', '常常', '经常', '有时',
     '偶尔', '忽然', '仍然', '依然', '依旧', '还是', '当然', '其实',
     '的确', '确实', '根本', '完全', '十分', '非常', '特别', '尤其',
@@ -50,20 +99,23 @@ _STOP_WORDS: set = {
     '开始', '继续', '完成', '结束', '出现', '存在', '发生', '进行',
     '做', '作', '搞', '弄', '干', '办', '处理', '解决', '实现',
     '成为', '作为', '当作', '叫做', '称为', '算', '算作', '看成',
-    # 长度/数字相关
+    '可以说', '也就是', '就是说', '这意味着', '换句话说',
+    # ── 数量词 ──
     '一', '二', '三', '四', '五', '六', '七', '八', '九', '十',
-    '零', '百', '千', '万', '亿', '第', '每', '各', '某', '任何',
+    '零', '百', '千', '万', '亿', '两', '第', '每', '各', '某', '任何',
     '整个', '全部', '所有', '一切', '部分', '一些', '许多', '大量',
     '很多', '少数', '不少', '任何', '每个', '各自', '别的',
-    # 时间/方位
-    '年', '月', '日', '时', '分', '秒', '天', '周', '小时',
-    '今天', '明天', '昨天', '早上', '晚上', '上午', '下午',
-    '现在', '过去', '未来', '当前', '目前', '之前', '以后',
+    '之一', '其中', '之一',
+    # ── 时间/方位 ──
+    '年', '月', '日', '时', '分', '秒', '天', '周', '小时', '分钟',
+    '今天', '明天', '昨天', '前天', '后天',
+    '早上', '晚上', '上午', '下午', '中午', '深夜',
+    '现在', '过去', '未来', '当前', '目前', '之前', '以后', '以来',
     '前后', '左右', '上下', '内外', '中间', '旁边', '附近',
     '这里', '那里', '这边', '那边', '上面', '下面', '里面', '外面',
     '前', '后', '左', '右', '上', '下', '内', '外', '中', '旁',
-    '东', '南', '西', '北',
-    # 常见英文停用词（少量）
+    '东', '南', '西', '北', '东南', '西南', '东北', '西北',
+    # ── 常见英文停用词 ──
     'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been',
     'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will',
     'would', 'could', 'should', 'may', 'might', 'shall', 'can',
@@ -73,18 +125,16 @@ _STOP_WORDS: set = {
     'with', 'by', 'from', 'as', 'about', 'into', 'through', 'during',
     'and', 'or', 'but', 'not', 'no', 'if', 'so', 'than', 'then',
     'just', 'also', 'very', 'too', 'only', 'more', 'some', 'any',
+    'up', 'down', 'out', 'off', 'over', 'under', 'again', 'further',
+    'once', 'here', 'there', 'when', 'where', 'why', 'how',
+    'all', 'each', 'both', 'few', 'most', 'other', 'such',
 }
-
-# ── 过滤模式 ──────────────────────────────────
-# 匹配纯数字、纯标点、URL、邮箱
-_PURE_DIGIT = re.compile(r'^\d+(\.\d+)?$')
-_PURE_PUNCT = re.compile(r'^[^\w\s]+$')
-_URL = re.compile(r'https?://\S+|www\.\S+')
-_EMAIL = re.compile(r'\S+@\S+\.\S+')
 
 
 def _clean_text(text: str) -> str:
     """移除 Markdown 标记、HTML 标签、URL、代码块，保留纯文本。
+
+    使用预编译正则，单次遍历完成所有清洗。
 
     Args:
         text: 原始 Markdown 内容
@@ -92,25 +142,19 @@ def _clean_text(text: str) -> str:
     Returns:
         清洗后的纯文本
     """
-    # 移除代码块（```...``` 和 `inline code`）
-    text = re.sub(r'```[\s\S]*?```', '', text)
-    text = re.sub(r'`[^`]+`', '', text)
-    # 移除 HTML 标签
-    text = re.sub(r'<[^>]+>', '', text)
-    # 移除 URL
-    text = _URL.sub('', text)
-    text = _EMAIL.sub('', text)
-    # 移除 Markdown 图片/链接语法 ![alt](url) 和 [text](url)
-    text = re.sub(r'!?\[([^\]]*)\]\([^)]+\)', r'\1', text)
-    # 移除 Markdown 标题标记 (#)
-    text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
-    # 移除 Markdown 列表标记
-    text = re.sub(r'^[\s]*[-*+]\s+', '', text, flags=re.MULTILINE)
-    text = re.sub(r'^[\s]*\d+\.\s+', '', text, flags=re.MULTILINE)
-    # 移除分割线
-    text = re.sub(r'^-{3,}\s*$', '', text, flags=re.MULTILINE)
-    # 移除加粗/斜体标记
-    text = re.sub(r'[*_]{1,3}', '', text)
+    text = _RE_CODE_BLOCK.sub('', text)
+    text = _RE_INLINE_CODE.sub('', text)
+    text = _RE_HTML_TAG.sub('', text)
+    text = _RE_URL.sub('', text)
+    text = _RE_EMAIL.sub('', text)
+    text = _RE_MD_LINK.sub(r'\1', text)
+    text = _RE_MD_HEADING.sub('', text)
+    text = _RE_MD_ULIST.sub('', text)
+    text = _RE_MD_OLIST.sub('', text)
+    text = _RE_MD_HR.sub('', text)
+    text = _RE_MD_EM.sub('', text)
+    # 合并连续空白
+    text = ' '.join(text.split())
     return text
 
 
@@ -130,9 +174,9 @@ def _is_valid_word(word: str) -> bool:
         return False  # 过滤单字
     if word.lower() in _STOP_WORDS:
         return False
-    if _PURE_DIGIT.match(word):
+    if _RE_PURE_DIGIT.match(word):
         return False
-    if _PURE_PUNCT.match(word):
+    if _RE_PURE_PUNCT.match(word):
         return False
     return True
 
@@ -140,41 +184,44 @@ def _is_valid_word(word: str) -> bool:
 def tokenize(text: str) -> List[str]:
     """对文本进行中文分词，返回有效词列表。
 
+    首次调用时自动初始化 jieba 并加载领域词典。
+
     Args:
         text: 原始 Markdown 文本
 
     Returns:
         过滤后的分词列表（按原文出现顺序）
     """
+    _init_jieba()
     import jieba
 
     cleaned = _clean_text(text)
     if not cleaned.strip():
         return []
 
-    words = jieba.lcut(cleaned)
+    words = jieba.lcut(cleaned, cut_all=False)  # 精确模式
     return [w for w in words if _is_valid_word(w)]
 
 
-def compute_word_frequencies(text: str, top_n: int = 60) -> list:
+def compute_word_frequencies(text: str, top_n: int = 60) -> Optional[list]:
     """计算词频，返回按权重降序排列的列表。
+
+    使用 Counter 进行高效计数，自动过滤停用词和无效词。
 
     Args:
         text: 原始 Markdown 文本
         top_n: 返回前 N 个高频词（默认 60）
 
     Returns:
-        [{word: str, weight: int}, ...]  按 weight 降序
+        [{word: str, weight: int}, ...] 按 weight 降序，无数据时返回 None
     """
     words = tokenize(text)
     if not words:
-        return []
+        return None
 
-    freq: dict = {}
-    for w in words:
-        freq[w] = freq.get(w, 0) + 1
-
+    # 使用 Counter 高效计数
+    freq = Counter(words)
     # 按词频降序，取 top_n
-    sorted_items = sorted(freq.items(), key=lambda x: -x[1])[:top_n]
+    most_common = freq.most_common(top_n)
 
-    return [{'word': w, 'weight': c} for w, c in sorted_items]
+    return [{'word': w, 'weight': c} for w, c in most_common]
