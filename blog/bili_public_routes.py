@@ -22,7 +22,7 @@ from collections import OrderedDict
 
 from flask import Blueprint, current_app, jsonify, render_template, request, url_for
 
-from blog.models import BiliSubscription, BiliUp, BiliUpHistory, BiliVideo, BiliVideoHistory, db
+from blog.models import BiliSubscription, BiliUp, BiliUpHistory, BiliVideo, BiliVideoHistory, WordCloudData, db
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +93,7 @@ def index():
         # 构建视频所属 UP 主的映射表，供前端显示
         up_ids = {v.up_id for v in videos}
         up_map = {u.id: u for u in BiliUp.query.filter(BiliUp.id.in_(up_ids)).all()}
+        bili_wordcloud = None
         return render_template(
             'bilibili.html',
             ups=ups,
@@ -101,13 +102,17 @@ def index():
             total=len(ups) + len(videos),
             up_map=up_map,
             all_ups=all_ups,
+            bili_wordcloud=bili_wordcloud,
         )
     else:
         # 无搜索：分页显示全部 UP 主
         pagination = BiliUp.query.order_by(BiliUp.follower_count.desc()).paginate(
             page=page, per_page=per_page, error_out=False
         )
-        return render_template('bilibili.html', pagination=pagination, q='', all_ups=all_ups)
+        # 读取 B站词云
+        wc = WordCloudData.query.filter_by(post_id=None, source='bili', period='all').first()
+        bili_wordcloud = wc.data if wc and wc.data else None
+        return render_template('bilibili.html', pagination=pagination, q='', all_ups=all_ups, bili_wordcloud=bili_wordcloud)
 
 
 @bili_public_bp.route('/up/<int:up_id>')
@@ -154,6 +159,9 @@ def up_videos(up_id):
             for h in follower_history
         ]
     )
+    # 读取 B站词云
+    wc = WordCloudData.query.filter_by(post_id=None, source='bili', period='all').first()
+    bili_wordcloud = wc.data if wc and wc.data else None
     return render_template(
         'bilibili_up.html',
         up=up,
@@ -161,6 +169,7 @@ def up_videos(up_id):
         q=q,
         follower_history=follower_history,
         follower_chart_data=follower_chart_data,
+        bili_wordcloud=bili_wordcloud,
     )
 
 

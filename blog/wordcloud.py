@@ -298,11 +298,19 @@ def precompute_site_wordcloud():
     """为全站预计算词云并存入数据库。
 
     汇总所有已发布文章的文本（content + html_content），
-    分词后计算词频，写入 WordCloudData 表（post_id = NULL）。
+    分词后计算词频，同时按月分段计算。
+
+    每条记录以 (post_id, period) 为唯一标识：
+      - post_id=NULL, period='all'    → 全站全量
+      - post_id=NULL, period='2026-01' → 某月全站
     """
     from . import db
     from .models import Post, WordCloudData, WordCloudConfig
+    from sqlalchemy import func
 
+    top_n = WordCloudConfig.get_or_create().top_n_site
+
+    # ── 全量词云 ──
     texts = []
     for post in Post.query.filter_by(is_published=True).all():
         text = extract_text_for_post(post)
@@ -310,15 +318,44 @@ def precompute_site_wordcloud():
             texts.append(text)
 
     full_text = ' '.join(texts)
-    top_n = WordCloudConfig.get_or_create().top_n_site
     data = compute_word_frequencies(full_text, top_n=top_n) or []
 
-    record = WordCloudData.query.filter_by(post_id=None).first()
+    record = WordCloudData.query.filter_by(post_id=None, period='all').first()
     if record is None:
-        record = WordCloudData(post_id=None, data=data)
+        record = WordCloudData(post_id=None, period='all', data=data)
         db.session.add(record)
     else:
         record.data = data
+
+    # ── 按月分段词云 ──
+    # 查询所有已发布文章的不同月份
+    months = (
+        db.session.query(func.date_format(Post.created_at, '%Y-%m'))
+        .filter(Post.is_published == True)
+        .distinct()
+        .order_by(func.date_format(Post.created_at, '%Y-%m'))
+        .all()
+    )
+    for (month,) in months:
+        month_posts = Post.query.filter(
+            Post.is_published == True,
+            func.date_format(Post.created_at, '%Y-%m') == month,
+        ).all()
+        month_texts = []
+        for p in month_posts:
+            t = extract_text_for_post(p)
+            if t.strip():
+                month_texts.append(t)
+        month_full = ' '.join(month_texts)
+        month_data = compute_word_frequencies(month_full, top_n=top_n) or []
+
+        m_record = WordCloudData.query.filter_by(post_id=None, period=month).first()
+        if m_record is None:
+            m_record = WordCloudData(post_id=None, period=month, data=month_data)
+            db.session.add(m_record)
+        else:
+            m_record.data = month_data
+
     db.session.commit()
 
 
@@ -329,3 +366,70 @@ def precompute_all_wordclouds():
 
     for post in Post.query.filter_by(is_published=True).all():
         precompute_post_wordcloud(post.id)
+
+
+def precompute_bili_wordclouds():
+    """为 B站视频标题+简介预计算词云并存入数据库。
+
+    汇总所有 B站视频的 title + description，分词后计算词频，
+    写入 WordCloudData 表（source='bili'），同时按月分段。
+    """
+    from . import db
+    from .models import BiliVideo, WordCloudData, WordCloudConfig
+    from sqlalchemy import func
+
+    top_n = WordCloudConfig.get_or_create().top_n_site
+
+    # ── 全量 B站词云 ──
+    videos = BiliVideo.query.all()
+    texts = []
+    for v in videos:
+        parts = []
+        if v.title:
+            parts.append(v.title)
+        if v.description:
+            parts.append(v.description)
+        texts.append(' '.join(parts))
+    full_text = ' '.join(texts)
+    data = compute_word_frequencies(full_text, top_n=top_n) or []
+
+    _save_bili_record('all', data)
+
+    # ── 按月分段 ──
+    months = (
+        db.session.query(func.date_format(BiliVideo.pubdate, '%Y-%m'))
+        .filter(BiliVideo.pubdate.isnot(None))
+        .distinct()
+        .order_by(func.date_format(BiliVideo.pubdate, '%Y-%m'))
+        .all()
+    )
+    for (month_pubdate,) in months:
+        month_videos = BiliVideo.query.filter(
+            func.date_format(BiliVideo.pubdate, '%Y-%m') == month_pubdate,
+        ).all()
+        month_texts = []
+        for v in month_videos:
+            parts = []
+            if v.title:
+                parts.append(v.title)
+            if v.description:
+                parts.append(v.description)
+            month_texts.append(' '.join(parts))
+        month_full = ' '.join(month_texts)
+        month_data = compute_word_frequencies(month_full, top_n=top_n) or []
+        _save_bili_record(month_pubdate, month_data)
+
+    db.session.commit()
+
+
+def _save_bili_record(period, data):
+    """保存或更新 B站词云记录。"""
+    from . import db
+    from .models import WordCloudData
+
+    record = WordCloudData.query.filter_by(post_id=None, source='bili', period=period).first()
+    if record is None:
+        record = WordCloudData(post_id=None, source='bili', period=period, data=data)
+        db.session.add(record)
+    else:
+        record.data = data

@@ -770,8 +770,16 @@ class WordCloudData(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     post_id = db.Column(
         db.Integer, db.ForeignKey('posts.id', ondelete='CASCADE'),
-        nullable=True, unique=True, index=True,
+        nullable=True, index=True,
         comment='文章 ID，NULL 表示全站词云',
+    )
+    period = db.Column(
+        db.String(16), default='all', index=True,
+        comment='时间周期: all=全部, 2026-01=某月',
+    )
+    source = db.Column(
+        db.String(8), default='blog', index=True,
+        comment='来源: blog=博客文章, bili=B站视频',
     )
     data = db.Column(db.JSON, nullable=False, comment='词频数据 [{word, weight}, ...]')
     updated_at = db.Column(

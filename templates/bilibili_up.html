@@ -52,6 +52,20 @@
         {% endif %}
     </div>
 
+    {% if bili_wordcloud and not q %}
+    <!-- B站词云 -->
+    <div class="site-wordcloud" style="margin-bottom:24px">
+        <div class="site-wordcloud-header">
+            <span class="site-wordcloud-title">✦ {{ up.name or 'UP主' }} 视频词云</span>
+            <span class="site-wordcloud-hint">标题高频词</span>
+        </div>
+        <div class="site-wordcloud-canvas-wrap">
+            <canvas id="wcBiliUp" data-wc="{{ bili_wordcloud | tojson | forceescape }}"
+                    data-wc-config='{"shape":"circle","colorScheme":"glow"}'></canvas>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- 视频列表 -->
     <div class="admin-table-wrapper">
         <table class="admin-table">

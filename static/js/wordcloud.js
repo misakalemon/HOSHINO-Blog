@@ -270,6 +270,23 @@
 
     // 保存绘制数据供外部使用
     canvas._wordcloudData = { placed: placed, data: sorted };
+
+    // ── 点击穿透检索 ──────────────────────────
+    canvas.onclick = function(e) {
+      var data = this._wordcloudData;
+      if (!data || !data.placed) return;
+      var rect = this.getBoundingClientRect();
+      var mx = (e.clientX - rect.left) * (this.width / rect.width / dpr);
+      var my = (e.clientY - rect.top) * (this.height / rect.height / dpr);
+      for (var i = 0; i < data.placed.length; i++) {
+        var p = data.placed[i];
+        if (mx >= p.x && mx <= p.x + p.w && my >= p.y && my <= p.y + p.h) {
+          var word = data.data[i] && data.data[i].word;
+          if (word) window.location.href = '/search?q=' + encodeURIComponent(word);
+          return;
+        }
+      }
+    };
   }
 
   /**
@@ -295,6 +312,8 @@
     if (!raw) return;
 
     var cfgRaw = canvas.getAttribute('data-wc-config');
+    // 调试日志：确认形状配置已传入
+    if (cfgRaw) console.log('[词云] config:', cfgRaw);
     var opts = defaults ? Object.assign({}, defaults) : {};
 
     if (cfgRaw) {

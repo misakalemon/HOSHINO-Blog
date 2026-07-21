@@ -304,14 +304,14 @@ def _get_site_wordcloud():
     """获取全站词云数据（从预计算数据库读取）。
 
     Returns:
-        list | None: [{word, weight}, ...] 词频列表，或 None
+        dict: {period: data, ...} 如 {'all': [...], '2026-01': [...], ...}
     """
     from .models import WordCloudData
 
-    record = WordCloudData.query.filter_by(post_id=None).first()
-    if record and record.data:
-        return record.data
-    return None
+    records = WordCloudData.query.filter_by(post_id=None).order_by(WordCloudData.period).all()
+    if not records:
+        return None
+    return {r.period: r.data for r in records if r.data}
 
 
 @blog_bp.route('/')
@@ -357,7 +357,7 @@ def index():
     hero_images = HeroImage.query.filter_by(is_active=True).order_by(HeroImage.sort_order).all()
     hero_image = random.choice(hero_images).image_url if hero_images else None
 
-    wordcloud_data = _get_site_wordcloud()
+    wordcloud_periods = _get_site_wordcloud()
     # 读取词云配置（单行，惰性初始化）
     from .models import WordCloudConfig
     wc_config = WordCloudConfig.get_or_create().to_dict()
@@ -375,7 +375,7 @@ def index():
         cat_lookup=cat_lookup,
         blog_subtitle=current_app.config['BLOG_SUBTITLE'],
         hero_image=hero_image,
-        wordcloud_data=wordcloud_data,
+        wordcloud_periods=wordcloud_periods,
         wc_config=wc_config,
     )
 

@@ -1712,9 +1712,10 @@ def wordcloud_config():
 @admin_bp.route('/wordcloud/refresh')
 @admin_required
 def refresh_wordcloud():
-    """手动触发全站词云重新计算（预计算存入数据库）。"""
-    from .wordcloud import precompute_all_wordclouds
+    """手动触发博客+ B站词云重新计算（预计算存入数据库）。"""
+    from .wordcloud import precompute_all_wordclouds, precompute_bili_wordclouds
 
     precompute_all_wordclouds()
-    flash('词云数据已重新计算', 'success')
+    precompute_bili_wordclouds()
+    flash('词云数据已重新计算（博客 + B站）', 'success')
     return redirect(url_for('admin.wordcloud_config'))

@@ -114,17 +114,31 @@
     {% endfor %}
 </div>
 
-{% if wordcloud_data %}
+{% if wordcloud_periods %}
+{% set wc_keys = wordcloud_periods.keys() | list %}
+{% set wc_first = wordcloud_periods[wc_keys[0]] %}
 <!-- 全站词云 -->
 <div class="site-wordcloud">
     <div class="site-wordcloud-header">
         <span class="site-wordcloud-title">✦ 全站词云</span>
-        <span class="site-wordcloud-hint">所有文章高频词 · 自动更新</span>
+        <span class="site-wordcloud-hint" id="wcPeriodLabel">所有文章</span>
     </div>
     <div class="site-wordcloud-canvas-wrap">
-        <canvas id="wcSite" data-wc="{{ wordcloud_data | tojson | forceescape }}"
+        <canvas id="wcSite" data-wc-periods="{{ wordcloud_periods | tojson | forceescape }}"
                 data-wc-config="{{ wc_config | tojson }}"></canvas>
     </div>
+    {% if wc_keys | length > 1 %}
+    <!-- 时间轴滑块 -->
+    <div class="wc-timeline" style="margin-top:14px;padding:0 8px">
+        <input type="range" id="wcSlider" min="0" max="{{ wc_keys | length - 1 }}" value="0" step="1"
+               style="width:100%;accent-color:#a78bfa">
+        <div class="wc-timeline-labels" style="display:flex;justify-content:space-between;font-size:0.65rem;color:rgba(255,255,255,0.25);margin-top:4px">
+            {% for key in wc_keys %}
+            <span>{{ '全部' if key == 'all' else key }}</span>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endif %}
 
@@ -290,8 +304,8 @@ if('IntersectionObserver' in window){
 })();
 </script>
 
-{% if wordcloud_data %}
-<script src="{{ url_for('static', filename='js/wordcloud.js') }}" defer></script>
+{% if wordcloud_periods %}
+<script src="{{ url_for('static', filename='js/wordcloud.js') }}?v=2" defer></script>
 <script>
 document.addEventListener('DOMContentLoaded', function(){
   initWordCloud('wcSite', { maxFont: 42, minFont: 13 });

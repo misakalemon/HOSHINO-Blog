@@ -320,8 +320,8 @@ def _init_scheduler(app):
             id='bili_auto_cleanup',
             replace_existing=True,
         )
-        # 每天 02:10 重新计算全站词云（紧随 B站 深扫之后）
-        from blog.wordcloud import precompute_all_wordclouds
+        # 每天 02:10 重新计算全站词云（博客 + B站）
+        from blog.wordcloud import precompute_all_wordclouds, precompute_bili_wordclouds
 
         scheduler.add_job(
             func=lambda: precompute_all_wordclouds(),
@@ -329,6 +329,14 @@ def _init_scheduler(app):
             hour=2,
             minute=10,
             id='daily_wordcloud_recompute',
+            replace_existing=True,
+        )
+        scheduler.add_job(
+            func=lambda: precompute_bili_wordclouds(),
+            trigger='cron',
+            hour=2,
+            minute=15,
+            id='daily_bili_wordcloud_recompute',
             replace_existing=True,
         )
         scheduler.start()
