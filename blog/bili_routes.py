@@ -423,6 +423,15 @@ def _insert_or_update_video(up, video_info, aid, bvid, title_short):
         video = BiliVideo(up_id=up.id, **video_info)
         db.session.add(video)
         db.session.flush()
+        # 新视频：异步抓取标签（不阻塞流程）
+        try:
+            from blog.bilibili.bili_api import get_video_tags
+            tags = get_video_tags(bvid)
+            if tags:
+                video.tags = tags
+                db.session.flush()
+        except Exception as e:
+            logger.warning('视频 %s 标签获取失败: %s', bvid, e)
     except IntegrityError:
         # aid 冲突 → 已有记录，回退并更新统计字段
         db.session.rollback()
@@ -469,6 +478,74 @@ def _insert_or_update_video(up, video_info, aid, bvid, title_short):
         db.session.rollback()
         return None, False
     return video, is_new
+
+
+_COMMENT_PAGES = 10
+_COMMENT_SLEEP_BASE = 4.0
+_COMMENT_SLEEP_JITTER = 3.0
+
+
+def _crawl_video_comments(video, max_pages: int = _COMMENT_PAGES):
+    """爬取单个视频的热门评论（最多前 max_pages 页）。
+
+    使用 B 站 API 按热度排序分页获取评论，每页间隔随机延时防风控。
+    自动检测风控/封禁并降级。
+
+    Args:
+        video (BiliVideo): 视频 ORM 对象（需有 id 和 aid）
+        max_pages (int):   最大翻页数（默认 10 页）
+    Returns:
+        int: 爬取的评论总数
+    """
+    from blog.bilibili.bili_api import get_video_comments, _is_risk_control, was_recently_blocked
+    from .models import BiliVideoComment
+
+    total = 0
+    for page in range(1, max_pages + 1):
+        if was_recently_blocked():
+            break
+        try:
+            comments = get_video_comments(video.aid, page)
+        except Exception as e:
+            if _is_risk_control(e):
+                logger.warning('视频 %s 评论触发风控，第 %d 页跳过', video.bvid, page)
+                time.sleep(15.0)
+                continue
+            logger.warning('视频 %s 第 %d 页评论失败: %s', video.bvid, page, e)
+            break
+
+        if not comments:
+            break
+
+        for c in comments:
+            ctime = c.get('ctime', 0)
+            content = (c.get('content') or '')[:2000]
+            if not content:
+                continue
+            existing = BiliVideoComment.query.filter_by(
+                video_id=video.id,
+                ctime=ctime,
+                content=content,
+            ).first()
+            if existing:
+                continue
+            db.session.add(BiliVideoComment(
+                video_id=video.id,
+                content=content,
+                author=(c.get('author') or '')[:64],
+                ctime=ctime,
+                like_count=c.get('like_count', 0),
+            ))
+            total += 1
+
+        db.session.commit()
+
+        if len(comments) < 20:
+            break
+
+        time.sleep(_COMMENT_SLEEP_BASE + random.random() * _COMMENT_SLEEP_JITTER)
+
+    return total
 
 
 def _check_new_videos(mid: int, app):
@@ -1237,6 +1314,32 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             if was_recently_blocked(cooldown=300) and time.time() >= _circuit_open_until:
                 _circuit_open_until = time.time() + _CIRCUIT_COOLDOWN
                 logger.error('API 层检测到 412 封禁，全局熔断 %d 分钟', _CIRCUIT_COOLDOWN // 60)
+
+            # 评论爬取：为本 UP 主尚未爬取评论的视频补充数据（限 5 个/次）
+            if not was_recently_blocked(cooldown=600):
+                from .models import BiliVideoComment
+                from sqlalchemy import func
+
+                videos_missing_comments = (
+                    BiliVideo.query
+                    .outerjoin(BiliVideoComment, BiliVideo.id == BiliVideoComment.video_id)
+                    .filter(BiliVideo.up_id == up.id)
+                    .group_by(BiliVideo.id)
+                    .having(func.count(BiliVideoComment.id) == 0)
+                    .order_by(BiliVideo.pubdate.desc())
+                    .limit(5)
+                    .all()
+                )
+                for v in videos_missing_comments:
+                    if was_recently_blocked():
+                        break
+                    try:
+                        n = _crawl_video_comments(v)
+                        if n:
+                            emit(f'评论 [{v.bvid[:8]}…] 爬取 {n} 条')
+                        time.sleep(3.0 + random.random() * 2.0)
+                    except Exception as e:
+                        logger.warning('视频 %s 评论爬取失败: %s', v.bvid, e)
 
         except Exception as e:
             emit(f'爬取失败: {e}')

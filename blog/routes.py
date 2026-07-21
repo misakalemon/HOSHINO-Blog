@@ -704,22 +704,25 @@ def search():
         else:
             match_expr = Post.title.match(q) | Post.content.match(q)
         match_exprs = [match_expr]
-    results = (
-        Post.query.options(
-            db.joinedload(Post.categories),
-            load_only(
-                Post.id, Post.title, Post.slug, Post.summary, Post.cover_image, Post.created_at
-            ),
+    try:
+        results = (
+            Post.query.options(
+                db.joinedload(Post.categories),
+                load_only(
+                    Post.id, Post.title, Post.slug, Post.summary, Post.cover_image, Post.created_at
+                ),
+            )
+            .filter(
+                Post.is_published == True,
+                db.or_(*match_exprs),
+            )
+            .order_by(Post.created_at.desc())
+            .paginate(page=page, per_page=per_page, error_out=False)
         )
-        .filter(
-            Post.is_published == True,
-            db.or_(*match_exprs),
-        )
-        .order_by(Post.created_at.desc())
-        .paginate(page=page, per_page=per_page, error_out=False)
-    )
-    # 若全文搜索无结果，回退到 ILIKE 模糊匹配（转义后的安全版本）
-    if results.total == 0:
+    except Exception:
+        results = None
+    # 若全文搜索无结果或无索引，回退到 ILIKE 模糊匹配（转义后的安全版本）
+    if not results or results.total == 0:
         results = (
             Post.query.options(
                 db.joinedload(Post.categories),

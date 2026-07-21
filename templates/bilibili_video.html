@@ -92,6 +92,33 @@
         <div id="videoChart" style="width:100%;height:280px"></div>
     </div>
     {% endif %}
+
+    <!-- 单视频词云 -->
+    {% if wc_data %}
+    <div style="margin-top:24px;padding:20px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:16px">
+        <div style="font-size:0.85rem;color:rgba(255,255,255,0.5);margin-bottom:12px">☁ 词云（点击词语搜索）</div>
+        <canvas id="videoWordCloud"
+            style="width:100%;height:280px"
+            data-wc='{{ wc_data | tojson | safe }}'
+            data-wc-config='{"shape":"circle","color_scheme":"glow"}'></canvas>
+    </div>
+    {% endif %}
+
+    <!-- 评论区 -->
+    {% if comments %}
+    <div style="margin-top:24px;padding:20px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:16px">
+        <div style="font-size:0.85rem;color:rgba(255,255,255,0.5);margin-bottom:16px">💬 热门评论（{{ comments|length }}）</div>
+        {% for c in comments %}
+        <div style="padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                <span style="font-size:0.75rem;color:rgba(255,255,255,0.3)">{{ c.author }}</span>
+                <span style="font-size:0.7rem;color:rgba(255,255,255,0.2)">👍 {{ c.like_count or 0 }}</span>
+            </div>
+            <div style="font-size:0.85rem;color:rgba(255,255,255,0.6);line-height:1.5">{{ c.content }}</div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
@@ -165,5 +192,11 @@
     renderChart();
     window.addEventListener('resize', function(){ chart.resize(); });
 })();
+</script>
+<script src="{{ url_for('static', filename='js/wordcloud.js') }}?v=2" defer></script>
+<script defer>
+  document.addEventListener('DOMContentLoaded', function () {
+    if (typeof initWordCloud === 'function') initWordCloud('videoWordCloud');
+  });
 </script>
 {% endblock %}

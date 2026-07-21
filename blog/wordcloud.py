@@ -378,7 +378,15 @@ def precompute_all_wordclouds():
 
 
 def _bili_texts_from_videos(videos):
-    """从 B站视频列表提取 title + description 文本列表。"""
+    """从 B站视频列表提取 title + description + tags + 评论 文本列表。"""
+    from .models import BiliVideoComment
+
+    video_ids = [v.id for v in videos]
+    comment_map = {}
+    if video_ids:
+        for c in BiliVideoComment.query.filter(BiliVideoComment.video_id.in_(video_ids)).all():
+            comment_map.setdefault(c.video_id, []).append(c.content)
+
     texts = []
     for v in videos:
         parts = []
@@ -386,14 +394,19 @@ def _bili_texts_from_videos(videos):
             parts.append(v.title)
         if v.description:
             parts.append(v.description)
+        if v.tags:
+            parts.extend(v.tags)
+        for content in comment_map.get(v.id, []):
+            if content:
+                parts.append(content)
         texts.append(' '.join(parts))
     return texts
 
 
 def precompute_bili_wordclouds():
-    """为 B站视频标题+简介预计算词云并存入数据库。
+    """为 B站视频预计算词云并存入数据库。
 
-    汇总所有 B站视频的 title + description，分词后计算词频，
+    汇总所有 B站视频的 title + description + tags + 评论，分词后计算词频，
     写入 WordCloudData 表（source='bili'），同时按月分段和按 UP 主分段。
     """
     from . import db
@@ -444,6 +457,9 @@ def precompute_bili_wordclouds():
 
     db.session.commit()
 
+    # 生成每期视频词云
+    precompute_video_wordclouds()
+
 
 def _save_bili_record(period, data):
     """保存或更新 B站词云记录。"""
@@ -456,3 +472,57 @@ def _save_bili_record(period, data):
         db.session.add(record)
     else:
         record.data = data
+
+
+def precompute_video_wordclouds():
+    """为每个 B站视频生成词云（标题 + 简介 + 标签 + 评论 = 全量，与主词云同源）。
+
+    从 BiliVideo 读取 title/description/tags，从 BiliVideoComment 读取评论，
+    拼合后分词计算词频，存入 WordCloudData(source='bili_video', period='bvid_{bvid}')。
+    """
+    from . import db
+    from .models import BiliVideo, WordCloudConfig, WordCloudData
+
+    top_n = WordCloudConfig.get_or_create().top_n_bili
+    videos = BiliVideo.query.all()
+
+    for video in videos:
+        try:
+            parts = []
+            if video.title:
+                parts.append(video.title)
+            if video.description:
+                parts.append(video.description)
+            if video.tags:
+                parts.extend(video.tags)
+
+            comment_texts = [
+                c.content for c in video.comments.all()
+                if c.content
+            ]
+            if comment_texts:
+                parts.extend(comment_texts)
+
+            text = ' '.join(parts)
+            if not text.strip():
+                continue
+
+            data = compute_word_frequencies(text, top_n=top_n) or []
+            if not data:
+                continue
+
+            period = f'bvid_{video.bvid}'
+            record = WordCloudData.query.filter_by(
+                post_id=None, source='bili_video', period=period
+            ).first()
+            if record is None:
+                record = WordCloudData(
+                    post_id=None, source='bili_video', period=period, data=data
+                )
+                db.session.add(record)
+            else:
+                record.data = data
+        except Exception as e:
+            logger.warning('视频 %s 词云生成失败: %s', video.bvid, e)
+
+    db.session.commit()

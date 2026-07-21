@@ -517,6 +517,8 @@ class BiliVideo(db.Model):
     comment_count = db.Column(db.Integer, default=0, comment='评论数')
     danmaku_count = db.Column(db.Integer, default=0, comment='弹幕数')
     created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(CST))
+    tags = db.Column(db.JSON, nullable=True, comment='视频标签名数组')
+
     updated_at = db.Column(
         db.DateTime,
         default=lambda: datetime.datetime.now(CST),
@@ -542,6 +544,26 @@ class BiliVideo(db.Model):
             'comment_count': self.comment_count,
             'danmaku_count': self.danmaku_count,
         }
+
+
+class BiliVideoComment(db.Model):
+    """B站视频评论（热门评论，最多前10页）
+
+    从 B站 API 爬取的视频评论，用于词云文本源和页面展示。
+    """
+    __tablename__ = 'bili_video_comments'
+
+    id = db.Column(db.Integer, primary_key=True)
+    video_id = db.Column(
+        db.Integer, db.ForeignKey('bili_videos.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    content = db.Column(db.Text, nullable=False, comment='评论内容')
+    author = db.Column(db.String(64), default='', comment='评论者昵称')
+    ctime = db.Column(db.Integer, default=0, comment='评论时间戳')
+    like_count = db.Column(db.Integer, default=0, comment='点赞数')
+
+    video = db.relationship('BiliVideo', backref=db.backref('comments', lazy='dynamic', cascade='all, delete-orphan'))
 
 
 class BiliUpHistory(db.Model):
@@ -780,8 +802,8 @@ class WordCloudData(db.Model):
         comment='时间周期: all=全部, 2026-01=某月',
     )
     source = db.Column(
-        db.String(8), default='blog', index=True,
-        comment='来源: blog=博客文章, bili=B站视频',
+        db.String(16), default='blog', index=True,
+        comment='来源: blog=博客文章, bili=B站视频, bili_video=单视频',
     )
     data = db.Column(db.JSON, nullable=False, comment='词频数据 [{word, weight}, ...]')
     updated_at = db.Column(

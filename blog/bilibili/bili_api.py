@@ -545,6 +545,67 @@ def get_video_stat(bvid: str) -> dict:
     }
 
 
+def get_video_tags(bvid: str) -> list[str]:
+    """获取视频标签列表。
+
+    使用 bilibili_api.video.Video.get_tags() 获取视频的所有标签。
+
+        bvid:      视频 BV 号。
+        returns:   标签名字列表（如 ['VOCALOID', '初音ミク', '技术宅']）。
+    """
+    v = _video_mod.Video(bvid=bvid, credential=_credential)
+    try:
+        tags = _sync(v.get_tags())
+    except Exception as e:
+        if _credential and _is_auth_error(e):
+            logger.warning('标签获取凭证过期，使用匿名: %s', e)
+            v = _video_mod.Video(bvid=bvid)
+            tags = _sync(v.get_tags())
+        else:
+            logger.warning('获取视频 %s 标签失败: %s', bvid, e)
+            return []
+    return [t.get('tag_name', '') for t in tags if isinstance(t, dict) and t.get('tag_name')]
+
+
+def get_video_comments(aid: int, page: int = 1) -> list[dict]:
+    """获取视频评论（按热度排序）。
+
+    使用 bilibili_api.comment.get_comments() 获取资源评论。
+    从第2页起需要 credential（已自动传入全局 _credential）。
+
+        aid:       视频稿件 ID（av 号）。
+        page:      页码，从 1 开始。
+        returns:   [{'content': str, 'author': str, 'ctime': int, 'like_count': int}, ...]
+    """
+    from bilibili_api import comment as _comment_mod
+
+    try:
+        resp = _sync(_comment_mod.get_comments(
+            oid=aid,
+            type_=_comment_mod.CommentResourceType.VIDEO,
+            page_index=page,
+            order=_comment_mod.OrderType.LIKE,
+            credential=_credential,
+        ))
+    except Exception as e:
+        logger.warning('获取视频 aid=%d 第 %d 页评论失败: %s', aid, page, e)
+        return []
+
+    replies = resp.get('replies') or []
+    results = []
+    for r in replies:
+        if not isinstance(r, dict):
+            continue
+        content = r.get('content') or {}
+        results.append({
+            'content': content.get('message', ''),
+            'author': (r.get('member') or {}).get('uname', ''),
+            'ctime': r.get('ctime', 0),
+            'like_count': r.get('like', 0),
+        })
+    return results
+
+
 def _parse_duration(length_str: str) -> int:
     """将 B 站视频时长字符串解析为秒数
 
