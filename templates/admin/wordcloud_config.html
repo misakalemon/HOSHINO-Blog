@@ -57,6 +57,11 @@
 
         <div class="form-row">
             <div class="form-group">
+                <label>{{ form.canvas_height.label }}</label>
+                {{ form.canvas_height(class='form-control', type='number', min='200', max='800') }}
+                <span class="form-hint">词云画布高度，建议 200–800px</span>
+            </div>
+            <div class="form-group">
                 <label>{{ form.top_n_article.label }}</label>
                 {{ form.top_n_article(class='form-control', type='number', min='10', max='200') }}
                 <span class="form-hint">文章详情页显示的词语数量</span>

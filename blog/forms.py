@@ -262,6 +262,7 @@ class WordCloudConfigForm(FlaskForm):
     ], default='circle')
     max_font = IntegerField('最大字号（px）', default=48, validators=[Optional()])
     min_font = IntegerField('最小字号（px）', default=14, validators=[Optional()])
+    canvas_height = IntegerField('画布高度（px）', default=350, validators=[Optional()])
     top_n_article = IntegerField('文章详情词数', default=60, validators=[Optional()])
     top_n_site = IntegerField('首页全站词数', default=50, validators=[Optional()])
     top_n_bili = IntegerField('B站视频词数', default=50, validators=[Optional()])

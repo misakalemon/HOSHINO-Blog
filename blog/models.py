@@ -710,6 +710,8 @@ class WordCloudConfig(db.Model):
     top_n_article = db.Column(db.Integer, default=60, nullable=False)
     # 首页全站词云显示的词数
     top_n_site = db.Column(db.Integer, default=50, nullable=False)
+    # 词云画布高度（px）
+    canvas_height = db.Column(db.Integer, default=350, nullable=False)
     # B站视频标题词云显示的词数
     top_n_bili = db.Column(db.Integer, default=50, nullable=False)
     # 配色方案：glow / ocean / forest
@@ -751,6 +753,7 @@ class WordCloudConfig(db.Model):
             'minFont': self.min_font,
             'top_n_article': self.top_n_article,
             'top_n_site': self.top_n_site,
+            'canvasHeight': self.canvas_height,
             'top_n_bili': self.top_n_bili,
             'color_scheme': self.color_scheme,
             'enabled_article': self.enabled_article,

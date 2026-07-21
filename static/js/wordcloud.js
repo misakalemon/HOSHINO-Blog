@@ -161,7 +161,8 @@
     // 计算画布尺寸
     var rect = canvas.parentElement.getBoundingClientRect();
     var w = (rect.width || canvas.parentElement.clientWidth || 600) | 0;
-    var h = Math.max(300, Math.min(500, (w * 0.5) | 0)) | 0;
+    var defaultH = Math.max(300, Math.min(500, (w * 0.5) | 0)) | 0;
+    var h = opts.canvasHeight || defaultH;
 
     // 设置 Canvas 物理尺寸（Retina 适配）
     canvas.width = w * dpr;
@@ -326,6 +327,7 @@
         var cfg = JSON.parse(cfgRaw);
         opts.shape = cfg.shape || opts.shape || 'circle';
         opts.colorScheme = cfg.color_scheme || opts.colorScheme || 'glow';
+        opts.canvasHeight = cfg.canvasHeight || opts.canvasHeight;
         opts.maxFont = cfg.maxFont || opts.maxFont || 48;
         opts.minFont = cfg.minFont || opts.minFont || 14;
       } catch(e) {}
