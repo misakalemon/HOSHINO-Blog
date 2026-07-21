@@ -1,0 +1,5 @@
+[     622ms] [LOG] [词云] config: { @ http://192.168.3.84:5000/static/js/wordcloud.js?v=2:320
+[     622ms] [WARNING] 词云 periods 解析失败 SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at JSON.parse (<anonymous>)
+    at initWordCloud (http://192.168.3.84:5000/static/js/wordcloud.js?v=2:338:28)
+    at HTMLDocument.<anonymous> (http://192.168.3.84:5000/:1081:3) @ http://192.168.3.84:5000/static/js/wordcloud.js?v=2:361

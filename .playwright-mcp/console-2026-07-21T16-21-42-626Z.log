@@ -1,0 +1,4 @@
+[   10918ms] [LOG] [词云] config: {"shape":"circle","colorScheme":"glow","maxFont":42,"minFont":13} @ http://localhost:8899/wc_test.html:100
+[   11023ms] [ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://localhost:8899/favicon.ico:0
+[  693146ms] [ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://localhost:8899/search?q=%E5%8D%9A%E5%AE%A2:0
+[  694171ms] [LOG] [词云] config: {"shape":"circle","colorScheme":"glow","maxFont":42,"minFont":13} @ http://localhost:8899/wc_test.html:100
