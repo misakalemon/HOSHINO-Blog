@@ -392,6 +392,7 @@ def register():
     注意：
       - 注册功能受 ENABLE_REGISTRATION 配置开关控制，默认关闭
       - 生产环境建议由管理员在后台创建用户
+      - 每个 IP 每天最多注册 3 次，防止批量注册
     """
     if current_user.is_authenticated:
         return redirect(url_for('admin.profile'))
@@ -401,6 +402,32 @@ def register():
 
     form = RegisterForm()
     if form.validate_on_submit():
+        # ── 注册频率限制：每 IP 每小时最多注册 3 次 ─
+        import ipaddress
+        import time
+
+        ip = request.access_route[0] if request.access_route else request.remote_addr or 'unknown'
+        try:
+            ip = ipaddress.ip_address(ip).compressed
+        except ValueError:
+            pass
+
+        REGISTER_KEY = f'reg_{ip}'
+        REGISTER_LIMIT = 3          # 每时间窗口允许的注册次数
+        REGISTER_WINDOW = 3600      # 时间窗口（秒）
+
+        now = time.time()
+        with _login_attempts_lock:
+            _login_attempts[REGISTER_KEY] = [
+                t for t in _login_attempts.get(REGISTER_KEY, []) if now - t < REGISTER_WINDOW
+            ]
+            if len(_login_attempts[REGISTER_KEY]) >= REGISTER_LIMIT:
+                flash('注册过于频繁，请稍后再试', 'error')
+                return render_template('admin/register.html', form=form, register_enabled=True)
+
+            # 记录本次注册尝试
+            _login_attempts[REGISTER_KEY].append(now)
+
         # 双重检查：防止在表单提交窗口期内配置被关闭
         if not current_app.config.get('ENABLE_REGISTRATION', False):
             flash('注册功能已关闭', 'error')
@@ -967,6 +994,8 @@ def edit_user(id):
     user = User.query.get_or_404(id)
     form = UserForm(obj=user)
     if form.validate_on_submit():
+        if user.id == current_user.id and user.role != form.role.data:
+            flash('⚠️ 警告：您正在修改自己的角色！降级后可能立即失去管理权限。如果角色不再为 admin/editor，当前会话的管理功能将不可用。', 'warning')
         # 编辑模式：仅更新角色，其他字段只读不写
         user.role = form.role.data
         db.session.commit()
@@ -1027,7 +1056,7 @@ def toggle_user_active(id):
 
 
 @admin_bp.route('/profile', methods=['GET', 'POST'])
-@login_required
+@author_required
 def profile():
     """个人资料编辑页，支持头像上传。
 

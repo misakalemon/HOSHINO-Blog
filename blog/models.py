@@ -161,7 +161,7 @@ class User(UserMixin, db.Model):
     @property
     def is_author(self):
         """可撰写/管理自己的文章：admin、editor、user 均有此权限。"""
-        return self.role in (self.ROLE_ADMIN, self.ROLE_EDITOR, self.ROLE_USER)
+        return self.role in (self.ROLE_ADMIN, self.ROLE_EDITOR, self.ROLE_USER, self.ROLE_AUTHOR)
 
     @property
     def role_label(self):
