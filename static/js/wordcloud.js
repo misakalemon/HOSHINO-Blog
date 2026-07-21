@@ -307,12 +307,7 @@
     var canvas = document.getElementById(canvasId);
     if (!canvas) return;
 
-    // 读取数据属性（支持 data-wc 和 data-wordcloud 两种写法）
-    var raw = canvas.getAttribute('data-wc') || canvas.getAttribute('data-wordcloud');
-    if (!raw) return;
-
     var cfgRaw = canvas.getAttribute('data-wc-config');
-    // 调试日志：确认形状配置已传入
     if (cfgRaw) console.log('[词云] config:', cfgRaw);
     var opts = defaults ? Object.assign({}, defaults) : {};
 
@@ -326,6 +321,40 @@
       } catch(e) {}
     }
 
+    // 支持 data-wc-periods（多时段词云字典）和 data-wc/data-wordcloud（单数据）
+    var periodsRaw = canvas.getAttribute('data-wc-periods');
+    if (periodsRaw) {
+      try {
+        var periods = JSON.parse(periodsRaw);
+        var keys = Object.keys(periods);
+        if (keys.length === 0) return;
+
+        // 默认显示 'all' 或第一个时段
+        var defaultKey = keys.indexOf('all') >= 0 ? 'all' : keys[0];
+        var data = periods[defaultKey];
+        if (data && data.length) renderWordCloud(canvas, data, opts);
+
+        // 绑定时间轴滑块
+        var slider = document.getElementById('wcSlider');
+        var label = document.getElementById('wcPeriodLabel');
+        if (slider && keys.length > 1) {
+          slider.max = keys.length - 1;
+          slider.oninput = function() {
+            var key = keys[this.value];
+            var d = periods[key];
+            if (d && d.length) {
+              renderWordCloud(canvas, d, opts);
+              if (label) label.textContent = key === 'all' ? '所有文章' : key + ' 月';
+            }
+          };
+        }
+        return;
+      } catch(e) { console.warn('词云 periods 解析失败', e); }
+    }
+
+    // 兼容旧版：data-wc 或 data-wordcloud（单数据）
+    var raw = canvas.getAttribute('data-wc') || canvas.getAttribute('data-wordcloud');
+    if (!raw) return;
     try {
       var data = JSON.parse(raw);
       if (data && data.length) renderWordCloud(canvas, data, opts);
