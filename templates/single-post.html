@@ -119,7 +119,7 @@
                     </div>
                 </div>
 
-                {% if wordcloud_data %}
+                {% if wordcloud_data and wc_config.get('enabled_article', True) %}
                 <!-- 词云 -->
                 <div class="wordcloud-section">
                     <div class="wordcloud-header">
@@ -186,7 +186,7 @@
 <script src="{{ url_for('static', filename='vendor/prism-bundle.min.js') }}" defer></script>
 <script>document.addEventListener('DOMContentLoaded',function(){Prism.highlightAll();});</script>
 
-{% if wordcloud_data %}
+{% if wordcloud_data and wc_config.get('enabled_article', True) %}
 <script src="{{ url_for('static', filename='js/wordcloud.js') }}?v=2" defer></script>
 <script>
 document.addEventListener('DOMContentLoaded', function(){

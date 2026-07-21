@@ -846,12 +846,6 @@ ul { list-style: none; }
   overflow: hidden;
   background: rgba(0,0,0,0.15);
 }
-#wordcloudCanvas {
-  display: block;
-  width: 100%;
-  height: auto;
-  cursor: default;
-}
 
 /* site wordcloud — 首页独立区块 */
 .site-wordcloud {

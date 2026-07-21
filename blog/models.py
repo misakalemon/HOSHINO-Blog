@@ -698,8 +698,6 @@ class WordCloudConfig(db.Model):
 
     单行配置表，存储词云渲染参数（形状、字号、配色等）。
     通过 get_or_create() 惰性初始化，确保始终只有一行数据。
-
-    __tablename__ = 'wordcloud_config'
     """
     __tablename__ = 'wordcloud_config'
 
@@ -712,6 +710,8 @@ class WordCloudConfig(db.Model):
     top_n_article = db.Column(db.Integer, default=60, nullable=False)
     # 首页全站词云显示的词数
     top_n_site = db.Column(db.Integer, default=50, nullable=False)
+    # B站视频标题词云显示的词数
+    top_n_bili = db.Column(db.Integer, default=50, nullable=False)
     # 配色方案：glow / ocean / forest
     color_scheme = db.Column(db.String(20), default='glow', nullable=False)
     # 是否在文章详情页显示词云
@@ -751,6 +751,7 @@ class WordCloudConfig(db.Model):
             'minFont': self.min_font,
             'top_n_article': self.top_n_article,
             'top_n_site': self.top_n_site,
+            'top_n_bili': self.top_n_bili,
             'color_scheme': self.color_scheme,
             'enabled_article': self.enabled_article,
             'enabled_site': self.enabled_site,
@@ -762,8 +763,6 @@ class WordCloudData(db.Model):
 
     每篇文章一行（post_id 有值），全站词云一行（post_id 为 NULL）。
     数据在发布/更新文章时触发重新计算，或由定时任务每日刷新。
-
-    __tablename__ = 'wordcloud_data'
     """
     __tablename__ = 'wordcloud_data'
 

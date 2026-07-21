@@ -202,6 +202,7 @@
     var maxRadius = Math.sqrt(drawArea.w * drawArea.w + drawArea.h * drawArea.h) / 2;
     var maxAttempts = 3000;
     var placed = [];
+    var placedWords = [];
 
     // 按颜色分组批量绘制（减少 Canvas 状态切换）
     // 先收集所有放置结果，再按颜色分组绘制
@@ -256,6 +257,7 @@
         if (!overlap) {
           placed.push(newRect);
           pendingDraws.push({ word: item.word, x: x, y: y, fontSize: fontSize, color: color, fontStyle: FONT_STYLE });
+          placedWords.push({ word: item.word, x: x, y: y, w: size.w, h: size.h });
           angle = localAngle;
           placedOk = true;
           break;
@@ -281,7 +283,7 @@
     }
 
     // 保存绘制数据供外部使用
-    canvas._wordcloudData = { placed: placed, data: sorted };
+    canvas._wordcloudData = { placed: placedWords };
 
     // ── 点击穿透检索 ──────────────────────────
     canvas.onclick = function(e) {
@@ -293,8 +295,7 @@
       for (var i = 0; i < data.placed.length; i++) {
         var p = data.placed[i];
         if (mx >= p.x && mx <= p.x + p.w && my >= p.y && my <= p.y + p.h) {
-          var word = data.data[i] && data.data[i].word;
-          if (word) window.location.href = '/search?q=' + encodeURIComponent(word);
+          if (p.word) window.location.href = '/search?q=' + encodeURIComponent(p.word);
           return;
         }
       }

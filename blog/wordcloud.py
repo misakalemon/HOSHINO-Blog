@@ -360,12 +360,18 @@ def precompute_site_wordcloud():
 
 
 def precompute_all_wordclouds():
-    """重新计算所有词云（全站 + 每篇已发布文章）。"""
+    """重新计算所有词云（全站 + 每篇已发布文章）。
+    
+    每篇文章独立 try/except，单篇失败不影响后续。
+    """
     precompute_site_wordcloud()
     from .models import Post
 
     for post in Post.query.filter_by(is_published=True).all():
-        precompute_post_wordcloud(post.id)
+        try:
+            precompute_post_wordcloud(post.id)
+        except Exception as e:
+            logger.warning('预计算词云失败 post_id=%d: %s', post.id, e)
 
 
 def precompute_bili_wordclouds():
@@ -378,7 +384,7 @@ def precompute_bili_wordclouds():
     from .models import BiliVideo, WordCloudData, WordCloudConfig
     from sqlalchemy import func
 
-    top_n = WordCloudConfig.get_or_create().top_n_site
+    top_n = WordCloudConfig.get_or_create().top_n_bili
 
     # ── 全量 B站词云 ──
     videos = BiliVideo.query.all()

@@ -66,6 +66,11 @@
                 {{ form.top_n_site(class='form-control', type='number', min='10', max='200') }}
                 <span class="form-hint">首页全站词云显示的词语数量</span>
             </div>
+            <div class="form-group">
+                <label>{{ form.top_n_bili.label }}</label>
+                {{ form.top_n_bili(class='form-control', type='number', min='10', max='200') }}
+                <span class="form-hint">B站视频标题词云显示的词语数量</span>
+            </div>
         </div>
 
         <div class="form-group">
