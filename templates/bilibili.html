@@ -25,6 +25,20 @@
         {% endif %}
     </div>
 
+    {% if bili_wordcloud %}
+    <!-- B站词云（非搜索模式：全站UP主汇总词云） -->
+    <div class="site-wordcloud" style="margin-bottom:28px">
+        <div class="site-wordcloud-header">
+            <span class="site-wordcloud-title">✦ 视频词云</span>
+            <span class="site-wordcloud-hint">B站视频标题 · 高频词</span>
+        </div>
+        <div class="site-wordcloud-canvas-wrap">
+            <canvas id="wcBili" data-wc='{{ bili_wordcloud | tojson }}'
+                    data-wc-config='{{ wc_config | tojson }}'></canvas>
+        </div>
+    </div>
+    {% endif %}
+
     {% if q %}
     <!-- 搜索结果 -->
     <div style="display:grid;gap:12px">
@@ -83,21 +97,6 @@
         </div>
         {% endif %}
     </div>
-
-    {% if bili_wordcloud and not q %}
-    <!-- B站词云 -->
-    <div class="site-wordcloud" style="margin-bottom:28px">
-        <div class="site-wordcloud-header">
-            <span class="site-wordcloud-title">✦ 视频词云</span>
-            <span class="site-wordcloud-hint">B站视频标题 · 高频词</span>
-        </div>
-        <div class="site-wordcloud-canvas-wrap">
-            <canvas id="wcBili" data-wc='{{ bili_wordcloud | tojson }}'
-                    data-wc-config='{{ wc_config | tojson }}'></canvas>
-        </div>
-    </div>
-    {% endif %}
-
     {% elif pagination %}
     <!-- UP 主列表 -->
     <div style="display:grid;gap:12px">
@@ -268,7 +267,7 @@ document.getElementById('subscribeForm').addEventListener('submit', function(e) 
 });
 </script>
 
-{% if bili_wordcloud and not q %}
+{% if bili_wordcloud %}
 <script src="{{ url_for('static', filename='js/wordcloud.js') }}?v=2" defer></script>
 <script>
 document.addEventListener('DOMContentLoaded', function(){
