@@ -806,6 +806,84 @@ ul { list-style: none; }
 .author-box .info h5 { font-weight: 600; font-size: 0.9rem; color: rgba(255,255,255,0.8); }
 .author-box .info p { font-size: 0.8rem; color: rgba(255,255,255,0.4); margin-top: 4px; }
 
+/* wordcloud */
+/* 文章详情页词云区块：磨砂玻璃卡片风格 */
+.wordcloud-section {
+  margin-top: 32px;
+  background: rgba(255,255,255,0.02);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: 20px;
+  padding: 24px;
+}
+.wordcloud-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.wordcloud-title {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: rgba(255,255,255,0.65);
+  letter-spacing: 0.05em;
+}
+.wordcloud-hint {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.25);
+}
+.wordcloud-canvas-wrap {
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(0,0,0,0.15);
+}
+#wordcloudCanvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  cursor: default;
+}
+
+/* site wordcloud — 首页独立区块 */
+.site-wordcloud {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 0 clamp(16px, 3vw, 24px);
+  margin-bottom: 20px;
+}
+.site-wordcloud-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.site-wordcloud-title {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: rgba(255,255,255,0.5);
+  letter-spacing: 0.05em;
+}
+.site-wordcloud-hint {
+  font-size: 0.7rem;
+  color: rgba(255,255,255,0.2);
+}
+.site-wordcloud-canvas-wrap {
+  width: 100%;
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.04);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+#wcSite {
+  display: block;
+  width: 100%;
+  height: 220px;
+}
+
 /* ── 14. 评论区 ──────────────────────────────── */
 .comments-section { margin-top: 32px; }
 .comments-section h4 { font-size: 1.1rem; font-weight: 500; margin-bottom: 16px; color: rgba(255,255,255,0.7); }

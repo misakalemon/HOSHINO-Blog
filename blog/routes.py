@@ -299,6 +299,34 @@ def _cached_featured_cards():
 # ═══════════════════════════════════════════════
 # 首页：文章瀑布流
 # ═══════════════════════════════════════════════
+
+def _get_site_wordcloud():
+    """计算全站词频（所有已发布文章），带 Redis 缓存。
+
+    缓存键 wordcloud:site 固定不变，缓存 TTL 3600 秒。
+    发布新文章或编辑已有文章后，最多 1 小时自动刷新。
+
+    Returns:
+        list | None: [{word, weight}, ...] 词频列表，或 None
+    """
+    from .cache import cache_get, cache_set
+    from .wordcloud import compute_word_frequencies
+
+    cached = cache_get('wordcloud:site')
+    if cached is not None:
+        return cached
+
+    posts = Post.query.filter_by(is_published=True).with_entities(Post.content).all()
+    full_text = ' '.join(p.content for p in posts if p.content)
+    if not full_text.strip():
+        return None
+
+    data = compute_word_frequencies(full_text, top_n=50)
+    if data:
+        cache_set('wordcloud:site', data, 3600)
+    return data
+
+
 @blog_bp.route('/')
 def index():
     """首页：分页显示已发布的文章列表，支持按分类筛选。
@@ -342,6 +370,8 @@ def index():
     hero_images = HeroImage.query.filter_by(is_active=True).order_by(HeroImage.sort_order).all()
     hero_image = random.choice(hero_images).image_url if hero_images else None
 
+    wordcloud_data = _get_site_wordcloud()
+
     return render_template(
         'index.html',
         posts=posts,
@@ -355,6 +385,7 @@ def index():
         cat_lookup=cat_lookup,
         blog_subtitle=current_app.config['BLOG_SUBTITLE'],
         hero_image=hero_image,
+        wordcloud_data=wordcloud_data,
     )
 
 
@@ -472,6 +503,17 @@ def single_post(slug):
 
     comment_count = post.published_comments()
 
+    # ── 词云数据（仅对 Markdown 文章计算，html_content 文章跳过）──
+    wordcloud_data = None
+    if not post.html_content:
+        wc_cache_key = f'wordcloud:post:{post.id}:{post.updated_at.timestamp() if post.updated_at else ""}'
+        wordcloud_data = cache_get(wc_cache_key)
+        if wordcloud_data is None:
+            from .wordcloud import compute_word_frequencies
+            wordcloud_data = compute_word_frequencies(post.content, top_n=60)
+            if wordcloud_data:
+                cache_set(wc_cache_key, wordcloud_data, 3600)
+
     # 优先使用手动编写的 html_content（如报告），否则渲染 Markdown
     template = 'html-post.html' if post.html_content else 'single-post.html'
 
@@ -484,6 +526,7 @@ def single_post(slug):
         cat_post_counts=cat_post_counts,
         form=form,
         comment_count=comment_count,
+        wordcloud_data=wordcloud_data,
     )
 
 

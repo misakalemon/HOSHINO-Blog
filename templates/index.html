@@ -114,6 +114,19 @@
     {% endfor %}
 </div>
 
+{% if wordcloud_data %}
+<!-- 全站词云 -->
+<div class="site-wordcloud">
+    <div class="site-wordcloud-header">
+        <span class="site-wordcloud-title">✦ 全站词云</span>
+        <span class="site-wordcloud-hint">所有文章高频词 · 自动更新</span>
+    </div>
+    <div class="site-wordcloud-canvas-wrap">
+        <canvas id="wcSite" data-wc="{{ wordcloud_data | tojson | forceescape }}"></canvas>
+    </div>
+</div>
+{% endif %}
+
 <div class="content">
     <div class="row">
         <div class="col-8">
@@ -275,4 +288,21 @@ if('IntersectionObserver' in window){
 }
 })();
 </script>
+
+{% if wordcloud_data %}
+<script src="{{ url_for('static', filename='js/wordcloud.js') }}" defer></script>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  var c = document.getElementById('wcSite');
+  if (!c) return;
+  var raw = c.getAttribute('data-wc');
+  if (!raw) return;
+  try {
+    var data = JSON.parse(raw);
+    if (data && data.length) renderWordCloud(c, data, { maxFont: 42, minFont: 13 });
+  } catch(e) { console.warn('词云渲染失败', e); }
+});
+</script>
+{% endif %}
+
 {% endblock %}

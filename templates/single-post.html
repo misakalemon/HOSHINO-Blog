@@ -119,6 +119,19 @@
                     </div>
                 </div>
 
+                {% if wordcloud_data %}
+                <!-- 词云 -->
+                <div class="wordcloud-section">
+                    <div class="wordcloud-header">
+                        <span class="wordcloud-title">✦ 词云</span>
+                        <span class="wordcloud-hint">文章高频词</span>
+                    </div>
+                    <div class="wordcloud-canvas-wrap">
+                        <canvas id="wordcloudCanvas" data-wordcloud="{{ wordcloud_data | tojson | forceescape }}"></canvas>
+                    </div>
+                </div>
+                {% endif %}
+
                 <!-- 评论区 -->
                 <div class="comments-section" id="comments">
                     <h4>评论 · {{ comment_count }}</h4>
@@ -171,5 +184,23 @@
 
 <script src="{{ url_for('static', filename='vendor/prism-bundle.min.js') }}" defer></script>
 <script>document.addEventListener('DOMContentLoaded',function(){Prism.highlightAll();});</script>
+
+{% if wordcloud_data %}
+<script src="{{ url_for('static', filename='js/wordcloud.js') }}" defer></script>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  var canvas = document.getElementById('wordcloudCanvas');
+  if (!canvas) return;
+  var raw = canvas.getAttribute('data-wordcloud');
+  if (!raw) return;
+  try {
+    var data = JSON.parse(raw);
+    if (data && data.length) {
+      renderWordCloud(canvas, data, { maxFont: 48, minFont: 14 });
+    }
+  } catch(e) { console.warn('词云数据解析失败', e); }
+});
+</script>
+{% endif %}
 
 {% endblock %}
