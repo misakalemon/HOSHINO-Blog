@@ -297,6 +297,9 @@ def init_db(app):
         # ── 迁移 wordcloud_data 表新增字段 ───────
         _migrate_wordcloud_data_fields(app)
 
+        # ── 迁移 posts 表 FULLTEXT 索引 ───────
+        _migrate_post_fulltext_index(app)
+
 
 def _migrate_post_html_file_url(app):
     """迁移：为 Post 表添加 html_file_url 字段。
@@ -732,6 +735,30 @@ def _migrate_wordcloud_data_fields(app):
             except Exception as e:
                 db.session.rollback()
                 app.logger.warning('迁移: 添加 wordcloud_data.%s 列失败: %s', col_name, e)
+
+
+def _migrate_post_fulltext_index(app):
+    """迁移：为 posts 表添加 FULLTEXT 索引（仅 MySQL）。
+
+    用于中文全文搜索 MATCH (title, content) AGAINST (...)。
+    已有数据库可能缺少此索引，需手动创建。
+    """
+    engine = db.get_engine()
+    dialect = engine.dialect.name
+    if dialect != 'mysql':
+        return
+    inspector = db.inspect(engine)
+    indexes = [ix['name'] for ix in inspector.get_indexes('posts')]
+    if 'ix_post_fulltext' not in indexes:
+        try:
+            db.session.execute(
+                text('ALTER TABLE posts ADD FULLTEXT INDEX ix_post_fulltext (title, content)')
+            )
+            db.session.commit()
+            app.logger.info('迁移: 已添加 posts 的 FULLTEXT 索引 ix_post_fulltext')
+        except Exception as e:
+            db.session.rollback()
+            app.logger.warning('迁移: 添加 FULLTEXT 索引失败: %s', e)
 
 
 # ── 后导入路由（延迟导入） ─────────────────────
