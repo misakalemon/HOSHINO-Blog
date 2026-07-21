@@ -696,11 +696,14 @@ def search():
             func.to_tsvector('simple', Post.content).op('@@')(func.plainto_tsquery('simple', q)),
         ]
     else:
-        # SQLite / MySQL: 使用 match 谓词（summary 不走 FULLTEXT，由 ILIKE 回退覆盖）
-        match_exprs = [
-            Post.title.match(q),
-            Post.content.match(q),
-        ]
+        # MySQL / SQLite: 使用单条 MATCH (title, content) 匹配复合 FULLTEXT 索引
+        # 注意：MySQL 要求 MATCH 列必须与 FULLTEXT 索引定义完全一致
+        if dialect == 'mysql':
+            match_expr = func.match(Post.title, Post.content).against(q)
+        else:
+            # SQLite: 使用 FTS match 谓词
+            match_expr = Post.title.match(q) | Post.content.match(q)
+        match_exprs = [match_expr]
     results = (
         Post.query.options(
             db.joinedload(Post.categories),
