@@ -308,7 +308,14 @@ def _get_site_wordcloud():
     """
     from .models import WordCloudData
 
-    records = WordCloudData.query.filter_by(post_id=None).order_by(WordCloudData.period).all()
+    try:
+        records = WordCloudData.query.filter_by(post_id=None, source='blog').order_by(WordCloudData.period).all()
+    except Exception:
+        # 兼容旧表缺少 source/period 列
+        try:
+            records = WordCloudData.query.filter_by(post_id=None).order_by(WordCloudData.period).all()
+        except Exception:
+            records = WordCloudData.query.filter_by(post_id=None).all()
     if not records:
         return None
     return {r.period: r.data for r in records if r.data}

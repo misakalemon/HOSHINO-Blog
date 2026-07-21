@@ -723,7 +723,7 @@ def _migrate_wordcloud_data_fields(app):
         if col_name not in cols:
             try:
                 db.session.execute(
-                    text(f'ALTER TABLE wordcloud_data ADD COLUMN {col_name} {col_type} AFTER id')
+                    text(f'ALTER TABLE wordcloud_data ADD COLUMN {col_name} {col_type}')
                 )
                 db.session.commit()
                 app.logger.info('迁移: 已添加 wordcloud_data.%s 列', col_name)

@@ -109,9 +109,14 @@ def index():
         pagination = BiliUp.query.order_by(BiliUp.follower_count.desc()).paginate(
             page=page, per_page=per_page, error_out=False
         )
-        # 读取 B站词云
-        wc = WordCloudData.query.filter_by(post_id=None, source='bili', period='all').first()
-        bili_wordcloud = wc.data if wc and wc.data else None
+        # 读取 B站词云（兼容旧表缺少 period/source 列的情况）
+        bili_wordcloud = None
+        try:
+            wc = WordCloudData.query.filter_by(post_id=None, source='bili', period='all').first()
+            if wc and wc.data:
+                bili_wordcloud = wc.data
+        except Exception:
+            pass
         return render_template('bilibili.html', pagination=pagination, q='', all_ups=all_ups, bili_wordcloud=bili_wordcloud)
 
 
@@ -159,9 +164,14 @@ def up_videos(up_id):
             for h in follower_history
         ]
     )
-    # 读取 B站词云
-    wc = WordCloudData.query.filter_by(post_id=None, source='bili', period='all').first()
-    bili_wordcloud = wc.data if wc and wc.data else None
+    # 读取 B站词云（兼容旧表缺少 period/source 列的情况）
+    bili_wordcloud = None
+    try:
+        wc = WordCloudData.query.filter_by(post_id=None, source='bili', period='all').first()
+        if wc and wc.data:
+            bili_wordcloud = wc.data
+    except Exception:
+        pass
     return render_template(
         'bilibili_up.html',
         up=up,
