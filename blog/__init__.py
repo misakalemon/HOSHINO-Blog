@@ -297,6 +297,9 @@ def init_db(app):
         # ── 迁移 wordcloud_data 表新增字段 ───────
         _migrate_wordcloud_data_fields(app)
 
+        # ── 迁移 wordcloud_config 表新增字段 ────
+        _migrate_wordcloud_config_fields(app)
+
         # ── 迁移 posts 表 FULLTEXT 索引 ───────
         _migrate_post_fulltext_index(app)
 
@@ -735,6 +738,31 @@ def _migrate_wordcloud_data_fields(app):
             except Exception as e:
                 db.session.rollback()
                 app.logger.warning('迁移: 添加 wordcloud_data.%s 列失败: %s', col_name, e)
+
+
+def _migrate_wordcloud_config_fields(app):
+    """迁移：为 wordcloud_config 表添加 top_n_bili 字段。
+
+    该字段用于独立控制 B站视频标题词云显示的词数。
+    """
+    from sqlalchemy import text
+
+    engine = db.get_engine()
+    dialect = engine.dialect.name
+    if dialect != 'mysql':
+        return
+    inspector = db.inspect(engine)
+    cols = {c['name'] for c in inspector.get_columns('wordcloud_config')}
+    if 'top_n_bili' not in cols:
+        try:
+            db.session.execute(
+                text('ALTER TABLE wordcloud_config ADD COLUMN top_n_bili INTEGER DEFAULT 50')
+            )
+            db.session.commit()
+            app.logger.info('迁移: 已添加 wordcloud_config.top_n_bili 列')
+        except Exception as e:
+            db.session.rollback()
+            app.logger.warning('迁移: 添加 wordcloud_config.top_n_bili 列失败: %s', e)
 
 
 def _migrate_post_fulltext_index(app):
