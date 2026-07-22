@@ -43,6 +43,7 @@ HOSHINO Blog — 数据模型
 
 import datetime
 import json
+import logging
 import zlib
 from datetime import timezone, timedelta
 
@@ -809,14 +810,13 @@ class CompressedJSON(db.TypeDecorator):
         """读取时：BLOB → zlib 解压 → JSON 解码 → Python list/dict。
 
         兼容 3 种存储格式：
-          1. 纯 zlib（Python zlib.compress 写入）
-          2. MySQL COMPRESS() 格式（4 字节长度前缀 + zlib）
+          1. 纯 zlib（Python zlib.compress 写入，首字节 0x78）
+          2. MySQL COMPRESS() 格式（4 字节长度前缀 + zlib，第 5 字节 0x78）
           3. 未压缩的明文 JSON（迁移前的旧数据）
         """
-        import struct
-
         if value is None:
             return None
+        logger = logging.getLogger(__name__ + '.CompressedJSON')
         # 格式 1：纯 zlib
         try:
             return json.loads(zlib.decompress(value).decode('utf-8'))
@@ -824,12 +824,16 @@ class CompressedJSON(db.TypeDecorator):
             pass
         # 格式 2：MySQL COMPRESS（跳过 4 字节长度前缀）
         try:
-            uncompressed = zlib.decompress(value[4:])
-            return json.loads(uncompressed.decode('utf-8'))
-        except (zlib.error, struct.error, IndexError):
+            return json.loads(zlib.decompress(value[4:]).decode('utf-8'))
+        except (zlib.error, IndexError):
             pass
         # 格式 3：未压缩的明文 JSON
-        return json.loads(value.decode('utf-8'))
+        try:
+            return json.loads(value.decode('utf-8'))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            logger.warning('wordcloud data corrupt: first 8 bytes=%s len=%d',
+                           value[:8].hex(), len(value))
+            return []
 
 
 class WordCloudData(db.Model):
