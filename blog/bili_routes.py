@@ -505,14 +505,17 @@ _WC_QUEUE_MAX = 500
 _wc_queue: queue.Queue = queue.Queue(maxsize=_WC_QUEUE_MAX)
 _wc_workers_started = False
 _wc_workers_lock = threading.Lock()
+# 在 _start_wc_workers 中捕获 app 对象（此时在请求上下文中），供工作线程使用
+_wc_app = None
 
 
 def _start_wc_workers(n=2):
     """启动 n 个词云工作线程（首次调用时）。"""
-    global _wc_workers_started
+    global _wc_workers_started, _wc_app
     with _wc_workers_lock:
         if _wc_workers_started:
             return
+        _wc_app = current_app._get_current_object()
         for i in range(n):
             t = threading.Thread(target=_wc_worker, daemon=True, name=f'wc-worker-{i}')
             t.start()
@@ -528,7 +531,7 @@ def _wc_worker():
     while True:
         video_id, bvid = _wc_queue.get()
         try:
-            app = current_app._get_current_object()
+            app = _wc_app
             logger.info('☁ 词云队列: 处理 %s', bvid)
 
             # Phase 1: 取视频信息（短连接）
