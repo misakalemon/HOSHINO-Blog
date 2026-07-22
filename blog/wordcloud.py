@@ -378,7 +378,7 @@ def precompute_all_wordclouds():
 
 
 def _bili_texts_from_videos(videos):
-    """从 B站视频列表提取 title + description + tags + 评论 文本列表。"""
+    """从 B站视频列表提取各文本源，权重：字幕×5 > 标题×3 > 评论×2 > 标签×2 > 简介×1。"""
     from .models import BiliVideoComment
 
     video_ids = [v.id for v in videos]
@@ -390,17 +390,18 @@ def _bili_texts_from_videos(videos):
     texts = []
     for v in videos:
         parts = []
-        if v.title:
-            parts.append(v.title)
-        if v.description:
-            parts.append(v.description)
-        if v.tags:
-            parts.extend(v.tags)
         if v.subtitle_text:
-            parts.append(v.subtitle_text)
+            parts.extend([v.subtitle_text] * 5)
+        if v.title:
+            parts.extend([v.title] * 3)
         for content in comment_map.get(v.id, []):
             if content:
-                parts.append(content)
+                parts.extend([content] * 2)
+        if v.tags:
+            for t in v.tags:
+                parts.extend([t] * 2)
+        if v.description:
+            parts.append(v.description)
         texts.append(' '.join(parts))
     return texts
 
@@ -522,27 +523,30 @@ def precompute_video_wordclouds():
 
 
 def _compute_single_video_wordcloud(video):
-    """为单个视频生成词云并存入数据库。"""
+    """为单个视频生成词云并存入数据库。
+
+    文本来源权重：字幕×5 > 标题×3 > 评论×2 > 标签×2 > 简介×1
+    """
     from . import db
     from .models import WordCloudConfig, WordCloudData
 
     top_n = WordCloudConfig.get_or_create().top_n_bili
     parts = []
-    if video.title:
-        parts.append(video.title)
-    if video.description:
-        parts.append(video.description)
-    if video.tags:
-        parts.extend(video.tags)
     if video.subtitle_text:
-        parts.append(video.subtitle_text)
-
+        parts.extend([video.subtitle_text] * 5)
+    if video.title:
+        parts.extend([video.title] * 3)
     comment_texts = [
         c.content for c in video.comments.all()
         if c.content
     ]
     if comment_texts:
-        parts.extend(comment_texts)
+        parts.extend(comment_texts * 2)
+    if video.tags:
+        for t in video.tags:
+            parts.extend([t] * 2)
+    if video.description:
+        parts.append(video.description)
 
     text = ' '.join(parts)
     if not text.strip():
