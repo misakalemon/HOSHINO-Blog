@@ -808,15 +808,28 @@ class CompressedJSON(db.TypeDecorator):
     def process_result_value(self, value, dialect):
         """读取时：BLOB → zlib 解压 → JSON 解码 → Python list/dict。
 
-        兼容未压缩的旧数据（迁移前遗留的 JSON 文本）：解压失败时
-        尝试直接 json.loads，避免服务因迁移不完整而中断。
+        兼容 3 种存储格式：
+          1. 纯 zlib（Python zlib.compress 写入）
+          2. MySQL COMPRESS() 格式（4 字节长度前缀 + zlib）
+          3. 未压缩的明文 JSON（迁移前的旧数据）
         """
+        import struct
+
         if value is None:
             return None
+        # 格式 1：纯 zlib
         try:
             return json.loads(zlib.decompress(value).decode('utf-8'))
         except zlib.error:
-            return json.loads(value.decode('utf-8'))
+            pass
+        # 格式 2：MySQL COMPRESS（跳过 4 字节长度前缀）
+        try:
+            uncompressed = zlib.decompress(value[4:])
+            return json.loads(uncompressed.decode('utf-8'))
+        except (zlib.error, struct.error, IndexError):
+            pass
+        # 格式 3：未压缩的明文 JSON
+        return json.loads(value.decode('utf-8'))
 
 
 class WordCloudData(db.Model):
