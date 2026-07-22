@@ -503,7 +503,7 @@ def precompute_video_wordclouds():
     video_ids = [v.id for v in videos]
     app = current_app._get_current_object()
 
-    with ThreadPoolExecutor(max_workers=4) as pool:
+    with ThreadPoolExecutor(max_workers=2) as pool:
         futures = [pool.submit(_compute_video_wc_wrapper, vid, app) for vid in video_ids]
         for f in as_completed(futures):
             try:
@@ -571,7 +571,7 @@ def precompute_up_wordclouds(up_id: int):
     video_ids = [v.id for v in videos]
     app = current_app._get_current_object()
 
-    with ThreadPoolExecutor(max_workers=4) as pool:
+    with ThreadPoolExecutor(max_workers=2) as pool:
         futures = [pool.submit(_compute_video_wc_wrapper, vid, app) for vid in video_ids]
         for f in as_completed(futures):
             try:
