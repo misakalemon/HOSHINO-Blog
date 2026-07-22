@@ -567,24 +567,28 @@ def get_video_tags(bvid: str) -> list[str]:
     return [t.get('tag_name', '') for t in tags if isinstance(t, dict) and t.get('tag_name')]
 
 
-def get_video_comments(aid: int, page: int = 1) -> list[dict]:
-    """获取视频评论（按热度排序）。
+def get_video_comments(aid: int, page: int = 1, order=None) -> list[dict]:
+    """获取视频评论。
 
     使用 bilibili_api.comment.get_comments() 获取资源评论。
     从第2页起需要 credential（已自动传入全局 _credential）。
 
         aid:       视频稿件 ID（av 号）。
         page:      页码，从 1 开始。
+        order:     排序方式，默认 OrderType.LIKE（热门），可传 OrderType.TIME（最新）
         returns:   [{'content': str, 'author': str, 'ctime': int, 'like_count': int}, ...]
     """
     from bilibili_api import comment as _comment_mod
+
+    if order is None:
+        order = _comment_mod.OrderType.LIKE
 
     try:
         resp = _sync(_comment_mod.get_comments(
             oid=aid,
             type_=_comment_mod.CommentResourceType.VIDEO,
             page_index=page,
-            order=_comment_mod.OrderType.LIKE,
+            order=order,
             credential=_credential,
         ))
     except Exception as e:

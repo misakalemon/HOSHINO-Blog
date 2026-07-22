@@ -533,43 +533,46 @@ def _insert_or_update_video(up, video_info, aid, bvid, title_short):
     return video, is_new
 
 
-_COMMENT_PAGES = 10
+_COMMENT_HOT_PAGES = 5
+_COMMENT_NEWEST_PAGES = 5
 _COMMENT_SLEEP_BASE = 4.0
 _COMMENT_SLEEP_JITTER = 3.0
 
 
-def _crawl_video_comments(video, max_pages: int = _COMMENT_PAGES):
-    """爬取单个视频的热门评论（最多前 max_pages 页）。
+def _crawl_video_comments(video, hot_pages: int = _COMMENT_HOT_PAGES, newest_pages: int = _COMMENT_NEWEST_PAGES):
+    """爬取单个视频的评论（热门 + 最新两种排序）。
 
-    使用 B 站 API 按热度排序分页获取评论，每页间隔随机延时防风控。
-    自动检测风控/封禁并降级。
+    先爬 5 页热门评论（按点赞排序），再爬 5 页最新评论（按时间排序），
+    去重后写入 BiliVideoComment 表。每页间隔随机延时防风控。
 
     Args:
-        video (BiliVideo): 视频 ORM 对象（需有 id 和 aid）
-        max_pages (int):   最大翻页数（默认 10 页）
+        video (BiliVideo):  视频 ORM 对象（需有 id 和 aid）
+        hot_pages (int):    热门评论页数（默认 5 页）
+        newest_pages (int): 最新评论页数（默认 5 页）
     Returns:
         int: 爬取的评论总数
     """
+    from bilibili_api.comment import OrderType
     from blog.bilibili.bili_api import get_video_comments, _is_risk_control, was_recently_blocked
     from .models import BiliVideoComment
 
-    total = 0
-    for page in range(1, max_pages + 1):
+    def _crawl_page(page, order):
         if was_recently_blocked():
-            break
+            return 0
         try:
-            comments = get_video_comments(video.aid, page)
+            comments = get_video_comments(video.aid, page, order=order)
         except Exception as e:
             if _is_risk_control(e):
                 logger.warning('视频 %s 评论触发风控，第 %d 页跳过', video.bvid, page)
                 time.sleep(15.0)
-                continue
+                return 0
             logger.warning('视频 %s 第 %d 页评论失败: %s', video.bvid, page, e)
-            break
+            return -1
 
         if not comments:
-            break
+            return 0
 
+        count = 0
         for c in comments:
             ctime = c.get('ctime', 0)
             content = (c.get('content') or '')[:2000]
@@ -589,14 +592,30 @@ def _crawl_video_comments(video, max_pages: int = _COMMENT_PAGES):
                 ctime=ctime,
                 like_count=c.get('like_count', 0),
             ))
-            total += 1
+            count += 1
 
         db.session.commit()
 
         if len(comments) < 20:
-            break
+            return -1
 
         time.sleep(_COMMENT_SLEEP_BASE + random.random() * _COMMENT_SLEEP_JITTER)
+        return count
+
+    total = 0
+    # 1. 热门评论（按点赞）
+    for page in range(1, hot_pages + 1):
+        n = _crawl_page(page, OrderType.LIKE)
+        if n < 0:
+            break
+        total += n
+
+    # 2. 最新评论（按时间）
+    for page in range(1, newest_pages + 1):
+        n = _crawl_page(page, OrderType.TIME)
+        if n < 0:
+            break
+        total += n
 
     return total
 
