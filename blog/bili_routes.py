@@ -678,8 +678,15 @@ def _insert_or_update_video(up, video_info, aid, bvid, title_short):
         db.session.rollback()
         logger.warning('视频 %s 「%s」入库失败: %s', bvid, title_short, e)
         return None, False
+    # 先提交视频（确保新视频持久化到数据库）
     try:
-        # 写入统计历史快照
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        logger.warning('视频 %s 提交失败: %s', bvid, e)
+        return None, False
+    try:
+        # 写入统计历史快照（独立提交，失败不影响视频已入库）
         db.session.add(
             BiliVideoHistory(
                 video_id=video.id,
@@ -692,9 +699,10 @@ def _insert_or_update_video(up, video_info, aid, bvid, title_short):
                 danmaku_count=video_info.get('danmaku_count', 0),
             )
         )
-    except Exception:
+        db.session.commit()
+    except Exception as e:
         db.session.rollback()
-        return None, False
+        logger.warning('视频 %s 历史快照写入失败（视频已入库）: %s', bvid, e)
     if is_new:
         try:
             _start_wc_workers()
@@ -732,17 +740,22 @@ def _crawl_video_comments(video, hot_pages: int = _COMMENT_HOT_PAGES, newest_pag
     from blog.bilibili.bili_api import get_video_comments, _is_risk_control, was_recently_blocked
     from .models import BiliVideoComment
 
+    # 在闭包外保存原始值，避免 db.session.remove() 后 ORM 对象 detached
+    _aid = video.aid
+    _bvid = video.bvid
+    _video_id = video.id
+
     def _crawl_page(page, order):
         if was_recently_blocked():
             return 0
         try:
-            comments = get_video_comments(video.aid, page, order=order)
+            comments = get_video_comments(_aid, page, order=order)
         except Exception as e:
             if _is_risk_control(e):
-                logger.warning('视频 %s 评论触发风控，第 %d 页跳过', video.bvid, page)
+                logger.warning('视频 %s 评论触发风控，第 %d 页跳过', _bvid, page)
                 time.sleep(15.0)
                 return 0
-            logger.warning('视频 %s 第 %d 页评论失败: %s', video.bvid, page, e)
+            logger.warning('视频 %s 第 %d 页评论失败: %s', _bvid, page, e)
             return -1
 
         if not comments:
@@ -755,14 +768,14 @@ def _crawl_video_comments(video, hot_pages: int = _COMMENT_HOT_PAGES, newest_pag
             if not content:
                 continue
             existing = BiliVideoComment.query.filter_by(
-                video_id=video.id,
+                video_id=_video_id,
                 ctime=ctime,
                 content=content,
             ).first()
             if existing:
                 continue
             db.session.add(BiliVideoComment(
-                video_id=video.id,
+                video_id=_video_id,
                 content=content,
                 author=(c.get('author') or '')[:64],
                 ctime=ctime,
@@ -795,7 +808,7 @@ def _crawl_video_comments(video, hot_pages: int = _COMMENT_HOT_PAGES, newest_pag
         total += n
 
     # 标记评论已爬取
-    v = BiliVideo.query.get(video.id)
+    v = BiliVideo.query.get(_video_id)
     if v:
         v.comments_crawled_at = datetime.datetime.now(CST)
         db.session.commit()
