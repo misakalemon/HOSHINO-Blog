@@ -11,7 +11,9 @@ HOSHINO Blog — 博文词云模块
 
 import logging
 import os
+import queue
 import re
+import threading
 from collections import Counter
 from typing import List, Optional
 
@@ -19,8 +21,83 @@ from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
-# ── jieba 延迟初始化（只在首次调用时加载）──
+# ── jieba 延迟初始化（只在首次调用时调用）──
 _jieba_initialized = False
+
+# ── 词云后台任务队列 ──────────────────────────────────
+# 所有用户触发的词云重算（发布文章、刷新UP主等）投递到此队列，
+# 由单线程消费者异步执行，避免 jieba 分词阻塞 HTTP 请求。
+# 定时任务（02:10 / 02:15）仍直接调用函数，不经过此队列。
+# ──────────────────────────────────────────────────────
+_task_queue: queue.Queue = queue.Queue()
+_worker_started = False
+_worker_lock = threading.Lock()
+_wc_app = None
+
+
+def _ensure_worker():
+    """惰性启动后台工作线程（首次 submit_task 时在请求上下文中调用）。
+
+    Flask 的 current_app 只能在有请求上下文时使用，因此首次初始化
+    必须在 submit_task 被某个请求处理器调用时完成（而非模块加载时）。
+    后续调用直接跳过，不依赖上下文。
+    """
+    global _worker_started, _wc_app
+    with _worker_lock:
+        if _worker_started:
+            return
+        from flask import current_app
+        _wc_app = current_app._get_current_object()
+        t = threading.Thread(target=_worker_loop, daemon=True)
+        t.start()
+        _worker_started = True
+
+
+def _worker_loop():
+    """单线程工作循环：阻塞读取任务 → 创建 app 上下文 → 分发到对应预计算函数。
+
+    每个任务完成后调用 task_done()，以便 queue.join() 能够感知完成状态。
+    单线程设计避免了多线程竞争 SQLAlchemy session 的问题。
+    """
+    while True:
+        task = _task_queue.get()
+        with _wc_app.app_context():
+            try:
+                task_type = task.pop('type')
+                if task_type == 'post':
+                    precompute_post_wordcloud(task['post_id'])
+                elif task_type == 'site':
+                    precompute_site_wordcloud()
+                elif task_type == 'all':
+                    precompute_all_wordclouds()
+                    precompute_bili_wordclouds()
+                elif task_type == 'bili_up':
+                    precompute_up_wordclouds(task['up_id'])
+            except Exception as e:
+                logger.error('词云任务失败 type=%s: %s', task.get('type', '?'), e)
+            finally:
+                _task_queue.task_done()
+
+
+def submit_task(task_type: str, **kwargs):
+    """将词云任务投递到后台队列，立即返回（不阻塞请求线程）。
+
+    这是用户触发词云重算的唯一入口。所有调用点（admin.py 发表/编辑/删除文章、
+    手动重算、bili_routes.py 刷新UP评论/字幕）都通过此函数投递，
+    而不是直接调用预计算函数。
+
+    支持的 task_type:
+      - 'post'      → precompute_post_wordcloud(post_id)
+      - 'site'      → precompute_site_wordcloud()
+      - 'all'       → precompute_all_wordclouds() + precompute_bili_wordclouds()
+      - 'bili_up'   → precompute_up_wordclouds(up_id)
+
+    Args:
+        task_type: 任务类型标识
+        **kwargs: 透传给预计算函数的参数（如 post_id、up_id 等）
+    """
+    _ensure_worker()
+    _task_queue.put_nowait(dict(type=task_type, **kwargs))
 
 
 def _init_jieba():
@@ -567,17 +644,21 @@ def _compute_single_video_wordcloud(video):
     else:
         record.data = data
     db.session.commit()
-def precompute_up_wordclouds(up_id: int):
-    """为指定 UP 主的所有视频生成词云。
 
-    并行计算各视频词云，只处理某一 UP 主的视频，避免全量刷新。
+
+def precompute_up_wordclouds(up_id: int):
+    """为指定 UP 主的所有视频生成词云并刷新 UP 主页聚合词云。
+
+    1. 并行计算各视频词云（单视频 source='bili_video'）
+    2. 汇总该 UP 主全部文本，刷新 UP 主页聚合词云 (source='bili', period='up_{up_id}')
 
     Args:
         up_id (int): UP 主数据库 ID
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
     from flask import current_app
-    from .models import BiliVideo
+    from . import db
+    from .models import BiliVideo, WordCloudConfig, WordCloudData
 
     videos = BiliVideo.query.filter_by(up_id=up_id).with_entities(BiliVideo.id).all()
     video_ids = [v.id for v in videos]
@@ -596,5 +677,22 @@ def precompute_up_wordclouds(up_id: int):
             done += 1
             if done % 10 == 0:
                 logger.info('📊 UP %s 词云进度: %d/%d', up_id, done, total)
+
+    # ── 聚合 UP 主词云 ──
+    all_videos = BiliVideo.query.filter_by(up_id=up_id).all()
+    up_texts = _bili_texts_from_videos(all_videos)
+    up_full = ' '.join(up_texts)
+    if up_full.strip():
+        top_n = WordCloudConfig.get_or_create().top_n_bili
+        up_data = compute_word_frequencies(up_full, top_n=top_n) or []
+        period = f'up_{up_id}'
+        record = WordCloudData.query.filter_by(post_id=None, source='bili', period=period).first()
+        if record is None:
+            record = WordCloudData(post_id=None, source='bili', period=period, data=up_data)
+            db.session.add(record)
+        else:
+            record.data = up_data
+        db.session.commit()
+        logger.info('📊 UP %s 聚合词云已更新', up_id)
 
     logger.info('📊 UP %s 词云计算完成', up_id)

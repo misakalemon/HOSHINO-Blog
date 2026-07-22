@@ -325,6 +325,9 @@ def init_db(app):
         # ── 迁移 bili_videos.comments_crawled_at 列 ──
         _migrate_bili_video_comments_crawled_at(app)
 
+        # ── 迁移 wordcloud_data.data JSON→ZLIB BLOB ──
+        _migrate_wordcloud_data_compress(app)
+
 
 def _migrate_post_html_file_url(app):
     """迁移：为 Post 表添加 html_file_url 字段。
@@ -997,8 +1000,56 @@ def _migrate_bili_video_subtitle_mediumtext(app):
             app.logger.warning('迁移: 扩展 subtitle_text 为 MEDIUMTEXT 失败: %s', e)
 
 
+def _migrate_wordcloud_data_compress(app):
+    """迁移：将 wordcloud_data.data 从 MySQL JSON 压缩为 ZLIB BLOB。
+
+    执行步骤：
+      1. 检查当前 data 列是否已是 BLOB（已迁移过则跳过）
+      2. ADD data_gz LONGBLOB — 新增临时列
+      3. UPDATE ... SET data_gz = COMPRESS(data) — 用 MySQL 原生 COMPRESS() 压缩
+         MySQL COMPRESS() 使用 RFC 1950 zlib 格式，与 Python zlib 兼容
+      4. DROP data — 删除旧 JSON 列
+      5. CHANGE data_gz → data — 重命名为原列名
+      6. 模型中的 CompressedJSON TypeDecorator 对读写透明压缩/解压
+
+    此迁移仅在 MySQL 方言上执行，SQLite 跳过。
+    """
+    from sqlalchemy import text
+
+    engine = db.get_engine()
+    inspector = db.inspect(engine)
+    cols = {c['name'] for c in inspector.get_columns('wordcloud_data')}
+    dialect = engine.dialect.name
+    if dialect != 'mysql':
+        return
+    if 'data_gz' in cols:
+        return
+
+    data_type = ''
+    for c in inspector.get_columns('wordcloud_data'):
+        if c['name'] == 'data':
+            data_type = str(c.get('type', '')).upper()
+            break
+    if 'BLOB' in data_type:
+        return
+
+    try:
+        db.session.execute(text('ALTER TABLE wordcloud_data ADD COLUMN data_gz LONGBLOB AFTER data'))
+        db.session.commit()
+        db.session.execute(text('UPDATE wordcloud_data SET data_gz = COMPRESS(data) WHERE data IS NOT NULL'))
+        db.session.commit()
+        db.session.execute(text('ALTER TABLE wordcloud_data DROP COLUMN data'))
+        db.session.commit()
+        db.session.execute(text('ALTER TABLE wordcloud_data CHANGE data_gz data LONGBLOB'))
+        db.session.commit()
+        app.logger.info('迁移: wordcloud_data.data 已压缩为 ZLIB BLOB')
+    except Exception as e:
+        db.session.rollback()
+        app.logger.warning('迁移: 压缩 wordcloud_data.data 失败: %s', e)
+
+
 # ── 后导入路由（延迟导入） ─────────────────────
-# 此处的 import 必须放在模型和 init_db 之后，否则会导致循环依赖：
+# 此处的 import 必须放在模型和 init_db 之后，否则会导致循环引用：
 #   __init__.py → routes.py → __init__.py
 # 延迟导入打破了这个循环。
 from . import admin, routes

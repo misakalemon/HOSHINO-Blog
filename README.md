@@ -373,6 +373,65 @@ arc/search API（按 pubdate 倒序翻页）
 
 ---
 
+## 词云系统
+
+### 架构总览
+
+词云系统采用**分层聚合**策略，支持博客文章和 B站 视频双数据源：
+
+```
+文本源（权重）
+  博客: content + html_content
+  B站: 字幕(×5) > 标题(×3) > 评论(×2) > 标签(×2) > 简介(×1)
+    ↓
+  tokenize() — jieba 精确模式 + 停用词过滤(300+)
+    ↓
+  compute_word_frequencies(text, top_n) — Counter → [{word, weight}]
+    ↓
+  CompressedJSON TypeDecorator — zlib 透明压缩 → BLOB 列
+```
+
+### 存储模型
+
+`WordCloudData` 表通过 `(source, period)` 区分不同维度的词云：
+
+| source | period | 含义 | 行数 |
+|--------|--------|------|------|
+| `blog` | `all` / `YYYY-MM` | 博客全站 + 按月切片 | ~13 行 |
+| `blog` |（post_id） | 单篇文章 | 每篇 1 行 |
+| `bili` | `all` / `YYYY-MM` | B站全站 + 按月切片 | ~13 行 |
+| `bili` | `up_{id}` | 单 UP 主聚合 | 每 UP 1 行 |
+| `bili_video` | `bvid_{bvid}` | 单视频 | 每视频 1 行 |
+
+### 计算入口
+
+| 入口 | 触发时机 | 覆盖范围 |
+|------|----------|----------|
+| 定时 02:10 | APScheduler | 博客全站 + 按月 + 每篇已发布文章 |
+| 定时 02:15 | APScheduler | B站全站 + 按月 + 每 UP + 每视频 |
+| `submit_task('post')` | 发布/编辑文章 | 单篇文章词云（异步后台队列） |
+| `submit_task('site')` | 删除文章 | 博客全站 + 按月 |
+| `submit_task('all')` | 后台"重新计算"按钮 | 全部词云（博客 + B站） |
+| `submit_task('bili_up')` | 刷新UP评论/字幕 | 该 UP 所有单视频 + UP 主页聚合词云 |
+| `_wc_queue →_wc_worker` | 新视频入库 | 单视频词云（独立 2 线程队列） |
+
+### 前端渲染
+
+`static/js/wordcloud.js` 零依赖纯 Canvas 实现：
+- 阿基米德螺旋线布局 + 矩形碰撞检测
+- 5 种形状（circle/star/heart/cloud/rectangle）
+- 3 套配色（glow/ocean/forest）
+- 点击词条跳搜索、多时段滑块切换
+- 社区词云配置页（后台管理）
+
+### 异步安全
+
+所有用户触发的词云计算通过 `submit_task()` 投递到内存队列，由单线程消费者异步执行，避免 HTTP 请求阻塞。定时任务不经过队列，直接调用预计算函数。
+
+---
+
+
+
 ## API 路由
 
 ### 前台路由
@@ -526,6 +585,7 @@ python app.py
 
 ## 开发日志
 
+- [2026-07-23 — 词云系统架构重铸（异步队列 + ZLIB 压缩 + UP 主页聚合）](docs/CHANGELOG-2026-07-23.md)
 - [2026-07-20 — 安全审计修复 / 并发竞态消除 / 代码完整注释](docs/CHANGELOG-2026-07-20.md)
 - [2026-07-19 — 首页粒子画像系统 / 移除价格爬取 / 启动性能优化 / 全站注释](docs/CHANGELOG-2026-07-19.md)
 - [2026-07-14 — 邮件订阅系统 / 视频对比 / 统计增长指标 / 全站确认保护](docs/CHANGELOG-2026-07-14.md)

@@ -42,6 +42,8 @@ HOSHINO Blog — 数据模型
 """
 
 import datetime
+import json
+import zlib
 from datetime import timezone, timedelta
 
 from flask_login import UserMixin
@@ -785,6 +787,31 @@ class WordCloudConfig(db.Model):
         }
 
 
+class CompressedJSON(db.TypeDecorator):
+    """透明 ZLIB 压缩 JSON 列。
+
+    写入时自动压缩（dict/list → zlib BLOB），读取时自动解压。
+    对上层代码完全透明，使用方式与普通 JSON 列无异。
+
+    MySQL COMPRESS()/UNCOMPRESS() 与 Python zlib 使用相同的 RFC 1950 格式，
+    因此迁移阶段用 MySQL COMPRESS() 压缩的历史数据可直接用 Python 解压。
+    """
+
+    impl = db.LargeBinary
+
+    def process_bind_param(self, value, dialect):
+        """写入时：Python list/dict → JSON 字符串 → zlib 压缩 → BLOB。"""
+        if value is None:
+            return None
+        return zlib.compress(json.dumps(value, ensure_ascii=False).encode('utf-8'))
+
+    def process_result_value(self, value, dialect):
+        """读取时：BLOB → zlib 解压 → JSON 解码 → Python list/dict。"""
+        if value is None:
+            return None
+        return json.loads(zlib.decompress(value).decode('utf-8'))
+
+
 class WordCloudData(db.Model):
     """预计算词云数据。
 
@@ -807,7 +834,7 @@ class WordCloudData(db.Model):
         db.String(16), default='blog', index=True,
         comment='来源: blog=博客文章, bili=B站视频, bili_video=单视频',
     )
-    data = db.Column(db.JSON, nullable=False, comment='词频数据 [{word, weight}, ...]')
+    data = db.Column(CompressedJSON, nullable=False, comment='词频数据 [{word, weight}, ...]')
     updated_at = db.Column(
         db.DateTime,
         default=lambda: datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))),

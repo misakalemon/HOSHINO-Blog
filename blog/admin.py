@@ -648,9 +648,9 @@ def new_post():
         db.session.commit()
         _invalidate_sidebar_cache()
         logger.info('创建文章: id=%d title="%s"', post.id, post.title)
-        # 预计算词云（仅单篇，全站由定时任务刷新）
-        from .wordcloud import precompute_post_wordcloud
-        precompute_post_wordcloud(post.id)
+        # 后台异步计算单篇词云
+        from .wordcloud import submit_task
+        submit_task('post', post_id=post.id)
         flash('文章已发布', 'success')
         return redirect(url_for('admin.post_list'))
     return render_template('admin/post-form.html', form=form, editing=False)
@@ -729,10 +729,9 @@ def edit_post(id):
         post.categories = Category.query.filter(Category.id.in_(form.categories.data)).all()
         db.session.commit()
         _invalidate_sidebar_cache()
+        from .wordcloud import submit_task
+        submit_task('post', post_id=post.id)
         flash('文章已更新', 'success')
-        # 预计算词云（仅单篇，全站由定时任务刷新）
-        from .wordcloud import precompute_post_wordcloud
-        precompute_post_wordcloud(post.id)
         return redirect(url_for('admin.post_list'))
     # ── 编辑时回填已选的分类 ─────────────────
     form.categories.data = [c.id for c in post.categories]
@@ -770,9 +769,9 @@ def delete_post(id):
     from .cache import cache_delete
 
     cache_delete('dashboard:stats')
-    # 重新计算全站词云
-    from .wordcloud import precompute_site_wordcloud
-    precompute_site_wordcloud()
+    # 异步投递全站词云重算（删除一篇文章后需刷新全站 + 按月切片）
+    from .wordcloud import submit_task
+    submit_task('site')
     flash('文章已删除', 'success')
     return redirect(url_for('admin.post_list'))
 
@@ -1713,10 +1712,9 @@ def wordcloud_config():
 @admin_bp.route('/wordcloud/refresh')
 @admin_required
 def refresh_wordcloud():
-    """手动触发博客+ B站词云重新计算（预计算存入数据库）。"""
-    from .wordcloud import precompute_all_wordclouds, precompute_bili_wordclouds
+    """手动触发博客+ B站词云重新计算（异步后台执行）。"""
+    from .wordcloud import submit_task
 
-    precompute_all_wordclouds()
-    precompute_bili_wordclouds()
-    flash('词云数据已重新计算（博客 + B站）', 'success')
+    submit_task('all')
+    flash('词云数据已投递到后台计算（博客 + B站）', 'success')
     return redirect(url_for('admin.wordcloud_config'))
