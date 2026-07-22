@@ -307,6 +307,9 @@ def init_db(app):
         # ── 迁移 bili_videos.tags 列 ──────────
         _migrate_bili_video_tags(app)
 
+        # ── 迁移 bili_videos.subtitle_text 列 ──
+        _migrate_bili_video_subtitle_text(app)
+
         # ── 迁移 bili_video_comments 表 ───────
         _migrate_bili_video_comments_table(app)
 
@@ -896,6 +899,28 @@ def _migrate_wordcloud_source_length(app):
         except Exception as e:
             db.session.rollback()
             app.logger.warning('迁移: 扩展 wordcloud_data.source 失败: %s', e)
+
+
+def _migrate_bili_video_subtitle_text(app):
+    """迁移：为 bili_videos 表添加 subtitle_text 列。"""
+    from sqlalchemy import text
+
+    engine = db.get_engine()
+    dialect = engine.dialect.name
+    if dialect != 'mysql':
+        return
+    inspector = db.inspect(engine)
+    cols = {c['name'] for c in inspector.get_columns('bili_videos')}
+    if 'subtitle_text' not in cols:
+        try:
+            db.session.execute(
+                text('ALTER TABLE bili_videos ADD COLUMN subtitle_text TEXT NULL COMMENT "AI字幕文本"')
+            )
+            db.session.commit()
+            app.logger.info('迁移: 已添加 bili_videos.subtitle_text 列')
+        except Exception as e:
+            db.session.rollback()
+            app.logger.warning('迁移: 添加 bili_videos.subtitle_text 列失败: %s', e)
 
 
 def _migrate_wordcloud_period_length(app):

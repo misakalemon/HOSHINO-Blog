@@ -486,6 +486,16 @@ def _insert_or_update_video(up, video_info, aid, bvid, title_short):
                 db.session.flush()
         except Exception as e:
             logger.warning('视频 %s 标签获取失败: %s', bvid, e)
+
+        # 新视频：抓取 AI 字幕
+        try:
+            from blog.bilibili.bili_api import get_video_subtitle
+            subtitle = get_video_subtitle(bvid)
+            if subtitle:
+                video.subtitle_text = subtitle
+                db.session.flush()
+        except Exception as e:
+            logger.warning('视频 %s 字幕获取失败: %s', bvid, e)
     except IntegrityError:
         # aid 冲突 → 已有记录，回退并更新统计字段
         db.session.rollback()

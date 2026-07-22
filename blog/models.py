@@ -518,6 +518,7 @@ class BiliVideo(db.Model):
     danmaku_count = db.Column(db.Integer, default=0, comment='弹幕数')
     created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(CST))
     tags = db.Column(db.JSON, nullable=True, comment='视频标签名数组')
+    subtitle_text = db.Column(db.Text, nullable=True, comment='AI 字幕文本（自动语音识别生成）')
 
     updated_at = db.Column(
         db.DateTime,

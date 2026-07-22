@@ -396,6 +396,8 @@ def _bili_texts_from_videos(videos):
             parts.append(v.description)
         if v.tags:
             parts.extend(v.tags)
+        if v.subtitle_text:
+            parts.append(v.subtitle_text)
         for content in comment_map.get(v.id, []):
             if content:
                 parts.append(content)
@@ -496,6 +498,8 @@ def precompute_video_wordclouds():
             if video.tags:
                 parts.extend(video.tags)
 
+            if video.subtitle_text:
+                parts.append(video.subtitle_text)
             comment_texts = [
                 c.content for c in video.comments.all()
                 if c.content
@@ -552,6 +556,8 @@ def precompute_up_wordclouds(up_id: int):
                 parts.append(video.description)
             if video.tags:
                 parts.extend(video.tags)
+            if video.subtitle_text:
+                parts.append(video.subtitle_text)
 
             comment_texts = [
                 c.content for c in video.comments.all()

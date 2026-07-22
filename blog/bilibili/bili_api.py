@@ -567,6 +567,47 @@ def get_video_tags(bvid: str) -> list[str]:
     return [t.get('tag_name', '') for t in tags if isinstance(t, dict) and t.get('tag_name')]
 
 
+def get_video_subtitle(bvid: str) -> str:
+    """获取视频 AI 字幕文本（自动语音识别生成）。
+
+    通过 bilibili-api 获取字幕下载链接，下载后提取所有 content 文本。
+
+    Args:
+        bvid: 视频 BV 号
+    Returns:
+        字幕拼接文本，无字幕时返回空字符串
+    """
+    import requests
+
+    v = _video_mod.Video(bvid=bvid, credential=_credential)
+    try:
+        cid = _sync(v.get_cid())
+    except Exception as e:
+        logger.warning('视频 %s 获取 CID 失败: %s', bvid, e)
+        return ''
+    try:
+        sub_data = _sync(v.get_subtitle(cid=cid))
+    except Exception as e:
+        logger.warning('视频 %s 获取字幕失败: %s', bvid, e)
+        return ''
+    subtitles = sub_data.get('subtitles') or []
+    if not subtitles:
+        return ''
+    url = subtitles[0].get('subtitle_url', '')
+    if not url:
+        return ''
+    if url.startswith('//'):
+        url = 'https:' + url
+    try:
+        resp = requests.get(url, timeout=15)
+        body = resp.json().get('body') or []
+        texts = [item['content'] for item in body if item.get('content')]
+        return ' '.join(texts)
+    except Exception as e:
+        logger.warning('视频 %s 字幕下载失败: %s', bvid, e)
+        return ''
+
+
 def get_video_comments(aid: int, page: int = 1, order=None) -> list[dict]:
     """获取视频评论。
 
