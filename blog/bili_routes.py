@@ -262,12 +262,15 @@ def refresh_up_comments(up_id):
             from blog.wordcloud import precompute_up_wordclouds
 
             with app.app_context():
-                videos = BiliVideo.query.filter_by(up_id=up_id).order_by(
-                    BiliVideo.pubdate.desc()
-                ).limit(50).all()
-                total = len(videos)
+                video_ids = [r[0] for r in BiliVideo.query.filter_by(
+                    up_id=up_id
+                ).order_by(BiliVideo.pubdate.desc()).with_entities(BiliVideo.id).limit(50).all()]
+                total = len(video_ids)
                 logger.info('💬 评论刷新: UP %s 共 %d 个视频', up_id, total)
-                for i, v in enumerate(videos, 1):
+                for i, vid in enumerate(video_ids, 1):
+                    v = BiliVideo.query.get(vid)
+                    if not v:
+                        continue
                     try:
                         logger.info('  [%d/%d] %s 正在爬取评论...', i, total, v.bvid)
                         n = _crawl_video_comments(v)
@@ -304,13 +307,16 @@ def refresh_up_subtitles(up_id):
 
     def _run():
         with app.app_context():
-            videos = BiliVideo.query.filter_by(up_id=up_id).order_by(
-                BiliVideo.pubdate.desc()
-            ).limit(50).all()
-            total = len(videos)
+            video_ids = [r[0] for r in BiliVideo.query.filter_by(
+                up_id=up_id
+            ).order_by(BiliVideo.pubdate.desc()).with_entities(BiliVideo.id).limit(50).all()]
+            total = len(video_ids)
             logger.info('📝 字幕刷新: UP %s 共 %d 个视频', up_id, total)
             ok = 0
-            for i, v in enumerate(videos, 1):
+            for i, vid in enumerate(video_ids, 1):
+                v = BiliVideo.query.get(vid)
+                if not v:
+                    continue
                 try:
                     from blog.bilibili.bili_api import get_video_subtitle
                     logger.info('  [%d/%d] %s 正在获取字幕...', i, total, v.bvid)
@@ -322,9 +328,12 @@ def refresh_up_subtitles(up_id):
                         logger.info('  [%d/%d] %s ✅ 字幕已获取', i, total, v.bvid)
                     else:
                         logger.info('  [%d/%d] %s 无字幕', i, total, v.bvid)
-                    time.sleep(1.0 + random.random())
                 except Exception as e:
+                    db.session.rollback()
                     logger.warning('  [%d/%d] %s 字幕失败: %s', i, total, v.bvid, e)
+                finally:
+                    db.session.remove()
+                    time.sleep(1.0 + random.random())
             logger.info('📝 字幕刷新完成: UP %s 成功 %d/%d', up_id, ok, total)
 
             logger.info('📊 字幕刷新完毕，自动触发 UP %s 词云计算...', up_id)

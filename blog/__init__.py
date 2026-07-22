@@ -310,6 +310,9 @@ def init_db(app):
         # ── 迁移 bili_videos.subtitle_text 列 ──
         _migrate_bili_video_subtitle_text(app)
 
+        # ── 迁移 subtitle_text TEXT→MEDIUMTEXT ─
+        _migrate_bili_video_subtitle_mediumtext(app)
+
         # ── 迁移 bili_video_comments 表 ───────
         _migrate_bili_video_comments_table(app)
 
@@ -964,6 +967,34 @@ def _migrate_bili_video_comments_crawled_at(app):
         except Exception as e:
             db.session.rollback()
             app.logger.warning('迁移: 添加 bili_videos.comments_crawled_at 列失败: %s', e)
+
+
+def _migrate_bili_video_subtitle_mediumtext(app):
+    """迁移：bili_videos.subtitle_text 从 TEXT 改为 MEDIUMTEXT（解决长字幕截断）。"""
+    from sqlalchemy import text
+
+    engine = db.get_engine()
+    inspector = db.inspect(engine)
+    cols = {c['name'] for c in inspector.get_columns('bili_videos')}
+    dialect = engine.dialect.name
+    if dialect != 'mysql':
+        return
+    if 'subtitle_text' in cols:
+        try:
+            # 获取当前列类型
+            current_type = None
+            for c in inspector.get_columns('bili_videos'):
+                if c['name'] == 'subtitle_text':
+                    current_type = str(c.get('type', ''))
+                    break
+            # 仅在当前是 TEXT 时修改（避免重复执行）
+            if current_type and 'MEDIUMTEXT' not in current_type.upper():
+                db.session.execute(text('ALTER TABLE bili_videos MODIFY subtitle_text MEDIUMTEXT COMMENT "AI字幕文本"'))
+                db.session.commit()
+                app.logger.info('迁移: bili_videos.subtitle_text 已扩展为 MEDIUMTEXT')
+        except Exception as e:
+            db.session.rollback()
+            app.logger.warning('迁移: 扩展 subtitle_text 为 MEDIUMTEXT 失败: %s', e)
 
 
 # ── 后导入路由（延迟导入） ─────────────────────
