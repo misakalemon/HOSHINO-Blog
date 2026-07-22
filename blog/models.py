@@ -819,13 +819,15 @@ class CompressedJSON(db.TypeDecorator):
         logger = logging.getLogger(__name__ + '.CompressedJSON')
         # 格式 1：纯 zlib
         try:
-            return json.loads(zlib.decompress(value).decode('utf-8'))
-        except (zlib.error, UnicodeDecodeError):
+            raw = zlib.decompress(value)
+            return json.loads(raw.decode('utf-8'))
+        except (zlib.error, UnicodeDecodeError, json.JSONDecodeError):
             pass
         # 格式 2：MySQL COMPRESS（跳过 4 字节长度前缀）
         try:
-            return json.loads(zlib.decompress(value[4:]).decode('utf-8'))
-        except (zlib.error, UnicodeDecodeError, IndexError):
+            raw = zlib.decompress(value[4:])
+            return json.loads(raw.decode('utf-8'))
+        except (zlib.error, UnicodeDecodeError, json.JSONDecodeError, IndexError):
             pass
         # 格式 3：未压缩的明文 JSON
         try:
