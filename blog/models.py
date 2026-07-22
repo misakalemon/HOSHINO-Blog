@@ -820,12 +820,12 @@ class CompressedJSON(db.TypeDecorator):
         # 格式 1：纯 zlib
         try:
             return json.loads(zlib.decompress(value).decode('utf-8'))
-        except zlib.error:
+        except (zlib.error, UnicodeDecodeError):
             pass
         # 格式 2：MySQL COMPRESS（跳过 4 字节长度前缀）
         try:
             return json.loads(zlib.decompress(value[4:]).decode('utf-8'))
-        except (zlib.error, IndexError):
+        except (zlib.error, UnicodeDecodeError, IndexError):
             pass
         # 格式 3：未压缩的明文 JSON
         try:
