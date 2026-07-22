@@ -1022,8 +1022,16 @@ def _migrate_wordcloud_data_compress(app):
     dialect = engine.dialect.name
     if dialect != 'mysql':
         return
-    if 'data_gz' in cols:
+    # data_gz 已存在且 data 已不存在 → 迁移已完成
+    if 'data_gz' in cols and 'data' not in cols:
         return
+    # data_gz 和 data 同时存在 → 上次迁移部分失败（ADD 成功但后续步骤失败）
+    if 'data_gz' in cols and 'data' in cols:
+        try:
+            db.session.execute(text('ALTER TABLE wordcloud_data DROP COLUMN data_gz'))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
 
     data_type = ''
     for c in inspector.get_columns('wordcloud_data'):
@@ -1031,7 +1039,26 @@ def _migrate_wordcloud_data_compress(app):
             data_type = str(c.get('type', '')).upper()
             break
     if 'BLOB' in data_type:
-        return
+        # data 列已是 BLOB，检查是否已压缩（以 zlib 0x78 开头）
+        try:
+            sample = db.session.execute(
+                text('SELECT data FROM wordcloud_data WHERE data IS NOT NULL LIMIT 1')
+            ).scalar()
+        except Exception:
+            sample = None
+        is_compressed = sample is not None and len(sample) > 0 and sample[0] == 120  # 0x78 = zlib magic
+        if is_compressed:
+            return  # 已经压缩过
+        # 列是 BLOB 但数据未压缩（迁移部分失败的残留状态）→ 原地压缩
+        try:
+            db.session.execute(text('UPDATE wordcloud_data SET data = COMPRESS(data) WHERE data IS NOT NULL'))
+            db.session.commit()
+            app.logger.info('迁移修复: wordcloud_data.data 已完成原地压缩')
+            return
+        except Exception as e:
+            db.session.rollback()
+            app.logger.warning('迁移修复: 原地压缩失败: %s', e)
+            return
 
     try:
         db.session.execute(text('ALTER TABLE wordcloud_data ADD COLUMN data_gz LONGBLOB AFTER data'))
@@ -1040,7 +1067,7 @@ def _migrate_wordcloud_data_compress(app):
         db.session.commit()
         db.session.execute(text('ALTER TABLE wordcloud_data DROP COLUMN data'))
         db.session.commit()
-        db.session.execute(text('ALTER TABLE wordcloud_data CHANGE data_gz data LONGBLOB'))
+        db.session.execute(text('ALTER TABLE wordcloud_data CHANGE data_gz data LONGBLOB NOT NULL'))
         db.session.commit()
         app.logger.info('迁移: wordcloud_data.data 已压缩为 ZLIB BLOB')
     except Exception as e:

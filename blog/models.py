@@ -806,10 +806,17 @@ class CompressedJSON(db.TypeDecorator):
         return zlib.compress(json.dumps(value, ensure_ascii=False).encode('utf-8'))
 
     def process_result_value(self, value, dialect):
-        """读取时：BLOB → zlib 解压 → JSON 解码 → Python list/dict。"""
+        """读取时：BLOB → zlib 解压 → JSON 解码 → Python list/dict。
+
+        兼容未压缩的旧数据（迁移前遗留的 JSON 文本）：解压失败时
+        尝试直接 json.loads，避免服务因迁移不完整而中断。
+        """
         if value is None:
             return None
-        return json.loads(zlib.decompress(value).decode('utf-8'))
+        try:
+            return json.loads(zlib.decompress(value).decode('utf-8'))
+        except zlib.error:
+            return json.loads(value.decode('utf-8'))
 
 
 class WordCloudData(db.Model):
