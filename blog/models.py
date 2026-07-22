@@ -519,6 +519,7 @@ class BiliVideo(db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(CST))
     tags = db.Column(db.JSON, nullable=True, comment='视频标签名数组')
     subtitle_text = db.Column(db.Text, nullable=True, comment='AI 字幕文本（自动语音识别生成）')
+    comments_crawled_at = db.Column(db.DateTime, nullable=True, comment='评论最后爬取时间')
 
     updated_at = db.Column(
         db.DateTime,

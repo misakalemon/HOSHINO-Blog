@@ -275,9 +275,11 @@ def refresh_up_comments(up_id):
                             logger.info('  [%d/%d] %s ✅ %d 条', i, total, v.bvid[:8], n)
                         else:
                             logger.info('  [%d/%d] %s 无新评论', i, total, v.bvid[:8])
-                        time.sleep(3.0 + random.random() * 2.0)
                     except Exception as e:
                         logger.warning('  [%d/%d] %s 评论失败: %s', i, total, v.bvid, e)
+                    finally:
+                        db.session.remove()
+                        time.sleep(3.0 + random.random() * 2.0)
 
                 logger.info('💬 UP %s 评论爬取完成，开始刷新词云...', up_id)
                 precompute_up_wordclouds(up_id)
@@ -535,42 +537,57 @@ def _wc_worker():
             logger.info('☁ 词云队列: 处理 %s', bvid)
 
             # Phase 1: 取视频信息（短连接）
-            with app.app_context():
-                video = BiliVideo.query.get(video_id)
-                if not video:
-                    logger.warning('☁ 词云队列: %s 视频不存在，跳过', bvid)
-                    continue
-                try:
-                    from blog.bilibili.bili_api import was_recently_blocked
-                    if was_recently_blocked():
-                        logger.warning('☁ 词云队列: %s 触发风控，放回队列', bvid)
-                        _wc_queue.put_nowait((video_id, bvid))
-                        time.sleep(60)
-                        continue
-                except Exception:
-                    pass
-                aid = video.aid
-            # 此时 app_context 弹出 → db.session.remove() → 连接已归还连接池
+            # 重试 3 次抵消事务可见性延迟，最后用 bvid 回退
+            video = None
+            for attempt in range(3):
+                with app.app_context():
+                    video = BiliVideo.query.get(video_id)
+                    if video:
+                        break
+                time.sleep(1.0)
+            if not video:
+                with app.app_context():
+                    video = BiliVideo.query.filter_by(bvid=bvid).first()
+            if not video:
+                logger.warning('☁ 词云队列: %s 视频不存在，跳过 (id=%d)', bvid, video_id)
+                continue
 
-            # Phase 2: 爬评论（无 DB 连接，db.session 在首次查询时自动签出新连接）
-            logger.info('☁ 词云队列: %s 开始爬取评论...', bvid)
             try:
-                n = _crawl_video_comments(video)
-                if n:
-                    logger.info('☁ 词云队列: %s ✅ 爬取 %d 条评论', bvid[:8], n)
-                else:
-                    logger.info('☁ 词云队列: %s 无新评论', bvid[:8])
-            except Exception as e:
-                logger.warning('☁ 词云队列: %s 评论失败: %s', bvid, e)
+                from blog.bilibili.bili_api import was_recently_blocked
+                if was_recently_blocked():
+                    logger.warning('☁ 词云队列: %s 触发风控，放回队列', bvid)
+                    _wc_queue.put_nowait((video_id, bvid))
+                    time.sleep(60)
+                    continue
+            except Exception:
+                pass
+            aid = video.aid
+
+            # Phase 2: 爬评论（db.session 在 app_context 内使用）
+            logger.info('☁ 词云队列: %s 开始爬取评论...', bvid)
+            with app.app_context():
+                try:
+                    # 在当前 app_context 内重新附加 video 对象
+                    v = BiliVideo.query.get(video.id)
+                    if v:
+                        n = _crawl_video_comments(v)
+                        if n:
+                            logger.info('☁ 词云队列: %s ✅ 爬取 %d 条评论', bvid[:8], n)
+                        else:
+                            logger.info('☁ 词云队列: %s 无新评论', bvid[:8])
+                    else:
+                        logger.warning('☁ 词云队列: %s 视频在 Phase 2 不存在', bvid)
+                except Exception as e:
+                    logger.warning('☁ 词云队列: %s 评论失败: %s', bvid, e)
 
             # Phase 3: 计算词云（短连接）
             logger.info('☁ 词云队列: %s 开始计算词云...', bvid)
             with app.app_context():
-                video = BiliVideo.query.get(video_id)
-                if video:
+                v = BiliVideo.query.get(video.id)
+                if v:
                     try:
                         from blog.wordcloud import _compute_single_video_wordcloud
-                        _compute_single_video_wordcloud(video)
+                        _compute_single_video_wordcloud(v)
                         logger.info('☁ 词云队列: %s ✅ 词云完成', bvid[:8])
                     except Exception as e:
                         logger.warning('☁ 词云队列: %s 词云失败: %s', bvid, e)
@@ -692,6 +709,9 @@ def _crawl_video_comments(video, hot_pages: int = _COMMENT_HOT_PAGES, newest_pag
     先爬 5 页热门评论（按点赞排序），再爬 5 页最新评论（按时间排序），
     去重后写入 BiliVideoComment 表。每页间隔随机延时防风控。
 
+    每页处理完毕后主动 db.session.remove() 归还 DB 连接至连接池，
+    使得中间的风控等待 / B 站 API 调用不占用连接。
+
     Args:
         video (BiliVideo):  视频 ORM 对象（需有 id 和 aid）
         hot_pages (int):    热门评论页数（默认 5 页）
@@ -742,6 +762,7 @@ def _crawl_video_comments(video, hot_pages: int = _COMMENT_HOT_PAGES, newest_pag
             count += 1
 
         db.session.commit()
+        db.session.remove()
 
         if len(comments) < 20:
             return -1
@@ -763,6 +784,12 @@ def _crawl_video_comments(video, hot_pages: int = _COMMENT_HOT_PAGES, newest_pag
         if n < 0:
             break
         total += n
+
+    # 标记评论已爬取
+    v = BiliVideo.query.get(video.id)
+    if v:
+        v.comments_crawled_at = datetime.datetime.now(CST)
+        db.session.commit()
 
     return total
 

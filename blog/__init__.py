@@ -319,6 +319,9 @@ def init_db(app):
         # ── 迁移 wordcloud_data.period 长度 ───
         _migrate_wordcloud_period_length(app)
 
+        # ── 迁移 bili_videos.comments_crawled_at 列 ──
+        _migrate_bili_video_comments_crawled_at(app)
+
 
 def _migrate_post_html_file_url(app):
     """迁移：为 Post 表添加 html_file_url 字段。
@@ -941,6 +944,26 @@ def _migrate_wordcloud_period_length(app):
         except Exception as e:
             db.session.rollback()
             app.logger.warning('迁移: 扩展 wordcloud_data.period 失败: %s', e)
+
+
+def _migrate_bili_video_comments_crawled_at(app):
+    """迁移：为 BiliVideo 表添加 comments_crawled_at 字段。"""
+    from sqlalchemy import text
+
+    engine = db.get_engine()
+    inspector = db.inspect(engine)
+    cols = {c['name'] for c in inspector.get_columns('bili_videos')}
+    dialect = engine.dialect.name
+    if dialect != 'mysql':
+        return
+    if 'comments_crawled_at' not in cols:
+        try:
+            db.session.execute(text('ALTER TABLE bili_videos ADD COLUMN comments_crawled_at DATETIME NULL COMMENT "评论最后爬取时间"'))
+            db.session.commit()
+            app.logger.info('迁移: 已添加 bili_videos.comments_crawled_at 列')
+        except Exception as e:
+            db.session.rollback()
+            app.logger.warning('迁移: 添加 bili_videos.comments_crawled_at 列失败: %s', e)
 
 
 # ── 后导入路由（延迟导入） ─────────────────────
