@@ -158,6 +158,7 @@
     var padding = opts.padding || 20;
     var dpr = opts.dpr || (window.devicePixelRatio || 1);
     var searchUrl = opts.searchUrl || '/search?q=';
+    var maxDisplay = opts.maxDisplay || 60;
 
     // 计算画布尺寸
     var rect = canvas.parentElement.getBoundingClientRect();
@@ -194,8 +195,8 @@
       if (data[i].weight > maxWt) maxWt = data[i].weight;
     }
 
-    // 按权重降序排列（大词先放）
-    var sorted = data.slice().sort(function (a, b) { return b.weight - a.weight; });
+    // 按权重降序排列（大词先放），限制显示词数防溢出
+    var sorted = data.slice().sort(function (a, b) { return b.weight - a.weight; }).slice(0, maxDisplay);
 
     // ── 螺旋布局 ────────────────────────────
     var angle = 0;
@@ -331,7 +332,7 @@
         opts.canvasHeight = cfg.canvasHeight || opts.canvasHeight;
         opts.maxFont = cfg.maxFont || opts.maxFont || 48;
         opts.minFont = cfg.minFont || opts.minFont || 14;
-      } catch(e) {}
+      } catch(e) { console.warn('[词云] data-wc-config 解析失败', e); }
     }
     opts.searchUrl = canvas.getAttribute('data-wc-search-url') || opts.searchUrl;
 
