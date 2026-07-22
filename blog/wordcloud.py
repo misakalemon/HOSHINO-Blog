@@ -486,7 +486,6 @@ def _compute_video_wc_wrapper(video_id, app):
             video = db.session.get(BiliVideo, video_id)
             if video:
                 _compute_single_video_wordcloud(video)
-                logger.info('📊 词云已计算: %s', video.bvid[:8] if video.bvid else video_id)
         except Exception as e:
             logger.warning('📊 词云计算失败 id=%d: %s', video_id, e)
 
