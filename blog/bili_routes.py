@@ -843,6 +843,7 @@ def _check_new_videos(mid: int, app):
         app (Flask): Flask 应用实例（用于在线程中创建应用上下文）
     """
     # 全局熔断检查 — 如果最近触发了 412 IP 封禁，跳过本次增量
+    global _circuit_open_until
     with _circuit_lock:
         if time.time() < _circuit_open_until:
             logger.warning('全局熔断中，跳过增量检查 mid=%d', mid)
@@ -1200,6 +1201,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                            同时跳过 age 检查（min_age_hours 不生效）
     """
     # 全局熔断检查 — force 模式允许忽略熔断
+    global _circuit_open_until
     if not force:
         with _circuit_lock:
             if time.time() < _circuit_open_until:
