@@ -1039,27 +1039,20 @@ def _migrate_wordcloud_data_compress(app):
             data_type = str(c.get('type', '')).upper()
             break
     if 'BLOB' in data_type:
-        # data 列已是 BLOB，检查数据是否已压缩（纯 zlib: 首字节 0x78；MySQL COMPRESS: 第 5 字节 0x78）
+        # data 列已是 BLOB → 用 MySQL UNCOMPRESS() 恢复为明文 JSON
+        # 后续第一次读走 process_result_value 格式 2（明文 JSON），
+        # 第一次写走 process_bind_param 自动转为纯 zlib
         try:
-            sample = db.session.execute(
-                text('SELECT data FROM wordcloud_data WHERE data IS NOT NULL LIMIT 1')
-            ).scalar()
-        except Exception:
-            sample = None
-        if sample is not None and len(sample) > 0:
-            if sample[0] == 120 or (len(sample) > 4 and sample[4] == 120):
-                return  # 已压缩（纯 zlib 或 MySQL COMPRESS 均可被 process_result_value 兼容）
-        # 列是 BLOB 但数据未压缩 → 使用 ORM 逐行读取再写入，触发 CompressedJSON 生成纯 zlib
-        try:
-            from .models import WordCloudData
-            rows = WordCloudData.query.filter(WordCloudData.data.isnot(None)).all()
-            for r in rows:
-                r.data = list(r.data)  # 触发 dirty，process_bind_param 重新压缩为纯 zlib
+            # COALESCE: UNCOMPRESS 对非 MySQL COMPRESS 数据返回 NULL，此时保留原值
+            db.session.execute(text(
+                "UPDATE wordcloud_data SET data = COALESCE(UNCOMPRESS(data), data) "
+                "WHERE data IS NOT NULL"
+            ))
             db.session.commit()
-            app.logger.info('迁移修复: wordcloud_data.data 已重新压缩为纯 zlib BLOB')
+            app.logger.info('迁移修复: wordcloud_data.data 已通过 UNCOMPRESS 恢复为明文 JSON')
         except Exception as e:
             db.session.rollback()
-            app.logger.warning('迁移修复: 重新压缩失败: %s', e)
+            app.logger.warning('迁移修复: UNCOMPRESS 失败: %s', e)
         return
 
     try:

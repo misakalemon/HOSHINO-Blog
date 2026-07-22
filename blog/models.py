@@ -809,33 +809,27 @@ class CompressedJSON(db.TypeDecorator):
     def process_result_value(self, value, dialect):
         """读取时：BLOB → zlib 解压 → JSON 解码 → Python list/dict。
 
-        兼容 3 种存储格式：
-          1. 纯 zlib（Python zlib.compress 写入，首字节 0x78）
-          2. MySQL COMPRESS() 格式（4 字节长度前缀 + zlib，第 5 字节 0x78）
-          3. 未压缩的明文 JSON（迁移前的旧数据）
+        兼容 2 种格式（MySQL COMPRESS 格式由迁移层负责转换）：
+          1. 纯 zlib（Python zlib.compress 写入）
+          2. 未压缩的明文 JSON（迁移前的旧数据）
         """
         if value is None:
             return None
         logger = logging.getLogger(__name__ + '.CompressedJSON')
         # 格式 1：纯 zlib
         try:
-            raw = zlib.decompress(value)
-            return json.loads(raw.decode('utf-8'))
+            return json.loads(zlib.decompress(value).decode('utf-8'))
         except (zlib.error, UnicodeDecodeError, json.JSONDecodeError):
             pass
-        # 格式 2：MySQL COMPRESS（跳过 4 字节长度前缀）
-        try:
-            raw = zlib.decompress(value[4:])
-            return json.loads(raw.decode('utf-8'))
-        except (zlib.error, UnicodeDecodeError, json.JSONDecodeError, IndexError):
-            pass
-        # 格式 3：未压缩的明文 JSON
+        # 格式 2：未压缩的明文 JSON
         try:
             return json.loads(value.decode('utf-8'))
         except (UnicodeDecodeError, json.JSONDecodeError):
-            logger.warning('wordcloud data corrupt: first 8 bytes=%s len=%d',
-                           value[:8].hex(), len(value))
-            return []
+            pass
+        # 全失败 → 返回空列表，后续重算覆盖
+        logger.warning('wordcloud data cant read: first 8 bytes=%s len=%d',
+                       value[:8].hex(), len(value))
+        return []
 
 
 class WordCloudData(db.Model):
