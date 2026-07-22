@@ -581,7 +581,12 @@ def get_video_subtitle(bvid: str) -> str:
 
     v = _video_mod.Video(bvid=bvid, credential=_credential)
     try:
-        cid = _sync(v.get_cid(page_index=1))
+        pages = _sync(v.get_pages())
+        if not pages:
+            return ''
+        cid = pages[0].get('cid', 0) or pages[0].get('page', {}).get('cid', 0) or pages[0].get('first_cid', 0)
+        if not cid:
+            return ''
     except Exception as e:
         logger.warning('视频 %s 获取 CID 失败: %s', bvid, e)
         return ''

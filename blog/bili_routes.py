@@ -492,6 +492,7 @@ _wc_workers_lock = threading.Lock()
 
 def _start_wc_workers(n=2):
     """启动 n 个词云工作线程（首次调用时）。"""
+    global _wc_workers_started
     with _wc_workers_lock:
         if _wc_workers_started:
             return
