@@ -33,6 +33,8 @@ _task_queue: queue.Queue = queue.Queue()
 _worker_started = False
 _worker_lock = threading.Lock()
 _wc_app = None
+# 重型任务（bili_up / all）并发上限，避免过多线程挤占资源
+_heavy_task_semaphore = threading.Semaphore(2)
 
 
 def _ensure_worker():
@@ -54,16 +56,21 @@ def _ensure_worker():
 
 
 def _run_heavy_task(task_type: str, kwargs: dict):
-    """在独立线程中执行重型词云任务，不阻塞 _worker_loop。"""
-    with _wc_app.app_context():
-        try:
+    """在独立线程中执行重型词云任务，不阻塞 _worker_loop。
+
+    执行完毕或异常时均释放 _heavy_task_semaphore，让后续重型任务可进入。
+    """
+    try:
+        with _wc_app.app_context():
             if task_type == 'bili_up':
                 precompute_up_wordclouds(kwargs['up_id'])
             elif task_type == 'all':
                 precompute_all_wordclouds()
                 precompute_bili_wordclouds()
-        except Exception as e:
-            logger.error('词云重型任务失败 type=%s: %s', task_type, e)
+    except Exception as e:
+        logger.error('词云重型任务失败 type=%s: %s', task_type, e)
+    finally:
+        _heavy_task_semaphore.release()
 
 
 def _worker_loop():
@@ -110,6 +117,7 @@ def submit_task(task_type: str, **kwargs):
     _ensure_worker()
     if task_type in ('bili_up', 'all'):
         # 重型任务独立线程，不阻塞 _worker_loop
+        _heavy_task_semaphore.acquire()
         t = threading.Thread(target=_run_heavy_task, args=(task_type, kwargs), daemon=True)
         t.start()
     else:

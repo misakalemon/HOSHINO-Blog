@@ -408,10 +408,12 @@ def _run_bili_incremental_check(app):
                 _circuit_open_until,
             )
 
-            if time.time() < _circuit_open_until:
-                remaining = int(_circuit_open_until - time.time()) // 60
-                logger.warning('B站 增量检查取消: 全局熔断中，剩余 %d 分钟', remaining)
-                return
+            from blog.bili_routes import _circuit_lock
+            with _circuit_lock:
+                if time.time() < _circuit_open_until:
+                    remaining = int(_circuit_open_until - time.time()) // 60
+                    logger.warning('B站 增量检查取消: 全局熔断中，剩余 %d 分钟', remaining)
+                    return
 
             THREAD_TIMEOUT = 10 * 60
 
@@ -428,7 +430,7 @@ def _run_bili_incremental_check(app):
 
             for i in range(0, len(active), _BATCH_SIZE):
                 batch = active[i : i + _BATCH_SIZE]
-                threads = []
+                thread_mids: list[tuple[threading.Thread, int]] = []
                 for up in batch:
                     t = threading.Thread(
                         target=_check_new_videos,
@@ -436,13 +438,17 @@ def _run_bili_incremental_check(app):
                         daemon=True,
                     )
                     t.start()
-                    threads.append(t)
+                    thread_mids.append((t, up.mid))
                     time.sleep(random.uniform(0.5, 2.0))
-                for t in threads:
+                for t, mid in thread_mids:
                     t.join(timeout=THREAD_TIMEOUT)
                     if t.is_alive():
+                        with _scrape_lock:
+                            _incremental_running.discard(mid)
+                            _scrape_progress.pop(mid, None)
                         logger.warning(
-                            'B站 增量检查: 线程 %s 超时 (>%ds)，跳过', t.name, THREAD_TIMEOUT
+                            'B站 增量检查: mid=%d 线程超时 (>%ds)，已清理运行状态',
+                            mid, THREAD_TIMEOUT
                         )
     except Exception as e:
         app.logger.error('B站 增量检查异常: %s', e, exc_info=True)

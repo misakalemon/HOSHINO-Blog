@@ -510,6 +510,7 @@ _VIDEO_SLEEP_BASE = 7.0
 _VIDEO_SLEEP_JITTER = 3.0
 # 全局熔断器 — 检测到 412 IP封禁后自动暂停所有爬取直到此时间戳（Unix 秒）
 _circuit_open_until: float = 0.0
+_circuit_lock = threading.Lock()
 _CIRCUIT_COOLDOWN = 60 * 60  # 封禁后冷却 60 分钟
 
 # ── 词云工作队列（独立线程池，不与视频爬取互斥）──
@@ -842,10 +843,10 @@ def _check_new_videos(mid: int, app):
         app (Flask): Flask 应用实例（用于在线程中创建应用上下文）
     """
     # 全局熔断检查 — 如果最近触发了 412 IP 封禁，跳过本次增量
-    global _circuit_open_until
-    if time.time() < _circuit_open_until:
-        logger.warning('全局熔断中，跳过增量检查 mid=%d', mid)
-        return
+    with _circuit_lock:
+        if time.time() < _circuit_open_until:
+            logger.warning('全局熔断中，跳过增量检查 mid=%d', mid)
+            return
 
     # 获取该 mid 的进度日志列表（引用，后续直接 append）
     with _scrape_lock:
@@ -1079,16 +1080,18 @@ def _check_new_videos(mid: int, app):
 
             # 检查 B站 API 层是否已检测到 412（可能在 get_video_list 内部处理，未抛异常到此处）
             from blog.bilibili.bili_api import was_recently_blocked
-            if was_recently_blocked(cooldown=300) and time.time() >= _circuit_open_until:
-                _circuit_open_until = time.time() + _CIRCUIT_COOLDOWN
-                logger.error('API 层检测到 412 封禁，全局熔断 %d 分钟', _CIRCUIT_COOLDOWN // 60)
+            with _circuit_lock:
+                if was_recently_blocked(cooldown=300) and time.time() >= _circuit_open_until:
+                    _circuit_open_until = time.time() + _CIRCUIT_COOLDOWN
+                    logger.error('API 层检测到 412 封禁，全局熔断 %d 分钟', _CIRCUIT_COOLDOWN // 60)
 
         except Exception as e:
             logger.error('增量检查失败 mid=%d: %s', mid, e)
             from blog.bilibili.bili_api import _is_ip_blocked
             if _is_ip_blocked(e):
-                _circuit_open_until = time.time() + _CIRCUIT_COOLDOWN
-                logger.error('检测到 412 封禁，全局熔断 %d 分钟', _CIRCUIT_COOLDOWN // 60)
+                with _circuit_lock:
+                    _circuit_open_until = time.time() + _CIRCUIT_COOLDOWN
+                    logger.error('检测到 412 封禁，全局熔断 %d 分钟', _CIRCUIT_COOLDOWN // 60)
         finally:
             # 无论成功还是异常，都必须清理运行状态
             with _scrape_lock:
@@ -1197,13 +1200,14 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                            同时跳过 age 检查（min_age_hours 不生效）
     """
     # 全局熔断检查 — force 模式允许忽略熔断
-    global _circuit_open_until
-    if not force and time.time() < _circuit_open_until:
-        logger.warning('全局熔断中，跳过深扫 mid=%d', mid)
-        with _scrape_lock:
-            _scrape_running.discard(mid)
-            _scrape_progress.pop(mid, None)
-        return
+    if not force:
+        with _circuit_lock:
+            if time.time() < _circuit_open_until:
+                logger.warning('全局熔断中，跳过深扫 mid=%d', mid)
+                with _scrape_lock:
+                    _scrape_running.discard(mid)
+                    _scrape_progress.pop(mid, None)
+                return
 
     # 获取该 mid 的进度日志列表引用
     prog = _scrape_progress.get(mid, [])
@@ -1551,9 +1555,10 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
 
             # 检查 B站 API 层是否已检测到 412（可能在 get_video_list 内部处理，未抛异常到此处）
             from blog.bilibili.bili_api import was_recently_blocked
-            if was_recently_blocked(cooldown=300) and time.time() >= _circuit_open_until:
-                _circuit_open_until = time.time() + _CIRCUIT_COOLDOWN
-                logger.error('API 层检测到 412 封禁，全局熔断 %d 分钟', _CIRCUIT_COOLDOWN // 60)
+            with _circuit_lock:
+                if was_recently_blocked(cooldown=300) and time.time() >= _circuit_open_until:
+                    _circuit_open_until = time.time() + _CIRCUIT_COOLDOWN
+                    logger.error('API 层检测到 412 封禁，全局熔断 %d 分钟', _CIRCUIT_COOLDOWN // 60)
 
             # 评论爬取：为本 UP 主尚未爬取评论的视频补充数据（限 5 个/次）
             if not was_recently_blocked(cooldown=600):
@@ -1586,8 +1591,9 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             logger.exception('爬取失败 mid=%d', mid)
             from blog.bilibili.bili_api import _is_ip_blocked
             if _is_ip_blocked(e):
-                _circuit_open_until = time.time() + _CIRCUIT_COOLDOWN
-                logger.error('检测到 412 封禁，全局熔断 %d 分钟', _CIRCUIT_COOLDOWN // 60)
+                with _circuit_lock:
+                    _circuit_open_until = time.time() + _CIRCUIT_COOLDOWN
+                    logger.error('检测到 412 封禁，全局熔断 %d 分钟', _CIRCUIT_COOLDOWN // 60)
         finally:
             # 无论成功还是异常，都必须清理运行状态
             with _scrape_lock:
@@ -1627,11 +1633,11 @@ def run_daily_scrape(app):
         ups = BiliUp.query.all()
         logger.info('B站 每日刷新启动: 共 %d 个 UP 主, 每批 %d 个', len(ups), _BATCH_SIZE)
 
-        # 全局熔断检查
-        if time.time() < _circuit_open_until:
-            remaining = int(_circuit_open_until - time.time()) // 60
-            logger.warning('B站 每日刷新取消: 全局熔断中，剩余 %d 分钟', remaining)
-            return
+        with _circuit_lock:
+            if time.time() < _circuit_open_until:
+                remaining = int(_circuit_open_until - time.time()) // 60
+                logger.warning('B站 每日刷新取消: 全局熔断中，剩余 %d 分钟', remaining)
+                return
 
         THREAD_TIMEOUT = 15 * 60  # 每个线程最长等待时间（15 分钟）
 

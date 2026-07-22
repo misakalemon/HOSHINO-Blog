@@ -153,14 +153,17 @@ def send_email(to: str, subject: str, html_body: str, to_name: str = ''):
 
     # 限制并发邮件线程数（最多 _MAX_MAIL_THREADS 个），超出时等待
     global _active_mail_threads
+    old_thread = None
     with _mail_lock:
         # 先清理已结束的线程，防止线程列表无限增长
         _active_mail_threads[:] = [
             t for t in _active_mail_threads if t.is_alive()
         ]
-        # 如果并发数已达上限，阻塞等待最旧的线程完成
+        # 如果并发数已达上限，取出最旧的线程（锁外 join 避免阻塞其他发送者）
         if len(_active_mail_threads) >= _MAX_MAIL_THREADS:
-            _active_mail_threads.pop(0).join(timeout=30)
+            old_thread = _active_mail_threads.pop(0)
+    if old_thread:
+        old_thread.join(timeout=30)
 
     # 启动后台线程发送邮件（daemon=True 确保主线程退出时不阻塞）
     t = threading.Thread(target=_send_email_async, args=(app, msg), daemon=True)
