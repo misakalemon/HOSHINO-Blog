@@ -53,11 +53,24 @@ def _ensure_worker():
         _worker_started = True
 
 
-def _worker_loop():
-    """单线程工作循环：阻塞读取任务 → 创建 app 上下文 → 分发到对应预计算函数。
+def _run_heavy_task(task_type: str, kwargs: dict):
+    """在独立线程中执行重型词云任务，不阻塞 _worker_loop。"""
+    with _wc_app.app_context():
+        try:
+            if task_type == 'bili_up':
+                precompute_up_wordclouds(kwargs['up_id'])
+            elif task_type == 'all':
+                precompute_all_wordclouds()
+                precompute_bili_wordclouds()
+        except Exception as e:
+            logger.error('词云重型任务失败 type=%s: %s', task_type, e)
 
-    每个任务完成后调用 task_done()，以便 queue.join() 能够感知完成状态。
-    单线程设计避免了多线程竞争 SQLAlchemy session 的问题。
+
+def _worker_loop():
+    """单线程工作循环：处理轻量词云任务，不阻塞 HTTP 请求。
+
+    重型任务（bili_up, all）在调用 submit_task 时直接开独立线程，
+    不经过此队列，避免 ThreadPoolExecutor + f.result() 阻塞队列消费。
     """
     while True:
         task = _task_queue.get()
@@ -68,11 +81,6 @@ def _worker_loop():
                     precompute_post_wordcloud(task['post_id'])
                 elif task_type == 'site':
                     precompute_site_wordcloud()
-                elif task_type == 'all':
-                    precompute_all_wordclouds()
-                    precompute_bili_wordclouds()
-                elif task_type == 'bili_up':
-                    precompute_up_wordclouds(task['up_id'])
             except Exception as e:
                 logger.error('词云任务失败 type=%s: %s', task.get('type', '?'), e)
             finally:
@@ -80,24 +88,32 @@ def _worker_loop():
 
 
 def submit_task(task_type: str, **kwargs):
-    """将词云任务投递到后台队列，立即返回（不阻塞请求线程）。
+    """将词云任务投递到后台执行，立即返回（不阻塞请求线程）。
 
     这是用户触发词云重算的唯一入口。所有调用点（admin.py 发表/编辑/删除文章、
     手动重算、bili_routes.py 刷新UP评论/字幕）都通过此函数投递，
     而不是直接调用预计算函数。
 
+    重型任务（bili_up, all）直接在独立线程中执行，避免阻塞队列消费者；
+    轻量任务（post, site）投递到 _task_queue 由单线程串行处理。
+
     支持的 task_type:
       - 'post'      → precompute_post_wordcloud(post_id)
       - 'site'      → precompute_site_wordcloud()
-      - 'all'       → precompute_all_wordclouds() + precompute_bili_wordclouds()
-      - 'bili_up'   → precompute_up_wordclouds(up_id)
+      - 'all'       → precompute_all_wordclouds() + precompute_bili_wordclouds()（重型，独立线程）
+      - 'bili_up'   → precompute_up_wordclouds(up_id)（重型，独立线程）
 
     Args:
         task_type: 任务类型标识
-        **kwargs: 透传给预计算函数的参数（如 post_id、up_id 等）
+        **kwargs: 透传给预计算函数的参数
     """
     _ensure_worker()
-    _task_queue.put_nowait(dict(type=task_type, **kwargs))
+    if task_type in ('bili_up', 'all'):
+        # 重型任务独立线程，不阻塞 _worker_loop
+        t = threading.Thread(target=_run_heavy_task, args=(task_type, kwargs), daemon=True)
+        t.start()
+    else:
+        _task_queue.put_nowait(dict(type=task_type, **kwargs))
 
 
 def _init_jieba():
