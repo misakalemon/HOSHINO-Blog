@@ -286,6 +286,38 @@ def refresh_up_comments(up_id):
     return redirect(url_for('bili.up_detail', up_id=up_id))
 
 
+@bili_bp.route('/refresh-subtitles/<int:up_id>', methods=['POST'])
+@editor_required
+def refresh_up_subtitles(up_id):
+    """刷新指定 UP 主视频的 AI 字幕。"""
+    up = BiliUp.query.get_or_404(up_id)
+    app = current_app._get_current_object()
+
+    def _run():
+        with app.app_context():
+            videos = BiliVideo.query.filter_by(up_id=up_id).order_by(
+                BiliVideo.pubdate.desc()
+            ).limit(50).all()
+            ok = 0
+            for v in videos:
+                try:
+                    from blog.bilibili.bili_api import get_video_subtitle
+                    subtitle = get_video_subtitle(v.bvid)
+                    if subtitle:
+                        v.subtitle_text = subtitle
+                        db.session.commit()
+                        ok += 1
+                    time.sleep(1.0 + random.random())
+                except Exception as e:
+                    logger.warning('字幕 [%s] 失败: %s', v.bvid, e)
+            logger.info('UP主 %s 字幕刷新完成: %d/%d', up_id, ok, len(videos))
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    flash(f'已开始刷新「{up.name or up.mid}」的 AI 字幕', 'success')
+    return redirect(url_for('bili.up_detail', up_id=up_id))
+
+
 @bili_bp.route('/delete/<int:up_id>', methods=['POST'])
 @editor_required
 def delete_up(up_id):
@@ -458,7 +490,7 @@ _wc_workers_started = False
 _wc_workers_lock = threading.Lock()
 
 
-def _start_wc_workers(n=2):
+def _start_wc_workers(n=4):
     """启动 n 个词云工作线程（首次调用时）。"""
     with _wc_workers_lock:
         if _wc_workers_started:

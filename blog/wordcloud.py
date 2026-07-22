@@ -476,60 +476,40 @@ def _save_bili_record(period, data):
         record.data = data
 
 
+def _compute_video_wc_wrapper(video_id, app):
+    """线程安全的单视频词云计算包装。"""
+    with app.app_context():
+        from . import db
+        from .models import BiliVideo
+        try:
+            video = db.session.get(BiliVideo, video_id)
+            if video:
+                _compute_single_video_wordcloud(video)
+        except Exception as e:
+            logger.warning('视频词云计算失败 id=%d: %s', video_id, e)
+
+
 def precompute_video_wordclouds():
     """为每个 B站视频生成词云（标题 + 简介 + 标签 + 评论 = 全量，与主词云同源）。
 
     从 BiliVideo 读取 title/description/tags，从 BiliVideoComment 读取评论，
     拼合后分词计算词频，存入 WordCloudData(source='bili_video', period='bvid_{bvid}')。
     """
-    from . import db
-    from .models import BiliVideo, WordCloudConfig, WordCloudData
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from flask import current_app
+    from .models import BiliVideo
 
-    top_n = WordCloudConfig.get_or_create().top_n_bili
-    videos = BiliVideo.query.all()
+    videos = BiliVideo.query.with_entities(BiliVideo.id).all()
+    video_ids = [v.id for v in videos]
+    app = current_app._get_current_object()
 
-    for video in videos:
-        try:
-            parts = []
-            if video.title:
-                parts.append(video.title)
-            if video.description:
-                parts.append(video.description)
-            if video.tags:
-                parts.extend(video.tags)
-
-            if video.subtitle_text:
-                parts.append(video.subtitle_text)
-            comment_texts = [
-                c.content for c in video.comments.all()
-                if c.content
-            ]
-            if comment_texts:
-                parts.extend(comment_texts)
-
-            text = ' '.join(parts)
-            if not text.strip():
-                continue
-
-            data = compute_word_frequencies(text, top_n=top_n) or []
-            if not data:
-                continue
-
-            period = f'bvid_{video.bvid}'
-            record = WordCloudData.query.filter_by(
-                post_id=None, source='bili_video', period=period
-            ).first()
-            if record is None:
-                record = WordCloudData(
-                    post_id=None, source='bili_video', period=period, data=data
-                )
-                db.session.add(record)
-            else:
-                record.data = data
-        except Exception as e:
-            logger.warning('视频 %s 词云生成失败: %s', video.bvid, e)
-
-    db.session.commit()
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = [pool.submit(_compute_video_wc_wrapper, vid, app) for vid in video_ids]
+        for f in as_completed(futures):
+            try:
+                f.result()
+            except Exception as e:
+                logger.warning('视频词云线程异常: %s', e)
 
 
 def _compute_single_video_wordcloud(video):
@@ -575,62 +555,26 @@ def _compute_single_video_wordcloud(video):
     else:
         record.data = data
     db.session.commit()
-
-
 def precompute_up_wordclouds(up_id: int):
     """为指定 UP 主的所有视频生成词云。
 
-    复用 precompute_video_wordclouds 的单视频词云逻辑，
-    只处理某一 UP 主的视频，避免全量刷新。
+    并行计算各视频词云，只处理某一 UP 主的视频，避免全量刷新。
 
     Args:
         up_id (int): UP 主数据库 ID
     """
-    from . import db
-    from .models import BiliVideo, WordCloudConfig, WordCloudData
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from flask import current_app
+    from .models import BiliVideo
 
-    top_n = WordCloudConfig.get_or_create().top_n_bili
-    videos = BiliVideo.query.filter_by(up_id=up_id).all()
+    videos = BiliVideo.query.filter_by(up_id=up_id).with_entities(BiliVideo.id).all()
+    video_ids = [v.id for v in videos]
+    app = current_app._get_current_object()
 
-    for video in videos:
-        try:
-            parts = []
-            if video.title:
-                parts.append(video.title)
-            if video.description:
-                parts.append(video.description)
-            if video.tags:
-                parts.extend(video.tags)
-            if video.subtitle_text:
-                parts.append(video.subtitle_text)
-
-            comment_texts = [
-                c.content for c in video.comments.all()
-                if c.content
-            ]
-            if comment_texts:
-                parts.extend(comment_texts)
-
-            text = ' '.join(parts)
-            if not text.strip():
-                continue
-
-            data = compute_word_frequencies(text, top_n=top_n) or []
-            if not data:
-                continue
-
-            period = f'bvid_{video.bvid}'
-            record = WordCloudData.query.filter_by(
-                post_id=None, source='bili_video', period=period
-            ).first()
-            if record is None:
-                record = WordCloudData(
-                    post_id=None, source='bili_video', period=period, data=data
-                )
-                db.session.add(record)
-            else:
-                record.data = data
-        except Exception as e:
-            logger.warning('视频 %s 词云生成失败: %s', video.bvid, e)
-
-    db.session.commit()
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = [pool.submit(_compute_video_wc_wrapper, vid, app) for vid in video_ids]
+        for f in as_completed(futures):
+            try:
+                f.result()
+            except Exception as e:
+                logger.warning('UP词云线程异常: %s', e)

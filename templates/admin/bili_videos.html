@@ -31,6 +31,10 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn-ghost-sm">💬 刷新评论</button>
             </form>
+            <form method="POST" action="{{ url_for('bili.refresh_up_subtitles', up_id=up.id) }}" style="display:inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn-ghost-sm">📝 刷新字幕</button>
+            </form>
             <a href="{{ url_for('bili.index') }}" class="btn-ghost-sm">← 返回</a>
         </div>
     </div>
