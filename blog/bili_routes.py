@@ -265,20 +265,27 @@ def refresh_up_comments(up_id):
                 videos = BiliVideo.query.filter_by(up_id=up_id).order_by(
                     BiliVideo.pubdate.desc()
                 ).limit(50).all()
-                for v in videos:
+                total = len(videos)
+                logger.info('💬 评论刷新: UP %s 共 %d 个视频', up_id, total)
+                for i, v in enumerate(videos, 1):
                     try:
+                        logger.info('  [%d/%d] %s 正在爬取评论...', i, total, v.bvid)
                         n = _crawl_video_comments(v)
                         if n:
-                            logger.info('评论 [%s] 爬取 %d 条', v.bvid[:8], n)
+                            logger.info('  [%d/%d] %s ✅ %d 条', i, total, v.bvid[:8], n)
+                        else:
+                            logger.info('  [%d/%d] %s 无新评论', i, total, v.bvid[:8])
                         time.sleep(3.0 + random.random() * 2.0)
                     except Exception as e:
-                        logger.warning('视频 %s 评论失败: %s', v.bvid, e)
+                        logger.warning('  [%d/%d] %s 评论失败: %s', i, total, v.bvid, e)
 
+                logger.info('💬 UP %s 评论爬取完成，开始刷新词云...', up_id)
                 precompute_up_wordclouds(up_id)
-                logger.info('UP主 %s 词云已刷新', up_id)
+                logger.info('💬 UP %s 评论+词云刷新完成', up_id)
         finally:
             with _scrape_lock:
                 _scrape_running.discard(up.mid)
+                logger.info('💬 UP %s 已释放爬取锁', up_id)
 
     t = threading.Thread(target=_run, daemon=True)
     t.start()
@@ -298,19 +305,29 @@ def refresh_up_subtitles(up_id):
             videos = BiliVideo.query.filter_by(up_id=up_id).order_by(
                 BiliVideo.pubdate.desc()
             ).limit(50).all()
+            total = len(videos)
+            logger.info('📝 字幕刷新: UP %s 共 %d 个视频', up_id, total)
             ok = 0
-            for v in videos:
+            for i, v in enumerate(videos, 1):
                 try:
                     from blog.bilibili.bili_api import get_video_subtitle
+                    logger.info('  [%d/%d] %s 正在获取字幕...', i, total, v.bvid)
                     subtitle = get_video_subtitle(v.bvid)
                     if subtitle:
                         v.subtitle_text = subtitle
                         db.session.commit()
                         ok += 1
+                        logger.info('  [%d/%d] %s ✅ 字幕已获取', i, total, v.bvid)
+                    else:
+                        logger.info('  [%d/%d] %s 无字幕', i, total, v.bvid)
                     time.sleep(1.0 + random.random())
                 except Exception as e:
-                    logger.warning('字幕 [%s] 失败: %s', v.bvid, e)
-            logger.info('UP主 %s 字幕刷新完成: %d/%d', up_id, ok, len(videos))
+                    logger.warning('  [%d/%d] %s 字幕失败: %s', i, total, v.bvid, e)
+            logger.info('📝 字幕刷新完成: UP %s 成功 %d/%d', up_id, ok, total)
+
+            logger.info('📊 字幕刷新完毕，自动触发 UP %s 词云计算...', up_id)
+            from blog.wordcloud import precompute_up_wordclouds
+            precompute_up_wordclouds(up_id)
 
     t = threading.Thread(target=_run, daemon=True)
     t.start()
@@ -512,15 +529,18 @@ def _wc_worker():
         video_id, bvid = _wc_queue.get()
         try:
             app = current_app._get_current_object()
+            logger.info('☁ 词云队列: 处理 %s', bvid)
 
             # Phase 1: 取视频信息（短连接）
             with app.app_context():
                 video = BiliVideo.query.get(video_id)
                 if not video:
+                    logger.warning('☁ 词云队列: %s 视频不存在，跳过', bvid)
                     continue
                 try:
                     from blog.bilibili.bili_api import was_recently_blocked
                     if was_recently_blocked():
+                        logger.warning('☁ 词云队列: %s 触发风控，放回队列', bvid)
                         _wc_queue.put_nowait((video_id, bvid))
                         time.sleep(60)
                         continue
@@ -530,24 +550,29 @@ def _wc_worker():
             # 此时 app_context 弹出 → db.session.remove() → 连接已归还连接池
 
             # Phase 2: 爬评论（无 DB 连接，db.session 在首次查询时自动签出新连接）
+            logger.info('☁ 词云队列: %s 开始爬取评论...', bvid)
             try:
                 n = _crawl_video_comments(video)
                 if n:
-                    logger.info('词云线程: 视频 %s 爬取 %d 条评论', bvid[:8], n)
+                    logger.info('☁ 词云队列: %s ✅ 爬取 %d 条评论', bvid[:8], n)
+                else:
+                    logger.info('☁ 词云队列: %s 无新评论', bvid[:8])
             except Exception as e:
-                logger.warning('词云线程: 视频 %s 评论失败: %s', bvid, e)
+                logger.warning('☁ 词云队列: %s 评论失败: %s', bvid, e)
 
             # Phase 3: 计算词云（短连接）
+            logger.info('☁ 词云队列: %s 开始计算词云...', bvid)
             with app.app_context():
                 video = BiliVideo.query.get(video_id)
                 if video:
                     try:
                         from blog.wordcloud import _compute_single_video_wordcloud
                         _compute_single_video_wordcloud(video)
+                        logger.info('☁ 词云队列: %s ✅ 词云完成', bvid[:8])
                     except Exception as e:
-                        logger.warning('词云线程: 视频 %s 词云失败: %s', bvid, e)
+                        logger.warning('☁ 词云队列: %s 词云失败: %s', bvid, e)
         except Exception as e:
-            logger.error('词云线程异常: %s', e)
+            logger.error('☁ 词云队列异常: %s', e)
         finally:
             _wc_queue.task_done()
 
@@ -963,20 +988,7 @@ def _check_new_videos(mid: int, app):
                     )
                     db.session.commit()
                     title_short = (v.title or '')[:30]
-                    nv = stat.get('view_count', 0)
-                    nl = stat.get('like_count', 0)
-                    nc = stat.get('coin_count', 0)
-                    nf = stat.get('favorite_count', 0)
-                    ns = stat.get('share_count', 0)
-                    ncm = stat.get('comment_count', 0)
-                    nd = stat.get('danmaku_count', 0)
                     emit(f'[跟踪] 「{title_short}」')
-                    emit(
-                        f'  播放:{nv:,}(+{nv - old_view:,})  点赞:{nl:,}(+{nl - old_like:,})  投币:{nc:,}(+{nc - old_coin:,})  收藏:{nf:,}(+{nf - old_fav:,})'
-                    )
-                    emit(
-                        f'  转发:{ns:,}(+{ns - old_share:,})  评论:{ncm:,}(+{ncm - old_comment:,})  弹幕:{nd:,}(+{nd - old_danmaku:,})'
-                    )
                     time.sleep(_VIDEO_SLEEP_BASE + random.random() * _VIDEO_SLEEP_JITTER)
             except Exception as e:
                 logger.error('最新视频追踪失败 mid=%d: %s', mid, e)
@@ -1007,9 +1019,7 @@ def _check_new_videos(mid: int, app):
                     )
                     db.session.commit()
                     title_short = (v.title or '')[:30]
-                    emit(
-                        f'[重点] 「{title_short}」  播放:{stat.get("view_count", 0):,}  点赞:{stat.get("like_count", 0):,}  投币:{stat.get("coin_count", 0):,}'
-                    )
+                    emit(f'[重点] 「{title_short}」')
                     time.sleep(_VIDEO_SLEEP_BASE + random.random() * _VIDEO_SLEEP_JITTER)
             except Exception as e:
                 logger.error('重点视频追踪失败 mid=%d: %s', mid, e)
@@ -1405,22 +1415,8 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                 except Exception:
                     db.session.rollback()
 
-                # 日志输出：标题 + 各指标数值及增量
                 title_short = (v.title or '')[:30]
-                nv = stat.get('view_count', 0)
-                nl = stat.get('like_count', 0)
-                nc = stat.get('coin_count', 0)
-                nf = stat.get('favorite_count', 0)
-                ns = stat.get('share_count', 0)
-                ncm = stat.get('comment_count', 0)
-                nd = stat.get('danmaku_count', 0)
                 emit(f'[{count}] {label}「{title_short}」')
-                emit(
-                    f'  播放:{nv:,}(+{nv - old_view:,})  点赞:{nl:,}(+{nl - old_like:,})  投币:{nc:,}(+{nc - old_coin:,})  收藏:{nf:,}(+{nf - old_fav:,})'
-                )
-                emit(
-                    f'  转发:{ns:,}(+{ns - old_share:,})  评论:{ncm:,}(+{ncm - old_comment:,})  弹幕:{nd:,}(+{nd - old_danmaku:,})'
-                )
                 return True
 
             # Hot 阶段: 发布时间 ≤7 天 — 全部更新，不跳过

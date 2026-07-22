@@ -105,6 +105,16 @@
     </div>
     {% endif %}
 
+    <!-- AI 字幕 -->
+    {% if video.subtitle_text %}
+    <div style="margin-top:24px;padding:20px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:16px">
+        <div style="font-size:0.85rem;color:rgba(255,255,255,0.5);margin-bottom:12px">📝 AI 字幕</div>
+        <div style="font-size:0.85rem;color:rgba(255,255,255,0.6);line-height:1.7">
+            {{ video.subtitle_text | paragraphify }}
+        </div>
+    </div>
+    {% endif %}
+
     <!-- 评论区 -->
     {% if comments %}
     <div style="margin-top:24px;padding:20px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:16px">

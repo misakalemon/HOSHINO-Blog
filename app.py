@@ -26,6 +26,7 @@ HOSHINO Blog — Flask 应用入口
 
 import atexit
 import os
+import re
 import signal
 import time
 
@@ -253,6 +254,16 @@ def create_app():
     def shutdown_session(exception=None):
         """每次请求结束后自动关闭数据库 session，释放连接回连接池。"""
         db.session.remove()
+
+    # ── Jinja 模板过滤器 ──────────────────────────
+    @app.template_filter('paragraphify')
+    def _jinja_paragraphify(text):
+        if not text:
+            return ''
+        parts = re.split(r'(?<=[。！？])', text)
+        parts = [p.strip() for p in parts if p.strip()]
+        from markupsafe import Markup
+        return Markup(''.join(f'<p style="margin:0 0 6px">{p}</p>' for p in parts))
 
     elapsed = time.time() - _startup_time
     logger.info(

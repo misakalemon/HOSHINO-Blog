@@ -247,7 +247,9 @@ def apply_cookies():
       2. 如果全局 _credential 已验证有效，直接返回 True
       3. 尝试加载完整 Credential JSON（含 refresh_token，可自动续期）
          - 有效 → 设置并返回 True
-         - 过期 → 日志警告，继续尝试 Cookie
+         - 过期 → 尝试 refresh() 续期
+           - 续期成功 → 保存新凭证，返回 True
+           - 续期失败 → 日志警告，继续尝试 Cookie
       4. 回退加载纯 Cookie 字符串（向后兼容）
          - 有效 → 设置并返回 True
          - 过期 → 返回 False（提示用户重新登录）
@@ -272,8 +274,19 @@ def apply_cookies():
         if is_logged_in():
             logger.info('✅ 已从文件加载 B站 Credential（含 refresh_token）')
             return True
-        else:
-            logger.warning('Credential 已过期，继续尝试 Cookie...')
+        # 尝试自动续期
+        try:
+            from bilibili_api import sync as _bili_sync
+            logger.info('🔄 尝试续期 Credential...')
+            _bili_sync(cred.refresh())
+            set_credential(cred)
+            if is_logged_in():
+                save_credential(cred)
+                logger.info('✅ Credential 续期成功')
+                return True
+        except Exception as e:
+            logger.warning('Credential 续期失败: %s', e)
+        logger.warning('Credential 已过期，继续尝试 Cookie...')
 
     # 回退：从 Cookie 文件加载（兼容旧流程，无 refresh_token）
     cookie_str = load_cookies()

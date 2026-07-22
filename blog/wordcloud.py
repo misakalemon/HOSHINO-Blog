@@ -485,8 +485,9 @@ def _compute_video_wc_wrapper(video_id, app):
             video = db.session.get(BiliVideo, video_id)
             if video:
                 _compute_single_video_wordcloud(video)
+                logger.info('📊 词云已计算: %s', video.bvid[:8] if video.bvid else video_id)
         except Exception as e:
-            logger.warning('视频词云计算失败 id=%d: %s', video_id, e)
+            logger.warning('📊 词云计算失败 id=%d: %s', video_id, e)
 
 
 def precompute_video_wordclouds():
@@ -502,14 +503,22 @@ def precompute_video_wordclouds():
     videos = BiliVideo.query.with_entities(BiliVideo.id).all()
     video_ids = [v.id for v in videos]
     app = current_app._get_current_object()
+    total = len(video_ids)
+    logger.info('📊 批量词云计算开始: 共 %d 个视频', total)
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         futures = [pool.submit(_compute_video_wc_wrapper, vid, app) for vid in video_ids]
+        done = 0
         for f in as_completed(futures):
             try:
                 f.result()
             except Exception as e:
-                logger.warning('视频词云线程异常: %s', e)
+                logger.warning('📊 词云线程异常: %s', e)
+            done += 1
+            if done % 50 == 0:
+                logger.info('📊 词云进度: %d/%d', done, total)
+
+    logger.info('📊 批量词云计算完成: %d 个视频', total)
 
 
 def _compute_single_video_wordcloud(video):
@@ -570,11 +579,19 @@ def precompute_up_wordclouds(up_id: int):
     videos = BiliVideo.query.filter_by(up_id=up_id).with_entities(BiliVideo.id).all()
     video_ids = [v.id for v in videos]
     app = current_app._get_current_object()
+    total = len(video_ids)
+    logger.info('📊 UP %s 词云计算: 共 %d 个视频', up_id, total)
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         futures = [pool.submit(_compute_video_wc_wrapper, vid, app) for vid in video_ids]
+        done = 0
         for f in as_completed(futures):
             try:
                 f.result()
             except Exception as e:
-                logger.warning('UP词云线程异常: %s', e)
+                logger.warning('📊 UP %s 词云线程异常: %s', up_id, e)
+            done += 1
+            if done % 10 == 0:
+                logger.info('📊 UP %s 词云进度: %d/%d', up_id, done, total)
+
+    logger.info('📊 UP %s 词云计算完成', up_id)
