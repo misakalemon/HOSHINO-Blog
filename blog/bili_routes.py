@@ -1657,7 +1657,7 @@ def run_daily_scrape(app):
         # 分批并发执行：每批 _BATCH_SIZE 个线程同时运行
         for i in range(0, len(active), _BATCH_SIZE):
             batch = active[i : i + _BATCH_SIZE]
-            threads = []
+            thread_mids: list[tuple[threading.Thread, int]] = []
             for up in batch:
                 t = threading.Thread(
                     target=_run_scrape,
@@ -1666,14 +1666,18 @@ def run_daily_scrape(app):
                     daemon=True,
                 )
                 t.start()
-                threads.append(t)
+                thread_mids.append((t, up.mid))
                 time.sleep(random.uniform(0.5, 2.0))  # 错开启动时间
             # 等待该批所有线程完成（或超时）
-            for t in threads:
+            for t, mid in thread_mids:
                 t.join(timeout=THREAD_TIMEOUT)
                 if t.is_alive():
+                    with _scrape_lock:
+                        _scrape_running.discard(mid)
+                        _scrape_progress.pop(mid, None)
                     logger.warning(
-                        'B站 每日刷新: 线程 %s 超时 (>%ds)，跳过', t.name, THREAD_TIMEOUT
+                        'B站 每日刷新: mid=%d 线程超时 (>%ds)，已清理运行状态',
+                        mid, THREAD_TIMEOUT
                     )
 
         logger.info('B站 每日刷新完成')

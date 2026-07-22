@@ -117,7 +117,10 @@ def submit_task(task_type: str, **kwargs):
     _ensure_worker()
     if task_type in ('bili_up', 'all'):
         # 重型任务独立线程，不阻塞 _worker_loop
-        _heavy_task_semaphore.acquire()
+        # Semaphore 非阻塞获取：已满则跳过，避免阻塞 HTTP 请求
+        if not _heavy_task_semaphore.acquire(blocking=False):
+            logger.warning('词云重型任务已达上限(2)，跳过 %s', task_type)
+            return
         t = threading.Thread(target=_run_heavy_task, args=(task_type, kwargs), daemon=True)
         t.start()
     else:
