@@ -292,10 +292,11 @@
       var rect = this.getBoundingClientRect();
       var mx = (e.clientX - rect.left) * (this.width / rect.width / dpr);
       var my = (e.clientY - rect.top) * (this.height / rect.height / dpr);
+      var url = this.getAttribute('data-wc-search-url') || searchUrl || '/search?q=';
       for (var i = 0; i < data.placed.length; i++) {
         var p = data.placed[i];
         if (mx >= p.x && mx <= p.x + p.w && my >= p.y && my <= p.y + p.h) {
-          if (p.word) window.location.href = searchUrl + encodeURIComponent(p.word);
+          if (p.word) window.location.href = url + encodeURIComponent(p.word);
           return;
         }
       }
