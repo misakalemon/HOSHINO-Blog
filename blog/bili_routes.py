@@ -30,6 +30,7 @@ CST = datetime.timezone(datetime.timedelta(hours=8))  # 东八区（中国标准
 import json
 import logging
 import os
+import queue
 import random
 import threading
 import time
@@ -450,6 +451,57 @@ _VIDEO_SLEEP_JITTER = 3.0
 _circuit_open_until: float = 0.0
 _CIRCUIT_COOLDOWN = 60 * 60  # 封禁后冷却 60 分钟
 
+# ── 词云工作队列（独立线程池，不与视频爬取互斥）──
+_WC_QUEUE_MAX = 500
+_wc_queue: queue.Queue = queue.Queue(maxsize=_WC_QUEUE_MAX)
+_wc_workers_started = False
+_wc_workers_lock = threading.Lock()
+
+
+def _start_wc_workers(n=2):
+    """启动 n 个词云工作线程（首次调用时）。"""
+    with _wc_workers_lock:
+        if _wc_workers_started:
+            return
+        for i in range(n):
+            t = threading.Thread(target=_wc_worker, daemon=True, name=f'wc-worker-{i}')
+            t.start()
+        _wc_workers_started = True
+
+
+def _wc_worker():
+    """工作线程：从队列取视频，爬评论 + 生成词云。"""
+    while True:
+        video_id, bvid = _wc_queue.get()
+        try:
+            with current_app._get_current_object().app_context():
+                video = BiliVideo.query.get(video_id)
+                if not video:
+                    continue
+                try:
+                    from blog.bilibili.bili_api import was_recently_blocked
+                    if was_recently_blocked():
+                        _wc_queue.put_nowait((video_id, bvid))
+                        time.sleep(60)
+                        continue
+                except Exception:
+                    pass
+                try:
+                    n = _crawl_video_comments(video)
+                    if n:
+                        logger.info('词云线程: 视频 %s 爬取 %d 条评论', bvid[:8], n)
+                except Exception as e:
+                    logger.warning('词云线程: 视频 %s 评论失败: %s', bvid, e)
+                try:
+                    from blog.wordcloud import _compute_single_video_wordcloud
+                    _compute_single_video_wordcloud(video)
+                except Exception as e:
+                    logger.warning('词云线程: 视频 %s 词云失败: %s', bvid, e)
+        except Exception as e:
+            logger.error('词云线程异常: %s', e)
+        finally:
+            _wc_queue.task_done()
+
 
 def _insert_or_update_video(up, video_info, aid, bvid, title_short):
     """插入新视频或更新已有视频的统计数据。
@@ -540,6 +592,14 @@ def _insert_or_update_video(up, video_info, aid, bvid, title_short):
     except Exception:
         db.session.rollback()
         return None, False
+    if is_new:
+        try:
+            _start_wc_workers()
+            _wc_queue.put_nowait((video.id, bvid))
+        except queue.Full:
+            logger.warning('词云队列已满，视频 %s 跳过', bvid)
+        except Exception as e:
+            logger.warning('词云队列投递失败: %s', e)
     return video, is_new
 
 
@@ -1413,15 +1473,15 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                     .all()
                 )
                 for v in videos_missing_comments:
-                    if was_recently_blocked():
-                        break
                     try:
-                        n = _crawl_video_comments(v)
-                        if n:
-                            emit(f'评论 [{v.bvid[:8]}…] 爬取 {n} 条')
-                        time.sleep(3.0 + random.random() * 2.0)
+                        _start_wc_workers()
+                        _wc_queue.put_nowait((v.id, v.bvid))
+                        emit(f'评论 [{v.bvid[:8]}…] 已投递到词云队列')
+                    except queue.Full:
+                        emit(f'词云队列已满，视频 {v.bvid[:8]}… 跳过')
+                        break
                     except Exception as e:
-                        logger.warning('视频 %s 评论爬取失败: %s', v.bvid, e)
+                        logger.warning('视频 %s 评论队列投递失败: %s', v.bvid, e)
 
         except Exception as e:
             emit(f'爬取失败: {e}')

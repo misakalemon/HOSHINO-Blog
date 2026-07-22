@@ -532,6 +532,51 @@ def precompute_video_wordclouds():
     db.session.commit()
 
 
+def _compute_single_video_wordcloud(video):
+    """为单个视频生成词云并存入数据库。"""
+    from . import db
+    from .models import WordCloudConfig, WordCloudData
+
+    top_n = WordCloudConfig.get_or_create().top_n_bili
+    parts = []
+    if video.title:
+        parts.append(video.title)
+    if video.description:
+        parts.append(video.description)
+    if video.tags:
+        parts.extend(video.tags)
+    if video.subtitle_text:
+        parts.append(video.subtitle_text)
+
+    comment_texts = [
+        c.content for c in video.comments.all()
+        if c.content
+    ]
+    if comment_texts:
+        parts.extend(comment_texts)
+
+    text = ' '.join(parts)
+    if not text.strip():
+        return
+
+    data = compute_word_frequencies(text, top_n=top_n) or []
+    if not data:
+        return
+
+    period = f'bvid_{video.bvid}'
+    record = WordCloudData.query.filter_by(
+        post_id=None, source='bili_video', period=period
+    ).first()
+    if record is None:
+        record = WordCloudData(
+            post_id=None, source='bili_video', period=period, data=data
+        )
+        db.session.add(record)
+    else:
+        record.data = data
+    db.session.commit()
+
+
 def precompute_up_wordclouds(up_id: int):
     """为指定 UP 主的所有视频生成词云。
 
