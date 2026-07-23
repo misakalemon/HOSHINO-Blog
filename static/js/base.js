@@ -30,6 +30,21 @@
   }
 })();
 
+// ── 滚动进度条（全站通用）──────────────────
+(function(){
+  var bar = document.getElementById('scrollProgress');
+  if (!bar) return;
+  function updateProgress(){
+    var scrollTop = window.scrollY;
+    var docHeight = document.documentElement.scrollHeight - window.innerHeight;
+    var progress = docHeight > 0 ? (scrollTop / docHeight) * 100 : 0;
+    bar.style.width = Math.min(progress, 100) + '%';
+  }
+  window.addEventListener('scroll', updateProgress, {passive: true});
+  window.addEventListener('resize', updateProgress);
+  updateProgress();
+})();
+
 // ── 移动端抽屉菜单 ─────────────────────────
 /** 切换移动端侧滑抽屉菜单的展开/收起状态 */
 function toggleDrawer(){

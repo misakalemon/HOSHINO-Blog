@@ -30,7 +30,7 @@
 .scroll-hint { display:inline-block; color:rgba(255,255,255,0.3); font-size:0.8rem; letter-spacing:0.15em; border:1px solid rgba(255,255,255,0.06); padding:0.4rem 1.4rem; border-radius:40px; backdrop-filter:blur(4px); margin-top:20px; }
 .scroll-hint span { display:inline-block; animation:bounceDown 2s infinite; }
 @keyframes bounceDown { 0%,100%{transform:translateY(0)} 50%{transform:translateY(6px)} }
-.scroll-progress { position:fixed; top:0; left:0; height:2.5px; background:linear-gradient(90deg,#7c5cfc,#a78bfa,#c4b5fd); z-index:999; width:0%; transition:width 0.1s linear; box-shadow:0 0 20px rgba(167,139,250,0.2); }
+
 
 .hero-particle { position:relative; z-index:10; min-height:100vh; display:flex; align-items:center; padding:0 28px; overflow:hidden; }
 .hero-particle #particleCanvas { position:fixed; inset:0; width:100%; height:100%; cursor:crosshair; touch-action:none; }
@@ -59,8 +59,7 @@
 
 <!-- 背景光晕 -->
 <div class="glow-bg"></div>
-<!-- 滚动进度条 -->
-<div class="scroll-progress" id="scrollProgress"></div>
+
 
 <!-- 英雄区域：如果存在搜索关键词则显示搜索结果标题，否则显示默认欢迎语 -->
 {% if search_query %}
@@ -277,11 +276,6 @@ function _particleBurst(){
 </script>
 {% endif %}
 <script>
-(function(){
-'use strict';
-var progressBar=document.getElementById('scrollProgress');
-function updateProgress(){var scrollTop=window.scrollY;var docHeight=document.documentElement.scrollHeight-window.innerHeight;var progress=docHeight>0?(scrollTop/docHeight)*100:0;progressBar.style.width=Math.min(progress,100)+'%';}
-window.addEventListener('scroll',updateProgress,{passive:true});window.addEventListener('resize',updateProgress);updateProgress();
 var cards=document.querySelectorAll('.featured-card,.masonry-item');
 if('IntersectionObserver' in window){
   var observer=new IntersectionObserver(function(entries){

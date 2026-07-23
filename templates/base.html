@@ -39,7 +39,7 @@
 </div>
 
 <!-- 导航栏 -->
-<nav class="navbar{% if request.endpoint != 'blog.index' %} visible{% endif %}"{% if request.endpoint == 'blog.index' %} data-nav-auto{% endif %}>
+<!-- 滚动进度条 -->\n<div class="scroll-progress" id="scrollProgress"></div>\n\n<nav class="navbar{% if request.endpoint != 'blog.index' %} visible{% endif %}"{% if request.endpoint == 'blog.index' %} data-nav-auto{% endif %}>
     <div style="display:flex;align-items:center;gap:16px">
         <a href="{{ url_for('blog.index') }}" class="nav-logo" id="navLogo">✦ Hoshino <span style="font-size:0.65rem;font-weight:400;background:linear-gradient(135deg,#ff8aae,#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:0.08em">—— 星野、参上！——</span></a>
     </div>
