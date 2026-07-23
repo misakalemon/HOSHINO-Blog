@@ -22,7 +22,7 @@
 #upListContainer.up-grid-view a[id^="up-"] > div:nth-child(2) > div:last-child { justify-content: center !important; }
 #upListContainer.up-grid-view a[id^="up-"] span:last-child { display: none !important; }
 /* 视图切换按钮激活状态 */
-#viewGridBtn.is-active, #viewListBtn.is-active { background: rgba(255,107,157,0.15) !important; border-color: rgba(255,107,157,0.25) !important; color: #ff8aae !important; }
+#viewGridBtn, #viewListBtn { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); color: rgba(255,255,255,0.35); }\n#viewGridBtn.is-active, #viewListBtn.is-active { background: rgba(255,107,157,0.15) !important; border-color: rgba(255,107,157,0.25) !important; color: #ff8aae !important; }
 </style>
 {% endblock %}
 {% block content %}
@@ -34,8 +34,8 @@
         </p>
         {% if not q and pagination and pagination.total > 0 %}
         <div style="display:flex;gap:8px;justify-content:center;margin-top:12px">
-            <button id="viewGridBtn" onclick="switchView('grid')" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.4);cursor:pointer;font-size:0.75rem;transition:all 0.2s">▦ 网格</button>
-            <button id="viewListBtn" onclick="switchView('list')" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.4);cursor:pointer;font-size:0.75rem;transition:all 0.2s">≡ 列表</button>
+            <button id="viewGridBtn" onclick="switchView('grid')" class="is-active">▦ 网格</button>
+            <button id="viewListBtn" onclick="switchView('list')">≡ 列表</button>
         </div>
         {% endif %}
     </div>
@@ -309,13 +309,13 @@ function switchView(mode) {
     if (!c) return;
     if (mode === 'grid') {
         c.classList.remove('up-list-view'); c.classList.add('up-grid-view');
-        if (g) { g.classList.add('is-active'); g.style.background='rgba(255,107,157,0.15)'; g.style.borderColor='rgba(255,107,157,0.25)'; g.style.color='#ff8aae'; }
-        if (l) { l.classList.remove('is-active'); l.style.background=''; l.style.borderColor=''; l.style.color=''; }
+        if (g) g.classList.add('is-active');
+        if (l) l.classList.remove('is-active');
         try { localStorage.setItem('bili_up_view', 'grid'); } catch(e) {}
     } else {
         c.classList.remove('up-grid-view'); c.classList.add('up-list-view');
-        if (l) { l.classList.add('is-active'); l.style.background='rgba(255,107,157,0.15)'; l.style.borderColor='rgba(255,107,157,0.25)'; l.style.color='#ff8aae'; }
-        if (g) { g.classList.remove('is-active'); g.style.background=''; g.style.borderColor=''; g.style.color=''; }
+        if (l) l.classList.add('is-active');
+        if (g) g.classList.remove('is-active');
         try { localStorage.setItem('bili_up_view', 'list'); } catch(e) {}
     }
 }
