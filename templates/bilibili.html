@@ -10,7 +10,21 @@
      ============================================================ -->
 {% extends 'base.html' %}
 {% block title %}B站数据 - Hoshino{% endblock %}
-{% block extra_head %}<meta name="csrf-token" content="{{ csrf_token() }}">{% endblock %}
+{% block extra_head %}<meta name="csrf-token" content="{{ csrf_token() }}">
+<style>
+/* UP主列表视图切换 — 网格模式 */
+#upListContainer.up-grid-view { display: grid !important; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)) !important; gap: 12px !important; }
+#upListContainer.up-grid-view a[id^="up-"] { display: block !important; text-align: center; padding: 24px 16px 20px !important; }
+#upListContainer.up-grid-view a[id^="up-"] > div:first-child { float: none; display: flex; justify-content: center; margin-bottom: 12px; }
+#upListContainer.up-grid-view a[id^="up-"] > div:first-child img,
+#upListContainer.up-grid-view a[id^="up-"] > div:first-child div { width: 64px !important; height: 64px !important; font-size: 28px !important; }
+#upListContainer.up-grid-view a[id^="up-"] > div:nth-child(2) { flex: none !important; min-width: 0; }
+#upListContainer.up-grid-view a[id^="up-"] > div:nth-child(2) > div:last-child { justify-content: center !important; }
+#upListContainer.up-grid-view a[id^="up-"] span:last-child { display: none !important; }
+/* 视图切换按钮激活状态 */
+#viewGridBtn.is-active, #viewListBtn.is-active { background: rgba(255,107,157,0.15) !important; border-color: rgba(255,107,157,0.25) !important; color: #ff8aae !important; }
+</style>
+{% endblock %}
 {% block content %}
 <div class="content" style="padding-top:100px;max-width:1200px">
     <div style="text-align:center;margin-bottom:32px">
@@ -18,6 +32,12 @@
         <p style="color:rgba(255,255,255,0.35);font-size:0.9rem">
             {% if q %}搜索结果{% else %}共 {{ pagination.total }} 个 UP 主{% endif %}
         </p>
+        {% if not q and pagination and pagination.total > 0 %}
+        <div style="display:flex;gap:8px;justify-content:center;margin-top:12px">
+            <button id="viewGridBtn" onclick="switchView('grid')" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.4);cursor:pointer;font-size:0.75rem;transition:all 0.2s">▦ 网格</button>
+            <button id="viewListBtn" onclick="switchView('list')" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.4);cursor:pointer;font-size:0.75rem;transition:all 0.2s">≡ 列表</button>
+        </div>
+        {% endif %}
     </div>
 
     <!-- 搜索框 -->
@@ -110,7 +130,7 @@
     </div>
     {% elif pagination %}
     <!-- UP 主列表 -->
-    <div style="display:grid;gap:12px">
+    <div id="upListContainer" class="up-list-view" style="display:grid;gap:12px"
         {% for up in pagination.items %}
         <a id="up-{{ up.id }}" href="{{ url_for('bili_public.up_videos', up_id=up.id) }}#up-{{ up.id }}"
            style="display:flex;align-items:center;gap:16px;padding:16px 20px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:16px;text-decoration:none;transition:all 0.2s"
@@ -280,6 +300,43 @@ document.getElementById('subscribeForm').addEventListener('submit', function(e) 
 
 {% if bili_wordcloud %}
 <script src="{{ url_for('static', filename='js/wordcloud.js') }}?v=5" defer></script>
+<style>
+#upListContainer.up-grid-view { display: grid !important; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)) !important; gap: 12px !important; }
+#upListContainer.up-grid-view a[id^="up-"] { display: block !important; text-align: center; padding: 24px 16px 20px !important; }
+#upListContainer.up-grid-view a[id^="up-"] > div:first-child { float: none; display: flex; justify-content: center; margin-bottom: 12px; }
+#upListContainer.up-grid-view a[id^="up-"] > div:first-child img,
+#upListContainer.up-grid-view a[id^="up-"] > div:first-child div { width: 64px !important; height: 64px !important; font-size: 28px !important; }
+#upListContainer.up-grid-view a[id^="up-"] > div:nth-child(2) { flex: none !important; min-width: 0; }
+#upListContainer.up-grid-view a[id^="up-"] > div:nth-child(2) > div:last-child { justify-content: center !important; }
+#upListContainer.up-grid-view a[id^="up-"] span:last-child { display: none !important; }
+#viewGridBtn.is-active, #viewListBtn.is-active { background: rgba(255,107,157,0.15) !important; border-color: rgba(255,107,157,0.25) !important; color: #ff8aae !important; }
+</style>
+<script>
+function switchView(mode) {
+    var c = document.getElementById('upListContainer');
+    var g = document.getElementById('viewGridBtn');
+    var l = document.getElementById('viewListBtn');
+    if (!c) return;
+    if (mode === 'grid') {
+        c.classList.remove('up-list-view'); c.classList.add('up-grid-view');
+        if (g) { g.classList.add('is-active'); g.style.background='rgba(255,107,157,0.15)'; g.style.borderColor='rgba(255,107,157,0.25)'; g.style.color='#ff8aae'; }
+        if (l) { l.classList.remove('is-active'); l.style.background=''; l.style.borderColor=''; l.style.color=''; }
+        try { localStorage.setItem('bili_up_view', 'grid'); } catch(e) {}
+    } else {
+        c.classList.remove('up-grid-view'); c.classList.add('up-list-view');
+        if (l) { l.classList.add('is-active'); l.style.background='rgba(255,107,157,0.15)'; l.style.borderColor='rgba(255,107,157,0.25)'; l.style.color='#ff8aae'; }
+        if (g) { g.classList.remove('is-active'); g.style.background=''; g.style.borderColor=''; g.style.color=''; }
+        try { localStorage.setItem('bili_up_view', 'list'); } catch(e) {}
+    }
+}
+!function(){
+    try {
+        var v = localStorage.getItem('bili_up_view');
+        if (v === 'grid') switchView('grid');
+        else switchView('list');
+    } catch(e) {}
+}();
+</script>
 <script>
 document.addEventListener('DOMContentLoaded', function(){
   initWordCloud('wcBili', { maxFont: 42, minFont: 13 });
