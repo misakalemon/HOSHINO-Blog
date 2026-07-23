@@ -766,9 +766,10 @@ def _migrate_wordcloud_data_fields(app):
 
 
 def _migrate_wordcloud_config_fields(app):
-    """迁移：为 wordcloud_config 表添加 top_n_bili 字段。
+    """迁移：确保 wordcloud_config 表包含模型定义的所有列。
 
-    该字段用于独立控制 B站视频标题词云显示的词数。
+    逐列检查并补加缺失的列（兼容旧表升级），使用 ALTER TABLE
+    配合 DEFAULT 值避免已有行出现 NULL。
     """
     from sqlalchemy import text
 
@@ -778,16 +779,30 @@ def _migrate_wordcloud_config_fields(app):
         return
     inspector = db.inspect(engine)
     cols = {c['name'] for c in inspector.get_columns('wordcloud_config')}
-    if 'top_n_bili' not in cols:
-        try:
-            db.session.execute(
-                text('ALTER TABLE wordcloud_config ADD COLUMN top_n_bili INTEGER DEFAULT 50')
-            )
-            db.session.commit()
-            app.logger.info('迁移: 已添加 wordcloud_config.top_n_bili 列')
-        except Exception as e:
-            db.session.rollback()
-            app.logger.warning('迁移: 添加 wordcloud_config.top_n_bili 列失败: %s', e)
+
+    missing = {
+        'shape': "VARCHAR(20) NOT NULL DEFAULT 'circle'",
+        'max_font': 'INTEGER NOT NULL DEFAULT 48',
+        'min_font': 'INTEGER NOT NULL DEFAULT 14',
+        'top_n_article': 'INTEGER NOT NULL DEFAULT 60',
+        'top_n_site': 'INTEGER NOT NULL DEFAULT 50',
+        'canvas_height': 'INTEGER NOT NULL DEFAULT 350',
+        'top_n_bili': 'INTEGER NOT NULL DEFAULT 100',
+        'color_scheme': "VARCHAR(20) NOT NULL DEFAULT 'glow'",
+        'enabled_article': 'TINYINT(1) NOT NULL DEFAULT 1',
+        'enabled_site': 'TINYINT(1) NOT NULL DEFAULT 1',
+    }
+    for col_name, col_def in missing.items():
+        if col_name not in cols:
+            try:
+                db.session.execute(
+                    text(f'ALTER TABLE wordcloud_config ADD COLUMN {col_name} {col_def}')
+                )
+                db.session.commit()
+                app.logger.info('迁移: 已添加 wordcloud_config.%s 列', col_name)
+            except Exception as e:
+                db.session.rollback()
+                app.logger.warning('迁移: 添加 wordcloud_config.%s 列失败: %s', col_name, e)
 
 
 def _migrate_wordcloud_canvas_height(app):
