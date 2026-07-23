@@ -155,8 +155,20 @@ THUMB_CACHE_VER = 'v3'
 _sidebar_executor = None
 _sidebar_executor_lock = threading.Lock()
 
-# 缩略图生成并发写锁
-_thumbnail_locks: dict[str, threading.Lock] = {}
+# 缩略图生成并发写锁（LRU 限制，防止无限增长）
+from collections import OrderedDict
+
+class _ThumbnailLockDict(OrderedDict):
+    """LRU 限制的锁字典，最多保留 10000 个缩略图锁，超限淘汰最早使用的。"""
+    def __init__(self, maxsize=10000, *args, **kwargs):
+        self.maxsize = maxsize
+        super().__init__(*args, **kwargs)
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        if len(self) > self.maxsize:
+            self.popitem(last=False)
+
+_thumbnail_locks: dict[str, threading.Lock] = _ThumbnailLockDict()
 _thumbnail_locks_lock = threading.Lock()
 
 
@@ -700,7 +712,9 @@ def search():
         # SQLite: 使用 FTS match 谓词
         if dialect == 'mysql':
             from sqlalchemy import text
-            match_expr = text("MATCH (title, content) AGAINST (:q IN BOOLEAN MODE)").bindparams(q=q)
+            # 过滤 BOOLEAN MODE 特殊操作符（+ - > < ( ) ~ * @ "），防止滥用构造昂贵查询
+            safe_ft_q = re.sub(r'[+\-><()~*@"]', ' ', q)
+            match_expr = text("MATCH (title, content) AGAINST (:q IN BOOLEAN MODE)").bindparams(q=safe_ft_q)
         else:
             match_expr = Post.title.match(q) | Post.content.match(q)
         match_exprs = [match_expr]

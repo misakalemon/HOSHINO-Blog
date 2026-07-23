@@ -69,6 +69,12 @@
     '}'
   ].join('\n');
 
+  /**
+   * 编译 WebGL 着色器
+   * @param {string} src  - 着色器 GLSL 源码
+   * @param {number} type - gl.VERTEX_SHADER 或 gl.FRAGMENT_SHADER
+   * @returns {WebGLShader|null} 编译成功的着色器对象，失败返回 null
+   */
   function compileShader(src, type) {
     var s = gl.createShader(type);
     gl.shaderSource(s, src);
@@ -149,6 +155,9 @@
   var scrollRatio = 0;
 
   // ── 窗口缩放 ─────────────────────────────────
+  /**
+   * 响应窗口尺寸变化，更新 Canvas / WebGL 视口 / DPR / 光点
+   */
   function resize() {
     DPR = Math.min(window.devicePixelRatio || 1, 1.6);
     W = window.innerWidth; H = window.innerHeight;
@@ -173,6 +182,10 @@
   }
 
   // ── PNG 像素采样 ─────────────────────────────
+  /**
+   * 从 PNG 图像采样不透明像素，生成粒子坐标与颜色数据
+   * @param {HTMLImageElement} img - 已加载的 PNG 画像元素
+   */
   function sampleImage(img) {
     var iw = img.naturalWidth, ih = img.naturalHeight;
     var off = document.createElement('canvas');
@@ -199,6 +212,9 @@
   }
 
   // ── 显示区域计算 ─────────────────────────────
+  /**
+   * 根据屏幕尺寸与画像比例计算粒子画像的显示区域和粒子尺寸
+   */
   function computeRect() {
     var iw = sampleData.iw, ih = sampleData.ih;
     var portrait = W >= 900;
@@ -213,6 +229,10 @@
   }
 
   // ── 生成粒子（JS 物理对象 + GPU 顶点缓冲） ─────
+  /**
+   * 创建粒子物理对象数组并填充 GPU 顶点缓冲
+   * @param {boolean} intro - true 则粒子从画面外飞入（intro 动画），false 则直接归位
+   */
   function buildParticles(intro) {
     var pts = sampleData.pts;
     var s = dispRect.s, ox = dispRect.ox, oy = dispRect.oy, psize = dispRect.psize;
@@ -272,6 +292,9 @@
   }
 
   // ── 重映射目标位置（窗口缩放后） ────────────────
+  /**
+   * 窗口缩放后重新计算粒子目标位置（不重建粒子）
+   */
   function remapHomes() {
     computeRect();
     if (!particles.length) { buildParticles(true); return; }
@@ -288,6 +311,11 @@
 
   // ── 背景浮游光点 ─────────────────────────────
   var moteSprites = {};
+  /**
+   * 生成径向渐变圆形精灵图，供浮游光点绘制使用
+   * @param {string} color - rgba 前缀，如 'rgba(196,132,252,'
+   * @returns {HTMLCanvasElement} 64×64 精灵画布
+   */
   function makeSprite(color) {
     var c = document.createElement('canvas'); c.width = c.height = 64;
     var g = c.getContext('2d');
@@ -299,6 +327,9 @@
     return c;
   }
 
+  /**
+   * 构建背景浮游光点数组，数量随屏幕面积缩放（上限 90）
+   */
   function buildMotes() {
     var palette = ['rgba(196,132,252,', 'rgba(255,138,174,', 'rgba(192,168,255,'];
     palette.forEach(function (c, i) { moteSprites[i] = makeSprite(c); });
@@ -318,6 +349,9 @@
   }
 
   // ── 渲染帧（WebGL 粒子 + 2D 光点） ─────────────
+  /**
+   * 渲染一帧：更新 GPU 顶点缓冲 → 绘制 WebGL 粒子 → 绘制 2D 浮游光点
+   */
   function draw() {
     gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
     for (var i = 0; i < particles.length; i++) {
@@ -352,6 +386,9 @@
   }
 
   // ── 物理模拟步进 ─────────────────────────────
+  /**
+   * 物理模拟步进：弹簧力 + 鼠标斥力 + 涟漪力 + 滚动散开 + 阻尼
+   */
   function step() {
     t++;
     assemble = Math.min(1, assemble + 0.001);
@@ -413,6 +450,9 @@
   }
 
   // ── 主循环 ───────────────────────────────────
+  /**
+   * requestAnimationFrame 主循环
+   */
   function loop() {
     step();
     draw();
@@ -442,6 +482,10 @@
   });
 
   // ── 切换散开/汇聚 ────────────────────────────
+  /**
+   * 切换粒子模式（gather / scatter），散开 8s 后自动汇聚
+   * @param {'gather'|'scatter'} m - 目标模式
+   */
   function setMode(m) {
     mode = m;
     var btn = document.getElementById('btnScatter');
@@ -460,6 +504,9 @@
     }
   }
 
+  /**
+   * 外部调用入口：切换散开/汇聚
+   */
   function toggleScatter() {
     setMode(mode === 'gather' ? 'scatter' : 'gather');
   }

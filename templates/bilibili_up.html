@@ -1,3 +1,15 @@
+<!-- ============================================================
+     B站 UP 主视频列表 (bilibili_up.html)
+     用途：展示单个 UP 主的视频列表、粉丝趋势图、词云
+     继承：base.html
+     模板变量：
+       - up           : BiliUp 对象（UP 主信息）
+       - videos       : 视频分页对象
+       - history      : 粉丝数历史列表（折线图数据）
+       - watched_ids  : 已标记重点的视频 ID 集合
+       - wc_config    : 词云配置
+       - wordcloud_data : UP 主词云数据
+     ============================================================ -->
 {% extends 'base.html' %}
 {% block title %}{{ up.name or 'UP主' }} 视频列表 - Hoshino{% endblock %}
 {% block content %}

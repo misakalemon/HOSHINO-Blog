@@ -1,3 +1,13 @@
+<!-- ============================================================
+     B站数据首页 (bilibili.html)
+     用途：UP 主列表 + 全局搜索（同时搜索 UP 主和视频标题）
+     继承：base.html
+     模板变量：
+       - ups          : UP 主分页对象或搜索结果
+       - all_ups      : 前 200 个 UP 主（导航栏快捷跳转）
+       - q            : 搜索关键词
+       - page/per_page : 分页参数
+     ============================================================ -->
 {% extends 'base.html' %}
 {% block title %}B站数据 - Hoshino{% endblock %}
 {% block extra_head %}<meta name="csrf-token" content="{{ csrf_token() }}">{% endblock %}

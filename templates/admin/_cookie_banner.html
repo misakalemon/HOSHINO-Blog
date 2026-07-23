@@ -1,3 +1,12 @@
+<!-- ============================================================
+     组件片段 — Cookie 同意横幅
+     =======================
+     底部浮层，首次访问时提示用户同意/拒绝 Cookie。
+     用户选择后由 cookie-banner.js 写入 localStorage 持久化。
+
+     Template: admin/_cookie_banner.html
+     Include:  被 base.html / base_admin.html 引入
+     ============================================================ -->
 <div class="cookie-banner" id="cookieBanner" role="dialog" aria-label="Cookie 同意提示">
     <p class="cookie-text">本站使用 Cookie 来改善体验。<a href="{{ url_for('blog.about') }}" class="cookie-link">了解更多</a></p>
     <div class="cookie-actions">

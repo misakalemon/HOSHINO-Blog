@@ -1,5 +1,24 @@
+/**
+ * admin.js — HOSHINO Blog 管理后台交互
+ *
+ * 职责：
+ *   1. Toast 提示 — 替换原生 alert，暗色粉紫风格浮动提示
+ *   2. 侧边栏切换 — 移动端管理后台侧滑菜单
+ *   3. 图片裁剪工具 — 浮动裁剪框模式，支持多比例/缩放/拖拽
+ *   4. 自定义下拉框 (glow-select) — 管理后台专用版本
+ *   5. 全局弹窗 — 替换原生 alert/confirm/prompt
+ *
+ * 所有事件绑定使用 addEventListener（CSP-safe）。
+ */
+
 // ── Toast 提示 ─────────────────────────────────
+// 全局浮动提示条，2.8 秒后自动消失，支持 error/success/default 三种样式
 let _toastTimer = null;
+/**
+ * 显示 Toast 提示
+ * @param {string} msg - 提示消息
+ * @param {string} [type] - 'error' | 'success' | undefined（默认粉紫风格）
+ */
 function showToast(msg, type) {
   var el = document.getElementById('globalToast');
   if (!el) {
@@ -28,6 +47,7 @@ function showToast(msg, type) {
 }
 
 // ── 侧边栏切换 ────────────────────────────────
+/** 切换管理后台移动端侧边栏的展开/收起状态 */
 function toggleAdminSidebar() {
   document.getElementById('adminSidebar').classList.toggle('open');
   document.getElementById('adminToggle').classList.toggle('open');
@@ -37,6 +57,21 @@ document.getElementById('adminToggle')?.addEventListener('click', toggleAdminSid
 document.getElementById('adminOverlay')?.addEventListener('click', toggleAdminSidebar);
 
 // ── 图片裁剪工具（浮动裁剪框模式）─────────────
+/**
+ * 打开图片裁剪弹窗
+ *
+ * 完整的客户端图片裁剪工具，支持：
+ *   - 10 种预设比例（自由/1:1/4:3/16:9 等）
+ *   - 鼠标拖拽移动图片和裁剪框
+ *   - 裁剪框边缘/角落拖拽调整大小
+ *   - 滚轮缩放 + 缩放滑块
+ *   - 弹窗可拖拽调整大小
+ *   - 触摸屏支持
+ *   - ESC 键关闭
+ *
+ * @param {File} file - 要裁剪的图片文件
+ * @param {function(Blob|null)} callback - 裁剪完成回调，参数为裁剪后的 Blob 或 null（取消）
+ */
 function openCropModal(file, callback) {
   var RATIOS = [
     { label: '自由', w: 0, h: 0 },
@@ -535,6 +570,17 @@ function openCropModal(file, callback) {
   ov.style.display = 'flex';
 }
 
+/**
+ * 绑定文件上传输入框到裁剪+上传流程
+ *
+ * 用户选择文件 → 打开裁剪弹窗 → 裁剪确认 → 上传到服务器 → 更新表单字段和预览
+ *
+ * @param {string} inputId - 文件输入框的 ID
+ * @param {string} uploadUrl - 上传接口 URL（POST，需 CSRF Token）
+ * @param {string} fieldSelector - 需要更新路径值的表单字段选择器
+ * @param {string} previewSelector - 需要更新预览图的元素选择器
+ * @param {function} [onSuccess] - 上传成功后的额外回调
+ */
 function bindCropUpload(inputId, uploadUrl, fieldSelector, previewSelector, onSuccess) {
   var input = document.getElementById(inputId);
   if (!input) return;
@@ -576,7 +622,12 @@ function bindCropUpload(inputId, uploadUrl, fieldSelector, previewSelector, onSu
   });
 }
 
-// ── 自定义下拉框 (glow-select) 驱动 ────────────
+// ── 自定义下拉框 (glow-select) 驱动（管理后台版本）──
+// 与 base.js 中的 glow-select 逻辑相同，此处为管理后台独立副本
+/**
+ * 切换管理后台 glow-select 下拉框的展开/收起状态
+ * @param {HTMLElement} t - 触发器元素
+ */
 function toggleGlowSelect(t){
   var r=t.parentNode,u=r.classList.contains('is-open');
   if(u){r.classList.remove('is-open');return;}
@@ -620,7 +671,8 @@ document.addEventListener('click',function(e){
   }
 });
 
-// ── 全局弹窗 ──────────────────────────────────
+// ── 全局弹窗（管理后台版本）──────────────────────
+// 与 base.js 中的全局弹窗逻辑相同，替换原生 alert/confirm/prompt
 (function() {
   if (document.querySelector('.glow-modal-overlay')) return;
   var overlay = document.createElement('div');
@@ -683,6 +735,12 @@ document.addEventListener('click',function(e){
   };
 })();
 
+/**
+ * 显示确认弹窗（管理后台版本）
+ * 用于替换表单 onsubmit 中的 return confirm()
+ * @param {string} msg - 确认消息
+ * @param {function(boolean)} cb - 回调函数
+ */
 function showConfirm(msg, cb) {
   var overlay = document.querySelector('.glow-modal-overlay');
   if (!overlay) { if (cb) cb(true); return; }

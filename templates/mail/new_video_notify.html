@@ -1,3 +1,15 @@
+<!-- ============================================================
+     邮件模板 — 新视频通知页
+     =======================
+     当订阅的 UP 主发布新视频时，系统向订阅者发送此邮件。
+     邮件列出最新视频的封面、标题与链接。
+
+     Template: mail/new_video_notify.html
+     Context:
+       up_name  — UP 主昵称
+       to_name  — 收件人昵称（可选）
+       videos   — 新视频列表（title / url / cover / duration / pub_ts）
+     ============================================================ -->
 <!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>新视频通知</title></head>

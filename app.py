@@ -37,6 +37,70 @@ from flask_login import LoginManager
 from flask_wtf.csrf import CSRFProtect
 from flask_migrate import Migrate
 
+# ── 多密钥 session 支持 ─────────────────────────
+# 默认 Flask 只用 SECRET_KEY 签名 session，
+# 密钥轮换后旧 session 立即失效。
+# 此接口在验签时逐一尝试所有历史密钥，保证轮换后不踢人。
+from flask.sessions import SecureCookieSessionInterface
+from itsdangerous import URLSafeTimedSerializer, BadSignature
+
+class _MultiKeySessionInterface(SecureCookieSessionInterface):
+    """支持 SECRET_KEY_FALLBACKS 的 session 接口。
+    
+    签名 → 只使用当前 SECRET_KEY（最新）
+    验签 → 尝试当前密钥 + 所有历史密钥（SECRET_KEY_FALLBACKS）
+    这样密钥轮换不会导致已登录用户的 session 失效。
+    """
+
+    def get_signing_serializer(self, app):
+        secret_key = app.secret_key
+        if not secret_key:
+            return None
+        fallbacks = app.config.get('SECRET_KEY_FALLBACKS', [])
+        salt = self.get_cookie_salt(app)
+        serializer = self.serializer_class()
+        signer_kwargs = dict(
+            key_derivation=self.key_derivation,
+            digest_method=self.digest_method,
+        )
+
+        primary = URLSafeTimedSerializer(
+            secret_key, salt=salt, serializer=serializer, signer_kwargs=signer_kwargs
+        )
+
+        if not fallbacks:
+            return primary  # 无历史密钥，退化为标准行为
+
+        class _MultiKeyWrapper:
+            """包装器：dumps 用当前密钥，loads 逐个尝试所有密钥。"""
+
+            def dumps(self, obj):
+                return primary.dumps(obj)
+
+            def loads(self, s, max_age=None, return_timestamp=False):
+                try:
+                    return primary.loads(s, max_age=max_age, return_timestamp=return_timestamp)
+                except BadSignature:
+                    for fb_key in fallbacks:
+                        try:
+                            fb = URLSafeTimedSerializer(
+                                fb_key,
+                                salt=salt,
+                                serializer=serializer,
+                                signer_kwargs=signer_kwargs,
+                            )
+                            return fb.loads(s, max_age=max_age, return_timestamp=return_timestamp)
+                        except BadSignature:
+                            continue
+                    raise
+
+        return _MultiKeyWrapper()
+
+    @staticmethod
+    def get_cookie_salt(app):
+        """Flask 默认 session cookie salt='cookie-session'"""
+        return 'cookie-session'
+
 # ── 环境变量加载 ──────────────────────────────
 # load_dotenv() 必须在 Flask 应用创建之前执行，
 # 确保所有后续 os.environ.get() 能读到 .env 文件中的值。
@@ -91,8 +155,8 @@ def create_app():
         'pool_pre_ping': True,
         'pool_recycle': 280,
         'pool_timeout': 30,
-        'pool_size': 20,
-        'max_overflow': 20,
+        'pool_size': 30,
+        'max_overflow': 30,
     }
 
     # ── CSRF 保护（全局，影响所有 POST/PUT/DELETE）──
@@ -173,6 +237,10 @@ def create_app():
         """Flask-Login 回调：从 session 中恢复用户对象。"""
         # Flask-Login 序列化时存的是 user.id，反序列化时调用此函数
         return db.session.get(User, int(user_id))
+
+    # ── 多密钥 session 支持（SECRET_KEY 轮换不踢人） ──
+    # 覆盖默认 session_interface，验签时逐一尝试所有历史密钥
+    app.session_interface = _MultiKeySessionInterface()
 
     # ── 注册蓝图 ─────────────────────────────────
     # 前台 blueprint（URL 前缀为空，所有前台路由直接挂在 / 下）

@@ -1,3 +1,14 @@
+<!-- ============================================================
+     B站视频详情 (bilibili_video.html)
+     用途：展示单个视频的详细数据、7 项指标历史折线图、增长卡片
+     继承：base.html
+     模板变量：
+       - video        : BiliVideo 对象
+       - history      : 统计数据历史列表（折线图数据）
+       - up           : 所属 UP 主对象
+       - wc_config    : 词云配置
+       - wordcloud_data : 视频词云数据
+     ============================================================ -->
 {% extends 'base.html' %}
 {% block title %}{{ video.title[:30] }} - Hoshino{% endblock %}
 {% block content %}

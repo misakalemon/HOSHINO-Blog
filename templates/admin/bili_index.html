@@ -1,5 +1,9 @@
+<!-- ============================================================
+     B站 UP 主管理 (admin/bili_index.html)
+     用途：UP 主列表 + 扫码登录入口 + 爬取/刷新/删除操作
+     继承：admin/base_admin.html
+     ============================================================ -->
 {% extends 'admin/base_admin.html' %}
-{% block title %}Bilibili 数据管理{% endblock %}
 {% block extra_head %}
 <meta name="csrf-token" content="{{ csrf_token() }}">
 {% endblock %}

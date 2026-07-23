@@ -1193,15 +1193,15 @@ def upload_image():
     # 校验 Magic Bytes（文件头签名），防止通过改名绕过后缀检查
     import io as _io
 
-    magic = file.read(8)
+    magic = file.read(12)
     file.seek(0)
-    # 各格式魔数签名：PNG(‰PNG), JPEG(ÿØ), GIF87a/GIF89a, WEBP(RIFF...WEBP)
+    # 各格式魔数签名：PNG(‰PNG), JPEG(ÿØ), GIF87a/GIF89a, WEBP(RIFF....WEBP)
     is_valid_magic = (
         magic.startswith(b'\x89PNG')
         or magic.startswith(b'\xff\xd8')
         or magic.startswith(b'GIF87a')
         or magic.startswith(b'GIF89a')
-        or magic.startswith(b'RIFF')
+        or (len(magic) >= 12 and magic.startswith(b'RIFF') and magic[8:12] == b'WEBP')
     )
     if not is_valid_magic:
         return jsonify({'error': '文件内容不是有效的图片'}), 400

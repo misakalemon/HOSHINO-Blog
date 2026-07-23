@@ -37,32 +37,57 @@
     ],
   };
 
-  /** 获取色板数组 */
+  /**
+   * 获取指定配色方案的色板数组
+   * @param {string} scheme - 配色名称（glow / ocean / forest）
+   * @returns {string[]} 颜色数组
+   */
   function getPalette(scheme) {
     return PALETTES[scheme] || PALETTES.glow;
   }
 
-  /** 从色板中随机选取一个颜色 */
+  /**
+   * 从色板中随机选取一个颜色
+   * @param {string} scheme - 配色名称
+   * @returns {string} 十六进制颜色值
+   */
   function randomColor(scheme) {
     var palette = getPalette(scheme);
     return palette[Math.floor(Math.random() * palette.length)];
   }
 
-  /** 映射 weight → 字体大小（线性插值） */
+  /**
+   * 将词频权重线性映射为字体大小
+   * @param {number} weight   - 当前词频
+   * @param {number} minW     - 最小词频
+   * @param {number} maxW     - 最大词频
+   * @param {number} minFont  - 最小字号
+   * @param {number} maxFont  - 最大字号
+   * @returns {number} 映射后的字号
+   */
   function mapFontSize(weight, minW, maxW, minFont, maxFont) {
     if (maxW <= minW) return (minFont + maxFont) / 2;
     return minFont + ((weight - minW) / (maxW - minW)) * (maxFont - minFont);
   }
 
-  /** 判断两个矩形是否重叠 */
+  /**
+   * 判断两个轴对齐矩形是否重叠
+   * @param {{x:number,y:number,w:number,h:number}} a - 矩形 A
+   * @param {{x:number,y:number,w:number,h:number}} b - 矩形 B
+   * @returns {boolean} 是否重叠
+   */
   function rectsOverlap(a, b) {
     return !(a.x + a.w <= b.x || b.x + b.w <= a.x ||
              a.y + a.h <= b.y || b.y + b.h <= a.y);
   }
 
   /**
-   * 测量文本尺寸（缓存结果避免重复测量）
-   * 返回 {w, h}（像素，已取整）
+   * 测量文本尺寸（带缓存，避免重复测量）
+   * @param {CanvasRenderingContext2D} ctx       - 2D 上下文
+   * @param {string}                   text      - 待测文本
+   * @param {number}                   fontSize  - 字号
+   * @param {string}                   fontStyle - 字体族
+   * @returns {{w:number,h:number}} 宽高（像素，已取整）
    */
   var _measureCache = {};
   function measureText(ctx, text, fontSize, fontStyle) {
@@ -77,6 +102,18 @@
 
   // ── 形状检测 ──────────────────────────────
 
+  /**
+   * 判断点是否在指定形状内（分发到各形状子函数）
+   * @param {number} px    - 点 x 坐标
+   * @param {number} py    - 点 y 坐标
+   * @param {string} shape - 形状名称
+   * @param {number} cx    - 形状中心 x
+   * @param {number} cy    - 形状中心 y
+   * @param {number} maxR  - 形状最大半径
+   * @param {number} w     - 画布宽
+   * @param {number} h     - 画布高
+   * @returns {boolean}
+   */
   function isInsideShape(px, py, shape, cx, cy, maxR, w, h) {
     switch (shape) {
       case 'circle': return _isInsideCircle(px, py, cx, cy, maxR);
@@ -94,6 +131,13 @@
   var _shapeMaskW = 0;
   var _shapeMaskH = 0;
 
+  /**
+   * 异步加载自定义形状遮罩图片，提取 alpha 通道像素数据
+   * @param {string}   url      - 图片 URL
+   * @param {number}   canvasW  - 画布宽（未使用，保留接口）
+   * @param {number}   canvasH  - 画布高（未使用，保留接口）
+   * @param {Function} callback - 加载完成回调
+   */
   function _loadShapeImage(url, canvasW, canvasH, callback) {
     var img = new Image();
     img.crossOrigin = 'anonymous';
@@ -116,6 +160,12 @@
     img.src = url;
   }
 
+  /**
+   * 判断点是否在自定义形状遮罩内（alpha > 128 视为内部）
+   * @param {number} px - 点 x 坐标
+   * @param {number} py - 点 y 坐标
+   * @returns {boolean}
+   */
   function _isInsideCustom(px, py) {
     if (!_shapeMaskData) return true;  // 图片未加载时全区域开放
     var iw = _shapeMaskW;
@@ -132,12 +182,30 @@
   var _shapeMaskCanvasWidth = 0;
   var _shapeMaskCanvasHeight = 0;
 
+  /**
+   * 判断点是否在圆形内
+   * @param {number} px   - 点 x
+   * @param {number} py   - 点 y
+   * @param {number} cx   - 圆心 x
+   * @param {number} cy   - 圆心 y
+   * @param {number} maxR - 半径
+   * @returns {boolean}
+   */
   function _isInsideCircle(px, py, cx, cy, maxR) {
     var dx = (px | 0) - cx;
     var dy = (py | 0) - cy;
     return (dx * dx + dy * dy) <= maxR * maxR;
   }
 
+  /**
+   * 判断点是否在五角星内（极坐标 + 正弦调制半径）
+   * @param {number} px   - 点 x
+   * @param {number} py   - 点 y
+   * @param {number} cx   - 中心 x
+   * @param {number} cy   - 中心 y
+   * @param {number} maxR - 外接圆半径
+   * @returns {boolean}
+   */
   function _isInsideStar(px, py, cx, cy, maxR) {
     var dx = (px | 0) - cx;
     var dy = (py | 0) - cy;
@@ -152,6 +220,15 @@
     return dist <= starR;
   }
 
+  /**
+   * 判断点是否在心形内（隐式方程 (x²+y²-1)³ - x²y³ ≤ 0）
+   * @param {number} px   - 点 x
+   * @param {number} py   - 点 y
+   * @param {number} cx   - 中心 x
+   * @param {number} cy   - 中心 y
+   * @param {number} maxR - 缩放半径
+   * @returns {boolean}
+   */
   function _isInsideHeart(px, py, cx, cy, maxR) {
     var dx = ((px | 0) - cx) / (maxR * 0.9);
     var dy = ((py | 0) - cy) / (maxR * 0.9);
@@ -160,6 +237,17 @@
     return val <= 0;
   }
 
+  /**
+   * 判断点是否在云朵形状内（6 个圆叠加近似）
+   * @param {number} px   - 点 x
+   * @param {number} py   - 点 y
+   * @param {number} cx   - 中心 x
+   * @param {number} cy   - 中心 y
+   * @param {number} maxR - 缩放半径
+   * @param {number} w    - 画布宽
+   * @param {number} h    - 画布高
+   * @returns {boolean}
+   */
   function _isInsideCloud(px, py, cx, cy, maxR, w, h) {
     var scale = maxR * 0.5;
     var circles = [
@@ -219,7 +307,13 @@
     _renderWordCloud(canvas, data, opts);
 }
 
-function _renderWordCloud(canvas, data, opts) {
+  /**
+   * 内部渲染实现：螺旋布局 + 碰撞检测 + 按颜色批量绘制
+   * @param {HTMLCanvasElement} canvas
+   * @param {Array}             data - [{word, weight}, ...]
+   * @param {Object}            opts - 渲染选项（同 renderWordCloud）
+   */
+  function _renderWordCloud(canvas, data, opts) {
     opts = opts || {};
     var shape = opts.shape || 'circle';
     var colorScheme = opts.colorScheme || 'glow';

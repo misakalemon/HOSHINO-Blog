@@ -1,3 +1,11 @@
+<!-- ============================================================
+     B站视频对比 (bilibili_compare.html)
+     用途：多视频跨 UP 主横向对比（表格 + 柱状图），最多 10 个视频
+     继承：base.html
+     模板变量：
+       - videos       : BiliVideo 对象列表
+       - ups          : BiliUp 对象列表（对应各视频的 UP 主）
+     ============================================================ -->
 {% extends 'base.html' %}
 {% block title %}视频对比 - Hoshino{% endblock %}
 {% block content %}

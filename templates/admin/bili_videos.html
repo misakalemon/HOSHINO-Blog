@@ -1,5 +1,9 @@
+<!-- ============================================================
+     B站视频管理 (admin/bili_videos.html)
+     用途：单个 UP 主的视频数据表格（分页 30 条）+ 统计刷新
+     继承：admin/base_admin.html
+     ============================================================ -->
 {% extends 'admin/base_admin.html' %}
-{% block title %}{{ up.name or 'UP主' }} 视频列表{% endblock %}
 {% block admin_content %}
 <style>
 .star-btn { background:none; border:none; cursor:pointer; font-size:1.1rem; padding:2px 4px;

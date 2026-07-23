@@ -1,3 +1,4 @@
+<!-- 分页组件宏：生成上一页/页码/下一页导航，接受分页对象和额外查询参数 -->
 {% macro pagination(paginate, page_param='page', extra_params='') %}
 {% if paginate.pages > 1 %}
 {% set p = page_param %}

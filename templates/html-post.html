@@ -1,3 +1,10 @@
+<!-- ============================================================
+     HTML 页面模式文章详情 (html-post.html)
+     用途：展示以 HTML 页面模式发布的文章，内容在沙箱 iframe 中渲染
+     继承：base.html
+     模板变量：
+       - post         : Post 对象（含 html_content）
+     ============================================================ -->
 {% extends 'base.html' %}
 {% block title %}{{ post.title }} - Hoshino{% endblock %}
 {% block content %}

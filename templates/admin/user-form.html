@@ -1,5 +1,9 @@
+<!-- ============================================================
+     用户新建/编辑表单 (admin/user-form.html)
+     用途：管理员创建或编辑用户（编辑模式仅角色可改）
+     继承：admin/base_admin.html
+     ============================================================ -->
 {% extends 'admin/base_admin.html' %}
-{% block title %}{{ '编辑' if editing else '新建' }}用户{% endblock %}
 {% block admin_content %}
 <div class="admin-header">
     <h3>{{ '编辑' if editing else '新建' }}用户</h3>

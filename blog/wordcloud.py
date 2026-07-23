@@ -100,11 +100,15 @@ def _run_heavy_task(task_type: str, kwargs: dict):
     """
     try:
         with _wc_app.app_context():
-            if task_type == 'bili_up':
-                precompute_up_wordclouds(kwargs['up_id'])
-            elif task_type == 'all':
-                precompute_all_wordclouds()
-                precompute_bili_wordclouds()
+            try:
+                if task_type == 'bili_up':
+                    precompute_up_wordclouds(kwargs['up_id'])
+                elif task_type == 'all':
+                    precompute_all_wordclouds()
+                    precompute_bili_wordclouds()
+            finally:
+                from . import db
+                db.session.remove()
     except Exception as e:
         logger.error('词云重型任务失败 type=%s: %s', task_type, e)
     finally:
@@ -129,6 +133,8 @@ def _worker_loop():
             except Exception as e:
                 logger.error('词云任务失败 type=%s: %s', task.get('type', '?'), e)
             finally:
+                from . import db
+                db.session.remove()
                 _task_queue.task_done()
 
 

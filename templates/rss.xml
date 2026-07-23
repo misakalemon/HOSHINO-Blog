@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- RSS 2.0 订阅源模板 — 输出最近 20 篇已发布文章 -->
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>HOSHINO Blog</title>

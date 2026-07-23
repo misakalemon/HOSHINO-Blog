@@ -1375,6 +1375,18 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                 emit(f'[补全] 完成，新增 {fill_count} 个视频')
 
             # ── D. 三层统计更新 ──────────────────────
+            # 将视频按发布时间分为三层，优先更新近期热门视频：
+            #
+            #   Hot  (≤7天)  → 全部更新，min_age_hours=0（不跳过）
+            #                    排除本次新入库的视频（filled_bvids，已有最新数据）
+            #   Warm (8~30天) → 配额剩余时更新，min_age_hours=1（1小时内已更新则跳过）
+            #                    按 updated_at ASC 排序（最久未更新的优先）
+            #   Cold (>30天)  → 配额剩余时处理，min_age_hours=24（24小时内已更新则跳过）
+            #                    同样按 updated_at ASC 排序
+            #
+            # max_videos 参数控制每个 UP 主的总更新上限（手动刷新时为 30，每日深扫时为 None）
+            # force=True 时跳过 min_age_hours 检查和 should_fill 判断
+            #
             # fill_new_bvids: 本次新入库的视频 BVID — Hot 阶段排除这些（已有最新数据）
             filled_bvids = fill_new_bvids
             count = 0
@@ -1563,6 +1575,9 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                     logger.error('API 层检测到 412 封禁，全局熔断 %d 分钟', _CIRCUIT_COOLDOWN // 60)
 
             # 评论爬取：为本 UP 主尚未爬取评论的视频补充数据（限 5 个/次）
+            # 使用 LEFT JOIN + GROUP BY HAVING COUNT=0 找出没有评论记录的视频，
+            # 投递到词云工作队列（_wc_queue），由 _wc_worker 线程异步处理。
+            # 限制每次最多 5 个，避免深扫后立即发起大量评论请求触发风控。
             if not was_recently_blocked(cooldown=600):
                 from .models import BiliVideoComment
                 from sqlalchemy import func
@@ -1604,7 +1619,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             db.session.remove()
 
 
-_BATCH_SIZE = 10  # 每日刷新时每批并行处理的 UP 主数量
+_BATCH_SIZE = 5  # 每日刷新时每批并行处理的 UP 主数量
 
 
 def run_daily_scrape(app):
@@ -1624,64 +1639,66 @@ def run_daily_scrape(app):
       此函数是同步阻塞的（join 等待所有线程完成），适合调度器直接调用。
     """
     with app.app_context():
-        import logging
-        import random
-        import threading
-        import time
+        try:
+            import logging
+            import random
+            import threading
+            import time
 
-        logger = logging.getLogger(__name__)
-        from blog.models import BiliUp
+            logger = logging.getLogger(__name__)
+            from blog.models import BiliUp
 
-        ups = BiliUp.query.all()
-        logger.info('B站 每日刷新启动: 共 %d 个 UP 主, 每批 %d 个', len(ups), _BATCH_SIZE)
+            ups = BiliUp.query.all()
+            logger.info('B站 每日刷新启动: 共 %d 个 UP 主, 每批 %d 个', len(ups), _BATCH_SIZE)
 
-        with _circuit_lock:
-            if time.time() < _circuit_open_until:
-                remaining = int(_circuit_open_until - time.time()) // 60
-                logger.warning('B站 每日刷新取消: 全局熔断中，剩余 %d 分钟', remaining)
-                return
+            with _circuit_lock:
+                if time.time() < _circuit_open_until:
+                    remaining = int(_circuit_open_until - time.time()) // 60
+                    logger.warning('B站 每日刷新取消: 全局熔断中，剩余 %d 分钟', remaining)
+                    return
 
-        THREAD_TIMEOUT = 15 * 60  # 每个线程最长等待时间（15 分钟）
+            THREAD_TIMEOUT = 15 * 60  # 每个线程最长等待时间（15 分钟）
 
-        # 筛选出当前不在运行中的 UP 主
-        active: list = []
-        for up in ups:
-            mid = up.mid
-            with _scrape_lock:
-                if mid in _scrape_running or mid in _incremental_running:
-                    continue
-                _scrape_progress[mid] = []
-                _scrape_running.add(mid)
-            active.append(up)
+            # 筛选出当前不在运行中的 UP 主
+            active: list = []
+            for up in ups:
+                mid = up.mid
+                with _scrape_lock:
+                    if mid in _scrape_running or mid in _incremental_running:
+                        continue
+                    _scrape_progress[mid] = []
+                    _scrape_running.add(mid)
+                active.append(up)
 
-        # 分批并发执行：每批 _BATCH_SIZE 个线程同时运行
-        for i in range(0, len(active), _BATCH_SIZE):
-            batch = active[i : i + _BATCH_SIZE]
-            thread_mids: list[tuple[threading.Thread, int]] = []
-            for up in batch:
-                t = threading.Thread(
-                    target=_run_scrape,
-                    args=(up.mid, up.space_url, app),
-                    kwargs={'max_videos': 30},
-                    daemon=True,
-                )
-                t.start()
-                thread_mids.append((t, up.mid))
-                time.sleep(random.uniform(0.5, 2.0))  # 错开启动时间
-            # 等待该批所有线程完成（或超时）
-            for t, mid in thread_mids:
-                t.join(timeout=THREAD_TIMEOUT)
-                if t.is_alive():
-                    with _scrape_lock:
-                        _scrape_running.discard(mid)
-                        _scrape_progress.pop(mid, None)
-                    logger.warning(
-                        'B站 每日刷新: mid=%d 线程超时 (>%ds)，已清理运行状态',
-                        mid, THREAD_TIMEOUT
+            # 分批并发执行：每批 _BATCH_SIZE 个线程同时运行
+            for i in range(0, len(active), _BATCH_SIZE):
+                batch = active[i : i + _BATCH_SIZE]
+                thread_mids: list[tuple[threading.Thread, int]] = []
+                for up in batch:
+                    t = threading.Thread(
+                        target=_run_scrape,
+                        args=(up.mid, up.space_url, app),
+                        kwargs={'max_videos': 30},
+                        daemon=True,
                     )
+                    t.start()
+                    thread_mids.append((t, up.mid))
+                    time.sleep(random.uniform(0.5, 2.0))  # 错开启动时间
+                # 等待该批所有线程完成（或超时）
+                for t, mid in thread_mids:
+                    t.join(timeout=THREAD_TIMEOUT)
+                    if t.is_alive():
+                        with _scrape_lock:
+                            _scrape_running.discard(mid)
+                            _scrape_progress.pop(mid, None)
+                        logger.warning(
+                            'B站 每日刷新: mid=%d 线程超时 (>%ds)，已清理运行状态',
+                            mid, THREAD_TIMEOUT
+                        )
 
-        logger.info('B站 每日刷新完成')
-        db.session.remove()
+            logger.info('B站 每日刷新完成')
+        finally:
+            db.session.remove()
 
 
 def cleanup_old_history(days=90):
@@ -1723,12 +1740,15 @@ def auto_cleanup_history(app=None):
         logger.warning('auto_cleanup_history: 未传入 app 实例')
         return 0
     with app.app_context():
-        from blog.models import BiliCleanupConfig, db as _db
+        try:
+            from blog.models import BiliCleanupConfig, db as _db
 
-        cfg = BiliCleanupConfig.query.first()
-        if cfg and cfg.enabled:
-            deleted = cleanup_old_history(days=cfg.days)
-            if deleted:
-                logger.info('自动清理完成: 删除了 %d 条 %d 天前的记录', deleted, cfg.days)
-            return deleted
+            cfg = BiliCleanupConfig.query.first()
+            if cfg and cfg.enabled:
+                deleted = cleanup_old_history(days=cfg.days)
+                if deleted:
+                    logger.info('自动清理完成: 删除了 %d 条 %d 天前的记录', deleted, cfg.days)
+                return deleted
+        finally:
+            _db.session.remove()
     return 0
