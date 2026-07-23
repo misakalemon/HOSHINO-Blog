@@ -151,20 +151,26 @@
     if (!canvas || !data || !data.length) return;
 
     opts = opts || {};
-    var maxFont = opts.maxFont || 48;
-    var minFont = opts.minFont || 14;
     var shape = opts.shape || 'circle';
     var colorScheme = opts.colorScheme || 'glow';
     var padding = opts.padding || 20;
     var dpr = opts.dpr || (window.devicePixelRatio || 1);
     var searchUrl = opts.searchUrl || '/search?q=';
-    var maxDisplay = opts.maxDisplay || 60;
+    var maxDisplay = opts.maxDisplay || 100;
 
     // 计算画布尺寸
     var rect = canvas.parentElement.getBoundingClientRect();
     var w = (rect.width || canvas.parentElement.clientWidth || 600) | 0;
     var defaultH = Math.max(300, Math.min(500, (w * 0.5) | 0)) | 0;
     var h = opts.canvasHeight || defaultH;
+
+    // 字号自动适配画布高度（配置的 maxFont/minFont 仅作参考上限）
+    var refMax = opts.maxFont || 48;
+    var refMin = opts.minFont || 14;
+    var maxFont = Math.min(refMax, (h * 0.25) | 0);       // ≤ 画布高的 25%
+    var minFont = Math.max(refMin, (h * 0.03) | 0);        // ≥ 画布高的 3%
+    // 确保 maxFont >= minFont
+    if (maxFont < minFont + 4) maxFont = minFont + 4;
 
     // 设置 Canvas 物理尺寸（Retina 适配）
     canvas.width = w * dpr;
@@ -200,10 +206,10 @@
 
     // ── 螺旋布局 ────────────────────────────
     var angle = 0;
-    var radiusStep = 2;
-    var angleStep = 0.3;
+    var radiusStep = 3;            // 每次半径增长量（加大以更快覆盖全画布）
+    var angleStep = 0.25;          // 每次角度增量
     var maxRadius = Math.sqrt(drawArea.w * drawArea.w + drawArea.h * drawArea.h) / 2;
-    var maxAttempts = 3000;
+    var maxAttempts = 5000;        // 单次词汇最大尝试次数
     var placed = [];
     var placedWords = [];
 
