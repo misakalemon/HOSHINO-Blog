@@ -132,6 +132,12 @@
             </label>
         </div>
 
+        <div class="form-group">
+            <label>{{ form.stop_words.label }}</label>
+            {{ form.stop_words(class='form-control', rows='5', placeholder='每行输入一个屏蔽词，如：\\n营销\\n广告\\n推广') }}
+            <span class="form-hint">每行一个词，这些词不会出现在任何词云中（全站 / 文章 / B站视频）</span>
+        </div>
+
         <button type="submit" class="btn btn-primary">保存配置</button>
     </form>
     <hr style="border-color:rgba(255,255,255,0.06);margin:24px 0">

@@ -792,6 +792,7 @@ class WordCloudConfig(db.Model):
             'color_scheme': self.color_scheme,
             'enabled_article': self.enabled_article,
             'enabled_site': self.enabled_site,
+            'stopWords': self.stop_words,
         }
 
 
