@@ -9,17 +9,55 @@ HOSHINO Blog — 博文词云模块
     data = compute_word_frequencies(post.content, top_n=60)
 """
 
+import gc
 import logging
 import os
 import queue
 import re
+import sys
 import threading
 from collections import Counter
-from typing import List, Optional
+from typing import Generator, List, Optional
 
 from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
+
+# ── 内存监控 ──────────────────────────────────────────
+try:
+    import psutil as _psutil
+    _HAS_PSUTIL = True
+except ImportError:
+    _HAS_PSUTIL = False
+
+
+def _log_memory(logger, label: str = ''):
+    """记录当前进程内存使用量（psutil 可用时）或 gc 对象计数。"""
+    if _HAS_PSUTIL:
+        proc = _psutil.Process()
+        mem = proc.memory_info()
+        logger.info(
+            '内存 [%s] RSS=%.1fMB VMS=%.1fMB gc=%d',
+            label,
+            mem.rss / 1024 / 1024,
+            mem.vms / 1024 / 1024,
+            len(gc.get_objects()),
+        )
+    else:
+        logger.info('内存 [%s] gc_objects=%d gc_count=%s', label,
+                     len(gc.get_objects()), gc.get_count())
+
+
+def _maybe_collect(force: bool = False):
+    """按阈值触发 GC。每 5 次调用执行一次回收（或 force 强制）。"""
+    _maybe_collect.counter += 1
+    if force or _maybe_collect.counter % 5 == 0:
+        collected = gc.collect()
+        if collected:
+            logger.debug('GC 回收 %d 个对象', collected)
+
+
+_maybe_collect.counter = 0
 
 # ── jieba 延迟初始化（只在首次调用时调用）──
 _jieba_initialized = False
@@ -128,19 +166,16 @@ def submit_task(task_type: str, **kwargs):
 
 
 def _init_jieba():
-    """初始化 jieba：添加领域词典 + 启用并行分词（4 核）。
+    """初始化 jieba：添加领域词典。
 
-    仅在首次调用 compute_word_frequencies 时执行一次。
+    不启用 jieba.enable_parallel（它会创建 4 个 multiprocessing 进程，
+    每个进程独立加载词典，增加 ~40MB 额外内存开销，与 ThreadPoolExecutor
+    并行方案冲突）。
     """
     global _jieba_initialized
     if _jieba_initialized:
         return
     import jieba
-    # 启用并行分词（多核加速）
-    try:
-        jieba.enable_parallel(4)
-    except Exception:
-        pass  # 并行不可用时静默降级
     # 添加博客领域词汇，提高分词准确率
     domain_words = [
         'Hoshino', 'Bilibili', 'GitCode', 'GitHub', 'Gitee',
@@ -481,53 +516,73 @@ def precompute_all_wordclouds():
             logger.warning('预计算词云失败 post_id=%d: %s', post.id, e)
 
 
+# 每批处理的 B站 视频数（控制内存峰值，避免 51K+ 视频 + 评论一次性加载）
+_BILI_BATCH = 500
+
+
 def _bili_texts_from_videos(videos):
-    """从 B站视频列表提取各文本源，权重：字幕×5 > 标题×3 > 评论×2 > 标签×2 > 简介×1。"""
+    """从 B站视频列表提取各文本源，权重：字幕×5 > 标题×3 > 评论×2 > 标签×2 > 简介×1。
+
+    每次处理一批视频（_BILI_BATCH），加载其评论后立即丢弃，避免
+    全部评论驻留内存。返回 Generator 逐条产出拼接文本。
+    """
     from .models import BiliVideoComment
 
-    video_ids = [v.id for v in videos]
-    comment_map = {}
-    if video_ids:
-        for c in BiliVideoComment.query.filter(BiliVideoComment.video_id.in_(video_ids)).all():
-            comment_map.setdefault(c.video_id, []).append(c.content)
-
-    texts = []
-    for v in videos:
-        parts = []
-        if v.subtitle_text:
-            parts.extend([v.subtitle_text] * 5)
-        if v.title:
-            parts.extend([v.title] * 3)
-        for content in comment_map.get(v.id, []):
-            if content:
-                parts.extend([content] * 2)
-        if v.tags:
-            for t in v.tags:
-                parts.extend([t] * 2)
-        if v.description:
-            parts.append(v.description)
-        texts.append(' '.join(parts))
-    return texts
+    for i in range(0, len(videos), _BILI_BATCH):
+        batch = videos[i:i + _BILI_BATCH]
+        video_ids = [v.id for v in batch]
+        comment_map = {}
+        if video_ids:
+            batch_comments = BiliVideoComment.query.filter(
+                BiliVideoComment.video_id.in_(video_ids)
+            ).all()
+            for c in batch_comments:
+                comment_map.setdefault(c.video_id, []).append(c.content)
+        for v in batch:
+            parts = []
+            if v.subtitle_text:
+                parts.extend([v.subtitle_text] * 5)
+            if v.title:
+                parts.extend([v.title] * 3)
+            for content in comment_map.get(v.id, []):
+                if content:
+                    parts.extend([content] * 2)
+            if v.tags:
+                for t in v.tags:
+                    parts.extend([t] * 2)
+            if v.description:
+                parts.append(v.description)
+            yield ' '.join(parts)
+        del batch, video_ids, comment_map, batch_comments
+        _maybe_collect()
 
 
 def precompute_bili_wordclouds():
     """为 B站视频预计算词云并存入数据库。
 
-    汇总所有 B站视频的 title + description + tags + 评论，分词后计算词频，
-    写入 WordCloudData 表（source='bili'），同时按月分段和按 UP 主分段。
+    分批加载视频 + 评论，每批 _BILI_BATCH 个，避免 51K+ 视频
+    全部加载导致 OOM。每批处理后释放引用 + 触发 GC。
     """
     from . import db
     from .models import BiliUp, BiliVideo, WordCloudData, WordCloudConfig
     from sqlalchemy import func
 
     top_n = WordCloudConfig.get_or_create().top_n_bili
+    _log_memory(logger, 'precompute_bili_wordclouds start')
 
     # ── 全量 B站词云 ──
-    videos = BiliVideo.query.all()
-    texts = _bili_texts_from_videos(videos)
-    full_text = ' '.join(texts)
+    total = BiliVideo.query.count()
+    full_parts: list[str] = []
+    for offset in range(0, total, _BILI_BATCH):
+        batch = BiliVideo.query.offset(offset).limit(_BILI_BATCH).all()
+        for text in _bili_texts_from_videos(batch):
+            full_parts.append(text)
+        del batch
+        _maybe_collect()
+    full_text = ' '.join(full_parts)
     data = compute_word_frequencies(full_text, top_n=top_n) or []
     _save_bili_record('all', data)
+    _log_memory(logger, 'full done')
 
     # ── 按月分段 ──
     months = (
@@ -538,34 +593,61 @@ def precompute_bili_wordclouds():
         .all()
     )
     for (month_pubdate,) in months:
-        month_videos = BiliVideo.query.filter(
-            func.date_format(BiliVideo.pubdate, '%Y-%m') == month_pubdate,
-        ).all()
-        month_texts = _bili_texts_from_videos(month_videos)
-        month_full = ' '.join(month_texts)
-        month_data = compute_word_frequencies(month_full, top_n=top_n) or []
-        _save_bili_record(month_pubdate, month_data)
+        try:
+            month_parts: list[str] = []
+            month_total = BiliVideo.query.filter(
+                func.date_format(BiliVideo.pubdate, '%Y-%m') == month_pubdate,
+            ).count()
+            for offset in range(0, month_total, _BILI_BATCH):
+                batch = BiliVideo.query.filter(
+                    func.date_format(BiliVideo.pubdate, '%Y-%m') == month_pubdate,
+                ).offset(offset).limit(_BILI_BATCH).all()
+                for text in _bili_texts_from_videos(batch):
+                    month_parts.append(text)
+                del batch
+                _maybe_collect()
+            month_full = ' '.join(month_parts)
+            month_data = compute_word_frequencies(month_full, top_n=top_n) or []
+            _save_bili_record(month_pubdate, month_data)
+        except Exception as e:
+            logger.warning('📊 %s 月词云失败: %s', month_pubdate, e)
+        del month_parts
+        _maybe_collect()
 
     # ── 按 UP 主分段 ──
     for up in BiliUp.query.all():
-        up_videos = BiliVideo.query.filter_by(up_id=up.id).all()
-        up_texts = _bili_texts_from_videos(up_videos)
-        up_full = ' '.join(up_texts)
-        if not up_full.strip():
-            continue
-        up_data = compute_word_frequencies(up_full, top_n=top_n) or []
-        period = f'up_{up.id}'
-        record = WordCloudData.query.filter_by(post_id=None, source='bili', period=period).first()
-        if record is None:
-            record = WordCloudData(post_id=None, source='bili', period=period, data=up_data)
-            db.session.add(record)
-        else:
-            record.data = up_data
+        try:
+            up_videos = BiliVideo.query.filter_by(up_id=up.id).all()
+            if not up_videos:
+                continue
+            up_texts = list(_bili_texts_from_videos(up_videos))
+            up_full = ' '.join(up_texts)
+            if not up_full.strip():
+                continue
+            up_data = compute_word_frequencies(up_full, top_n=top_n) or []
+            period = f'up_{up.id}'
+            record = WordCloudData.query.filter_by(
+                post_id=None, source='bili', period=period
+            ).first()
+            if record is None:
+                record = WordCloudData(
+                    post_id=None, source='bili', period=period, data=up_data
+                )
+                db.session.add(record)
+            else:
+                record.data = up_data
+            db.session.flush()
+        except Exception as e:
+            logger.warning('📊 UP %s 词云失败: %s', up.id, e)
+        del up_videos, up_texts
+        _maybe_collect()
 
     db.session.commit()
+    _log_memory(logger, 'bili done, starting per-video')
 
     # 生成每期视频词云
     precompute_video_wordclouds()
+
 
 
 def _save_bili_record(period, data):
@@ -592,6 +674,8 @@ def _compute_video_wc_wrapper(video_id, app):
                 _compute_single_video_wordcloud(video)
         except Exception as e:
             logger.warning('📊 词云计算失败 id=%d: %s', video_id, e)
+        finally:
+            db.session.remove()
 
 
 def precompute_video_wordclouds():
@@ -604,11 +688,11 @@ def precompute_video_wordclouds():
     from flask import current_app
     from .models import BiliVideo
 
-    videos = BiliVideo.query.with_entities(BiliVideo.id).all()
-    video_ids = [v.id for v in videos]
+    total = BiliVideo.query.count()
+    video_ids = [r[0] for r in BiliVideo.query.with_entities(BiliVideo.id).all()]
     app = current_app._get_current_object()
-    total = len(video_ids)
     logger.info('📊 批量词云计算开始: 共 %d 个视频', total)
+    _log_memory(logger, 'precompute_video_wordclouds start')
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         futures = [pool.submit(_compute_video_wc_wrapper, vid, app) for vid in video_ids]
@@ -619,6 +703,10 @@ def precompute_video_wordclouds():
             except Exception as e:
                 logger.warning('📊 词云线程异常: %s', e)
             done += 1
+            if done % 500 == 0:
+                _maybe_collect(force=True)
+            if done % 5000 == 0:
+                _log_memory(logger, f'video wordcloud {done}/{total}')
             if done % 50 == 0:
                 logger.info('📊 词云进度: %d/%d', done, total)
 
@@ -692,6 +780,7 @@ def precompute_up_wordclouds(up_id: int):
     app = current_app._get_current_object()
     total = len(video_ids)
     logger.info('📊 UP %s 词云计算: 共 %d 个视频', up_id, total)
+    _log_memory(logger, f'precompute_up_wordclouds up_id={up_id} start')
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         futures = [pool.submit(_compute_video_wc_wrapper, vid, app) for vid in video_ids]
@@ -702,8 +791,10 @@ def precompute_up_wordclouds(up_id: int):
             except Exception as e:
                 logger.warning('📊 UP %s 词云线程异常: %s', up_id, e)
             done += 1
-            if done % 10 == 0:
+            if done % 100 == 0:
                 logger.info('📊 UP %s 词云进度: %d/%d', up_id, done, total)
+            if done % 500 == 0:
+                _maybe_collect(force=True)
 
     # ── 聚合 UP 主词云 ──
     all_videos = BiliVideo.query.filter_by(up_id=up_id).all()
