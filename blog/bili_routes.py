@@ -506,12 +506,28 @@ _scrape_progress: dict[int, list[str]] = {}
 # 上述三个共享状态的互斥锁 — 读写均需持有
 _scrape_lock = threading.Lock()
 # 每视频请求后的睡眠（防风控）— BASE + [0, JITTER) 秒
-_VIDEO_SLEEP_BASE = 7.0
-_VIDEO_SLEEP_JITTER = 3.0
+_VIDEO_SLEEP_BASE = 10.0
+_VIDEO_SLEEP_JITTER = 5.0
 # 全局熔断器 — 检测到 412 IP封禁后自动暂停所有爬取直到此时间戳（Unix 秒）
 _circuit_open_until: float = 0.0
 _circuit_lock = threading.Lock()
-_CIRCUIT_COOLDOWN = 60 * 60  # 封禁后冷却 60 分钟
+# 412 违规计数（近 1h 内次数），用于阶梯退避
+_circuit_attempts: list[float] = []
+_circuit_attempts_lock = threading.Lock()
+_CIRCUIT_MAX_COOLDOWN = 60 * 60  # 最大冷却 60 分钟
+
+
+def _circuit_compute_cooldown() -> float:
+    """阶梯退避：记录一次 412 并返回本次冷却秒数。
+    第1次 5min，第2次 10min，第3次 20min，第4次+ 60min（封顶）。
+    近 1 小时无新 412 自动重置计数器。
+    """
+    now = time.time()
+    with _circuit_attempts_lock:
+        _circuit_attempts[:] = [t for t in _circuit_attempts if now - t < 3600]
+        count = len(_circuit_attempts) + 1
+        _circuit_attempts.append(now)
+    return min(_CIRCUIT_MAX_COOLDOWN, (2 ** (count - 1)) * 300)
 
 # ── 词云工作队列（独立线程池，不与视频爬取互斥）──
 _WC_QUEUE_MAX = 500

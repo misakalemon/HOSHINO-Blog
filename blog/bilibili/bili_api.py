@@ -22,7 +22,7 @@ from bilibili_api import sync as _bili_sync
 from bilibili_api import user as _user_mod
 from bilibili_api import video as _video_mod
 
-from .config import PAGE_SIZE, REQUEST_INTERVAL
+from .config import PAGE_SIZE, REQUEST_INTERVAL, REQUEST_INTERVAL_JITTER, USER_AGENTS
 
 logger = logging.getLogger(__name__)
 
@@ -58,22 +58,30 @@ def was_recently_blocked(cooldown: float = 0) -> bool:
 _loop_local = threading.local()
 
 # 并发信号量 — 限制同时发往 B 站 API 的请求数，防风控
-_api_semaphore = threading.Semaphore(5)
+# 从 5 降到 3，减少瞬时并发压力；B站对同一 IP 并发超过 3-4 容易触发 412
+_api_semaphore = threading.Semaphore(3)
 
 # 单次 API 调用超时时间（秒）
 _API_TIMEOUT = 30.0
 
 
 def _sync(coro):
-    """在线程本地事件循环中执行协程，并发上限 5 路，单路 30s 超时。
+    """在线程本地事件循环中执行协程，并发上限 3 路，单路 30s 超时。
 
     每个线程拥有独立的 asyncio 事件循环（threading.local 隔离）。
+    每次请求前随机轮换 User-Agent，降低 B站 风控识别概率。
     超时或异常后关闭循环并重建，防止 fd/异步生成器资源泄漏。
 
         coro:     要执行的 asyncio 协程对象。
         returns:  协程执行结果。
         raises:   TimeoutError — 请求超时（30s 未返回）。
     """
+    # 随机轮换 User-Agent 降低风控
+    try:
+        from bilibili_api import settings as _bili_settings
+        _bili_settings.settings['user-agent'] = USER_AGENTS[random.randrange(len(USER_AGENTS))]
+    except Exception:
+        pass
     with _api_semaphore:
         loop = getattr(_loop_local, 'loop', None)
         if loop is None or loop.is_closed():
