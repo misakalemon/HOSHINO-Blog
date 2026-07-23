@@ -22,7 +22,11 @@
 #upListContainer.up-grid-view a[id^="up-"] > div:nth-child(2) > div:last-child { justify-content: center !important; }
 #upListContainer.up-grid-view a[id^="up-"] span:last-child { display: none !important; }
 /* 视图切换按钮激活状态 */
-#viewGridBtn, #viewListBtn { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); color: rgba(255,255,255,0.35); }\n#viewGridBtn.is-active, #viewListBtn.is-active { background: rgba(255,107,157,0.15) !important; border-color: rgba(255,107,157,0.25) !important; color: #ff8aae !important; }
+\n#viewGridBtn.is-active, #viewListBtn.is-active {
+    background: rgba(255,107,157,0.15) !important;
+    border-color: rgba(255,107,157,0.25) !important;
+    color: #ff8aae !important;
+}
 </style>
 {% endblock %}
 {% block content %}
@@ -303,6 +307,7 @@ document.getElementById('subscribeForm').addEventListener('submit', function(e) 
 
 <script>
 function switchView(mode) {
+    console.log('[视图切换]', mode);
     var c = document.getElementById('upListContainer');
     var g = document.getElementById('viewGridBtn');
     var l = document.getElementById('viewListBtn');
