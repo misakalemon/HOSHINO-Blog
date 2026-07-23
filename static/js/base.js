@@ -20,11 +20,11 @@
   if (!nav) return;
   // data-nav-auto 属性标记需要渐显行为的导航栏（仅首页）
   if (nav.hasAttribute('data-nav-auto')) {
-    var hero = document.querySelector('.hero');
+    var hero = document.querySelector('.hero, .hero-particle');
     // 无 Hero 区域时直接显示导航栏（非首页场景）
     if (!hero) { nav.classList.add('visible'); return; }
-    /** 滚动监听：切换导航栏可见性 */
-    function checkNav() { nav.classList.toggle('visible', window.scrollY > window.innerHeight * 0.2); }
+    /** 滚动监听：滚过英雄区 15% 高度后导航栏渐显 */
+    function checkNav() { nav.classList.toggle('visible', window.scrollY > hero.offsetHeight * 0.15); }
     window.addEventListener('scroll', checkNav, {passive:true});
     checkNav();
   }

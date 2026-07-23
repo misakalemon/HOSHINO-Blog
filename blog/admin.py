@@ -1733,21 +1733,24 @@ def wordcloud_config():
                     path = os.path.join(upload_dir, filename)
                     with open(path, 'wb') as f:
                         f.write(buf.getvalue())
-                    # 删除旧形状图片
+# 删除旧形状图片
                     if config.shape_image:
                         old_path = os.path.join(current_app.root_path, 'static', config.shape_image)
                         if os.path.isfile(old_path):
                             try: os.remove(old_path)
                             except OSError: pass
                     config.shape_image = 'uploads/' + filename
-                    config.shape = 'custom'  # 上传图片时自动切换为自定义形状
-                    form.shape.data = 'custom'  # 同步更新表单避免 populate_obj 还原
+                    # 标记图片已上传，populate_obj 后强制切 custom
+                    request._shape_uploaded = True
                     flash('形状图片已上传', 'success')
                 except Exception as e:
                     flash(f'形状图片处理失败: {e}', 'danger')
                     return render_template('admin/wordcloud_config.html', form=form, config=config)
 
         form.populate_obj(config)
+        # 如果上传了自定义形状图片，强制 shape 为 custom（覆盖表单提交值）
+        if getattr(request, '_shape_uploaded', False):
+            config.shape = 'custom'
         config.updated_at = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8)))
         db.session.commit()
         flash('词云配置已保存', 'success')
