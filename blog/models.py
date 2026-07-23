@@ -747,6 +747,8 @@ class WordCloudConfig(db.Model):
     color_scheme = db.Column(db.String(20), default='glow', nullable=False)
     # 自定义形状图片路径（上传后存 static/uploads/shape_<uuid>.webp，空字符串表示不使用）
     shape_image = db.Column(db.String(256), default='', nullable=False)
+    # 自定义屏蔽词（每行一个，分词后自动过滤）
+    stop_words = db.Column(db.Text, default='', nullable=False, comment='自定义屏蔽词，每行一个')
     # 是否在文章详情页显示词云
     enabled_article = db.Column(db.Boolean, default=True, nullable=False)
     # 是否在首页显示全站词云

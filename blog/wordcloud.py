@@ -355,6 +355,7 @@ def compute_word_frequencies(text: str, top_n: int = 60) -> Optional[list]:
     """计算词频，返回按权重降序排列的列表。
 
     使用 Counter 进行高效计数，自动过滤停用词和无效词。
+    同时加载 WordCloudConfig 中的自定义屏蔽词，分词后一并过滤。
 
     Args:
         text: 原始 Markdown 文本
@@ -367,9 +368,21 @@ def compute_word_frequencies(text: str, top_n: int = 60) -> Optional[list]:
     if not words:
         return None
 
-    # 使用 Counter 高效计数
+    # 加载用户自定义屏蔽词（每行一个）
+    try:
+        from .models import WordCloudConfig
+        cfg = WordCloudConfig.get_or_create()
+        if cfg.stop_words and cfg.stop_words.strip():
+            extra_stops = {
+                w.strip().lower() for w in cfg.stop_words.split('\n')
+                if w.strip()
+            }
+            if extra_stops:
+                words = [w for w in words if w.lower() not in extra_stops]
+    except Exception:
+        pass
+
     freq = Counter(words)
-    # 按词频降序，取 top_n
     most_common = freq.most_common(top_n)
 
     return [{'word': w, 'weight': c} for w, c in most_common]

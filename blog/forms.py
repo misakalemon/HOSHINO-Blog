@@ -273,3 +273,5 @@ class WordCloudConfigForm(FlaskForm):
     ], default='glow')
     enabled_article = BooleanField('文章详情页显示词云', default=True)
     enabled_site = BooleanField('首页显示全站词云', default=True)
+    stop_words = TextAreaField('自定义屏蔽词', default='',
+        description='每行一个词，这些词不会出现在任何词云中')
