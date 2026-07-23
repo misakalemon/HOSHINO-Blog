@@ -1740,6 +1740,8 @@ def wordcloud_config():
                             try: os.remove(old_path)
                             except OSError: pass
                     config.shape_image = 'uploads/' + filename
+                    config.shape = 'custom'  # 上传图片时自动切换为自定义形状
+                    form.shape.data = 'custom'  # 同步更新表单避免 populate_obj 还原
                     flash('形状图片已上传', 'success')
                 except Exception as e:
                     flash(f'形状图片处理失败: {e}', 'danger')

@@ -181,9 +181,27 @@
         }
     }
 
-    // 点击上传区触发文件选择
+    // 点击上传区时自动切形状为 "自定义图片"
     upload.addEventListener('click', function(e) {
         if (e.target.closest('.icon-remove')) return;
+        // 先切下拉
+        if (shapeSelect && shapeSelect.value !== 'custom') {
+            var opt = shapeSelect.querySelector('option[value="custom"]');
+            if (opt) {
+                shapeSelect.value = 'custom';
+                // 更新可视化菜单
+                var menu = selectWrap.querySelector('.glow-select-menu');
+                if (menu) {
+                    var items = menu.querySelectorAll('.glow-select-option');
+                    for (var i = 0; i < items.length; i++) {
+                        items[i].classList.toggle('is-selected', items[i].getAttribute('data-value') === 'custom');
+                    }
+                }
+                var trigger = selectWrap.querySelector('.glow-select-value');
+                if (trigger) trigger.textContent = '自定义图片';
+            }
+        }
+        toggleSection();
         imgInput.click();
     });
 
