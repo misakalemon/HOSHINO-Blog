@@ -130,7 +130,7 @@
     </div>
     {% elif pagination %}
     <!-- UP 主列表 -->
-    <div id="upListContainer" class="up-list-view" style="display:grid;gap:12px"
+    <div id="upListContainer" class="up-list-view" style="display:grid;gap:12px">
         {% for up in pagination.items %}
         <a id="up-{{ up.id }}" href="{{ url_for('bili_public.up_videos', up_id=up.id) }}#up-{{ up.id }}"
            style="display:flex;align-items:center;gap:16px;padding:16px 20px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:16px;text-decoration:none;transition:all 0.2s"
@@ -300,17 +300,7 @@ document.getElementById('subscribeForm').addEventListener('submit', function(e) 
 
 {% if bili_wordcloud %}
 <script src="{{ url_for('static', filename='js/wordcloud.js') }}?v=5" defer></script>
-<style>
-#upListContainer.up-grid-view { display: grid !important; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)) !important; gap: 12px !important; }
-#upListContainer.up-grid-view a[id^="up-"] { display: block !important; text-align: center; padding: 24px 16px 20px !important; }
-#upListContainer.up-grid-view a[id^="up-"] > div:first-child { float: none; display: flex; justify-content: center; margin-bottom: 12px; }
-#upListContainer.up-grid-view a[id^="up-"] > div:first-child img,
-#upListContainer.up-grid-view a[id^="up-"] > div:first-child div { width: 64px !important; height: 64px !important; font-size: 28px !important; }
-#upListContainer.up-grid-view a[id^="up-"] > div:nth-child(2) { flex: none !important; min-width: 0; }
-#upListContainer.up-grid-view a[id^="up-"] > div:nth-child(2) > div:last-child { justify-content: center !important; }
-#upListContainer.up-grid-view a[id^="up-"] span:last-child { display: none !important; }
-#viewGridBtn.is-active, #viewListBtn.is-active { background: rgba(255,107,157,0.15) !important; border-color: rgba(255,107,157,0.25) !important; color: #ff8aae !important; }
-</style>
+
 <script>
 function switchView(mode) {
     var c = document.getElementById('upListContainer');
