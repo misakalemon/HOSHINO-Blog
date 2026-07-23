@@ -402,16 +402,23 @@ def _init_scheduler(app):
         # 每天 02:10 重新计算全站词云（博客 + B站）
         from blog.wordcloud import precompute_all_wordclouds, precompute_bili_wordclouds
 
+        def _run_all_wc():
+            with app.app_context():
+                precompute_all_wordclouds()
         scheduler.add_job(
-            func=lambda: precompute_all_wordclouds(),
+            func=_run_all_wc,
             trigger='cron',
             hour=2,
             minute=10,
             id='daily_wordcloud_recompute',
             replace_existing=True,
         )
+
+        def _run_bili_wc():
+            with app.app_context():
+                precompute_bili_wordclouds()
         scheduler.add_job(
-            func=lambda: precompute_bili_wordclouds(),
+            func=_run_bili_wc,
             trigger='cron',
             hour=2,
             minute=15,
