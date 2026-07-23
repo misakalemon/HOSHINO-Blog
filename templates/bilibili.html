@@ -95,8 +95,8 @@
             <div style="flex:1;min-width:0">
                 <div style="color:#d0c8f0;font-weight:500;font-size:0.9rem">{{ up.name or 'UP主 #' + up.mid|string }}</div>
                 <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:0.75rem;color:rgba(255,255,255,0.35);margin-top:3px">
-                    <span>👥 {{ '{:,}'.format(up.follower_count) if up.follower_count else '?' }} 粉丝</span>
-                    <span>📹 {{ up.video_count }} 视频</span>
+                    <span>👥 {{ up.follower_display }}</span>
+                    <span>📹 {{ up.video_display }} 视频</span>
                 </div>
             </div>
             <span style="color:rgba(255,255,255,0.2);font-size:0.75rem">查看视频 →</span>
@@ -150,8 +150,8 @@
             <div style="flex:1;min-width:0">
                 <div style="color:#d0c8f0;font-weight:500;font-size:0.95rem">{{ up.name or 'UP主 #' + up.mid|string }}</div>
                 <div style="display:flex;flex-wrap:wrap;gap:16px;font-size:0.8rem;color:rgba(255,255,255,0.35);margin-top:4px">
-                    <span>👥 {{ '{:,}'.format(up.follower_count) if up.follower_count else '?' }} 粉丝</span>
-                    <span>📹 {{ up.video_count }} 视频</span>
+                    <span>👥 {{ up.follower_display }}</span>
+                    <span>📹 {{ up.video_display }} 视频</span>
                 </div>
             </div>
             <span style="color:rgba(255,255,255,0.2);font-size:0.8rem">查看视频 →</span>

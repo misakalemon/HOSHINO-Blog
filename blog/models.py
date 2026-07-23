@@ -460,6 +460,28 @@ class BiliUp(db.Model):
         """返回 HTTPS 协议的头像 URL（强制替换 http:// → https://）。"""
         return (self.avatar or '').replace('http://', 'https://')
 
+    @property
+    def follower_display(self) -> str:
+        """粉丝数简写：≥1亿 → X.X亿（去.0），≥1万 → X.X万（去.0），≥1千 → 逗号，其它→原值。"""
+        n = self.follower_count or 0
+        if n >= 100_000_000:
+            s = f'{n / 100_000_000:.1f}亿'
+            return s.replace('.0亿', '亿')
+        if n >= 10_000:
+            s = f'{n / 10_000:.1f}万'
+            return s.replace('.0万', '万')
+        if n >= 1_000:
+            return f'{n:,}'
+        return str(n)
+
+    @property
+    def video_display(self) -> str:
+        """视频数显示（None / 0 时显示 0，≥1000 加逗号）。"""
+        n = self.video_count or 0
+        if n >= 1_000:
+            return f'{n:,}'
+        return str(n)
+
 
 class BiliVideo(db.Model):
     """B站视频数据
