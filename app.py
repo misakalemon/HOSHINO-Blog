@@ -58,7 +58,7 @@ class _MultiKeySessionInterface(SecureCookieSessionInterface):
             return None
         fallbacks = app.config.get('SECRET_KEY_FALLBACKS', [])
         salt = self.get_cookie_salt(app)
-        serializer = self.serializer_class()
+        serializer = self.serializer
         signer_kwargs = dict(
             key_derivation=self.key_derivation,
             digest_method=self.digest_method,
