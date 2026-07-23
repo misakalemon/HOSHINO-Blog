@@ -1754,6 +1754,9 @@ def wordcloud_config():
         config.updated_at = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8)))
         db.session.commit()
         flash('词云配置已保存', 'success')
+        # 自动投递全量词云重算（使屏蔽词等立即生效）
+        from .wordcloud import submit_task
+        submit_task('all')
         return redirect(url_for('admin.wordcloud_config'))
 
     return render_template('admin/wordcloud_config.html', form=form, config=config)

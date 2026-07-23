@@ -792,7 +792,7 @@ def _migrate_wordcloud_config_fields(app):
         'enabled_article': 'TINYINT(1) NOT NULL DEFAULT 1',
         'enabled_site': 'TINYINT(1) NOT NULL DEFAULT 1',
         'shape_image': "VARCHAR(256) NOT NULL DEFAULT ''",
-        'stop_words': 'TEXT NOT NULL',
+        'stop_words': "TEXT NOT NULL DEFAULT ''",
     }
     for col_name, col_def in missing.items():
         if col_name not in cols:

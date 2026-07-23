@@ -378,9 +378,10 @@ def compute_word_frequencies(text: str, top_n: int = 60) -> Optional[list]:
                 if w.strip()
             }
             if extra_stops:
+                logger.info('词云屏蔽词生效: %d 个', len(extra_stops))
                 words = [w for w in words if w.lower() not in extra_stops]
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning('词云屏蔽词加载失败: %s', e)
 
     freq = Counter(words)
     most_common = freq.most_common(top_n)
