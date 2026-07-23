@@ -305,7 +305,7 @@ if('IntersectionObserver' in window){
 </script>
 
 {% if wordcloud_periods and wc_config.get('enabled_site', True) %}
-<script src="{{ url_for('static', filename='js/wordcloud.js') }}?v=2" defer></script>
+<script src="{{ url_for('static', filename='js/wordcloud.js') }}?v=5" defer></script>
 <script>
 document.addEventListener('DOMContentLoaded', function(){
   initWordCloud('wcSite', { maxFont: 42, minFont: 13 });

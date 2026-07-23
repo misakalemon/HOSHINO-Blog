@@ -208,7 +208,10 @@
         var imgUrl = opts.shapeImage;
         if (imgUrl.indexOf('//') < 0 && imgUrl.indexOf('/') === 0) imgUrl = imgUrl;
         else if (imgUrl.indexOf('//') < 0) imgUrl = '/static/' + imgUrl;
+        console.log('[词云] 加载自定义形状图片:', imgUrl);
         _loadShapeImage(imgUrl, 0, 0, function () {
+            if (_shapeMaskData) console.log('[词云] 形状图片已加载, 尺寸:', _shapeMaskW, 'x', _shapeMaskH);
+            else console.warn('[词云] 形状图片加载失败，回退为矩形');
             _renderWordCloud(canvas, data, opts);
         });
         return;
@@ -235,11 +238,11 @@ function _renderWordCloud(canvas, data, opts) {
     _shapeMaskCanvasWidth = w;
     _shapeMaskCanvasHeight = h;
 
-    // 字号自动适配画布高度（配置的 maxFont/minFont 仅作参考上限）
+    // 字号自动适配画布高度 — 用 max 确保配置值作为最低下限
     var refMax = opts.maxFont || 48;
     var refMin = opts.minFont || 14;
-    var maxFont = Math.min(refMax, (h * 0.25) | 0);       // ≤ 画布高的 25%
-    var minFont = Math.max(refMin, (h * 0.03) | 0);        // ≥ 画布高的 3%
+    var maxFont = Math.max(refMax, (h * 0.18) | 0);       // ≥ 画布高的 18%（或用配置值）
+    var minFont = Math.max(refMin, (h * 0.04) | 0);        // ≥ 画布高的 4%（或用配置值）
     // 确保 maxFont >= minFont
     if (maxFont < minFont + 4) maxFont = minFont + 4;
 
