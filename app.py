@@ -386,9 +386,13 @@ def _run_bili_incremental_check(app):
     如果全局熔断（_circuit_open_until）未到期，则跳过本轮检查。
 
     跑完一轮后自动调度下一轮（间隔 30 分钟），形成持续的增量检查循环。
+
+    若数据库不可达（MySQL 未启动），30 秒后重试而不是 30 分钟，
+    避免服务挂起期间人为等待过久，同时不会塞爆日志。
     """
     from datetime import datetime, timedelta
 
+    retry_seconds = 30 * 60  # 默认 30 分钟后重试
     try:
         with app.app_context():
             import logging
@@ -451,18 +455,24 @@ def _run_bili_incremental_check(app):
                             mid, THREAD_TIMEOUT
                         )
     except Exception as e:
-        app.logger.error('B站 增量检查异常: %s', e, exc_info=True)
+        err_str = str(e)
+        if 'Can\'t connect to MySQL' in err_str or '2003' in err_str:
+            app.logger.critical(
+                '❌ MySQL 服务不可达！请启动 MySQL 服务。30 秒后重试...'
+            )
+            retry_seconds = 30
+        else:
+            app.logger.error('B站 增量检查异常: %s', e, exc_info=True)
+            retry_seconds = 30
     finally:
-        # 即使熔断早退或抛出异常，也要重新调度下一轮，避免检查永久停止
         try:
             app.scheduler.add_job(
                 func=lambda: _run_bili_incremental_check(app),
                 trigger='date',
-                run_date=datetime.now() + timedelta(minutes=30),
+                run_date=datetime.now() + timedelta(seconds=retry_seconds),
                 id='bili_incremental_check',
                 replace_existing=True,
             )
-            app.logger.info('B站 增量检查完成（或跳过），30 分钟后开始下一轮')
         except Exception:
             app.logger.warning('B站 增量检查无法重新调度（调度器可能已关闭）')
 
