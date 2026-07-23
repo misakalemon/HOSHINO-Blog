@@ -414,6 +414,7 @@ function _renderWordCloud(canvas, data, opts) {
         opts.canvasHeight = cfg.canvasHeight || opts.canvasHeight;
         opts.maxFont = cfg.maxFont || opts.maxFont || 48;
         opts.minFont = cfg.minFont || opts.minFont || 14;
+        if (opts.shape === 'custom') console.log('[词云] 自定义形状 shapeImage:', opts.shapeImage || '(空)');
       } catch(e) { console.warn('[词云] data-wc-config 解析失败', e); }
     }
     opts.searchUrl = canvas.getAttribute('data-wc-search-url') || opts.searchUrl;
