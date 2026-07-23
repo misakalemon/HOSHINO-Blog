@@ -22,9 +22,6 @@ class AmazonScraper:
         self._ready = True
         self._proxy = None
 
-    def set_proxy(self, proxy_url):
-        self._proxy = proxy_url
-
     def _get(self, url, timeout=10):
         kwargs = {'impersonate': 'chrome', 'timeout': timeout}
         if self._proxy:

@@ -87,7 +87,6 @@ class PostForm(FlaskForm):
       两者可以同时存在，渲染时优先使用 HTML 模式。
     """
     title = StringField('标题', validators=[DataRequired(), Length(max=256)])          # 文章标题，必填
-    from wtforms.validators import Regexp
     # slug 正则限制：只允许小写字母、数字和连字符，保证 URL 友好
     slug = StringField('链接标识 (URL)', validators=[DataRequired(), Length(max=256), Regexp(r'^[a-z0-9\-]+$', message='只允许小写字母、数字和连字符')])
     summary = TextAreaField('摘要', validators=[Optional()])                           # 文章摘要，选填

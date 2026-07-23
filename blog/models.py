@@ -24,7 +24,6 @@ HOSHINO Blog — 数据模型
   BiliCleanupConfig  — B 站历史快照自动清理配置
 
 --- 其他 ---
-  ExchangeRate       — 汇率记录（外币对人民币，Exa 爬取）
 
 关联关系摘要：
   User ──1:N──→ Post             一个用户有多篇文章
@@ -417,25 +416,6 @@ class FeaturedCard(db.Model):
         default=lambda: datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))),
         onupdate=lambda: datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))),
     )
-
-
-class ExchangeRate(db.Model):
-    """汇率记录（外币对人民币）。
-
-    每次 Exa 爬取时自动记录各币种实时汇率，
-    用于汇率走势分析和历史回溯。
-    __tablename__ = 'exchange_rates'
-    """
-
-    __tablename__ = 'exchange_rates'
-
-    id = db.Column(db.Integer, primary_key=True)
-    currency = db.Column(db.String(10), nullable=False, index=True)  # 币种代码（USD / EUR / GBP / JPY 等）
-    rate = db.Column(db.Float, nullable=False)  # 兑换人民币汇率（1 外币 = rate CNY）
-    recorded_at = db.Column(
-        db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))), index=True
-    )
-
 
 # ── Bilibili 数据 ────────────────────────────────
 

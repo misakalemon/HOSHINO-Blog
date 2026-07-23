@@ -50,7 +50,6 @@ import os
 import threading
 import time
 import uuid
-from collections import defaultdict
 from functools import wraps
 
 from flask import (
