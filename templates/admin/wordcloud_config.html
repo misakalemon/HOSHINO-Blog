@@ -42,6 +42,17 @@
                 </div>
             </div>
             <span class="form-hint">词云形状，影响词语的布局范围</span>
+            <!-- 自定义形状图片上传区，选择 "自定义图片" 时显示 -->
+            <div id="shapeImageSection" style="display:none;margin-top:12px">
+                <div class="icon-upload" id="shapeImageUpload" style="min-height:80px">
+                    <img id="shapeImagePreview" src="" style="display:none;max-height:160px;border-radius:12px" alt="形状预览">
+                    <span id="shapeImagePlaceholder">点击上传形状图片<br><small>PNG / WebP / JPEG，≤512×512</small></span>
+                    <span id="shapeImageRemove" class="icon-remove" style="display:none" onclick="deleteShapeImage(event)">× 删除</span>
+                    <input type="file" id="shapeImageInput" accept="image/png,image/webp,image/jpeg" style="display:none">
+                </div>
+                <input type="hidden" name="delete_shape_image" id="deleteShapeImage" value="0">
+                <span class="form-hint">图片的非透明区域即为词云形状边界</span>
+            </div>
         </div>
 
         <div class="form-row">
@@ -121,4 +132,86 @@
     <p class="admin-desc">词云数据预计算存储于数据库，修改配置后需重新计算才能生效。</p>
     <a href="{{ url_for('admin.refresh_wordcloud') }}" class="btn btn-ghost" onclick="return confirm('确定重新计算所有词云？此操作可能需要几秒钟。')">⟳ 重新计算词云</a>
 </div>
+
+<style>
+.icon-upload { border:2px dashed var(--border-subtle); border-radius:16px; padding:24px; text-align:center; cursor:pointer; transition:all 0.3s; position:relative; min-height:80px; display:flex; align-items:center; justify-content:center; }
+.icon-upload:hover { border-color:var(--accent); background:rgba(108,66,209,0.03); }
+.icon-upload.has-image { padding:8px; border-style:solid; }
+.icon-upload img { max-width:100%; max-height:160px; border-radius:12px; display:block; }
+.icon-remove { position:absolute; top:6px; right:6px; background:rgba(255,45,120,0.8); color:#fff; border:none; border-radius:6px; padding:2px 10px; font-size:11px; cursor:pointer; display:none; z-index:2; }
+.icon-upload.has-image .icon-remove { display:block; }
+</style>
+<script>
+(function(){
+    var selectWrap = document.querySelector('.glow-select-wrap');
+    var shapeSelect = selectWrap ? selectWrap.querySelector('select[name="shape"]') : null;
+    var section = document.getElementById('shapeImageSection');
+    var imgInput = document.getElementById('shapeImageInput');
+    var upload = document.getElementById('shapeImageUpload');
+    var preview = document.getElementById('shapeImagePreview');
+    var placeholder = document.getElementById('shapeImagePlaceholder');
+    var removeBtn = document.getElementById('shapeImageRemove');
+    var deleteFlag = document.getElementById('deleteShapeImage');
+
+    function toggleSection() {
+        if (!shapeSelect || !section) return;
+        section.style.display = shapeSelect.value === 'custom' ? '' : 'none';
+    }
+
+    // 监听形状选择变化
+    // 由于 glow-select 通过 JS 更新隐藏 select 的值，用 MutationObserver 或轮询
+    if (shapeSelect) {
+        shapeSelect.addEventListener('change', toggleSection);
+        // 初始状态
+        toggleSection();
+        // 如果有已保存的图片，显示预览
+        var savedImg = '{{ config.shape_image if config else "" }}';
+        if (savedImg) {
+            preview.src = '/static/' + savedImg;
+            preview.style.display = '';
+            if (placeholder) placeholder.style.display = 'none';
+            upload.classList.add('has-image');
+            removeBtn.style.display = '';
+        }
+    }
+
+    // 点击上传区触发文件选择
+    upload.addEventListener('click', function(e) {
+        if (e.target.closest('.icon-remove')) return;
+        imgInput.click();
+    });
+
+    // 文件选择后预览
+    imgInput.addEventListener('change', function() {
+        var file = imgInput.files[0];
+        if (!file) return;
+        if (file.size > 1024 * 1024) {
+            alert('图片大小不能超过 1MB');
+            imgInput.value = '';
+            return;
+        }
+        var reader = new FileReader();
+        reader.onload = function(ev) {
+            preview.src = ev.target.result;
+            preview.style.display = '';
+            if (placeholder) placeholder.style.display = 'none';
+            upload.classList.add('has-image');
+            removeBtn.style.display = '';
+            deleteFlag.value = '0';
+        };
+        reader.readAsDataURL(file);
+    });
+
+    window.deleteShapeImage = function(e) {
+        e.stopPropagation();
+        preview.src = '';
+        preview.style.display = 'none';
+        if (placeholder) placeholder.style.display = '';
+        upload.classList.remove('has-image');
+        removeBtn.style.display = 'none';
+        deleteFlag.value = '1';
+        imgInput.value = '';
+    };
+})();
+</script>
 {% endblock %}

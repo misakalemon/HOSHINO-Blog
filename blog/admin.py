@@ -1699,13 +1699,59 @@ def wordcloud_config():
     form = WordCloudConfigForm(obj=config)
 
     if form.validate_on_submit():
+        # 处理自定义形状图片上传
+        if request.form.get('delete_shape_image') == '1':
+            config.shape_image = ''
+        elif 'shape_image' in request.files:
+            file = request.files['shape_image']
+            if file and file.filename:
+                ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else 'png'
+                if ext not in ('png', 'webp', 'jpg', 'jpeg'):
+                    flash('仅支持 PNG / WebP / JPEG 格式的形状图片', 'danger')
+                    return render_template('admin/wordcloud_config.html', form=form, config=config)
+                try:
+                    from PIL import Image
+                    import io as _io
+                    magic = file.read(12)
+                    file.seek(0)
+                    if magic[:8] != b'\x89PNG\r\n\x1a\n' and magic[:4] not in (b'\xff\xd8', b'RIFF'):
+                        flash('不是有效的图片文件', 'danger')
+                        return render_template('admin/wordcloud_config.html', form=form, config=config)
+                    img = Image.open(file)
+                    img.verify()
+                    file.seek(0)
+                    img = Image.open(file)
+                    w, h_ = img.size
+                    if max(w, h_) > 512:
+                        scale = 512 / max(w, h_)
+                        img = img.resize((int(w * scale), int(h_ * scale)), Image.LANCZOS)
+                    buf = _io.BytesIO()
+                    img.save(buf, 'WEBP', quality=80)
+                    filename = 'shape_' + str(uuid.uuid4()) + '.webp'
+                    upload_dir = os.path.join(current_app.root_path, 'static', 'uploads')
+                    os.makedirs(upload_dir, exist_ok=True)
+                    path = os.path.join(upload_dir, filename)
+                    with open(path, 'wb') as f:
+                        f.write(buf.getvalue())
+                    # 删除旧形状图片
+                    if config.shape_image:
+                        old_path = os.path.join(current_app.root_path, 'static', config.shape_image)
+                        if os.path.isfile(old_path):
+                            try: os.remove(old_path)
+                            except OSError: pass
+                    config.shape_image = 'uploads/' + filename
+                    flash('形状图片已上传', 'success')
+                except Exception as e:
+                    flash(f'形状图片处理失败: {e}', 'danger')
+                    return render_template('admin/wordcloud_config.html', form=form, config=config)
+
         form.populate_obj(config)
         config.updated_at = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8)))
         db.session.commit()
         flash('词云配置已保存', 'success')
         return redirect(url_for('admin.wordcloud_config'))
 
-    return render_template('admin/wordcloud_config.html', form=form)
+    return render_template('admin/wordcloud_config.html', form=form, config=config)
 
 
 @admin_bp.route('/wordcloud/refresh')

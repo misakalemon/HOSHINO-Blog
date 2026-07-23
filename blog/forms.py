@@ -258,6 +258,7 @@ class WordCloudConfigForm(FlaskForm):
         ('heart', '心形 ♥'),
         ('cloud', '云朵 ☁'),
         ('rectangle', '矩形 ▭'),
+        ('custom', '自定义图片'),
     ], default='circle')
     max_font = IntegerField('最大字号（px）', default=48, validators=[Optional()])
     min_font = IntegerField('最小字号（px）', default=14, validators=[Optional()])

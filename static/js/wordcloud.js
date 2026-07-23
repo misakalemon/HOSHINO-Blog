@@ -83,9 +83,54 @@
       case 'star':   return _isInsideStar(px, py, cx, cy, maxR);
       case 'heart':  return _isInsideHeart(px, py, cx, cy, maxR);
       case 'cloud':  return _isInsideCloud(px, py, cx, cy, maxR, w, h);
+      case 'custom': return _isInsideCustom(px, py);
       default:       return true; // rectangle
     }
   }
+
+  // 自定义形状图片的离屏 Canvas + 像素缓存
+  var _shapeMaskCanvas = null;
+  var _shapeMaskData = null;
+  var _shapeMaskW = 0;
+  var _shapeMaskH = 0;
+
+  function _loadShapeImage(url, canvasW, canvasH, callback) {
+    var img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = function () {
+      var offCanvas = document.createElement('canvas');
+      offCanvas.width = img.width;
+      offCanvas.height = img.height;
+      var offCtx = offCanvas.getContext('2d');
+      offCtx.drawImage(img, 0, 0);
+      _shapeMaskCanvas = offCanvas;
+      _shapeMaskData = offCtx.getImageData(0, 0, img.width, img.height);
+      _shapeMaskW = img.width;
+      _shapeMaskH = img.height;
+      callback();
+    };
+    img.onerror = function () {
+      _shapeMaskData = null;
+      callback();
+    };
+    img.src = url;
+  }
+
+  function _isInsideCustom(px, py) {
+    if (!_shapeMaskData) return true;  // 图片未加载时全区域开放
+    var iw = _shapeMaskW;
+    var ih = _shapeMaskH;
+    // 将画布坐标映射到图片坐标（保持比例 + 居中）
+    var ix = ((px / _shapeMaskCanvasWidth) * iw) | 0;
+    var iy = ((py / _shapeMaskCanvasHeight) * ih) | 0;
+    if (ix < 0 || ix >= iw || iy < 0 || iy >= ih) return false;
+    var idx = (iy * iw + ix) * 4 + 3;  // alpha channel offset
+    return _shapeMaskData.data[idx] > 128;
+  }
+
+  // 存储画布尺寸供坐标映射
+  var _shapeMaskCanvasWidth = 0;
+  var _shapeMaskCanvasHeight = 0;
 
   function _isInsideCircle(px, py, cx, cy, maxR) {
     var dx = (px | 0) - cx;
@@ -158,11 +203,37 @@
     var searchUrl = opts.searchUrl || '/search?q=';
     var maxDisplay = opts.maxDisplay || 100;
 
+    // 自定义形状：先加载图片，再执行渲染
+    if (shape === 'custom' && opts.shapeImage) {
+        var imgUrl = opts.shapeImage;
+        if (imgUrl.indexOf('//') < 0 && imgUrl.indexOf('/') === 0) imgUrl = imgUrl;
+        else if (imgUrl.indexOf('//') < 0) imgUrl = '/static/' + imgUrl;
+        _loadShapeImage(imgUrl, 0, 0, function () {
+            _renderWordCloud(canvas, data, opts);
+        });
+        return;
+    }
+    _renderWordCloud(canvas, data, opts);
+}
+
+function _renderWordCloud(canvas, data, opts) {
+    opts = opts || {};
+    var shape = opts.shape || 'circle';
+    var colorScheme = opts.colorScheme || 'glow';
+    var padding = opts.padding || 20;
+    var dpr = opts.dpr || (window.devicePixelRatio || 1);
+    var searchUrl = opts.searchUrl || '/search?q=';
+    var maxDisplay = opts.maxDisplay || 100;
+
     // 计算画布尺寸
     var rect = canvas.parentElement.getBoundingClientRect();
     var w = (rect.width || canvas.parentElement.clientWidth || 600) | 0;
     var defaultH = Math.max(300, Math.min(500, (w * 0.5) | 0)) | 0;
     var h = opts.canvasHeight || defaultH;
+
+    // 自定义形状坐标映射尺寸
+    _shapeMaskCanvasWidth = w;
+    _shapeMaskCanvasHeight = h;
 
     // 字号自动适配画布高度（配置的 maxFont/minFont 仅作参考上限）
     var refMax = opts.maxFont || 48;
@@ -335,6 +406,7 @@
       try {
         var cfg = JSON.parse(cfgRaw);
         opts.shape = cfg.shape || opts.shape || 'circle';
+        opts.shapeImage = cfg.shapeImage || opts.shapeImage || '';
         opts.colorScheme = cfg.color_scheme || opts.colorScheme || 'glow';
         opts.canvasHeight = cfg.canvasHeight || opts.canvasHeight;
         opts.maxFont = cfg.maxFont || opts.maxFont || 48;
