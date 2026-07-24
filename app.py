@@ -31,7 +31,7 @@ import signal
 import time
 
 from dotenv import load_dotenv
-from flask import Flask, request
+from flask import Flask, render_template, request
 from flask_compress import Compress
 from flask_login import LoginManager
 from flask_wtf.csrf import CSRFProtect
