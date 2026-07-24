@@ -280,14 +280,32 @@ def create_app():
             request.path,
         )
         return (
-            f'<h1>413 Request Entity Too Large</h1><p>请求体过大 (Content-Length: {request.content_length})，'
-            f'当前限制: {app.config["MAX_CONTENT_LENGTH"] // 1024 // 1024}MB。'
-            f'请减小文件或联系管理员。</p>',
-            413,
-            {'Content-Type': 'text/html; charset=utf-8'},
-        )
+        f'<h1>413 Request Entity Too Large</h1><p>请求体过大 (Content-Length: {request.content_length})，'
+        f'当前限制: {app.config["MAX_CONTENT_LENGTH"] // 1024 // 1024}MB。'
+        f'请减小文件或联系管理员。</p>',
+        413,
+        {'Content-Type': 'text/html; charset=utf-8'},
+    )
 
     app.register_error_handler(RequestEntityTooLarge, _handle_413)
+
+    # ── 通用错误页面 ────────────────────────────
+
+    def _handle_404(e):
+        """404 页面不存在。"""
+        return render_template('errors/404.html'), 404
+
+    def _handle_403(e):
+        """403 权限不足。"""
+        return render_template('errors/403.html'), 403
+
+    def _handle_500(e):
+        """500 服务器内部错误。"""
+        return render_template('errors/500.html'), 500
+
+    app.register_error_handler(404, _handle_404)
+    app.register_error_handler(403, _handle_403)
+    app.register_error_handler(500, _handle_500)
 
     # ── 全局请求日志中间件 ───────────────────────
     # 每次 HTTP 响应返回到客户端之前执行 log_request()
