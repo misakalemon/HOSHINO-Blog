@@ -131,6 +131,7 @@ def _sanitize_html(html: str) -> str:
 
 
 from .forms import (
+    CategoryForm,
     FeaturedCardForm,
     HeroImageForm,
     LoginForm,
