@@ -61,13 +61,9 @@
 <div class="glow-bg"></div>
 
 
-<!-- 英雄区域：如果存在搜索关键词则显示搜索结果标题，否则显示默认欢迎语 -->
-{% if search_query %}
-<section class="hero">
-    <h1>搜索：<span class="highlight">{{ search_query }}</span></h1>
-    <p>找到 {{ posts.total if posts.total is defined else 0 }} 篇相关文章</p>
-</section>
-{% elif hero_image %}
+<!-- 英雄区域：仅首页显示，搜索结果页不显示 -->
+{% if not search_query %}
+{% if hero_image %}
 <section class="hero-particle" id="heroSection">
     <canvas id="particleCanvas" data-src="{{ hero_image }}"></canvas>
     <div id="particleLoader"><div class="bar"><i></i></div>粒子重构中 …</div>
@@ -89,6 +85,7 @@
     <p>{{ blog_subtitle }}</p>
     <div class="scroll-hint" onclick="document.querySelector('.featured-grid').scrollIntoView({behavior:'smooth'})"><span>↓ 向下滚动 ↓</span></div>
 </section>
+{% endif %}
 {% endif %}
 
 <!-- 特色卡片网格：遍历所有特色卡片 -->
