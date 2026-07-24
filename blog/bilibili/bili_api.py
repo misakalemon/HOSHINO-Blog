@@ -592,7 +592,7 @@ def get_video_subtitle(bvid: str) -> str:
         pages = _sync(v.get_pages())
         if not pages:
             return ''
-        cid = pages[0].get('cid', 0) or pages[0].get('page', {}).get('cid', 0) or pages[0].get('first_cid', 0)
+        cid = getattr(pages[0], 'cid', 0)
         if not cid:
             return ''
     except Exception as e:
