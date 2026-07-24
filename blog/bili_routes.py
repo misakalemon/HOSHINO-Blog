@@ -511,6 +511,8 @@ _VIDEO_SLEEP_JITTER = 5.0
 # 全局熔断器 — 检测到 412 IP封禁后自动暂停所有爬取直到此时间戳（Unix 秒）
 _circuit_open_until: float = 0.0
 _circuit_lock = threading.Lock()
+# 全局熔断时长（秒）：检测到 412 封禁后暂停所有爬取 1 小时
+_CIRCUIT_COOLDOWN = 3600
 # 412 违规计数（近 1h 内次数），用于阶梯退避
 _circuit_attempts: list[float] = []
 _circuit_attempts_lock = threading.Lock()

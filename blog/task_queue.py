@@ -74,10 +74,8 @@ def get_task():
         _, data = redis_client.brpop(_TASK_QUEUE_KEY, timeout=5)
         if data:
             return json.loads(data)
-    except (TimeoutError, TypeError):
-        return None
-    except Exception as e:
-        logger.debug('获取任务失败: %s', e)
+    except Exception:
+        pass
     return None
 
 
