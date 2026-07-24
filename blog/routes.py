@@ -450,8 +450,8 @@ new ResizeObserver(h).observe(document.body);})();
                 "script-src 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; "
                 "style-src 'unsafe-inline' 'self' https://fonts.googleapis.com https://cdnjs.cloudflare.com; "
                 "img-src 'self' data: https:; "
-                "font-src 'self' https://fonts.gstatic.com; "
-                "connect-src 'self'; "
+                "font-src 'self' data: https://fonts.gstatic.com; "
+                "connect-src 'self' https:; "
                 "frame-src 'none'; "
                 "object-src 'none'"
             ),
