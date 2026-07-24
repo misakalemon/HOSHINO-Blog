@@ -184,21 +184,22 @@ def refresh_up(up_id):
         HTTP 重定向到 up_detail 页
     """
     up = BiliUp.query.get_or_404(up_id)
+    from blog.task_queue import is_running
     with _scrape_lock:
-        if up.mid in _scrape_running:
-            from blog.task_queue import is_running
-            if is_running(up.mid):
-                flash('该 UP 主正在爬取中', 'error')
-                return redirect(url_for('bili.up_detail', up_id=up_id))
+        if is_running(up.mid) or up.mid in _scrape_running:
+            flash('该 UP 主正在爬取中', 'error')
+            return redirect(url_for('bili.up_detail', up_id=up_id))
         _scrape_progress[up.mid] = []
-        _scrape_running.add(up.mid)
 
-    from blog.task_queue import submit_task
+    from blog.task_queue import submit_task, mark_running
     task_id = submit_task('refresh_up', mid=up.mid, space_url=up.space_url, max_videos=30)
     if task_id:
+        mark_running(up.mid)
         flash(f'刷新「{up.name or up.mid}」的任务已提交', 'success')
         return redirect(url_for('bili.up_detail', up_id=up_id))
 
+    with _scrape_lock:
+        _scrape_running.add(up.mid)
     app = current_app._get_current_object()
     t = threading.Thread(
         target=_run_scrape, args=(up.mid, up.space_url, app), kwargs={'max_videos': 30}, daemon=True
@@ -230,14 +231,16 @@ def refresh_up_all(up_id):
                 flash('该 UP 主正在爬取中', 'error')
                 return redirect(url_for('bili.up_detail', up_id=up_id))
         _scrape_progress[up.mid] = []
-        _scrape_running.add(up.mid)
 
-    from blog.task_queue import submit_task
+    from blog.task_queue import submit_task, mark_running
     task_id = submit_task('refresh_all', mid=up.mid, space_url=up.space_url)
     if task_id:
+        mark_running(up.mid)
         flash(f'已提交强制刷新「{up.name or up.mid}」的任务', 'success')
         return redirect(url_for('bili.up_detail', up_id=up_id))
 
+    with _scrape_lock:
+        _scrape_running.add(up.mid)
     app = current_app._get_current_object()
     t = threading.Thread(
         target=_run_scrape, args=(up.mid, up.space_url, app), kwargs={'force': True}, daemon=True
@@ -265,7 +268,8 @@ def refresh_up_comments(up_id):
     """
     up = BiliUp.query.get_or_404(up_id)
     with _scrape_lock:
-        if up.mid in _scrape_running:
+        from blog.task_queue import is_running
+        if is_running(up.mid) or up.mid in _scrape_running:
             flash('该 UP 主正在爬取中，请等待完成', 'error')
             return redirect(url_for('bili.up_detail', up_id=up_id))
         _scrape_running.add(up.mid)
@@ -881,14 +885,18 @@ def _check_new_videos(mid: int, app):
             return
 
     # 获取该 mid 的进度日志列表（引用，后续直接 append）
-    with _scrape_lock:
-        prog = _scrape_progress.get(mid, [])
+    prog = _scrape_progress.get(mid, [])
     _up_name = ['?']
 
     def emit(line: str):
         """向进度日志追加一行并同时输出到日志系统"""
         prog.append(f'[{time.strftime("%H:%M:%S")}] [{_up_name[0]}] {line}')
         logger.info('[%s] %s', _up_name[0], line)
+        try:
+            from blog.task_queue import update_progress
+            update_progress(mid, prog[:])
+        except Exception:
+            pass
 
     with app.app_context():
         try:
@@ -1155,13 +1163,14 @@ def scrape_status():
 
     from blog.task_queue import get_progress
     redis_lines, redis_running = get_progress(mid)
-    if redis_lines or redis_running:
-        return {'running': redis_running, 'lines': redis_lines}
 
     from copy import deepcopy
     with _scrape_lock:
-        lines = deepcopy(_scrape_progress.get(mid, []))
-        running = (mid in _scrape_running) or (mid in _incremental_running)
+        local_lines = deepcopy(_scrape_progress.get(mid, []))
+        local_running = (mid in _scrape_running) or (mid in _incremental_running)
+
+    lines = redis_lines if redis_lines else local_lines
+    running = redis_running or local_running
     return {'running': running, 'lines': lines}
 
 
@@ -1189,18 +1198,19 @@ def scrape():
         return redirect(url_for('bili.index'))
 
     with _scrape_lock:
-        if mid in _scrape_running:
-            from blog.task_queue import is_running
-            if is_running(mid):
-                return {'ok': False, 'error': '该 UP 主正在爬取中，请等待完成'}
+        from blog.task_queue import is_running
+        if is_running(mid) or mid in _scrape_running:
+            return {'ok': False, 'error': '该 UP 主正在爬取中，请等待完成'}
         _scrape_progress[mid] = []
-        _scrape_running.add(mid)
 
-    from blog.task_queue import submit_task
+    from blog.task_queue import submit_task, mark_running
     task_id = submit_task('refresh_up', mid=mid, space_url=space_url)
     if task_id:
+        mark_running(mid)
         return {'ok': True, 'mid': mid, 'task_id': task_id}
 
+    with _scrape_lock:
+        _scrape_running.add(mid)
     app = current_app._get_current_object()
     t = threading.Thread(target=_run_scrape, args=(mid, space_url, app), daemon=True)
     t.start()
@@ -1256,6 +1266,11 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
         """向进度日志追加一行并同时输出到日志系统"""
         prog.append(f'[{time.strftime("%H:%M:%S")}] [{_up_name[0]}] {line}')
         logger.info('[%s] %s', _up_name[0], line)
+        try:
+            from blog.task_queue import update_progress
+            update_progress(mid, prog[:])
+        except Exception:
+            pass
 
     with app.app_context():
         try:

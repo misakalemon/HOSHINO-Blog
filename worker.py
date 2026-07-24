@@ -104,6 +104,10 @@ def main():
                     else:
                         logger.warning('未知任务类型: %s', task_type)
 
+                from blog.task_queue import mark_done
+                if task_type in ('refresh_up', 'refresh_all'):
+                    mark_done(data['mid'])
+
                 logger.info('任务完成 id=%s type=%s', task_id, task_type)
 
             except Exception as e:
