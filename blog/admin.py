@@ -130,8 +130,8 @@ def _sanitize_html(html: str) -> str:
     return bleach.clean(html, tags=_HTML_CLEAN_TAGS, attributes=_HTML_STRIP_ATTRS, strip=True)
 
 
-from .forms import (
-    CategoryForm,
+from .forms import (CategoryForm,
+             
     FeaturedCardForm,
     HeroImageForm,
     LoginForm,

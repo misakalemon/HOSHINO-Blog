@@ -9,7 +9,6 @@
 
 import asyncio
 import logging
-import os
 import re
 import threading
 import time
@@ -59,11 +58,11 @@ def was_recently_blocked(cooldown: float = 0) -> bool:
 _loop_local = threading.local()
 
 # 并发信号量 — 限制同时发往 B 站 API 的请求数，防风控
-# 从 5 → 3 → 2，B站对同一 IP 并发超过 2-3 容易触发 412；可通过 BILI_SEMAPHORE 环境变量覆盖
-_api_semaphore = threading.Semaphore(int(os.environ.get('BILI_SEMAPHORE', '2')))
+# 从 5 降到 3，减少瞬时并发压力；B站对同一 IP 并发超过 3-4 容易触发 412
+_api_semaphore = threading.Semaphore(3)
 
-# 单次 API 调用超时时间（秒）。降低至 15s 减少线程阻塞时间
-_API_TIMEOUT = 15.0
+# 单次 API 调用超时时间（秒）
+_API_TIMEOUT = 30.0
 
 
 def _sync(coro):
@@ -101,13 +100,7 @@ def _sync(coro):
             logger.error('B站 API 请求超时 (%ds)', _API_TIMEOUT)
             try:
                 if not loop.is_closed():
-                    # 尝试优雅关闭异步生成器，5s 超时保护防止线程永久挂起
-                    try:
-                        loop.run_until_complete(
-                            asyncio.wait_for(loop.shutdown_asyncgens(), timeout=5)
-                        )
-                    except Exception:
-                        pass  # 超时/失败不影响强制关闭
+                    loop.run_until_complete(loop.shutdown_asyncgens())
                     loop.close()
             except Exception:
                 pass
@@ -117,13 +110,7 @@ def _sync(coro):
             # 任何其他异常也需清理循环资源
             try:
                 if not loop.is_closed():
-                    # 同上的超时保护
-                    try:
-                        loop.run_until_complete(
-                            asyncio.wait_for(loop.shutdown_asyncgens(), timeout=5)
-                        )
-                    except Exception:
-                        pass
+                    loop.run_until_complete(loop.shutdown_asyncgens())
                     loop.close()
             except Exception:
                 pass

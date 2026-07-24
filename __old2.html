@@ -1,82 +1,82 @@
-<!-- ============================================================
-     B站 UP 主管理 (admin/bili_index.html)
-     用途：UP 主列表 + 扫码登录入口 + 爬取/刷新/删除操作
-     继承：admin/base_admin.html
+﻿<!-- ============================================================
+     B绔?UP 涓荤鐞?(admin/bili_index.html)
+     鐢ㄩ€旓細UP 涓诲垪琛?+ 鎵爜鐧诲綍鍏ュ彛 + 鐖彇/鍒锋柊/鍒犻櫎鎿嶄綔
+     缁ф壙锛歛dmin/base_admin.html
      ============================================================ -->
 {% extends 'admin/base_admin.html' %}
 {% block extra_head %}
 <meta name="csrf-token" content="{{ csrf_token() }}">
 {% endblock %}
 {% block admin_content %}
-<div class="admin-header"><h3>📺 Bilibili 数据</h3></div>
+<div class="admin-header"><h3>馃摵 Bilibili 鏁版嵁</h3></div>
 
-<!-- B站 登录状态 -->
+<!-- B绔?鐧诲綍鐘舵€?-->
 <div class="admin-card" style="padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
     <div style="display:flex;align-items:center;gap:10px">
-        <span style="font-size:0.85rem;color:rgba(255,255,255,0.5)">B站 登录状态：</span>
+        <span style="font-size:0.85rem;color:rgba(255,255,255,0.5)">B绔?鐧诲綍鐘舵€侊細</span>
         {% if bili_logged_in %}
-        <span style="color:#3dd68c;font-size:0.85rem">✅ 已登录</span>
+        <span style="color:#3dd68c;font-size:0.85rem">鉁?宸茬櫥褰?/span>
         {% else %}
-        <span style="color:#f0a030;font-size:0.85rem">⚠️ 未登录（爬取可能被限流）</span>
+        <span style="color:#f0a030;font-size:0.85rem">鈿狅笍 鏈櫥褰曪紙鐖彇鍙兘琚檺娴侊級</span>
         {% endif %}
     </div>
     <div style="display:flex;gap:8px;align-items:center">
-        <button class="btn btn-primary btn-sm" onclick="biliLogin()" id="biliLoginBtn" {% if bili_logged_in %}style="display:none"{% endif %}>📱 扫码登录</button>
+        <button class="btn btn-primary btn-sm" onclick="biliLogin()" id="biliLoginBtn" {% if bili_logged_in %}style="display:none"{% endif %}>馃摫 鎵爜鐧诲綍</button>
         <form method="POST" action="{{ url_for('bili.logout_bili') }}" style="display:{% if bili_logged_in %}inline{% else %}none{% endif %}" id="biliLogoutForm">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn-ghost-sm" style="color:#f25a5a">退出登录</button>
+            <button type="submit" class="btn-ghost-sm" style="color:#f25a5a">閫€鍑虹櫥褰?/button>
         </form>
     </div>
 </div>
 
-<!-- QR 扫码弹窗 -->
+<!-- QR 鎵爜寮圭獥 -->
 <div id="biliQrOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.6);backdrop-filter:blur(8px);align-items:center;justify-content:center" onclick="if(event.target===this)closeBiliQr()">
     <div style="background:rgba(18,16,34,0.96);border:1px solid rgba(255,255,255,0.06);border-radius:32px;padding:28px 32px;text-align:center;box-shadow:0 40px 100px rgba(0,0,0,0.9);max-width:340px;width:90%">
-        <div style="font-size:16px;font-weight:600;color:#e0daff;margin-bottom:16px">📱 B站 扫码登录</div>
-        <div id="biliQrImg" style="width:200px;height:200px;margin:0 auto 16px;background:rgba(255,255,255,0.05);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:13px;color:rgba(255,255,255,0.3)">生成中...</div>
-        <div id="biliQrStatus" style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:16px">请使用 B站 App 扫码</div>
-        <button class="panel-close" onclick="closeBiliQr()">✕ 关闭</button>
+        <div style="font-size:16px;font-weight:600;color:#e0daff;margin-bottom:16px">馃摫 B绔?鎵爜鐧诲綍</div>
+        <div id="biliQrImg" style="width:200px;height:200px;margin:0 auto 16px;background:rgba(255,255,255,0.05);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:13px;color:rgba(255,255,255,0.3)">鐢熸垚涓?..</div>
+        <div id="biliQrStatus" style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:16px">璇蜂娇鐢?B绔?App 鎵爜</div>
+        <button class="panel-close" onclick="closeBiliQr()">鉁?鍏抽棴</button>
     </div>
 </div>
 
-<!-- 添加 UP 主 -->
+<!-- 娣诲姞 UP 涓?-->
 <div class="admin-card" style="padding:20px;margin-bottom:20px">
-    <h5 style="margin-bottom:12px">添加 UP 主</h5>
+    <h5 style="margin-bottom:12px">娣诲姞 UP 涓?/h5>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
         <input type="text" id="scrapeUrl" placeholder="https://space.bilibili.com/2" required
                style="flex:1;min-width:240px;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;color:#e8edf5;font-size:0.85rem;outline:none"
                onkeydown="if(event.key==='Enter')startScrape()">
-        <button type="button" class="btn btn-primary" onclick="startScrape()">🚀 开始爬取</button>
-        <button type="button" id="checkMissingBtn" class="btn btn-ghost" onclick="checkMissing()">🔍 检查遗漏</button>
+        <button type="button" class="btn btn-primary" onclick="startScrape()">馃殌 寮€濮嬬埇鍙?/button>
+        <button type="button" id="checkMissingBtn" class="btn btn-ghost" onclick="checkMissing()">馃攳 妫€鏌ラ仐婕?/button>
     </div>
-    <div style="font-size:0.75rem;color:rgba(255,255,255,0.3);margin-top:8px">爬取将后台执行，实时显示进度</div>
+    <div style="font-size:0.75rem;color:rgba(255,255,255,0.3);margin-top:8px">鐖彇灏嗗悗鍙版墽琛岋紝瀹炴椂鏄剧ず杩涘害</div>
 </div>
 
-<!-- 爬取进度日志 -->
+<!-- 鐖彇杩涘害鏃ュ織 -->
 <div id="scrapeLog" class="admin-card" style="padding:16px;margin-bottom:20px;display:none">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <h5 style="margin:0">📋 爬取日志</h5>
-        <button class="btn-ghost-sm" onclick="document.getElementById('scrapeLog').style.display='none';document.getElementById('scrapeLogContent').innerHTML=''">✕ 关闭</button>
+        <h5 style="margin:0">馃搵 鐖彇鏃ュ織</h5>
+        <button class="btn-ghost-sm" onclick="document.getElementById('scrapeLog').style.display='none';document.getElementById('scrapeLogContent').innerHTML=''">鉁?鍏抽棴</button>
     </div>
     <pre id="scrapeLogContent" style="max-height:400px;overflow-y:auto;background:rgba(0,0,0,0.3);border-radius:10px;padding:12px;font-size:0.75rem;line-height:1.5;color:#b0b8d0;font-family:'SF Mono','Fira Code',monospace;margin:0;white-space:pre-wrap;word-break:break-all"></pre>
 </div>
 
-<!-- 遗漏检查结果 -->
+<!-- 閬楁紡妫€鏌ョ粨鏋?-->
 <div id="missingResult" class="admin-card" style="padding:16px;margin-bottom:20px;display:none">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <h5 style="margin:0">🔍 遗漏检查结果</h5>
+        <h5 style="margin:0">馃攳 閬楁紡妫€鏌ョ粨鏋?/h5>
         <div style="display:flex;gap:8px;align-items:center">
             <span id="missingSummary" style="font-size:0.8rem;color:rgba(255,255,255,0.5)"></span>
-            <button class="btn-ghost-sm" onclick="document.getElementById('missingResult').style.display='none'">✕ 关闭</button>
+            <button class="btn-ghost-sm" onclick="document.getElementById('missingResult').style.display='none'">鉁?鍏抽棴</button>
         </div>
     </div>
     <div id="missingContent"></div>
 </div>
 
-<!-- UP 主列表 -->
+<!-- UP 涓诲垪琛?-->
 {% if ups %}
 <div class="admin-card" style="padding:20px">
-    <h5 style="margin-bottom:14px">已添加的 UP 主（{{ ups|length }}）</h5>
+    <h5 style="margin-bottom:14px">宸叉坊鍔犵殑 UP 涓伙紙{{ ups|length }}锛?/h5>
     <div style="display:grid;gap:10px">
         {% for up in ups %}
         <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(255,255,255,0.02);border-radius:12px;border:1px solid rgba(255,255,255,0.04)">
@@ -84,24 +84,24 @@
                 {% if up.avatar %}
                 <img src="{{ up.safe_avatar }}" alt="" referrerpolicy="no-referrer" loading="lazy" style="width:44px;height:44px;border-radius:50%;border:2px solid rgba(255,255,255,0.06);object-fit:cover">
                 {% else %}
-                <div style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:center;font-size:18px">📺</div>
+                <div style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:center;font-size:18px">馃摵</div>
                 {% endif %}
             </div>
             <div style="flex:1;min-width:0">
                 <a href="{{ url_for('bili.up_detail', up_id=up.id) }}" style="color:#d0c8f0;text-decoration:none;font-weight:500;font-size:0.9rem">
-                    {{ up.name or 'UP主 #' + up.mid|string }}
+                    {{ up.name or 'UP涓?#' + up.mid|string }}
                 </a>
                 <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:0.75rem;color:rgba(255,255,255,0.3);margin-top:3px">
                     <span>mid: <a href="https://space.bilibili.com/{{ up.mid }}" target="_blank" style="color:inherit;text-decoration:none;border-bottom:1px dotted rgba(255,255,255,0.2)">{{ up.mid }}</a></span>
-                    <span>📹 {{ up.video_count }} 视频</span>
-                    <span>👥 {{ '{:,}'.format(up.follower_count) if up.follower_count else '?' }} 粉丝</span>
-                    <span>更新: {{ up.updated_at.strftime('%m/%d %H:%M') if up.updated_at else '-' }}</span>
+                    <span>馃摴 {{ up.video_count }} 瑙嗛</span>
+                    <span>馃懃 {{ '{:,}'.format(up.follower_count) if up.follower_count else '?' }} 绮変笣</span>
+                    <span>鏇存柊: {{ up.updated_at.strftime('%m/%d %H:%M') if up.updated_at else '-' }}</span>
                 </div>
             </div>
-            <a href="{{ url_for('bili.up_detail', up_id=up.id) }}" class="btn-ghost-sm">查看视频</a>
-            <form method="POST" action="{{ url_for('bili.delete_up', up_id=up.id) }}" style="display:inline" onsubmit="var _f=this;event.preventDefault();showConfirm('⚠️ 确定要删除 UP 主「{{ up.name or up.mid }}」吗？\n包括该 UP 主的所有视频数据（共 {{ up.video_count }} 个）\n\n此操作不可恢复！',function(r){if(r){_f.onsubmit=null;_f.submit()}})">
+            <a href="{{ url_for('bili.up_detail', up_id=up.id) }}" class="btn-ghost-sm">鏌ョ湅瑙嗛</a>
+            <form method="POST" action="{{ url_for('bili.delete_up', up_id=up.id) }}" style="display:inline" onsubmit="var _f=this;event.preventDefault();showConfirm('鈿狅笍 纭畾瑕佸垹闄?UP 涓汇€寋{ up.name or up.mid }}銆嶅悧锛焅n鍖呮嫭璇?UP 涓荤殑鎵€鏈夎棰戞暟鎹紙鍏?{{ up.video_count }} 涓級\n\n姝ゆ搷浣滀笉鍙仮澶嶏紒',function(r){if(r){_f.onsubmit=null;_f.submit()}})">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="btn-ghost-sm" style="color:#f25a5a">删除</button>
+                <button type="submit" class="btn-ghost-sm" style="color:#f25a5a">鍒犻櫎</button>
             </form>
         </div>
         {% endfor %}
@@ -109,8 +109,8 @@
 </div>
 {% else %}
 <div class="admin-card" style="padding:40px;text-align:center">
-    <div style="font-size:40px;margin-bottom:12px;opacity:0.3">📺</div>
-    <div style="color:rgba(255,255,255,0.4);font-size:0.9rem">还没有添加 UP 主，输入空间链接开始爬取</div>
+    <div style="font-size:40px;margin-bottom:12px;opacity:0.3">馃摵</div>
+    <div style="color:rgba(255,255,255,0.4);font-size:0.9rem">杩樻病鏈夋坊鍔?UP 涓伙紝杈撳叆绌洪棿閾炬帴寮€濮嬬埇鍙?/div>
 </div>
 {% endif %}
 
@@ -119,14 +119,14 @@ var biliQrTimer = null;
 function biliLogin() {
     var ov = document.getElementById('biliQrOverlay');
     ov.style.display = 'flex';
-    document.getElementById('biliQrImg').textContent = '生成中...';
-    document.getElementById('biliQrStatus').textContent = '正在获取二维码...';
+    document.getElementById('biliQrImg').textContent = '鐢熸垚涓?..';
+    document.getElementById('biliQrStatus').textContent = '姝ｅ湪鑾峰彇浜岀淮鐮?..';
     fetch('{{ url_for("bili.qr_generate") }}')
         .then(function(r) { return r.json(); })
         .then(function(d) {
-            if (!d.ok) { document.getElementById('biliQrStatus').textContent = '生成失败: ' + d.error; return; }
+            if (!d.ok) { document.getElementById('biliQrStatus').textContent = '鐢熸垚澶辫触: ' + d.error; return; }
             document.getElementById('biliQrImg').innerHTML = '<img src="' + d.img + '" style="width:200px;height:200px;border-radius:12px">';
-            document.getElementById('biliQrStatus').textContent = '请使用 B站 App 扫码登录';
+            document.getElementById('biliQrStatus').textContent = '璇蜂娇鐢?B绔?App 鎵爜鐧诲綍';
             pollBiliQr(d.qrcode_key);
         });
 }
@@ -135,16 +135,16 @@ function pollBiliQr(key) {
     fetch('{{ url_for("bili.qr_poll") }}?key=' + encodeURIComponent(key))
         .then(function(r) { return r.json(); })
         .then(function(d) {
-            if (!d.ok) { document.getElementById('biliQrStatus').textContent = '轮询失败: ' + d.error; return; }
+            if (!d.ok) { document.getElementById('biliQrStatus').textContent = '杞澶辫触: ' + d.error; return; }
             if (d.status === 'success') {
-                document.getElementById('biliQrStatus').textContent = '✅ ' + d.msg;
+                document.getElementById('biliQrStatus').textContent = '鉁?' + d.msg;
                 setTimeout(closeBiliQr, 1000);
                 location.reload();
                 return;
             }
-            if (d.status === 'scanned') { document.getElementById('biliQrStatus').textContent = '⏳ 已扫码，请在手机上确认'; }
-            else if (d.status === 'waiting') { document.getElementById('biliQrStatus').textContent = '📱 等待扫码...'; }
-            else if (d.status === 'expired') { document.getElementById('biliQrStatus').textContent = '二维码已过期，请重新生成'; return; }
+            if (d.status === 'scanned') { document.getElementById('biliQrStatus').textContent = '鈴?宸叉壂鐮侊紝璇峰湪鎵嬫満涓婄‘璁?; }
+            else if (d.status === 'waiting') { document.getElementById('biliQrStatus').textContent = '馃摫 绛夊緟鎵爜...'; }
+            else if (d.status === 'expired') { document.getElementById('biliQrStatus').textContent = '浜岀淮鐮佸凡杩囨湡锛岃閲嶆柊鐢熸垚'; return; }
             biliQrTimer = setTimeout(function() { pollBiliQr(key); }, 1500);
         });
 }
@@ -153,7 +153,7 @@ function closeBiliQr() {
     document.getElementById('biliQrOverlay').style.display = 'none';
 }
 
-// ── 爬取进度 ────────────────────────────────
+// 鈹€鈹€ 鐖彇杩涘害 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 var scrapeTimer = null;
 function startScrape() {
     var url = document.getElementById('scrapeUrl').value.trim();
@@ -165,7 +165,7 @@ function startScrape() {
     })
     .then(function(r) { return r.json(); })
     .then(function(d) {
-        if (!d.ok) { alert(d.error || '启动失败'); return; }
+        if (!d.ok) { alert(d.error || '鍚姩澶辫触'); return; }
         document.getElementById('scrapeLog').style.display = 'block';
         document.getElementById('scrapeLogContent').textContent = '';
         pollScrapeLog(d.mid);
@@ -189,14 +189,14 @@ function pollScrapeLog(mid, attempt) {
         });
 }
 
-// ── 遗漏检查 ────────────────────────────────
+// 鈹€鈹€ 閬楁紡妫€鏌?鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 function checkMissing() {
     var btn = document.getElementById('checkMissingBtn');
     if (!btn) return;
     btn.disabled = true;
-    btn.textContent = '⏳ 检查中...';
+    btn.textContent = '鈴?妫€鏌ヤ腑...';
     document.getElementById('missingResult').style.display = 'block';
-    document.getElementById('missingContent').innerHTML = '<div style="text-align:center;padding:20px;color:rgba(255,255,255,0.4)">正在检查，请稍候...</div>';
+    document.getElementById('missingContent').innerHTML = '<div style="text-align:center;padding:20px;color:rgba(255,255,255,0.4)">姝ｅ湪妫€鏌ワ紝璇风◢鍊?..</div>';
     fetch('{{ url_for("bili.check_missing") }}')
         .then(function(r) { return r.json(); })
         .then(function(d) {
@@ -204,11 +204,11 @@ function checkMissing() {
             if (d.results) {
                 html += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.8rem">';
                 html += '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.06);color:rgba(255,255,255,0.4)">';
-                html += '<th style="padding:8px 10px;text-align:left">UP主</th>';
-                html += '<th style="padding:8px 10px;text-align:right">DB 数</th>';
-                html += '<th style="padding:8px 10px;text-align:right">API 数</th>';
-                html += '<th style="padding:8px 10px;text-align:right">缺失</th>';
-                html += '<th style="padding:8px 10px;text-align:right">完整度</th>';
+                html += '<th style="padding:8px 10px;text-align:left">UP涓?/th>';
+                html += '<th style="padding:8px 10px;text-align:right">DB 鏁?/th>';
+                html += '<th style="padding:8px 10px;text-align:right">API 鏁?/th>';
+                html += '<th style="padding:8px 10px;text-align:right">缂哄け</th>';
+                html += '<th style="padding:8px 10px;text-align:right">瀹屾暣搴?/th>';
                 html += '<th style="padding:8px 10px"></th></tr></thead><tbody>';
                 d.results.forEach(function(r) {
                     var cls = '';
@@ -222,18 +222,18 @@ function checkMissing() {
                     html += '<td style="padding:8px 10px;text-align:right;font-weight:600">' + missingStr + '</td>';
                     html += '<td style="padding:8px 10px;text-align:right">' + r.percent + '</td>';
                     if (r.missing > 0) {
-                        html += '<td style="padding:8px 10px"><a href="/admin/bilibili/up/' + r.up_id + '" class="btn-ghost-sm" style="font-size:0.75rem">补充爬取</a></td>';
+                        html += '<td style="padding:8px 10px"><a href="/admin/bilibili/up/' + r.up_id + '" class="btn-ghost-sm" style="font-size:0.75rem">琛ュ厖鐖彇</a></td>';
                     } else {
                         html += '<td></td>';
                     }
                     html += '</tr>';
                 });
                 html += '</tbody></table></div>';
-                document.getElementById('missingSummary').textContent = '共 ' + d.total + ' 个 UP 主，' + missingCount + ' 个有遗漏' + (errCount ? '，' + errCount + ' 个查询失败' : '');
+                document.getElementById('missingSummary').textContent = '鍏?' + d.total + ' 涓?UP 涓伙紝' + missingCount + ' 涓湁閬楁紡' + (errCount ? '锛? + errCount + ' 涓煡璇㈠け璐? : '');
             }
             document.getElementById('missingContent').innerHTML = html;
             btn.disabled = false;
-            btn.textContent = '🔍 检查遗漏';
+            btn.textContent = '馃攳 妫€鏌ラ仐婕?;
         });
 }
 </script>
