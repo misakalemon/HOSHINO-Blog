@@ -1184,44 +1184,59 @@ def scrape_status():
 @bili_bp.route('/scrape', methods=['POST'])
 @editor_required
 def scrape():
-    """启动新 UP 主的爬取任务（根据 space_url 自动提取 mid）
+    """批量启动新 UP 主的爬取任务。
 
-    优先提交到 Worker 进程执行，Worker 不可用时降级为本地线程。
+    接受多行空间链接（textarea），每行一个 space_url，
+    逐个提取 mid 后提交到 Workers 队列并行处理。
+
+    Form: space_urls (多行文本，每行一个链接)
 
     Returns:
-        JSON: {ok: True, mid: int, task_id: str}
-               或 {ok: False, error: str}
+        JSON: {ok: True, results: [{ok, mid, task_id, url, error?}, ...]}
     """
-    space_url = request.form.get('space_url', '').strip()
-    if not space_url:
-        flash('请输入 UP 主空间链接', 'error')
+    raw = request.form.get('space_urls', '').strip()
+    # 兼容旧版单链接字段名
+    if not raw:
+        raw = request.form.get('space_url', '').strip()
+    if not raw:
+        flash('请输入 UP 主空间链接（每行一个）', 'error')
         return redirect(url_for('bili.index'))
 
-    try:
-        from blog.bilibili.bili_api import extract_mid
-        mid = extract_mid(space_url)
-    except ValueError as e:
-        flash(str(e), 'error')
+    urls = [u.strip() for u in raw.replace('\r\n', '\n').replace(',', '\n').split('\n') if u.strip()]
+    if not urls:
+        flash('请输入有效的空间链接', 'error')
         return redirect(url_for('bili.index'))
 
-    with _scrape_lock:
-        from blog.task_queue import is_running
-        if is_running(mid) or mid in _scrape_running:
-            return {'ok': False, 'error': '该 UP 主正在爬取中，请等待完成'}
-        _scrape_progress[mid] = []
+    from blog.bilibili.bili_api import extract_mid
+    from blog.task_queue import submit_task, mark_running, is_running
 
-    from blog.task_queue import submit_task, mark_running
-    task_id = submit_task('refresh_up', mid=mid, space_url=space_url)
-    if task_id:
-        mark_running(mid)
-        return {'ok': True, 'mid': mid, 'task_id': task_id}
+    results = []
+    for space_url in urls:
+        try:
+            mid = extract_mid(space_url)
+        except ValueError as e:
+            results.append({'ok': False, 'url': space_url, 'error': str(e)})
+            continue
 
-    with _scrape_lock:
-        _scrape_running.add(mid)
-    app = current_app._get_current_object()
-    t = threading.Thread(target=_run_scrape, args=(mid, space_url, app), daemon=True)
-    t.start()
-    return {'ok': True, 'mid': mid, 'task_id': None}
+        with _scrape_lock:
+            if is_running(mid) or mid in _scrape_running:
+                results.append({'ok': False, 'url': space_url, 'mid': mid, 'error': '正在爬取中'})
+                continue
+            _scrape_progress[mid] = []
+
+        task_id = submit_task('refresh_up', mid=mid, space_url=space_url)
+        if task_id:
+            mark_running(mid)
+            results.append({'ok': True, 'mid': mid, 'task_id': task_id, 'url': space_url})
+        else:
+            with _scrape_lock:
+                _scrape_running.add(mid)
+            app = current_app._get_current_object()
+            t = threading.Thread(target=_run_scrape, args=(mid, space_url, app), daemon=True)
+            t.start()
+            results.append({'ok': True, 'mid': mid, 'task_id': None, 'url': space_url})
+
+    return {'ok': True, 'results': results}
 
 
 def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, force: bool = False):

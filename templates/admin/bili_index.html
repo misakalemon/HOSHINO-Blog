@@ -43,13 +43,13 @@
 <div class="admin-card" style="padding:20px;margin-bottom:20px">
     <h5 style="margin-bottom:12px">添加 UP 主</h5>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <input type="text" id="scrapeUrl" placeholder="https://space.bilibili.com/2" required
-               style="flex:1;min-width:240px;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;color:#e8edf5;font-size:0.85rem;outline:none"
-               onkeydown="if(event.key==='Enter')startScrape()">
+        <textarea id="scrapeUrls" placeholder="https://space.bilibili.com/2&#10;https://space.bilibili.com/3&#10;每行一个链接，可批量添加" required
+                  style="flex:1;min-width:240px;min-height:80px;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;color:#e8edf5;font-size:0.85rem;outline:none;font-family:inherit;resize:vertical"
+                  onkeydown="if(event.key==='Enter'&&event.ctrlKey)startScrape()"></textarea>
         <button type="button" class="btn btn-primary" onclick="startScrape()">🚀 开始爬取</button>
         <button type="button" id="checkMissingBtn" class="btn btn-ghost" onclick="checkMissing()">🔍 检查遗漏</button>
     </div>
-    <div style="font-size:0.75rem;color:rgba(255,255,255,0.3);margin-top:8px">爬取将后台执行，实时显示进度</div>
+    <div style="font-size:0.75rem;color:rgba(255,255,255,0.3);margin-top:8px">批量添加：每行一个链接，支持 Ctrl+Enter 快速提交。爬取将后台执行。</div>
 </div>
 
 <!-- 爬取进度日志 -->
@@ -156,37 +156,78 @@ function closeBiliQr() {
 // ── 爬取进度 ────────────────────────────────
 var scrapeTimer = null;
 function startScrape() {
-    var url = document.getElementById('scrapeUrl').value.trim();
-    if (!url) return;
+    var raw = document.getElementById('scrapeUrls').value.trim();
+    if (!raw) return;
+    var urls = raw.split('\n').map(function(u) { return u.trim(); }).filter(function(u) { return u; });
+    if (!urls.length) return;
     fetch('{{ url_for("bili.scrape") }}', {
         method: 'POST',
         headers: {'Content-Type':'application/x-www-form-urlencoded', 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')},
-        body: 'space_url=' + encodeURIComponent(url)
+        body: 'space_urls=' + encodeURIComponent(urls.join('\n'))
     })
     .then(function(r) { return r.json(); })
     .then(function(d) {
         if (!d.ok) { alert(d.error || '启动失败'); return; }
-        document.getElementById('scrapeLog').style.display = 'block';
-        document.getElementById('scrapeLogContent').textContent = '';
-        pollScrapeLog(d.mid);
-    });
-}
-function pollScrapeLog(mid, attempt) {
-    if (attempt === undefined) attempt = 0;
-    if (attempt >= 300) { return; }
-    if (scrapeTimer) clearTimeout(scrapeTimer);
-    fetch('{{ url_for("bili.scrape_status") }}?mid=' + mid)
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-            var el = document.getElementById('scrapeLogContent');
-            if (d.lines && d.lines.length) el.textContent = d.lines.join('\n');
-            el.scrollTop = el.scrollHeight;
-            if (d.running) {
-                scrapeTimer = setTimeout(function() { pollScrapeLog(mid, attempt + 1); }, 1000);
+        var mids = [];
+        var html = '';
+        (d.results || []).forEach(function(r) {
+            if (r.ok) {
+                mids.push(r.mid);
+                html += '<div style="color:#3dd68c;font-size:0.85rem;padding:4px 0">✅ mid=' + r.mid + ' 已提交爬取</div>';
             } else {
-                scrapeTimer = setTimeout(function() { location.reload(); }, 2000);
+                html += '<div style="color:#f25a5a;font-size:0.85rem;padding:4px 0">❌ ' + (r.error || '失败') + '</div>';
             }
         });
+        if (!mids.length) return;
+        document.getElementById('scrapeLog').style.display = 'block';
+        var logEl = document.getElementById('scrapeLogContent');
+        logEl.innerHTML = html + '<div style="color:rgba(255,255,255,0.3);font-size:0.75rem;padding:4px 0">--- 爬取进度 ---</div>';
+        pollScrapeLogs(mids);
+    });
+}
+function pollScrapeLogs(mids) {
+    if (scrapeTimer) clearTimeout(scrapeTimer);
+    var allDone = true;
+    var logEl = document.getElementById('scrapeLogContent');
+    mids.forEach(function(mid) {
+        fetch('{{ url_for("bili.scrape_status") }}?mid=' + mid)
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                var sec = document.getElementById('scrapeLog_' + mid);
+                if (!sec) {
+                    sec = document.createElement('div');
+                    sec.id = 'scrapeLog_' + mid;
+                    sec.style.marginBottom = '6px';
+                    sec.style.padding = '6px 8px';
+                    sec.style.background = 'rgba(255,255,255,0.02)';
+                    sec.style.borderRadius = '8px';
+                    var title = document.createElement('div');
+                    title.style.cssText = 'font-size:0.8rem;font-weight:500;color:#c4b5fd;margin-bottom:4px';
+                    title.textContent = 'mid=' + mid;
+                    sec.appendChild(title);
+                    var body = document.createElement('div');
+                    body.style.cssText = 'font-size:0.75rem;color:#b0b8d0;white-space:pre-wrap;line-height:1.4';
+                    body.id = 'scrapeLogBody_' + mid;
+                    sec.appendChild(body);
+                    logEl.appendChild(sec);
+                }
+                var body = document.getElementById('scrapeLogBody_' + mid);
+                if (d.lines && d.lines.length) body.textContent = d.lines.join('\n');
+                // auto scroll to bottom
+                body.scrollTop = body.scrollHeight;
+                if (d.running) {
+                    body.textContent += '\n⏳ 运行中...';
+                    allDone = false;
+                } else if (d.lines && d.lines.length) {
+                    body.textContent += '\n✅ 完成';
+                }
+            });
+    });
+    if (!allDone) {
+        scrapeTimer = setTimeout(function() { pollScrapeLogs(mids); }, 1000);
+    } else {
+        scrapeTimer = setTimeout(function() { location.reload(); }, 3000);
+    }
 }
 
 // ── 遗漏检查 ────────────────────────────────
