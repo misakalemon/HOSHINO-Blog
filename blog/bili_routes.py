@@ -525,8 +525,9 @@ _scrape_progress: dict[int, list[str]] = {}
 # 上述三个共享状态的互斥锁 — 读写均需持有
 _scrape_lock = threading.Lock()
 # 每视频请求后的睡眠（防风控）— BASE + [0, JITTER) 秒
-_VIDEO_SLEEP_BASE = 10.0
-_VIDEO_SLEEP_JITTER = 5.0
+# 可通过 BILI_SLEEP / BILI_JITTER 环境变量覆盖
+_VIDEO_SLEEP_BASE = float(os.environ.get('BILI_SLEEP', '20.0'))
+_VIDEO_SLEEP_JITTER = float(os.environ.get('BILI_JITTER', '15.0'))
 # 全局熔断器 — 检测到 412 IP封禁后自动暂停所有爬取直到此时间戳（Unix 秒）
 _circuit_open_until: float = 0.0
 _circuit_lock = threading.Lock()
@@ -1708,7 +1709,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             db.session.remove()
 
 
-_BATCH_SIZE = 5  # 每日刷新时每批并行处理的 UP 主数量
+# 每日刷新时每批并行处理的 UP 主数量。降低至 3 减少瞬时并发，可通过 BILI_BATCH 环境变量覆盖\n_BATCH_SIZE = int(os.environ.get('BILI_BATCH', '3'))
 
 
 def run_daily_scrape(app):
