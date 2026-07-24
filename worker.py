@@ -8,10 +8,16 @@ HOSHINO Blog — 后台工作进程 (Worker)
   1. APScheduler 定时任务（B站深扫/增量/密钥轮换/词云）
   2. 从 Redis 队列消费手动触发的爬取任务
 
+线程模型：
+  消费循环主线程从 Redis 拉取任务，提交到 ThreadPoolExecutor，
+  最多 WORKER_THREADS（默认 3）个任务并行执行。
+  APScheduler 使用自己的线程池（默认 10 线程），两套线程互不干扰。
+
 启动方式：
   python worker.py
 
-通过 Supervisor / systemd / launcher.py 管理生命周期。
+环境变量：
+  WORKER_THREADS — 并行任务数（默认 3）
 """
 
 import logging
@@ -19,6 +25,7 @@ import os
 import signal
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 from dotenv import load_dotenv
 
@@ -26,12 +33,18 @@ load_dotenv()
 
 _startup_time = time.time()
 
+# 并行任务数，可通过环境变量 WORKER_THREADS 覆盖
+MAX_WORKER_THREADS = int(os.environ.get('WORKER_THREADS', '3'))
+
 
 def _setup_signal_handlers(shutdown_flag):
+    """注册 SIGTERM/SIGINT 处理函数，设置退出标志。"""
     logger = logging.getLogger(__name__)
+
     def _handler(signum, frame):
         logger.info('收到信号 %s，正在退出...', signum)
         shutdown_flag[0] = True
+
     try:
         signal.signal(signal.SIGTERM, _handler)
     except (ValueError, AttributeError):
@@ -42,11 +55,61 @@ def _setup_signal_handlers(shutdown_flag):
         pass
 
 
+def _run_task(task, app):
+    """在线程池中执行单个任务，确保 mark_done 始终被调用。"""
+    from blog import db
+    from blog.task_queue import mark_done
+
+    task_type = task.get('type')
+    data = task.get('data', {})
+    task_id = task.get('id', '?')
+    logger = logging.getLogger(__name__)
+
+    logger.info('开始处理任务 id=%s type=%s', task_id, task_type)
+
+    try:
+        with app.app_context():
+            if task_type == 'refresh_up':
+                from blog.bili_routes import _run_scrape
+                _run_scrape(
+                    mid=data['mid'],
+                    space_url=data['space_url'],
+                    app=app,
+                    max_videos=data.get('max_videos'),
+                )
+            elif task_type == 'refresh_all':
+                from blog.bili_routes import _run_scrape
+                _run_scrape(
+                    mid=data['mid'],
+                    space_url=data['space_url'],
+                    app=app,
+                    force=True,
+                )
+            elif task_type == 'bili_wordcloud':
+                from blog.wordcloud import precompute_up_wordclouds
+                precompute_up_wordclouds(data['up_id'])
+            elif task_type == 'comment_refresh':
+                from blog.bili_routes import _crawl_video_comments
+                _crawl_video_comments(data['bvid'])
+            else:
+                logger.warning('未知任务类型: %s', task_type)
+                return
+
+        logger.info('任务完成 id=%s type=%s', task_id, task_type)
+
+    except Exception as e:
+        logger.error('任务失败 id=%s type=%s: %s', task_id, task_type, e, exc_info=True)
+    finally:
+        # 无论成功还是异常，都清除 Redis 中的运行标记
+        if task_type in ('refresh_up', 'refresh_all'):
+            mark_done(data['mid'])
+        db.session.remove()
+
+
 def main():
     from app import create_app, _init_scheduler
 
     app = create_app()
-
     logger = app.logger
 
     _init_scheduler(app)
@@ -56,65 +119,39 @@ def main():
     from blog import db
 
     init_task_queue(app)
-    logger.info('后台 Worker 就绪，等待任务...')
 
     elapsed = time.time() - _startup_time
-    logger.info('Worker 启动完成 (%.2fs)', elapsed)
+    logger.info('Worker 启动完成 (%.2fs) 并行任务数=%d', elapsed, MAX_WORKER_THREADS)
 
     shutdown_flag = [False]
     _setup_signal_handlers(shutdown_flag)
 
+    # --- ThreadPoolExecutor 多线程任务消费者 ---
+    executor = ThreadPoolExecutor(max_workers=MAX_WORKER_THREADS)
+    futures = {}  # Future → task 映射
+
     while not shutdown_flag[0]:
         try:
+            # 清理已完成的任务
+            done_futures = [f for f in futures if f.done()]
+            for f in done_futures:
+                try:
+                    f.result()  # 重抛异常供日志记录
+                except Exception:
+                    pass
+                del futures[f]
+
             task = get_task()
             if task is None:
                 time.sleep(1)
                 continue
 
-            task_type = task.get('type')
-            data = task.get('data', {})
-            task_id = task.get('id', '?')
+            task_type = task.get('type', '?')
+            logger.info('派发任务 id=%s type=%s (队列中: %d)',
+                        task.get('id'), task_type, len(futures))
 
-            logger.info('处理任务 id=%s type=%s', task_id, task_type)
-
-            try:
-                with app.app_context():
-                    if task_type == 'refresh_up':
-                        from blog.bili_routes import _run_scrape
-                        _run_scrape(
-                            mid=data['mid'],
-                            space_url=data['space_url'],
-                            app=app,
-                            max_videos=data.get('max_videos'),
-                        )
-                    elif task_type == 'refresh_all':
-                        from blog.bili_routes import _run_scrape
-                        _run_scrape(
-                            mid=data['mid'],
-                            space_url=data['space_url'],
-                            app=app,
-                            force=True,
-                        )
-                    elif task_type == 'bili_wordcloud':
-                        from blog.wordcloud import precompute_up_wordclouds
-                        precompute_up_wordclouds(data['up_id'])
-                    elif task_type == 'comment_refresh':
-                        from blog.bili_routes import _crawl_video_comments
-                        _crawl_video_comments(data['bvid'])
-                    else:
-                        logger.warning('未知任务类型: %s', task_type)
-
-                from blog.task_queue import mark_done
-                if task_type in ('refresh_up', 'refresh_all'):
-                    mark_done(data['mid'])
-
-                logger.info('任务完成 id=%s type=%s', task_id, task_type)
-
-            except Exception as e:
-                logger.error('任务失败 id=%s type=%s: %s',
-                             task_id, task_type, e, exc_info=True)
-            finally:
-                db.session.remove()
+            future = executor.submit(_run_task, task, app)
+            futures[future] = task
 
         except KeyboardInterrupt:
             shutdown_flag[0] = True
@@ -123,6 +160,8 @@ def main():
             logger.error('任务循环异常: %s', e, exc_info=True)
             time.sleep(5)
 
+    logger.info('正在等待 %d 个运行中任务完成...', len(futures))
+    executor.shutdown(wait=True, timeout=30)
     logger.info('Worker 已正常退出')
 
 

@@ -588,7 +588,7 @@ if __name__ == '__main__':
     worker_proc = subprocess.Popen(
         [sys.executable, worker_py],
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stderr=sys.stderr,
         stdin=subprocess.DEVNULL,
         cwd=os.path.dirname(__file__),
     )
