@@ -205,6 +205,10 @@ def create_app():
     from blog.cache import init_redis
 
     init_redis(app)
+    # ── 后台任务队列（Redis，Web→Worker 通信）──
+    from blog.task_queue import init_task_queue
+
+    init_task_queue(app)
 
     # ── Amazon 直爬（curl_cffi 模拟浏览器） ────
     from blog.apify_client import scraper
@@ -220,9 +224,6 @@ def create_app():
     from blog.bilibili.login import apply_cookies as _bili_apply_cookies
 
     _bili_apply_cookies()
-
-    # ── 定时任务（价格爬虫 + SECRET_KEY 轮换） ──
-    _init_scheduler(app)
 
     # ── 登录管理 ──────────────────────────────────
     login_manager = LoginManager()
@@ -574,12 +575,50 @@ if __name__ == '__main__':
     # ── 开发服务器启动 ──────────────────────────
     # 生产环境请使用 gunicorn (Linux) 或 waitress (Windows) 等 WSGI 服务器
     app = create_app()
-    # 端口号优先从环境变量 PORT 读取，默认 5000
+    logger = app.logger
+
+    # ── 自动启动后台 Worker 进程 ────────────────
+    # Worker 与 Flask 在同一目录下的 worker.py，
+    # 作为独立子进程运行，通过 Redis 队列通信。
+    # Flask 负责管理 Worker 生命周期（启动 + 退出时清理）。
+    import subprocess
+    import sys
+
+    worker_py = os.path.join(os.path.dirname(__file__), 'worker.py')
+    worker_proc = subprocess.Popen(
+        [sys.executable, worker_py],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL,
+        cwd=os.path.dirname(__file__),
+    )
+    logger.info('后台 Worker 进程已启动 (PID: %d)', worker_proc.pid)
+
+    # 注册退出清理：Flask 停止时自动终止 Worker
+    def _stop_worker():
+        if worker_proc.poll() is None:
+            logger.info('正在停止 Worker 进程...')
+            try:
+                worker_proc.terminate()
+                worker_proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                worker_proc.kill()
+            logger.info('Worker 进程已停止')
+    atexit.register(_stop_worker)
+
+    def _sigterm_handler(signum, frame):
+        _stop_worker()
+        sys.exit(0)
+    try:
+        signal.signal(signal.SIGTERM, _sigterm_handler)
+    except (ValueError, AttributeError):
+        pass
+
+    # ─────────────────────────────────────────────
+
     port = int(os.environ.get('PORT', 5000))
-    # FLASK_ENV=development 时开启 debug 模式（热重载 + 详细错误页）
     debug = os.environ.get('FLASK_ENV') == 'development'
     host = '127.0.0.1' if debug else '0.0.0.0'
-    logger = app.logger
     logger.info('=' * 50)
     logger.info('服务启动: http://%s:%d  debug=%s', host, port, debug)
     logger.info('=' * 50)

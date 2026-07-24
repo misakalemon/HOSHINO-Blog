@@ -59,9 +59,11 @@ _logger.addHandler(_console_handler)
 APPS = [
     {'name': '博客服务', 'icon': '🚀', 'desc': 'Flask 博客主服务 (http://0.0.0.0:5000)',
      'cmd': lambda env: f'conda run -n {env} python {os.path.join(BASE_DIR, "app.py")}'},
-    {'name': 'B站 增量检查', 'icon': '🔄', 'desc': '检查所有 UP 主的新视频并入库',
+    {'name': '后台 Worker', 'icon': '⚙️', 'desc': '后台 Worker 进程（定时任务 + B站爬取 + 任务队列）',
+     'cmd': lambda env: f'conda run -n {env} python {os.path.join(BASE_DIR, "worker.py")}'},
+    {'name': 'B站 增量检查', 'icon': '🔄', 'desc': '检查所有 UP 主的新视频并入库（传统脚本，Worker 已内置此功能）',
      'cmd': lambda env: f'conda run -n {env} python {os.path.join(BASE_DIR, "scripts", "bili_incremental.py")}'},
-    {'name': 'B站 全量刷新', 'icon': '📊', 'desc': '对所有 UP 主执行完整爬取',
+    {'name': 'B站 全量刷新', 'icon': '📊', 'desc': '对所有 UP 主执行完整爬取（传统脚本，Worker 已内置此功能）',
      'cmd': lambda env: f'conda run -n {env} python {os.path.join(BASE_DIR, "scripts", "bili_daily_scrape.py")}'},
 ]
 

@@ -174,8 +174,8 @@ def up_detail(up_id):
 def refresh_up(up_id):
     """重新爬取单个 UP 主的数据（最多 30 个新视频）
 
-    在 _scrape_lock 保护下检查并发状态，然后启动后台线程执行 _run_scrape
-    并立即返回，不阻塞 HTTP 请求。
+    优先通过 Redis 任务队列提交给 Worker 进程执行，
+    Worker 不可用时降级为本地后台线程。
 
     Args:
         up_id (int): UP 主数据库 ID
@@ -184,21 +184,27 @@ def refresh_up(up_id):
         HTTP 重定向到 up_detail 页
     """
     up = BiliUp.query.get_or_404(up_id)
-    # 检查是否正在爬取 — 加锁防止竞态
     with _scrape_lock:
         if up.mid in _scrape_running:
-            flash('该 UP 主正在爬取中', 'error')
-            return redirect(url_for('bili.up_detail', up_id=up_id))
-        # 初始化进度日志 & 标记运行态
+            from blog.task_queue import is_running
+            if is_running(up.mid):
+                flash('该 UP 主正在爬取中', 'error')
+                return redirect(url_for('bili.up_detail', up_id=up_id))
         _scrape_progress[up.mid] = []
         _scrape_running.add(up.mid)
-    # 获取 Flask app 对象以在线程中创建应用上下文
+
+    from blog.task_queue import submit_task
+    task_id = submit_task('refresh_up', mid=up.mid, space_url=up.space_url, max_videos=30)
+    if task_id:
+        flash(f'刷新「{up.name or up.mid}」的任务已提交', 'success')
+        return redirect(url_for('bili.up_detail', up_id=up_id))
+
     app = current_app._get_current_object()
     t = threading.Thread(
         target=_run_scrape, args=(up.mid, up.space_url, app), kwargs={'max_videos': 30}, daemon=True
     )
     t.start()
-    flash(f'已开始刷新「{up.name or up.mid}」的数据', 'success')
+    flash(f'已开始刷新「{up.name or up.mid}」的数据（本地模式）', 'success')
     return redirect(url_for('bili.up_detail', up_id=up_id))
 
 
@@ -219,10 +225,19 @@ def refresh_up_all(up_id):
     up = BiliUp.query.get_or_404(up_id)
     with _scrape_lock:
         if up.mid in _scrape_running:
-            flash('该 UP 主正在爬取中', 'error')
-            return redirect(url_for('bili.up_detail', up_id=up_id))
+            from blog.task_queue import is_running
+            if is_running(up.mid):
+                flash('该 UP 主正在爬取中', 'error')
+                return redirect(url_for('bili.up_detail', up_id=up_id))
         _scrape_progress[up.mid] = []
         _scrape_running.add(up.mid)
+
+    from blog.task_queue import submit_task
+    task_id = submit_task('refresh_all', mid=up.mid, space_url=up.space_url)
+    if task_id:
+        flash(f'已提交强制刷新「{up.name or up.mid}」的任务', 'success')
+        return redirect(url_for('bili.up_detail', up_id=up_id))
+
     app = current_app._get_current_object()
     t = threading.Thread(
         target=_run_scrape, args=(up.mid, up.space_url, app), kwargs={'force': True}, daemon=True
@@ -1122,8 +1137,8 @@ def _check_new_videos(mid: int, app):
 def scrape_status():
     """返回指定 UP 主的爬取进度日志（JSON，供前端 AJAX 轮询）
 
-    前端通过定时调用此接口获取实时爬取进度，使用 deepcopy
-    以避免在读取过程中进度日志被后台线程修改。
+    优先从 Redis 读取进度（Worker 进程运行的远程任务），
+    Redis 不可用时回退到本进程内存中的进度（本地线程模式）。
 
     Query Params:
         mid (int): 目标 UP 主的 B 站 mid
@@ -1137,8 +1152,13 @@ def scrape_status():
     mid = request.args.get('mid', type=int)
     if not mid:
         return {'running': False, 'lines': []}
-    from copy import deepcopy
 
+    from blog.task_queue import get_progress
+    redis_lines, redis_running = get_progress(mid)
+    if redis_lines or redis_running:
+        return {'running': redis_running, 'lines': redis_lines}
+
+    from copy import deepcopy
     with _scrape_lock:
         lines = deepcopy(_scrape_progress.get(mid, []))
         running = (mid in _scrape_running) or (mid in _incremental_running)
@@ -1150,15 +1170,11 @@ def scrape_status():
 def scrape():
     """启动新 UP 主的爬取任务（根据 space_url 自动提取 mid）
 
-    解析前端提交的 UP 主空间链接（如 https://space.bilibili.com/12345），
-    自动提取 mid 后启动后台线程执行 _run_scrape 完整爬取。
-
-    与 refresh_up/refresh_up_all 不同，此路由从零开始爬取
-    一个全新的 UP 主（无 DB 记录）。
+    优先提交到 Worker 进程执行，Worker 不可用时降级为本地线程。
 
     Returns:
-        JSON: {ok: True, mid: int}
-              或 {ok: False, error: str}
+        JSON: {ok: True, mid: int, task_id: str}
+               或 {ok: False, error: str}
     """
     space_url = request.form.get('space_url', '').strip()
     if not space_url:
@@ -1167,7 +1183,6 @@ def scrape():
 
     try:
         from blog.bilibili.bili_api import extract_mid
-
         mid = extract_mid(space_url)
     except ValueError as e:
         flash(str(e), 'error')
@@ -1175,15 +1190,21 @@ def scrape():
 
     with _scrape_lock:
         if mid in _scrape_running:
-            return {'ok': False, 'error': '该 UP 主正在爬取中，请等待完成'}
+            from blog.task_queue import is_running
+            if is_running(mid):
+                return {'ok': False, 'error': '该 UP 主正在爬取中，请等待完成'}
         _scrape_progress[mid] = []
         _scrape_running.add(mid)
 
-    # 在后台线程中执行爬取（传入 app 实例以建立应用上下文）
+    from blog.task_queue import submit_task
+    task_id = submit_task('refresh_up', mid=mid, space_url=space_url)
+    if task_id:
+        return {'ok': True, 'mid': mid, 'task_id': task_id}
+
     app = current_app._get_current_object()
     t = threading.Thread(target=_run_scrape, args=(mid, space_url, app), daemon=True)
     t.start()
-    return {'ok': True, 'mid': mid}
+    return {'ok': True, 'mid': mid, 'task_id': None}
 
 
 def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, force: bool = False):
