@@ -30,6 +30,10 @@
 .scroll-hint { display:inline-block; color:rgba(255,255,255,0.3); font-size:0.8rem; letter-spacing:0.15em; border:1px solid rgba(255,255,255,0.06); padding:0.4rem 1.4rem; border-radius:40px; backdrop-filter:blur(4px); margin-top:20px; }
 .scroll-hint span { display:inline-block; animation:bounceDown 2s infinite; }
 @keyframes bounceDown { 0%,100%{transform:translateY(0)} 50%{transform:translateY(6px)} }
+.search-header { padding:80px 28px 40px; text-align:center; position:relative; z-index:10; }
+.search-header .search-badge { display:inline-block; padding:6px 18px; border-radius:30px; font-size:0.8rem; font-weight:500; letter-spacing:0.06em; background:rgba(167,139,250,0.12); border:1px solid rgba(167,139,250,0.2); color:#c4b5fd; margin-bottom:12px; }
+.search-header h1.search-query { font-size:clamp(1.6rem,3vw,2.4rem); font-weight:300; color:rgba(255,255,255,0.85); margin:0 0 8px; word-break:break-all; }
+.search-header .search-result-count { font-size:0.85rem; color:rgba(255,255,255,0.4); margin:0; }
 
 
 .hero-particle { position:relative; z-index:10; min-height:100vh; display:flex; align-items:center; padding:0 28px; overflow:hidden; }
@@ -135,6 +139,16 @@
         </div>
     </div>
     {% endif %}
+</div>
+{% endif %}
+
+{% if search_query %}
+<div class="search-header">
+    <div class="search-header-inner">
+        <div class="search-badge">🔍 搜索</div>
+        <h1 class="search-query">{{ search_query }}</h1>
+        <p class="search-result-count">找到 {{ posts.total if posts.total is defined else 0 }} 篇相关文章</p>
+    </div>
 </div>
 {% endif %}
 
