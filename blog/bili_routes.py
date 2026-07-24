@@ -1258,6 +1258,14 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                     _scrape_progress.pop(mid, None)
                 return
 
+    # 重入保护 — 防止同一 mid 被多线程/多进程同时爬取
+    if not force:
+        with _scrape_lock:
+            if mid in _scrape_running or mid in _incremental_running:
+                logger.warning('mid=%d 已在运行中，跳过本次深扫', mid)
+                return
+            _scrape_running.add(mid)
+
     # 获取该 mid 的进度日志列表引用
     prog = _scrape_progress.get(mid, [])
     _up_name = ['?']
