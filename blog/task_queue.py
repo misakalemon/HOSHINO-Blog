@@ -26,6 +26,8 @@ _TASK_PROGRESS_KEY = f'{_KEY_PREFIX}:progress'
 _TASK_RUNNING_KEY = f'{_KEY_PREFIX}:running'
 
 _redis_client = None
+# 任务运行超时时间（秒）：超过此时间仍未完成的任务视为卡死
+_MAX_RUNNING_TIME = 1800  # 30 分钟
 
 
 def init_task_queue(app):
@@ -102,6 +104,11 @@ def get_progress(mid):
         lines = []
     try:
         running = redis_client.hexists(_TASK_RUNNING_KEY, str(mid))
+        if running:
+            ts = redis_client.hget(_TASK_RUNNING_KEY, str(mid))
+            if ts and time.time() - float(ts) > _MAX_RUNNING_TIME:
+                redis_client.hdel(_TASK_RUNNING_KEY, str(mid))
+                running = False
     except Exception:
         running = False
     return lines, running
@@ -132,6 +139,12 @@ def is_running(mid):
     if redis_client is None:
         return False
     try:
-        return redis_client.hexists(_TASK_RUNNING_KEY, str(mid))
+        running = redis_client.hexists(_TASK_RUNNING_KEY, str(mid))
+        if running:
+            ts = redis_client.hget(_TASK_RUNNING_KEY, str(mid))
+            if ts and time.time() - float(ts) > _MAX_RUNNING_TIME:
+                redis_client.hdel(_TASK_RUNNING_KEY, str(mid))
+                return False
+        return running
     except Exception:
         return False
