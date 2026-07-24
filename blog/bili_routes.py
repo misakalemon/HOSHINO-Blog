@@ -1137,6 +1137,13 @@ def _check_new_videos(mid: int, app):
             with _scrape_lock:
                 _incremental_running.discard(mid)
                 _scrape_progress.pop(mid, None)
+            # 如果有新视频入库，触发该 UP 的词云计算
+            if count > 0:
+                try:
+                    from blog.wordcloud import submit_task as _submit_wc
+                    _submit_wc('bili_up', up_id=up.id)
+                except Exception:
+                    pass
             db.session.remove()
 
 
@@ -1676,6 +1683,13 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             with _scrape_lock:
                 _scrape_running.discard(mid)
                 _scrape_progress.pop(mid, None)
+            # 如果有新视频入库，触发该 UP 的词云计算
+            if locals().get('fill_count', 0) > 0:
+                try:
+                    from blog.wordcloud import submit_task as _submit_wc
+                    _submit_wc('bili_up', up_id=up.id)
+                except Exception:
+                    pass
             db.session.remove()
 
 
