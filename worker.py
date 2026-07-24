@@ -63,8 +63,12 @@ def _run_task(task, app):
     task_type = task.get('type')
     data = task.get('data', {})
     task_id = task.get('id', '?')
-    logger = logging.getLogger(__name__)
 
+    # 直接写终端，绕过 logging 缓存层（Windows 兼容）
+    sys.stderr.write(f'[Worker] 任务到达: {task_id} type={task_type}\n')
+    sys.stderr.flush()
+
+    logger = logging.getLogger(__name__)
     logger.info('开始处理任务 id=%s type=%s', task_id, task_type)
 
     try:
@@ -131,6 +135,9 @@ def main():
     futures = {}  # Future → task 映射
 
     while not shutdown_flag[0]:
+        # 心跳信号：每轮循环输出一次，确认 Worker 主循环活着
+        sys.stderr.write(f'[Worker ♥] {time.strftime("%H:%M:%S")} 存活 任务数={len(futures)}\n')
+        sys.stderr.flush()
         try:
             # 清理已完成的任务
             done_futures = [f for f in futures if f.done()]
