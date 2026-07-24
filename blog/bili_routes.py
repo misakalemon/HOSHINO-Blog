@@ -1709,7 +1709,8 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             db.session.remove()
 
 
-# 每日刷新时每批并行处理的 UP 主数量。降低至 3 减少瞬时并发，可通过 BILI_BATCH 环境变量覆盖\n_BATCH_SIZE = int(os.environ.get('BILI_BATCH', '3'))
+# 每日刷新时每批并行处理的 UP 主数量。降低至 3 减少瞬时并发，可通过 BILI_BATCH 环境变量覆盖
+_BATCH_SIZE = int(os.environ.get('BILI_BATCH', '3'))
 
 
 def run_daily_scrape(app):
