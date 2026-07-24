@@ -838,6 +838,7 @@ def _migrate_post_fulltext_index(app):
     用于中文全文搜索 MATCH (title, content) AGAINST (...)。
     已有数据库可能缺少此索引，需手动创建。
     """
+    from sqlalchemy import text
     engine = db.get_engine()
     dialect = engine.dialect.name
     if dialect != 'mysql':
