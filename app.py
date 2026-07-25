@@ -191,8 +191,10 @@ def create_app():
     #   4. 创建默认管理员        —— 首次启动时
     from blog import db, init_db
 
-    # Worker 进程不执行数据库迁移（避免与 Flask 进程并发 DDL 冲突）
-    # WORKER_PROCESS=1 由 worker.py 在调用 create_app 前设置
+    # 所有进程（包括 Worker）都需要注册 db，否则数据库查询会报错
+    db.init_app(app)
+
+    # Worker 进程跳过建表和迁移（避免并发 DDL 冲突）
     if os.environ.get('WORKER_PROCESS') != '1':
         try:
             init_db(app)
@@ -200,8 +202,9 @@ def create_app():
             logger.critical('数据库初始化失败: %s', e, exc_info=True)
             raise
 
-    # Flask-Migrate 始终注册（即使 Worker 跳过了 init_db）
-    migrate = Migrate(app, db)
+    # Flask-Migrate（仅主进程注册，Worker 跳过）
+    if 'migrate' not in app.extensions:
+        migrate = Migrate(app, db)
     logger.info('数据库初始化完成')
 
     # ── Redis 缓存（数据库之后，蓝图之前） ────────
