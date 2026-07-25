@@ -647,6 +647,23 @@ def _insert_or_update_video(up, video_info, aid, bvid, title_short):
         (video_or_None, is_new: bool)
         is_new=True 表示第一次入库；is_new=False 表示仅更新了已有记录
     """
+    # 预检当前 aid 是否已存在（防止跨线程同时插入同一视频）
+    existing = BiliVideo.query.filter_by(aid=aid).first()
+    if existing:
+        return _update_existing_video(existing, video_info)
+
+    # 预检 aid 是否已存在（防止跨线程重复插入）
+    existing = BiliVideo.query.filter_by(aid=aid).first()
+    if existing:
+        for key in (
+            'view_count', 'like_count', 'coin_count',
+            'favorite_count', 'share_count', 'comment_count',
+            'danmaku_count',
+        ):
+            setattr(existing, key, video_info.get(key, 0))
+        db.session.commit()
+        return existing, False
+
     is_new = True
     try:
         # 尝试插入新视频记录
