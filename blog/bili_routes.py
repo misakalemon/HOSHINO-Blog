@@ -284,8 +284,8 @@ def refresh_up_comments(up_id):
 
             # 异步投递 UP 主词云重算（单视频 + 聚合 UP 主页词云）
             with app.app_context():
-                from blog.wordcloud import submit_task
-                submit_task('bili_up', up_id=up_id)
+                from blog.task_queue import submit_task
+                submit_task('bili_wordcloud', up_id=up_id)
             logger.info('💬 UP %s 评论+词云刷新完成', up_id)
         finally:
             with _scrape_lock:
@@ -338,8 +338,8 @@ def refresh_up_subtitles(up_id):
 
             logger.info('📊 字幕刷新完毕，自动触发 UP %s 词云计算...', up_id)
             # 异步投递（由 wordcloud 队列线程执行，不阻塞当前字幕刷新线程）
-            from blog.wordcloud import submit_task
-            submit_task('bili_up', up_id=up_id)
+            from blog.task_queue import submit_task
+            submit_task('bili_wordcloud', up_id=up_id)
 
     t = threading.Thread(target=_run, daemon=True)
     t.start()

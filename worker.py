@@ -33,8 +33,10 @@ load_dotenv()
 
 _startup_time = time.time()
 
-# 并行任务数，可通过环境变量 WORKER_THREADS 覆盖
+# 爬取线程数，可通过环境变量 WORKER_THREADS 覆盖
 MAX_WORKER_THREADS = int(os.environ.get('WORKER_THREADS', '3'))
+# 词云线程数，可通过环境变量 WC_THREADS 覆盖
+MAX_WC_THREADS = int(os.environ.get('WC_THREADS', '3'))
 
 
 def _setup_signal_handlers(shutdown_flag):
@@ -130,23 +132,35 @@ def main():
     shutdown_flag = [False]
     _setup_signal_handlers(shutdown_flag)
 
-    # --- ThreadPoolExecutor 多线程任务消费者 ---
-    executor = ThreadPoolExecutor(max_workers=MAX_WORKER_THREADS)
-    futures = {}  # Future → task 映射
+    # --- 双线程池：爬取 3 线程 + 词云 3 线程，完全独立 ---
+    scrape_executor = ThreadPoolExecutor(max_workers=MAX_WORKER_THREADS)
+    wc_executor = ThreadPoolExecutor(max_workers=MAX_WC_THREADS)
+    scrape_futures: dict = {}
+    wc_futures: dict = {}
+
+    heartbeat_interval = 0
 
     while not shutdown_flag[0]:
-        # 心跳信号：每轮循环输出一次，确认 Worker 主循环活着
-        sys.stderr.write(f'[Worker ♥] {time.strftime("%H:%M:%S")} 存活 任务数={len(futures)}\n')
-        sys.stderr.flush()
+        # 心跳信号：每 5 秒输出一次
+        now = time.time()
+        if now - heartbeat_interval >= 5:
+            sys.stderr.write(f'[Worker ♥] {time.strftime("%H:%M:%S")} 爬取={len(scrape_futures)} 词云={len(wc_futures)}\n')
+            sys.stderr.flush()
+            heartbeat_interval = now
+
         try:
             # 清理已完成的任务
-            done_futures = [f for f in futures if f.done()]
-            for f in done_futures:
-                try:
-                    f.result()  # 重抛异常供日志记录
-                except Exception:
-                    pass
-                del futures[f]
+            def _cleanup(futures_map):
+                done = [f for f in futures_map if f.done()]
+                for f in done:
+                    try:
+                        f.result()
+                    except Exception:
+                        pass
+                    del futures_map[f]
+
+            _cleanup(scrape_futures)
+            _cleanup(wc_futures)
 
             task = get_task()
             if task is None:
@@ -154,11 +168,20 @@ def main():
                 continue
 
             task_type = task.get('type', '?')
-            logger.info('派发任务 id=%s type=%s (队列中: %d)',
-                        task.get('id'), task_type, len(futures))
 
-            future = executor.submit(_run_task, task, app)
-            futures[future] = task
+            # 按任务类型分发到对应线程池
+            if task_type in ('refresh_up', 'refresh_all'):
+                future = scrape_executor.submit(_run_task, task, app)
+                scrape_futures[future] = task
+            elif task_type in ('bili_wordcloud',):
+                future = wc_executor.submit(_run_task, task, app)
+                wc_futures[future] = task
+            else:
+                logger.warning('未知任务类型: %s，跳过', task_type)
+                continue
+
+            logger.info('派发任务 id=%s type=%s (爬取队列=%d 词云队列=%d)',
+                        task.get('id'), task_type, len(scrape_futures), len(wc_futures))
 
         except KeyboardInterrupt:
             shutdown_flag[0] = True
@@ -167,8 +190,10 @@ def main():
             logger.error('任务循环异常: %s', e, exc_info=True)
             time.sleep(5)
 
-    logger.info('正在等待 %d 个运行中任务完成...', len(futures))
-    executor.shutdown(wait=True, timeout=30)
+    logger.info('正在等待 %d 个爬取任务 + %d 个词云任务完成...',
+                len(scrape_futures), len(wc_futures))
+    wc_executor.shutdown(wait=True, timeout=30)
+    scrape_executor.shutdown(wait=True, timeout=30)
     logger.info('Worker 已正常退出')
 
 
