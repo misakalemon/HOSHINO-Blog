@@ -1685,7 +1685,7 @@ def run_daily_scrape(app):
         try:
             import logging
             import os
-import random
+            import random
             import threading
             import time
 

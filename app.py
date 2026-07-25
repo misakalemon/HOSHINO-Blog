@@ -522,6 +522,9 @@ def _run_bili_incremental_check(app):
                     return
 
             THREAD_TIMEOUT = 10 * 60
+            # 全局并发限制：最多同时跑 _BATCH_SIZE 个增量检查线程
+            _inc_semaphore = threading.Semaphore(_BATCH_SIZE)
+            _inc_semaphore_acquired = False
 
             ups = BiliUp.query.all()
             active: list = []
@@ -545,7 +548,6 @@ def _run_bili_incremental_check(app):
                     )
                     t.start()
                     thread_mids.append((t, up.mid))
-                    time.sleep(random.uniform(0.5, 2.0))
                 for t, mid in thread_mids:
                     t.join(timeout=THREAD_TIMEOUT)
                     if t.is_alive():
