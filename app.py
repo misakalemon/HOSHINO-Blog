@@ -191,11 +191,16 @@ def create_app():
     #   4. 创建默认管理员        —— 首次启动时
     from blog import db, init_db
 
-    try:
-        init_db(app)
-    except Exception as e:
-        logger.critical('数据库初始化失败: %s', e, exc_info=True)
-        raise
+    # Worker 进程不执行数据库迁移（避免与 Flask 进程并发 DDL 冲突）
+    # WORKER_PROCESS=1 由 worker.py 在调用 create_app 前设置
+    if os.environ.get('WORKER_PROCESS') != '1':
+        try:
+            init_db(app)
+        except Exception as e:
+            logger.critical('数据库初始化失败: %s', e, exc_info=True)
+            raise
+
+    # Flask-Migrate 始终注册（即使 Worker 跳过了 init_db）
     migrate = Migrate(app, db)
     logger.info('数据库初始化完成')
 
@@ -587,7 +592,8 @@ if __name__ == '__main__':
     logger.info('=' * 50)
     logger.info('服务启动: http://%s:%d  debug=%s', host, port, debug)
     logger.info('=' * 50)
-        # ── 启动后台 Worker 进程 ───────────────────────
+
+    # ── 启动后台 Worker 进程（仅启动一个，所有后台任务统一由它处理）──
     import subprocess, sys, atexit
     worker_py = os.path.join(os.path.dirname(__file__), 'worker.py')
     worker_proc = subprocess.Popen(
@@ -608,34 +614,5 @@ if __name__ == '__main__':
             except Exception:
                 worker_proc.kill()
     atexit.register(_stop_worker)
-
-    # ── 启动后台 Worker 进程 ───────────────────────
-    import subprocess, sys, atexit
-    worker_py = os.path.join(os.path.dirname(__file__), 'worker.py')
-    worker_proc = subprocess.Popen(
-        [sys.executable, worker_py],
-        stdout=subprocess.DEVNULL,
-        stderr=sys.stderr,
-        stdin=subprocess.DEVNULL,
-        cwd=os.path.dirname(__file__),
-    )
-    app.logger.info('后台 Worker 进程已启动 (PID: %d)', worker_proc.pid)
-
-    def _stop_worker():
-        if worker_proc.poll() is None:
-            app.logger.info('正在停止 Worker 进程...')
-            try:
-                worker_proc.terminate()
-                worker_proc.wait(timeout=5)
-            except Exception:
-                worker_proc.kill()
-    atexit.register(_stop_worker)
-
-    worker_py = os.path.join(os.path.dirname(__file__), 'worker.py')
-    import subprocess
-    worker_proc = subprocess.Popen([sys.executable, worker_py], stdout=subprocess.DEVNULL, stderr=sys.stderr, stdin=subprocess.DEVNULL, cwd=os.path.dirname(__file__))
-    app.logger.info('Worker started (PID: %d)', worker_proc.pid)
-    import atexit
-    atexit.register(lambda p=worker_proc: (None if p.poll() is not None else (p.terminate(), p.wait(5))))
 
     app.run(host=host, port=port, debug=debug)

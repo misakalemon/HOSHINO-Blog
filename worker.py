@@ -115,7 +115,9 @@ def _run_task(task, app):
 def main():
     from app import create_app, _init_scheduler
 
-    app = create_app()
+    # 标记为 Worker 进程（让 create_app 跳过数据库迁移，避免与 Flask 并发 DDL）
+os.environ['WORKER_PROCESS'] = '1'
+app = create_app()
     logger = app.logger
 
     _init_scheduler(app)
