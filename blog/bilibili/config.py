@@ -19,8 +19,8 @@ PROJECT_ROOT = os.path.abspath(os.path.join(BILI_DIR, '..', '..'))
 # ── API 请求参数 ────────────────────────────────
 # 这些参数控制 B站 API 请求的频率和数量，影响爬取速度和风控风险
 # 核心原则：低频 + 随机抖动，模拟人类浏览行为
-REQUEST_INTERVAL = 8.0          # 翻页间隔基础值（秒）— 最终值 = 基础值 + random(0, JITTER)
-REQUEST_INTERVAL_JITTER = 4.0   # 翻页间隔随机抖动范围（秒），避免固定频率被检测
+REQUEST_INTERVAL = float(os.environ.get('BILI_INTERVAL', '8.0'))          # 翻页间隔基础值（秒）— 最终值 = 基础值 + random(0, JITTER)
+REQUEST_INTERVAL_JITTER = float(os.environ.get('BILI_JITTER', '4.0'))   # 翻页间隔随机抖动范围（秒），避免固定频率被检测
 PAGE_SIZE = 15                  # 每页视频数 — B站 API 单次返回的最大视频条目数
 MAX_RETRIES = 3                 # 最大重试次数（预留，当前逻辑用指数退避）
 TIMEOUT = 15                    # HTTP 请求超时（秒，login.py 使用；API 调用另有 _API_TIMEOUT=30s）

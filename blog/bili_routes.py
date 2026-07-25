@@ -31,6 +31,7 @@ import json
 import logging
 import os
 import queue
+import os
 import random
 import threading
 import time
@@ -506,13 +507,13 @@ _scrape_progress: dict[int, list[str]] = {}
 # 上述三个共享状态的互斥锁 — 读写均需持有
 _scrape_lock = threading.Lock()
 # 每视频请求后的睡眠（防风控）— BASE + [0, JITTER) 秒
-_VIDEO_SLEEP_BASE = 10.0
-_VIDEO_SLEEP_JITTER = 5.0
+_VIDEO_SLEEP_BASE = float(os.environ.get('BILI_VIDEO_SLEEP', '10.0'))
+_VIDEO_SLEEP_JITTER = float(os.environ.get('BILI_VIDEO_JITTER', '5.0'))
 # 全局熔断器 — 检测到 412 IP封禁后自动暂停所有爬取直到此时间戳（Unix 秒）
 _circuit_open_until: float = 0.0
 _circuit_lock = threading.Lock()
 # 全局熔断时长（秒）：检测到 412 封禁后暂停所有爬取 1 小时
-_CIRCUIT_COOLDOWN = 3600
+_CIRCUIT_COOLDOWN = int(os.environ.get('BILI_COOLDOWN', '3600'))
 # 412 违规计数（近 1h 内次数），用于阶梯退避
 _circuit_attempts: list[float] = []
 _circuit_attempts_lock = threading.Lock()
@@ -1661,7 +1662,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             db.session.remove()
 
 
-_BATCH_SIZE = 5  # 每日刷新时每批并行处理的 UP 主数量
+_BATCH_SIZE = int(os.environ.get('BILI_BATCH', '5'))
 
 
 def run_daily_scrape(app):
@@ -1683,7 +1684,8 @@ def run_daily_scrape(app):
     with app.app_context():
         try:
             import logging
-            import random
+            import os
+import random
             import threading
             import time
 

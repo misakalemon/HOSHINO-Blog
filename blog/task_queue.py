@@ -27,7 +27,7 @@ _TASK_RUNNING_KEY = f'{_KEY_PREFIX}:running'
 
 _redis_client = None
 # 任务运行超时时间（秒）：超过此时间仍未完成的任务视为卡死
-_MAX_RUNNING_TIME = 1800  # 30 分钟
+_MAX_RUNNING_TIME = int(os.environ.get('BILI_MAX_RUNNING', '1800'))  # 30 分钟
 
 
 def init_task_queue(app):
