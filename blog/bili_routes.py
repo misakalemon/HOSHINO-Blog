@@ -724,16 +724,28 @@ def _insert_or_update_video(up, video_info, aid, bvid, title_short):
         logger.warning('视频 %s 提交失败: %s', bvid, e)
         return None, False
     try:
-        # 写入统计历史快照（独立提交，失败不影响视频已入库）
-        db.session.add(
-            BiliVideoHistory(
-                video_id=video.id,
-                view_count=video_info.get('view_count', 0),
-                like_count=video_info.get('like_count', 0),
-                coin_count=video_info.get('coin_count', 0),
-                favorite_count=video_info.get('favorite_count', 0),
-                share_count=video_info.get('share_count', 0),
-                comment_count=video_info.get('comment_count', 0),
+        # 写入统计历史快照（预检避免重复数据点）
+        _prev_h = BiliVideoHistory.query.filter(
+            BiliVideoHistory.video_id == video.id,
+            BiliVideoHistory.recorded_at >= datetime.now() - timedelta(seconds=30)
+        ).first()
+        if _prev_h:
+            _prev_h.view_count = video_info.get('view_count', 0)
+            _prev_h.like_count = video_info.get('like_count', 0)
+            _prev_h.coin_count = video_info.get('coin_count', 0)
+            _prev_h.favorite_count = video_info.get('favorite_count', 0)
+            _prev_h.share_count = video_info.get('share_count', 0)
+            _prev_h.comment_count = video_info.get('comment_count', 0)
+        else:
+            db.session.add(
+                BiliVideoHistory(
+                    video_id=video.id,
+                    view_count=video_info.get('view_count', 0),
+                    like_count=video_info.get('like_count', 0),
+                    coin_count=video_info.get('coin_count', 0),
+                    favorite_count=video_info.get('favorite_count', 0),
+                    share_count=video_info.get('share_count', 0),
+                    comment_count=video_info.get('comment_count', 0),
                 danmaku_count=video_info.get('danmaku_count', 0),
             )
         )
@@ -1069,17 +1081,30 @@ def _check_new_videos(mid: int, app):
                     stat = get_video_stat(v.bvid)
                     for key, val in stat.items():
                         setattr(v, key, val)
-                    # 记录历史快照
-                    db.session.add(
-                        BiliVideoHistory(
-                            video_id=v.id,
-                            view_count=stat.get('view_count', 0),
-                            like_count=stat.get('like_count', 0),
-                            coin_count=stat.get('coin_count', 0),
-                            favorite_count=stat.get('favorite_count', 0),
-                            share_count=stat.get('share_count', 0),
-                            comment_count=stat.get('comment_count', 0),
-                            danmaku_count=stat.get('danmaku_count', 0),
+                    # 记录历史快照（预检避免重复数据点）
+                    _prev_h = BiliVideoHistory.query.filter(
+                        BiliVideoHistory.video_id == v.id,
+                        BiliVideoHistory.recorded_at >= datetime.now() - timedelta(seconds=30)
+                    ).first()
+                    if _prev_h:
+                        _prev_h.view_count = stat.get('view_count', 0)
+                        _prev_h.like_count = stat.get('like_count', 0)
+                        _prev_h.coin_count = stat.get('coin_count', 0)
+                        _prev_h.favorite_count = stat.get('favorite_count', 0)
+                        _prev_h.share_count = stat.get('share_count', 0)
+                        _prev_h.comment_count = stat.get('comment_count', 0)
+                        _prev_h.danmaku_count = stat.get('danmaku_count', 0)
+                    else:
+                        db.session.add(
+                            BiliVideoHistory(
+                                video_id=v.id,
+                                view_count=stat.get('view_count', 0),
+                                like_count=stat.get('like_count', 0),
+                                coin_count=stat.get('coin_count', 0),
+                                favorite_count=stat.get('favorite_count', 0),
+                                share_count=stat.get('share_count', 0),
+                                comment_count=stat.get('comment_count', 0),
+                                danmaku_count=stat.get('danmaku_count', 0),
                         )
                     )
                     db.session.commit()
@@ -1101,10 +1126,23 @@ def _check_new_videos(mid: int, app):
                     stat = get_video_stat(v.bvid)
                     for key, val in stat.items():
                         setattr(v, key, val)
-                    db.session.add(
-                        BiliVideoHistory(
-                            video_id=v.id,
-                            view_count=stat.get('view_count', 0),
+                    _prev_h = BiliVideoHistory.query.filter(
+                        BiliVideoHistory.video_id == v.id,
+                        BiliVideoHistory.recorded_at >= datetime.now() - timedelta(seconds=30)
+                    ).first()
+                    if _prev_h:
+                        _prev_h.view_count = stat.get('view_count', 0)
+                        _prev_h.like_count = stat.get('like_count', 0)
+                        _prev_h.coin_count = stat.get('coin_count', 0)
+                        _prev_h.favorite_count = stat.get('favorite_count', 0)
+                        _prev_h.share_count = stat.get('share_count', 0)
+                        _prev_h.comment_count = stat.get('comment_count', 0)
+                        _prev_h.danmaku_count = stat.get('danmaku_count', 0)
+                    else:
+                        db.session.add(
+                            BiliVideoHistory(
+                                video_id=v.id,
+                                view_count=stat.get('view_count', 0),
                             like_count=stat.get('like_count', 0),
                             coin_count=stat.get('coin_count', 0),
                             favorite_count=stat.get('favorite_count', 0),
@@ -1528,11 +1566,24 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                 elif label.startswith('Cold'):
                     cold_done += 1
 
-                try:
-                    # 写入统计历史快照
-                    db.session.add(
-                        BiliVideoHistory(
-                            video_id=v.id,
+                _prev_h = BiliVideoHistory.query.filter(
+                    BiliVideoHistory.video_id == v.id,
+                    BiliVideoHistory.recorded_at >= datetime.now() - timedelta(seconds=30)
+                ).first()
+                if _prev_h:
+                    _prev_h.view_count = stat.get('view_count', 0)
+                    _prev_h.like_count = stat.get('like_count', 0)
+                    _prev_h.coin_count = stat.get('coin_count', 0)
+                    _prev_h.favorite_count = stat.get('favorite_count', 0)
+                    _prev_h.share_count = stat.get('share_count', 0)
+                    _prev_h.comment_count = stat.get('comment_count', 0)
+                    _prev_h.danmaku_count = stat.get('danmaku_count', 0)
+                else:
+                    try:
+                        # 写入统计历史快照
+                        db.session.add(
+                            BiliVideoHistory(
+                                video_id=v.id,
                             view_count=stat.get('view_count', 0),
                             like_count=stat.get('like_count', 0),
                             coin_count=stat.get('coin_count', 0),
@@ -1542,9 +1593,9 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                             danmaku_count=stat.get('danmaku_count', 0),
                         )
                     )
-                    db.session.commit()
-                except Exception:
-                    db.session.rollback()
+                        db.session.commit()
+                    except Exception:
+                        db.session.rollback()
 
                 title_short = (v.title or '')[:30]
                 emit(f'[{count}] {label}「{title_short}」')
