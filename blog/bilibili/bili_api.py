@@ -301,20 +301,23 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
             data = _sync(u.get_videos(ps=PAGE_SIZE, pn=pn))
             page_retries = 0  # 成功则重置本页重试计数
         except Exception as e:
-            logger.error('获取第 %d 页视频列表失败: %s', pn, e)
+            # 先判断异常类型再决定日志内容（避免 412 时输出完整 HTML）
+            if _is_ip_blocked(e):
+                global _last_412_time
+                with _last_412_lock:
+                    _last_412_time = time.time()
+                logger.error('触发风控(412) - 获取第 %d 页视频列表失败', pn)
+                break
+            if _is_risk_control(e):
+                logger.warning('触发风控限流 - 获取第 %d 页视频列表失败', pn)
+            else:
+                logger.error('获取第 %d 页视频列表失败: %s', pn, e)
             # 路径 1: 凭证过期 → 降级为匿名重试
             if _credential and _is_auth_error(e) and not auth_retried:
                 logger.warning('凭证过期，切换为匿名访问后重试第 %d 页', pn)
                 auth_retried = True
                 u = _user_mod.User(mid)
                 continue
-            # 路径 2: IP 级封禁 412 → 记录时间并停止
-            if _is_ip_blocked(e):
-                global _last_412_time
-                with _last_412_lock:
-                    _last_412_time = time.time()
-                logger.error('IP 被安全封禁(412)，停止爬取')
-                break
             # 路径 3: 风控限流 → 指数退避重试
             if _is_risk_control(e):
                 page_retries += 1
