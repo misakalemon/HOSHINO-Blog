@@ -727,7 +727,7 @@ def _insert_or_update_video(up, video_info, aid, bvid, title_short):
         # 写入统计历史快照（预检避免重复数据点）
         _prev_h = BiliVideoHistory.query.filter(
             BiliVideoHistory.video_id == video.id,
-            BiliVideoHistory.recorded_at >= datetime.now() - timedelta(seconds=30)
+            BiliVideoHistory.recorded_at >= datetime.datetime.now() - datetime.timedelta(seconds=30)
         ).first()
         if _prev_h:
             _prev_h.view_count = video_info.get('view_count', 0)
@@ -1084,7 +1084,7 @@ def _check_new_videos(mid: int, app):
                     # 记录历史快照（预检避免重复数据点）
                     _prev_h = BiliVideoHistory.query.filter(
                         BiliVideoHistory.video_id == v.id,
-                        BiliVideoHistory.recorded_at >= datetime.now() - timedelta(seconds=30)
+                        BiliVideoHistory.recorded_at >= datetime.datetime.now() - datetime.timedelta(seconds=30)
                     ).first()
                     if _prev_h:
                         _prev_h.view_count = stat.get('view_count', 0)
@@ -1128,7 +1128,7 @@ def _check_new_videos(mid: int, app):
                         setattr(v, key, val)
                     _prev_h = BiliVideoHistory.query.filter(
                         BiliVideoHistory.video_id == v.id,
-                        BiliVideoHistory.recorded_at >= datetime.now() - timedelta(seconds=30)
+                        BiliVideoHistory.recorded_at >= datetime.datetime.now() - datetime.timedelta(seconds=30)
                     ).first()
                     if _prev_h:
                         _prev_h.view_count = stat.get('view_count', 0)
@@ -1568,7 +1568,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
 
                 _prev_h = BiliVideoHistory.query.filter(
                     BiliVideoHistory.video_id == v.id,
-                    BiliVideoHistory.recorded_at >= datetime.now() - timedelta(seconds=30)
+                    BiliVideoHistory.recorded_at >= datetime.datetime.now() - datetime.timedelta(seconds=30)
                 ).first()
                 if _prev_h:
                     _prev_h.view_count = stat.get('view_count', 0)
