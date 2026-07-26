@@ -51,8 +51,9 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.dialects.mysql import MEDIUMTEXT
 from werkzeug.security import check_password_hash, generate_password_hash
 
-# 东八区（CST，中国标准时间）— 全站 B站 数据统一使用时区
 CST = timezone(timedelta(hours=8))
+
+from .utils import now_cst
 
 # SQLAlchemy 实例，所有模型共享
 # 采用延迟初始化模式：先创建 db 实例，然后在 create_app() 中 db.init_app(app)
@@ -132,7 +133,7 @@ class User(UserMixin, db.Model):
     login_count = db.Column(db.Integer, default=0)  # 累计登录次数
 
     # ── 时间戳 ──────────────────────────────────
-    created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))))
+    created_at = db.Column(db.DateTime, default=now_cst)
 
     # ── 关联关系 ────────────────────────────────
     # 一对多：一个用户可撰写多篇文章
@@ -240,7 +241,7 @@ class Category(db.Model):
     name = db.Column(db.String(64), unique=True, nullable=False)  # 分类名，唯一
     slug = db.Column(db.String(64), unique=True, nullable=False, index=True)  # URL 标识，唯一
     description = db.Column(db.Text, default='')  # 分类描述
-    created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))))
+    created_at = db.Column(db.DateTime, default=now_cst)
 
     # 多对多关联：一个分类包含多篇文章
     # secondary 指向关联表 post_categories
@@ -299,12 +300,12 @@ class Post(db.Model):
 
     # ── 时间戳 ──────────────────────────────────
     created_at = db.Column(
-        db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))), index=True
+        db.DateTime, default=now_cst, index=True
     )
     updated_at = db.Column(
         db.DateTime,
-        default=lambda: datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))),
-        onupdate=lambda: datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))),  # 更新时自动修改
+        default=now_cst,
+        onupdate=now_cst,
     )
 
     # ── 关联关系 ────────────────────────────────
@@ -368,7 +369,7 @@ class Comment(db.Model):
     author_email = db.Column(db.String(120), nullable=True)  # 评论者邮箱（选填，用于回复通知）
     content = db.Column(db.Text, nullable=False)  # 评论正文
     is_approved = db.Column(db.Boolean, default=False, index=True)  # 管理员审核标记（默认未审核）
-    created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))))
+    created_at = db.Column(db.DateTime, default=now_cst)
 
 
 class ContactMessage(db.Model):
@@ -387,7 +388,7 @@ class ContactMessage(db.Model):
     email = db.Column(db.String(120), nullable=False)  # 联系人邮箱
     subject = db.Column(db.String(256), default='')  # 主题
     content = db.Column(db.Text, nullable=False)  # 留言内容
-    created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))))
+    created_at = db.Column(db.DateTime, default=now_cst)
 
 
 class FeaturedCard(db.Model):
@@ -410,11 +411,11 @@ class FeaturedCard(db.Model):
     image_url = db.Column(db.String(256), default='')  # 背景图片 URL
     sort_order = db.Column(db.Integer, default=0)  # 排序权重（越小越靠前）
     is_active = db.Column(db.Boolean, default=True, index=True)  # 是否在前台显示
-    created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))))
+    created_at = db.Column(db.DateTime, default=now_cst)
     updated_at = db.Column(
         db.DateTime,
-        default=lambda: datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))),
-        onupdate=lambda: datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))),
+        default=now_cst,
+        onupdate=now_cst,
     )
 
 # ── Bilibili 数据 ────────────────────────────────
@@ -439,11 +440,11 @@ class BiliUp(db.Model):
     space_url = db.Column(db.String(256), default='', comment='空间链接')
     video_count = db.Column(db.Integer, default=0, comment='视频数')
     follower_count = db.Column(db.Integer, default=0, comment='粉丝数')
-    created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(CST))
+    created_at = db.Column(db.DateTime, default=now_cst)
     updated_at = db.Column(
         db.DateTime,
-        default=lambda: datetime.datetime.now(CST),
-        onupdate=lambda: datetime.datetime.now(CST),
+        default=now_cst,
+        onupdate=now_cst,
     )
 
     # 一对多：一个 UP 主有多个视频
@@ -521,15 +522,15 @@ class BiliVideo(db.Model):
     share_count = db.Column(db.Integer, default=0, comment='转发数')
     comment_count = db.Column(db.Integer, default=0, comment='评论数')
     danmaku_count = db.Column(db.Integer, default=0, comment='弹幕数')
-    created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(CST))
+    created_at = db.Column(db.DateTime, default=now_cst)
     tags = db.Column(db.JSON, nullable=True, comment='视频标签名数组')
     subtitle_text = db.Column(MEDIUMTEXT, nullable=True, comment='AI 字幕文本（自动语音识别生成）')
     comments_crawled_at = db.Column(db.DateTime, nullable=True, comment='评论最后爬取时间')
 
     updated_at = db.Column(
         db.DateTime,
-        default=lambda: datetime.datetime.now(CST),
-        onupdate=lambda: datetime.datetime.now(CST),
+        default=now_cst,
+        onupdate=now_cst,
     )
 
     def __repr__(self):
@@ -587,7 +588,7 @@ class BiliUpHistory(db.Model):
     up_id = db.Column(db.Integer, db.ForeignKey('bili_ups.id', ondelete='CASCADE'), nullable=False, index=True)
     follower_count = db.Column(db.Integer, default=0, comment='采样时的粉丝数')
     recorded_at = db.Column(
-        db.DateTime, default=lambda: datetime.datetime.now(CST), index=True
+        db.DateTime, default=now_cst, index=True
     )
 
     # lazy='joined'：查询时使用 JOIN 一次性加载关联的 BiliUp，减少 N+1 查询
@@ -619,7 +620,7 @@ class BiliVideoHistory(db.Model):
     comment_count = db.Column(db.Integer, default=0, comment='评论数')
     danmaku_count = db.Column(db.Integer, default=0, comment='弹幕数')
     recorded_at = db.Column(
-        db.DateTime, default=lambda: datetime.datetime.now(CST), index=True
+        db.DateTime, default=now_cst, index=True
     )
 
     # lazy='joined'：查询时 JOIN BiliVideo，避免 N+1
@@ -642,7 +643,7 @@ class BiliWatchedVideo(db.Model):
     video_id = db.Column(
         db.Integer, db.ForeignKey('bili_videos.id', ondelete='CASCADE'), unique=True, nullable=False
     )
-    added_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(CST))
+    added_at = db.Column(db.DateTime, default=now_cst)
 
     # lazy='joined'：查询时 JOIN BiliVideo
     video = db.relationship('BiliVideo', backref='watched_entry', lazy='joined')
@@ -675,7 +676,7 @@ class BiliSubscription(db.Model):
         db.String(64), nullable=False, index=True, comment='验证/取消订阅 token（同批次相同）'
     )
     verified = db.Column(db.Boolean, default=False, comment='是否已通过邮件验证')
-    created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(CST))
+    created_at = db.Column(db.DateTime, default=now_cst)
 
     # passive_deletes=True：不主动加载关联对象，让数据库级联删除
     up = db.relationship('BiliUp', backref=db.backref('subscriptions', lazy='dynamic'), passive_deletes=True)
@@ -693,7 +694,7 @@ class BiliCleanupConfig(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     days = db.Column(db.Integer, default=90, nullable=False, comment='清理几天前的数据')
     enabled = db.Column(db.Boolean, default=False, comment='是否启用自动清理')
-    updated_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(CST))
+    updated_at = db.Column(db.DateTime, default=now_cst)
 
 
 class HeroImage(db.Model):
@@ -719,7 +720,7 @@ class HeroImage(db.Model):
     image_url = db.Column(db.String(512), nullable=False)  # 图片静态 URL
     is_active = db.Column(db.Boolean, default=True, index=True)  # 是否启用（首页随机展示）
     sort_order = db.Column(db.Integer, default=0)  # 排序权重
-    created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))))
+    created_at = db.Column(db.DateTime, default=now_cst)
 
 
 class WordCloudConfig(db.Model):
@@ -755,8 +756,8 @@ class WordCloudConfig(db.Model):
     enabled_site = db.Column(db.Boolean, default=True, nullable=False)
     updated_at = db.Column(
         db.DateTime,
-        default=lambda: datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))),
-        onupdate=lambda: datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))),
+        default=now_cst,
+        onupdate=now_cst,
     )
 
     @classmethod
@@ -865,8 +866,8 @@ class WordCloudData(db.Model):
     data = db.Column(CompressedJSON, nullable=False, comment='词频数据 [{word, weight}, ...]')
     updated_at = db.Column(
         db.DateTime,
-        default=lambda: datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))),
-        onupdate=lambda: datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))),
+        default=now_cst,
+        onupdate=now_cst,
     )
 
     post = db.relationship('Post', backref=db.backref('wordcloud_data', uselist=False, cascade='all, delete-orphan'))

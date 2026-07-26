@@ -42,6 +42,7 @@ from sqlalchemy.orm import load_only
 from . import blog_bp
 from .forms import CommentForm, ContactForm
 from .models import Category, Comment, FeaturedCard, Post, db, post_categories
+from .utils import LRUDict, validate_url_protocol, escape_like
 
 logger = logging.getLogger(__name__)
 
@@ -87,28 +88,8 @@ ALLOWED_TAGS = [
     's',
 ]
 def _is_safe_url(url):
-    """检查 URL 是否为安全的 HTTP/HTTPS 链接，阻止危险协议注入。
-
-    用于过滤用户提交的链接（如评论中的 URL），
-    防止 javascript:/data:/vbscript: 等协议被注入到 <a href> 中。
-
-    Args:
-        url: 待检查的 URL 字符串
-
-    Returns:
-        bool: True 表示安全可用，False 表示包含危险协议
-    """
-    if not url:
-        return False
-    # 跳过以 // 开头的协议相对 URL
-    if url.startswith('//'):
-        return False
-    # 去除空白后检查是否以危险协议开头
-    url_lower = ''.join(url.strip().lower().split())
-    for scheme in ('javascript:', 'data:', 'vbscript:', 'file:', 'blob:'):
-        if url_lower.startswith(scheme):
-            return False
-    return True
+    """检查 URL 是否为安全的 HTTP/HTTPS 链接，委托给 utils.validate_url_protocol。"""
+    return validate_url_protocol(url)
 
 
 # 标签→允许属性映射表，bleach 清理 HTML 时据此保留安全的属性
@@ -152,24 +133,10 @@ THUMB_CACHE_VER = 'v3'
 
 
 # ── 侧边栏数据缓存（Redis，降级友好） ─────────
-# 共享线程池，避免每次请求创建/销毁
-_sidebar_executor = None
-_sidebar_executor_lock = threading.Lock()
+
 
 # 缩略图生成并发写锁（LRU 限制，防止无限增长）
-from collections import OrderedDict
-
-class _ThumbnailLockDict(OrderedDict):
-    """LRU 限制的锁字典，最多保留 10000 个缩略图锁，超限淘汰最早使用的。"""
-    def __init__(self, maxsize=10000, *args, **kwargs):
-        self.maxsize = maxsize
-        super().__init__(*args, **kwargs)
-    def __setitem__(self, key, value):
-        super().__setitem__(key, value)
-        if len(self) > self.maxsize:
-            self.popitem(last=False)
-
-_thumbnail_locks: dict[str, threading.Lock] = _ThumbnailLockDict()
+_thumbnail_locks: dict[str, threading.Lock] = LRUDict(maxsize=10000)
 _thumbnail_locks_lock = threading.Lock()
 
 
@@ -204,77 +171,48 @@ def _get_sidebar_data():
             recent_posts     — 最新 4 篇已发布文章的摘要信息
             cat_post_counts  — dict { category_id: 已发布文章数 }
     """
-    from concurrent.futures import ThreadPoolExecutor
-
     from flask import current_app
 
     from .cache import cache_get, cache_set
 
-    global _sidebar_executor
-    if _sidebar_executor is None:
-        with _sidebar_executor_lock:
-            if _sidebar_executor is None:
-                _sidebar_executor = ThreadPoolExecutor(max_workers=3)
-                # 进程退出时自动关闭线程池，避免资源泄漏
-                atexit.register(lambda: _sidebar_executor.shutdown(wait=False))
-
     ttl = current_app.config.get('CACHE_TTL_SIDEBAR', 300)
-    app = current_app._get_current_object()
 
-    def _fetch_categories():
-        """子任务 1：获取所有分类（按名称排序）。"""
-        with app.app_context():
-            return Category.query.order_by(Category.name).all()
+    categories = Category.query.order_by(Category.name).all()
 
-    def _fetch_cat_post_counts():
-        """子任务 2：统计每个分类下已发布文章的数量。"""
-        with app.app_context():
-            return dict(
-                db.session.query(
-                    post_categories.c.category_id, func.count(post_categories.c.post_id)
-                )
-                .join(Post, Post.id == post_categories.c.post_id)
-                .filter(Post.is_published == True)
-                .group_by(post_categories.c.category_id)
-                .all()
+    cat_post_counts = dict(
+        db.session.query(
+            post_categories.c.category_id, func.count(post_categories.c.post_id)
+        )
+        .join(Post, Post.id == post_categories.c.post_id)
+        .filter(Post.is_published == True)
+        .group_by(post_categories.c.category_id)
+        .all()
+    )
+
+    cached = cache_get('sidebar:recent_posts')
+    if cached is not None:
+        recent_posts = cached
+    else:
+        posts = (
+            Post.query.filter_by(is_published=True)
+            .options(
+                load_only(Post.id, Post.title, Post.slug, Post.cover_image, Post.created_at)
             )
-
-    def _fetch_recent_posts():
-        """子任务 3：获取最新 4 篇已发布文章（优先走 Redis 缓存）。"""
-        with app.app_context():
-            cached = cache_get('sidebar:recent_posts')
-            if cached is not None:
-                return cached
-            posts = (
-                Post.query.filter_by(is_published=True)
-                .options(
-                    load_only(Post.id, Post.title, Post.slug, Post.cover_image, Post.created_at)
-                )
-                .order_by(Post.created_at.desc())
-                .limit(4)
-                .all()
-            )
-            # 序列化为纯 Python 结构以兼容 Redis 存储
-            result = [
-                {
-                    'id': p.id,
-                    'title': p.title,
-                    'slug': p.slug,
-                    'cover_image': p.cover_image,
-                    'created_at': p.created_at.isoformat() if p.created_at else None,
-                }
-                for p in posts
-            ]
-            cache_set('sidebar:recent_posts', result, ttl)
-            return result
-
-    # 并行提交三个独立查询任务
-    fut_cat = _sidebar_executor.submit(_fetch_categories)
-    fut_counts = _sidebar_executor.submit(_fetch_cat_post_counts)
-    fut_recent = _sidebar_executor.submit(_fetch_recent_posts)
-    categories = fut_cat.result()
-    cat_post_counts = fut_counts.result()
-    recent_posts = fut_recent.result()
+            .order_by(Post.created_at.desc())
+            .limit(4)
+            .all()
+        )
+        recent_posts = [
+            {
+                'id': p.id,
+                'title': p.title,
+                'slug': p.slug,
+                'cover_image': p.cover_image,
+                'created_at': p.created_at.isoformat() if p.created_at else None,
+            }
+            for p in posts
+        ]
+        cache_set('sidebar:recent_posts', recent_posts, ttl)
 
     return categories, recent_posts, cat_post_counts
 
@@ -635,11 +573,10 @@ def contact():
         db.session.add(msg)
         try:
             db.session.commit()
+            message_sent = True
         except Exception:
-            # 数据库写入失败时回滚，保持 message_sent = False
             db.session.rollback()
             message_sent = False
-        message_sent = True
     categories, recent_posts, cat_post_counts = _get_sidebar_data()
     return render_template(
         'contact.html',
@@ -695,7 +632,7 @@ def search():
     if not q:
         return redirect(url_for('blog.index'))
     # 转义 SQL 通配符（% 和 _），防止恶意构造的搜索词导致 DoS
-    safe_q = q.replace('%', '\\%').replace('_', '\\_')
+    safe_q = escape_like(q)
     per_page = request.args.get('per_page', current_app.config['POSTS_PER_PAGE'], type=int)
     categories, recent_posts, cat_post_counts = _get_sidebar_data()
     # 根据数据库方言选择不同的全文搜索语法

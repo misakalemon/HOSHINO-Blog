@@ -4,10 +4,10 @@ services:
     container_name: hoshino-chrome
     restart: unless-stopped
     ports:
-      - "4444:4444"
+      - "127.0.0.1:4444:4444"
     shm_size: 2g
     environment:
-      - SE_VNC_PASSWORD=
+      - SE_VNC_PASSWORD=changeme
       - SE_NODE_MAX_SESSIONS=8
       - SE_SESSION_REQUEST_TIMEOUT=300
       - SE_NODE_SESSION_TIMEOUT=600

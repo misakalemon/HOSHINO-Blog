@@ -172,7 +172,7 @@ document.addEventListener('click',function(e){
   function hideOverlay() { overlay.style.display = 'none'; }
   // 替换原生 alert：显示标题+消息+确定按钮
   window.alert = function(msg) {
-    titleEl.textContent = '提示'; msgEl.innerHTML = msg;
+    titleEl.textContent = '提示'; msgEl.textContent = msg;
     actionsEl.innerHTML = '<button class="btn btn-primary" style="flex:1;justify-content:center">确定</button>';
     actionsEl.querySelector('button').onclick = hideOverlay;
     overlay.style.display = 'flex';
@@ -180,7 +180,7 @@ document.addEventListener('click',function(e){
   // 替换原生 confirm：显示标题+消息+取消/确定按钮，回调返回 true/false
   window.confirm = function(msg, cb) {
     if (typeof cb !== 'function') return true;
-    titleEl.textContent = '确认操作'; msgEl.innerHTML = msg;
+    titleEl.textContent = '确认操作'; msgEl.textContent = msg;
     actionsEl.innerHTML = '<button class="btn btn-ghost" style="flex:1;justify-content:center">取消</button><button class="btn btn-primary" style="flex:1;justify-content:center">确定</button>';
     const btns = actionsEl.querySelectorAll('button');
     btns[0].onclick = function() { hideOverlay(); cb(false); };
@@ -189,7 +189,7 @@ document.addEventListener('click',function(e){
   };
   // 替换原生 prompt：显示标题+消息+输入框+取消/确定按钮
   window.prompt = function(msg, def) {
-    titleEl.textContent = '输入'; msgEl.innerHTML = msg;
+    titleEl.textContent = '输入'; msgEl.textContent = msg;
     inputEl.style.display = 'block'; inputEl.value = def || '';
     actionsEl.innerHTML = '<button class="btn btn-ghost" style="flex:1;justify-content:center">取消</button><button class="btn btn-primary" style="flex:1;justify-content:center">确定</button>';
     const btns = actionsEl.querySelectorAll('button');
@@ -211,7 +211,7 @@ function showConfirm(msg, cb) {
   if (!overlay) { if (cb) cb(true); return; }
   document.getElementById('gmd-input').style.display = 'none';
   document.getElementById('gmd-title').textContent = '确认操作';
-  document.getElementById('gmd-msg').innerHTML = msg;
+  document.getElementById('gmd-msg').textContent = msg;
   const actionsEl = document.getElementById('gmd-actions');
   actionsEl.innerHTML = '<button class="btn btn-ghost" style="flex:1;justify-content:center">取消</button><button class="btn btn-primary" style="flex:1;justify-content:center">确定</button>';
   const btns = actionsEl.querySelectorAll('button');

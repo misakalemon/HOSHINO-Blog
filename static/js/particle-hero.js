@@ -454,8 +454,10 @@
    * requestAnimationFrame 主循环
    */
   function loop() {
-    step();
-    draw();
+    if (!_paused) {
+      step();
+      draw();
+    }
     requestAnimationFrame(loop);
   }
 
@@ -542,6 +544,11 @@
     if (el) el.textContent = '画像加载失败';
   };
   img.src = imgUrl;
+
+  var _paused = false;
+  document.addEventListener('visibilitychange', function() {
+    _paused = document.hidden;
+  });
 
   window._particleToggle = toggleScatter;
 })();

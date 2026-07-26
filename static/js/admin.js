@@ -608,7 +608,7 @@ function bindCropUpload(inputId, uploadUrl, fieldSelector, previewSelector, onSu
         }
         if (previewSelector) {
           var el = document.querySelector(previewSelector);
-          if (el) { el.innerHTML = '<img src="' + data.url + '" alt="crop">'; el.style.display = 'block'; }
+          if (el) { el.innerHTML = ''; var img = document.createElement('img'); img.src = data.url; img.alt = 'crop'; el.appendChild(img); el.style.display = 'block'; }
           var upload = input.closest('[class*="-upload"]');
           if (upload) upload.classList.add('has-image');
           var placeholder = input.closest('[class*="-upload"]') ? input.closest('[class*="-upload"]').querySelector('[class*="placeholder"]') : null;
@@ -700,7 +700,7 @@ document.addEventListener('click',function(e){
 
   window.alert = function(msg) {
     titleEl.textContent = '提示';
-    msgEl.innerHTML = msg;
+    msgEl.textContent = msg;
     actionsEl.innerHTML = '<button class="btn btn-primary" style="flex:1;justify-content:center">确定</button>';
     actionsEl.querySelector('button').onclick = hideOverlay;
     overlay.style.display = 'flex';
@@ -709,7 +709,7 @@ document.addEventListener('click',function(e){
   window.confirm = function(msg, cb) {
     if (typeof cb !== 'function') return true;
     titleEl.textContent = '确认操作';
-    msgEl.innerHTML = msg;
+    msgEl.textContent = msg;
     actionsEl.innerHTML =
       '<button class="btn btn-ghost" style="flex:1;justify-content:center">取消</button>' +
       '<button class="btn btn-primary" style="flex:1;justify-content:center">确定</button>';
@@ -721,7 +721,7 @@ document.addEventListener('click',function(e){
 
   window.prompt = function(msg, def) {
     titleEl.textContent = '输入';
-    msgEl.innerHTML = msg;
+    msgEl.textContent = msg;
     inputEl.style.display = 'block';
     inputEl.value = def || '';
     actionsEl.innerHTML =
@@ -746,7 +746,7 @@ function showConfirm(msg, cb) {
   if (!overlay) { if (cb) cb(true); return; }
   document.getElementById('gmd-input').style.display = 'none';
   document.getElementById('gmd-title').textContent = '确认操作';
-  document.getElementById('gmd-msg').innerHTML = msg;
+  document.getElementById('gmd-msg').textContent = msg;
   var actionsEl = document.getElementById('gmd-actions');
   actionsEl.innerHTML =
     '<button class="btn btn-ghost" style="flex:1;justify-content:center">取消</button>' +

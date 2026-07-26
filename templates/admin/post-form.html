@@ -216,7 +216,7 @@
                     <button type="button" onclick="rte('removeFormat')" title="清除格式">✕</button>
                 </div>
                 <!-- 可编辑区域：显示已有内容（编辑模式） -->
-                <div id="rte-content" contenteditable="true">{{ form.content.data|safe if form.content.data else '' }}</div>
+                <div id="rte-content" contenteditable="true" role="textbox" aria-label="文章正文">{{ form.content.data|bleach_clean if form.content.data else '' }}</div>
                 <!-- 隐藏文本域：提交时同步 contenteditable 的内容 -->
                 <textarea name="content" id="content-hidden" style="display:none">{{ form.content.data or '' }}</textarea>
                 {% if form.content.errors %}<div class="field-error">{{ form.content.errors[0] }}</div>{% endif %}
@@ -350,6 +350,10 @@ function rte(cmd, val) {
   document.execCommand(cmd, false, val);
 }
 function insertHTML(html) {
+  // 轻除 <script> 和事件处理器属性，防止导入文件中的恶意代码执行
+  html = html.replace(/<script[\s\S]*?<\/script>/gi, '')
+             .replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '')
+             .replace(/\s+on\w+\s*=\s*[^\s>]*/gi, '');
   var el = document.getElementById('rte-content');
   el.focus();
   var sel = window.getSelection();
@@ -476,6 +480,10 @@ function rteLink() {
     fields: [{ key:'url', label:'链接地址', type:'text', placeholder:'https://', value:'https://' }],
     onConfirm: function(vals) {
       if (vals.url) {
+        if (vals.url.trim().toLowerCase().startsWith('javascript:')) {
+          showToast('不允许 javascript: 链接', 'error');
+          return;
+        }
         var sel = window.getSelection().toString();
         if (sel) insertHTML('<a href="' + vals.url.replace(/"/g,'&quot;') + '">' + sel.replace(/</g,'&lt;') + '</a>');
       }
@@ -941,7 +949,7 @@ function rteImageUpload(align) {
         if (alignMode === 'left') style = ' style="float:left; margin-right:16px; max-width:50%"';
         else if (alignMode === 'right') style = ' style="float:right; margin-left:16px; max-width:50%"';
         else if (alignMode === 'center') style = ' style="display:block; margin:0 auto; text-align:center"';
-        insertHTML('<img src="' + data.url + '"' + style + ' alt="image">');
+        insertHTML('<img src="' + data.url.replace(/"/g,'&quot;') + '"' + style + ' alt="image">');
         return;
       }
       // 弹窗选择对齐方式
@@ -962,7 +970,7 @@ function rteImageUpload(align) {
           if (vals.align === 'left') style = ' style="float:left; margin-right:16px; max-width:50%"';
           else if (vals.align === 'right') style = ' style="float:right; margin-left:16px; max-width:50%"';
           else if (vals.align === 'center') style = ' style="display:block; margin:0 auto; text-align:center"';
-          insertHTML('<img src="' + data.url + '"' + style + ' alt="image">');
+          insertHTML('<img src="' + data.url.replace(/"/g,'&quot;') + '"' + style + ' alt="image">');
         }
       });
     })
@@ -1001,7 +1009,7 @@ function removeCover(e) {
   var existingCover = {{ form.cover_image.data|tojson or '' }};
   if (existingCover) {
     var url = '/static/' + existingCover;
-    document.getElementById('coverPreview').innerHTML = '<img src="' + url + '" alt="cover">';
+    document.getElementById('coverPreview').innerHTML = '<img src="' + url.replace(/"/g,'&quot;') + '" alt="cover">';
     document.getElementById('coverPreview').style.display = 'block';
     document.getElementById('coverPlaceholder').style.display = 'none';
     document.getElementById('coverUpload').classList.add('has-image');

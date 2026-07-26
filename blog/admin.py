@@ -69,6 +69,7 @@ import bleach
 
 from . import admin_bp
 from .routes import ALLOWED_TAGS, ALLOWED_ATTRS
+from .utils import LRUDict, now_cst, get_client_ip, validate_url_protocol, escape_like
 
 
 # bleach HTML 白名单：定义允许保留的标签属性
@@ -288,27 +289,10 @@ def debug_info():
 
 # 登录频率限制（简易内存实现：每 IP 每分钟最多 10 次）
 # 使用固定大小的 LRU 字典避免内存泄漏
-from collections import OrderedDict
 
 
-class _LRUDict(OrderedDict):
-    """基于 OrderedDict 的简易 LRU 字典，达到 maxsize 时淘汰最早插入的条目。
 
-    用于登录频率限制的记录存储，避免无限增长导致内存泄漏。
-    默认 maxsize=1000，超过上限时自动弹出最早插入的键值对。
-    """
-
-    def __init__(self, maxsize=1000, *args, **kwargs):
-        self.maxsize = maxsize
-        super().__init__(*args, **kwargs)
-
-    def __setitem__(self, key, value):
-        super().__setitem__(key, value)
-        if len(self) > self.maxsize:
-            self.popitem(last=False)  # 淘汰最早插入的条目（FIFO 策略）
-
-
-_login_attempts = _LRUDict(maxsize=10000)      # IP → [尝试时间戳列表]，记录每个 IP 的登录尝试
+_login_attempts = LRUDict(maxsize=10000)      # IP → [尝试时间戳列表]，记录每个 IP 的登录尝试
 _login_attempts_lock = threading.Lock()        # 保护 _login_attempts 的并发访问
 LOGIN_RATE_LIMIT = 10                          # 每个时间窗口内允许的最大尝试次数
 LOGIN_RATE_WINDOW = 60                         # 时间窗口长度（秒）
@@ -339,7 +323,7 @@ def login():
     import ipaddress
 
     # ── 获取客户端真实 IP（支持反向代理，取 access_route 第一跳） ─
-    ip = request.access_route[0] if request.access_route else request.remote_addr or 'unknown'
+    ip = get_client_ip()
     try:
         ip = ipaddress.ip_address(ip).compressed  # 标准化 IPv6 格式
     except ValueError:
@@ -365,7 +349,7 @@ def login():
             # ── 登录成功：清除该 IP 的失败记录，更新用户统计信息 ─
             with _login_attempts_lock:
                 _login_attempts[ip] = []
-            user.last_login_at = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8)))
+            user.last_login_at = now_cst()
             user.last_login_ip = ip
             user.login_count = (user.login_count or 0) + 1
             db.session.commit()
@@ -406,7 +390,7 @@ def register():
         import ipaddress
         import time
 
-        ip = request.access_route[0] if request.access_route else request.remote_addr or 'unknown'
+        ip = get_client_ip()
         try:
             ip = ipaddress.ip_address(ip).compressed
         except ValueError:
@@ -493,60 +477,43 @@ def dashboard():
     if stats:
         return render_template('admin/dashboard.html', **stats)
 
-    from concurrent.futures import ThreadPoolExecutor
+    post_count = Post.query.count()
+    published_count = Post.query.filter_by(is_published=True).count()
+    comment_count = Comment.query.filter_by(is_approved=False).count()
+    user_count = User.query.count()
+    recent_posts_raw = Post.query.order_by(Post.created_at.desc()).limit(5).all()
+    recent_comments_raw = (
+        Comment.query.options(db.joinedload(Comment.post))
+        .filter_by(is_approved=False)
+        .order_by(Comment.created_at.desc())
+        .limit(5)
+        .all()
+    )
 
-    # 获取 Flask 应用实例（非代理对象），用于子线程中创建应用上下文
-    app = current_app._get_current_object()
-
-    def _run(fn):
-        """在子线程中创建 Flask 应用上下文后执行查询"""
-        with app.app_context():
-            return fn()
-
-    # 使用最多 6 个线程并行执行 6 个独立统计查询
-    with ThreadPoolExecutor(max_workers=6) as pool:
-        fut_pc = pool.submit(_run, lambda: Post.query.count())                          # 文章总数
-        fut_pub = pool.submit(_run, lambda: Post.query.filter_by(is_published=True).count())  # 已发布文章数
-        fut_cc = pool.submit(_run, lambda: Comment.query.filter_by(is_approved=False).count())  # 待审核评论数
-        fut_uc = pool.submit(_run, lambda: User.query.count())                          # 用户总数
-        fut_rp = pool.submit(                                                            # 最近 5 篇文章
-            _run, lambda: Post.query.order_by(Post.created_at.desc()).limit(5).all()
-        )
-        fut_rc = pool.submit(                                                            # 最近 5 条待审核评论（含文章信息）
-            _run,
-            lambda: (
-                Comment.query.options(db.joinedload(Comment.post))
-                .filter_by(is_approved=False)
-                .order_by(Comment.created_at.desc())
-                .limit(5)
-                .all()
-            ),
-        )
-
-        stats = {
-            'post_count': fut_pc.result(),
-            'published_count': fut_pub.result(),
-            'comment_count': fut_cc.result(),
-            'user_count': fut_uc.result(),
-            'recent_posts': [
-                {
-                    'id': p.id,
-                    'title': p.title,
-                    'is_published': p.is_published,
-                    'created_at': p.created_at.isoformat() if p.created_at else None,
-                }
-                for p in fut_rp.result()
-            ],
-            'recent_comments': [
-                {
-                    'id': c.id,
-                    'content': c.content,
-                    'post': {'id': c.post.id, 'title': c.post.title},
-                    'created_at': c.created_at.isoformat() if c.created_at else None,
-                }
-                for c in fut_rc.result()
-            ],
-        }
+    stats = {
+        'post_count': post_count,
+        'published_count': published_count,
+        'comment_count': comment_count,
+        'user_count': user_count,
+        'recent_posts': [
+            {
+                'id': p.id,
+                'title': p.title,
+                'is_published': p.is_published,
+                'created_at': p.created_at.isoformat() if p.created_at else None,
+            }
+            for p in recent_posts_raw
+        ],
+        'recent_comments': [
+            {
+                'id': c.id,
+                'content': c.content,
+                'post': {'id': c.post.id, 'title': c.post.title},
+                'created_at': c.created_at.isoformat() if c.created_at else None,
+            }
+            for c in recent_comments_raw
+        ],
+    }
     cache_set('dashboard:stats', stats, ttl)
     return render_template('admin/dashboard.html', **stats)
 
@@ -574,7 +541,7 @@ def post_list():
     )
     if q:
         # 转义 LIKE 通配符，防止用户通过 % 或 _ 触发非预期的模糊匹配
-        safe_q = q.replace('%', '\\%').replace('_', '\\_')
+        safe_q = escape_like(q)
         query = query.filter(Post.title.ilike(f'%{safe_q}%'))
     if not current_user.is_editor:
         query = query.filter(Post.author_id == current_user.id)
@@ -725,7 +692,7 @@ def edit_post(id):
         post.content = form.content.data
         post.cover_image = form.cover_image.data or ''
         post.is_published = form.is_published.data
-        post.updated_at = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8)))
+        post.updated_at = now_cst()
         post.categories = Category.query.filter(Category.id.in_(form.categories.data)).all()
         db.session.commit()
         _invalidate_sidebar_cache()
@@ -1281,25 +1248,14 @@ def new_featured_card():
         return redirect(url_for('admin.category_list'))
     form = FeaturedCardForm()
     form.tag.choices = [(c.slug, c.name) for c in categories]
-    def _validate_url_protocol(val):
-        """检查 URL 协议是否安全，阻止 javascript:/data:/vbscript:/file: 等危险协议。
-
-        Args:
-            val: 待检查的 URL 字符串
-
-        Returns:
-            True 表示安全，False 表示包含危险协议
-        """
-        if val:
-            val_lower = val.strip().lower()
-            for scheme in ('javascript:', 'data:', 'vbscript:', 'file:'):
-                if val_lower.startswith(scheme):
-                    flash(f'不安全的 URL 协议: {val}', 'error')
-                    return False
+    def _validate_url_protocol_local(val):
+        if not validate_url_protocol(val):
+            flash(f'不安全的 URL 协议: {val}', 'error')
+            return False
         return True
 
     if form.validate_on_submit():
-        if not _validate_url_protocol(form.link.data) or not _validate_url_protocol(form.image_url.data):
+        if not _validate_url_protocol_local(form.link.data) or not _validate_url_protocol_local(form.image_url.data):
             return render_template('admin/featured-card-form.html', form=form, editing=False)
         card = FeaturedCard(
             title=form.title.data,
@@ -1343,25 +1299,14 @@ def edit_featured_card(id):
     card = FeaturedCard.query.get_or_404(id)
     form = FeaturedCardForm(obj=card)
     form.tag.choices = [(c.slug, c.name) for c in Category.query.order_by(Category.name).all()]
-    def _validate_url_protocol(val):
-        """检查 URL 协议是否安全，阻止 javascript:/data:/vbscript:/file: 等危险协议。
-
-        Args:
-            val: 待检查的 URL 字符串
-
-        Returns:
-            True 表示安全，False 表示包含危险协议
-        """
-        if val:
-            val_lower = val.strip().lower()
-            for scheme in ('javascript:', 'data:', 'vbscript:', 'file:'):
-                if val_lower.startswith(scheme):
-                    flash(f'不安全的 URL 协议: {val}', 'error')
-                    return False
+    def _validate_url_protocol_local(val):
+        if not validate_url_protocol(val):
+            flash(f'不安全的 URL 协议: {val}', 'error')
+            return False
         return True
 
     if form.validate_on_submit():
-        if not _validate_url_protocol(form.link.data) or not _validate_url_protocol(form.image_url.data):
+        if not _validate_url_protocol_local(form.link.data) or not _validate_url_protocol_local(form.image_url.data):
             return render_template('admin/featured-card-form.html', form=form, editing=True)
         card.title = form.title.data
         card.description = form.description.data or ''
@@ -1423,10 +1368,11 @@ def bili_subscriptions():
 
     query = BiliSubscription.query.join(BiliUp, BiliSubscription.up_id == BiliUp.id)
     if q:
+        safe_q = escape_like(q)
         query = query.filter(
             db.or_(
-                BiliSubscription.email.ilike(f'%{q}%'),
-                BiliUp.name.ilike(f'%{q}%'),
+                BiliSubscription.email.ilike(f'%{safe_q}%'),
+                BiliUp.name.ilike(f'%{safe_q}%'),
             )
         )
     pagination = query.order_by(BiliSubscription.created_at.desc()).paginate(
@@ -1497,7 +1443,7 @@ def cleanup_unverified_subscriptions():
     """
     import datetime
 
-    cutoff = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))) - datetime.timedelta(hours=24)
+    cutoff = now_cst() - datetime.timedelta(hours=24)
     deleted = BiliSubscription.query.filter(
         BiliSubscription.verified == False, BiliSubscription.created_at < cutoff
     ).delete()
@@ -1752,7 +1698,7 @@ def wordcloud_config():
         # 如果上传了自定义形状图片，强制 shape 为 custom（覆盖表单提交值）
         if getattr(request, '_shape_uploaded', False):
             config.shape = 'custom'
-        config.updated_at = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8)))
+        config.updated_at = now_cst()
         db.session.commit()
         flash('词云配置已保存', 'success')
         # 自动投递全量词云重算（使屏蔽词等立即生效）

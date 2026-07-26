@@ -44,6 +44,11 @@ def _get_redis():
     return _redis_client
 
 
+def is_queue_available():
+    """检查任务队列是否可用（Redis 已连接）。"""
+    return _redis_client is not None
+
+
 def submit_task(task_type, **kwargs):
     redis_client = _get_redis()
     if redis_client is None:

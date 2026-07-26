@@ -33,10 +33,12 @@
                 <form method="POST">
                     {{ form.hidden_tag() }}
                     <div class="form-group">
-                        <input type="text" name="username" placeholder="用户名" required>
+                        <label for="login_username" class="sr-only">用户名</label>
+                        <input type="text" name="username" id="login_username" placeholder="用户名" required>
                     </div>
                     <div class="form-group">
-                        <input type="password" name="password" placeholder="密码" required>
+                        <label for="login_password" class="sr-only">密码</label>
+                        <input type="password" name="password" id="login_password" placeholder="密码" required>
                     </div>
                     <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">登录</button>
                 </form>

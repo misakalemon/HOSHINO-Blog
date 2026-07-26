@@ -125,7 +125,12 @@ function biliLogin() {
         .then(function(r) { return r.json(); })
         .then(function(d) {
             if (!d.ok) { document.getElementById('biliQrStatus').textContent = '生成失败: ' + d.error; return; }
-            document.getElementById('biliQrImg').innerHTML = '<img src="' + d.img + '" style="width:200px;height:200px;border-radius:12px">';
+            var qrImg = document.createElement('img');
+            qrImg.src = d.img;
+            qrImg.style.cssText = 'width:200px;height:200px;border-radius:12px';
+            var qrContainer = document.getElementById('biliQrImg');
+            qrContainer.innerHTML = '';
+            qrContainer.appendChild(qrImg);
             document.getElementById('biliQrStatus').textContent = '请使用 B站 App 扫码登录';
             pollBiliQr(d.qrcode_key);
         });

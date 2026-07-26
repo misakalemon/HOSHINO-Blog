@@ -160,8 +160,8 @@ def _build_database_uri():
     # 各字段均有默认值，适合本地开发快速启动
     host = os.environ.get('DB_HOST', '127.0.0.1')
     port = os.environ.get('DB_PORT', '3306')
-    user = os.environ.get('DB_USER', 'hoshino')
-    passwd = os.environ.get('DB_PASS', 'hoshino_pass')
+    user = os.environ.get('DB_USER', '')
+    passwd = os.environ.get('DB_PASS', '')
     dbname = os.environ.get('DB_NAME', 'hoshino_blog')
 
     # 默认使用 pymysql 驱动连接 MySQL，UTF-8 编码 + 10 秒连接超时
@@ -205,16 +205,15 @@ class Config:
     # ── Session 安全 ────────────────────────────────
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
-    # 生产环境默认强制 HTTPS，可通过 .env 中 SESSION_COOKIE_SECURE=false 关闭
-    _default_secure = os.environ.get('FLASK_ENV') != 'development'
+    # 使用独立环境变量控制，不依赖 FLASK_ENV
     SESSION_COOKIE_SECURE = os.environ.get(
-        'SESSION_COOKIE_SECURE', str(_default_secure)
+        'SESSION_COOKIE_SECURE', 'true'
     ).lower() in ('true', '1')
     PERMANENT_SESSION_LIFETIME = timedelta(days=7)
 
     # ── CSRF 保护 ──────────────────────────────────
-    # 关闭 SSL 严格检查（HTTP 环境下误报率低）
-    WTF_CSRF_SSL_STRICT = False
+    # 启用 SSL 严格检查
+    WTF_CSRF_SSL_STRICT = True
     # 不设 CSRF token 过期时间（由 session 7 天过期兜底）
     WTF_CSRF_TIME_LIMIT = None
 
@@ -239,11 +238,8 @@ class Config:
     # ── 上传 ──────────────────────────────────────
     # 用户上传文件存放目录（相对于项目根目录）
     UPLOAD_FOLDER = os.path.join(basedir, 'static', 'uploads')
-    # 单次上传最大字节数（默认 16MB，可通过 .env 覆盖）
-    try:
-        MAX_CONTENT_LENGTH = int(os.environ.get('MAX_CONTENT_LENGTH', 16 * 1024 * 1024))
-    except (ValueError, TypeError):
-        MAX_CONTENT_LENGTH = 16 * 1024 * 1024
+    # 单次上传最大字节数（默认 16MB，app.py 可按需覆盖为更大值）
+    MAX_CONTENT_LENGTH = 16 * 1024 * 1024
 
     # ── 分页 ──────────────────────────────────────
     # 每页文章数（默认 6），可通过 .env 的 POSTS_PER_PAGE 覆盖
@@ -271,7 +267,7 @@ class Config:
     # 这些值只在数据库没有任何用户时生效一次。
     # 创建管理员后，修改这些值不会影响已有用户。
     ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin')
-    ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'CHANGE_ME')
+    ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', '')
     ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', 'admin@localhost')
     ADMIN_DISPLAY_NAME = os.environ.get('ADMIN_DISPLAY_NAME', 'Admin')
 

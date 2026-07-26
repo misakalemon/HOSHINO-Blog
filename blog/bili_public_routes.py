@@ -18,41 +18,18 @@ import logging
 import secrets
 import time
 
-from collections import OrderedDict
-
 from flask import Blueprint, current_app, jsonify, render_template, request, url_for
 
 from blog.models import BiliSubscription, BiliUp, BiliUpHistory, BiliVideo, BiliVideoHistory, WordCloudData, db
+from blog.utils import get_client_ip, RateLimiter, escape_like
 
 logger = logging.getLogger(__name__)
 
 bili_public_bp = Blueprint('bili_public', __name__, url_prefix='/bilibili')
 
 
-class _RateLimitDict(OrderedDict):
-    """固定大小的速率限制字典，超出容量时自动淘汰最久未访问的条目（FIFO）。
-
-    基于 OrderedDict 实现 LRU 风格淘汰：
-      当条目数超过 maxsize 时，popitem(last=False) 从头部删除最早插入的键值对。
-    OrderedDict 在 Python 3.7+ 中保证了插入顺序，因此最早插入的即为最久未访问的条目。
-
-    Attributes:
-        maxsize (int): 最大条目数，默认 2000
-    """
-    def __init__(self, maxsize=2000):
-        self.maxsize = maxsize
-        super().__init__()
-
-    def __setitem__(self, key, value):
-        super().__setitem__(key, value)
-        # 超出容量时淘汰最早插入的条目
-        if len(self) > self.maxsize:
-            self.popitem(last=False)
-
-
 # 订阅速率限制：每 IP 每分钟最多 5 次（内存存储，重启后重置）
-_subscribe_limits = _RateLimitDict(maxsize=2000)
-_SUBSCRIBE_MAX_PER_MIN = 5
+_subscribe_limiter = RateLimiter(max_requests=5, window_seconds=60, maxsize=2000)
 
 
 @bili_public_bp.route('/')
@@ -77,15 +54,16 @@ def index():
 
     if q:
         # 统一搜索：同时匹配 UP 主和视频（各自限制 50 条避免爆表）
+        q_escaped = escape_like(q)
         ups = (
             BiliUp.query.filter(
-                db.or_(BiliUp.name.contains(q), BiliUp.mid.cast(db.String).contains(q))
+                db.or_(BiliUp.name.contains(q_escaped), BiliUp.mid.cast(db.String).contains(q_escaped))
             )
             .limit(50)
             .all()
         )
         videos = (
-            BiliVideo.query.filter(BiliVideo.title.contains(q))
+            BiliVideo.query.filter(BiliVideo.title.contains(q_escaped))
             .order_by(BiliVideo.pubdate.desc())
             .limit(50)
             .all()
@@ -146,7 +124,8 @@ def up_videos(up_id):
 
     query = BiliVideo.query.filter_by(up_id=up_id)
     if q:
-        query = query.filter(BiliVideo.title.contains(q))
+        q_escaped = escape_like(q)
+        query = query.filter(BiliVideo.title.contains(q_escaped))
     pagination = query.order_by(BiliVideo.pubdate.desc()).paginate(
         page=page, per_page=per_page, error_out=False
     )
@@ -349,16 +328,10 @@ def subscribe():
               或 {ok: False, error: str} + 对应 HTTP 状态码
     """
     # IP 速率限制：滑窗 60 秒，最多 5 次
-    ip = request.remote_addr or 'unknown'
-    now = time.time()
-    entries = _subscribe_limits.get(ip, [])
-    # 过滤掉超过 60 秒的历史记录
-    entries = [t for t in entries if now - t < 60]
-    _subscribe_limits[ip] = entries
-    if len(_subscribe_limits[ip]) >= _SUBSCRIBE_MAX_PER_MIN:
+    ip = get_client_ip()
+    if _subscribe_limiter.is_limited(ip):
         logger.warning('订阅请求过频 IP=%s', ip)
         return jsonify({'ok': False, 'error': '操作太频繁，请稍后再试'}), 429
-    _subscribe_limits[ip].append(now)
 
     email = (request.form.get('email') or '').strip().lower()
     raw_ids = request.form.getlist('up_ids[]')
@@ -437,7 +410,7 @@ def subscribe():
     return jsonify({'ok': True, 'message': msg})
 
 
-@bili_public_bp.route('/verify/<token>')
+@bili_public_bp.route('/verify/<token>', methods=['POST'])
 def verify_subscription(token):
     """验证邮件订阅（批量验证同一 token 的所有订阅记录）
 
@@ -476,7 +449,7 @@ def verify_subscription(token):
     )
 
 
-@bili_public_bp.route('/unsubscribe/<token>')
+@bili_public_bp.route('/unsubscribe/<token>', methods=['POST'])
 def unsubscribe(token):
     """取消订阅（批量删除同一 token 的所有订阅记录）
 

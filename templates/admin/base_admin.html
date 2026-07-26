@@ -14,6 +14,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex,nofollow">
     <title>{% block title %}管理后台{% endblock %} · Hoshino</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/glow-design.css') }}">
     {% block extra_head %}{% endblock %}
@@ -30,11 +31,11 @@
 </div>
 
 <!-- 侧边栏导航 -->
-<button class="admin-toggle" id="adminToggle">
+<button class="admin-toggle" id="adminToggle" aria-label="切换侧边栏" aria-expanded="false">
   <span></span><span></span><span></span>
 </button>
 <div class="admin-overlay" id="adminOverlay"></div>
-<div class="admin-sidebar" id="adminSidebar">
+<div class="admin-sidebar" id="adminSidebar" role="navigation" aria-label="管理后台导航">
     <a href="{{ url_for('admin.dashboard') }}" class="logo">✦ Hoshino</a>
     <!-- 根据当前用户权限显示对应菜单项，防止前端猜测后端接口 -->
     {% if current_user.is_editor %}
@@ -61,7 +62,7 @@
     <a href="{{ url_for('admin.bili_history_cleanup') }}" style="padding-left:36px;font-size:0.8rem" {% if request.endpoint and 'bili_history_cleanup' in request.endpoint %}class="active"{% endif %}><i class="hm-public-history"></i>历史清理</a>
     {% endif %}
     <a href="{{ url_for('admin.profile') }}" {% if request.endpoint == 'admin.profile' %}class="active"{% endif %}><i class="hm-set"></i>个人资料</a>
-    <a href="{{ url_for('blog.index') }}" style="color:rgba(255,255,255,0.25);margin-top:20px;font-size:0.75rem">← 查看网站</a>
+    <a href="{{ url_for('blog.index') }}" style="color:rgba(255,255,255,0.55);margin-top:20px;font-size:0.75rem">← 查看网站</a>
     <a href="{{ url_for('admin.logout') }}" class="logout-link"><i class="hm-quit"></i>退出登录</a>
 </div>
 
@@ -80,7 +81,7 @@
     {% endif %}
     {% endwith %}
 
-<script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+<script src="{{ url_for('static', filename='js/admin.js') }}" defer></script>
 
     <!-- admin_content 块：子模板填充 -->
     {% block admin_content %}{% endblock %}

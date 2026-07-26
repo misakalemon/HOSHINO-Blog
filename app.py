@@ -24,10 +24,10 @@ HOSHINO Blog — Flask 应用入口
     waitress-serve --port=5000 app:create_app  # Windows 生产部署
 """
 
-import atexit
+
 import os
 import re
-import signal
+
 import time
 
 from dotenv import load_dotenv
@@ -146,17 +146,15 @@ def create_app():
     app.config['MAX_FORM_MEMORY_SIZE'] = 100 * 1024 * 1024
     # 最大表单部件数
     app.config['MAX_FORM_PARTS'] = 2000
-    os.environ['MAX_CONTENT_LENGTH'] = str(200 * 1024 * 1024)
     # 静态文件缓存 — 7 天（文件内容变更时手动清浏览器缓存即可）
     app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 604800
-    # 数据库连接池配置（B站爬取并发高，池子设大些）
-    # 保留 config.py 中的 pool_pre_ping 设置
+    # 数据库连接池配置（Web 进程，不需要过大连接池）
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
         'pool_pre_ping': True,
         'pool_recycle': 280,
         'pool_timeout': 30,
-        'pool_size': 30,
-        'max_overflow': 30,
+        'pool_size': 10,
+        'max_overflow': 10,
     }
 
     # ── CSRF 保护（全局，影响所有 POST/PUT/DELETE）──
@@ -233,8 +231,6 @@ def create_app():
 
     _bili_apply_cookies()
 
-    # ── 定时任务（价格爬虫 + SECRET_KEY 轮换） ──
-    _init_scheduler(app)
 
     # ── 登录管理 ──────────────────────────────────
     login_manager = LoginManager()
@@ -292,8 +288,7 @@ def create_app():
             request.path,
         )
         return (
-        f'<h1>413 Request Entity Too Large</h1><p>请求体过大 (Content-Length: {request.content_length})，'
-        f'当前限制: {app.config["MAX_CONTENT_LENGTH"] // 1024 // 1024}MB。'
+        f'<h1>413 Request Entity Too Large</h1><p>请求体过大 (Content-Length: {request.content_length})。'
         f'请减小文件或联系管理员。</p>',
         413,
         {'Content-Type': 'text/html; charset=utf-8'},
@@ -329,11 +324,14 @@ def create_app():
         """为所有 HTTP 响应添加安全相关的响应头。
 
         包括：X-Content-Type-Options、X-Frame-Options、
-        HSTS、Content-Security-Policy，防范常见 Web 攻击。
+        HSTS、Content-Security-Policy、Referrer-Policy、Permissions-Policy，
+        防范常见 Web 攻击。
         """
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['X-Frame-Options'] = 'SAMEORIGIN'
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+        # TODO: 迁移到 nonce-based CSP：将所有 inline script/style 移出为外部 .js/.css 文件，
+        # 然后改用 'nonce-{nonce}' 替代 'unsafe-inline'，彻底杜绝 inline 注入风险。
         response.headers['Content-Security-Policy'] = (
             "default-src 'self';"
             "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;"
@@ -343,6 +341,8 @@ def create_app():
             "connect-src 'self' https:;"
             "frame-ancestors 'self'"
         )
+        response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
         return response
 
     # ── 请求结束时清理数据库 session ────────────
@@ -363,6 +363,34 @@ def create_app():
         from markupsafe import Markup
         return Markup(''.join(f'<p style="margin:0 0 6px">{p}</p>' for p in parts))
 
+    @app.template_filter('bleach_clean')
+    def _jinja_bleach_clean(text):
+        """Jinja 过滤器：对 HTML 内容进行 bleach 消毒，防止 XSS。
+
+        用于替代 |safe，在渲染用户提交的 HTML 时确保安全。
+        允许的标签和属性覆盖富文本编辑器所需的全部元素。
+        """
+        if not text:
+            return ''
+        import bleach
+        allowed_tags = [
+            'p', 'br', 'b', 'strong', 'i', 'em', 'u', 's', 'del',
+            'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+            'ul', 'ol', 'li', 'blockquote', 'pre', 'code',
+            'a', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+            'span', 'div', 'hr', 'sub', 'sup',
+        ]
+        allowed_attrs = {
+            '*': ['class', 'id', 'style'],
+            'a': ['href', 'title', 'target'],
+            'img': ['src', 'alt', 'title', 'width', 'height'],
+            'td': ['colspan', 'rowspan'],
+            'th': ['colspan', 'rowspan'],
+        }
+        cleaned = bleach.clean(text, tags=allowed_tags, attributes=allowed_attrs, strip=True)
+        from markupsafe import Markup
+        return Markup(cleaned)
+
     elapsed = time.time() - _startup_time
     logger.info(
         '应用就绪 (%.2fs)  MAX_CONTENT_LENGTH=%dMB',
@@ -372,217 +400,6 @@ def create_app():
     return app
 
 
-def _init_scheduler(app):
-    """初始化 APScheduler 定时任务。
-
-    定时任务清单：
-      - 每天 02:00  深扫所有 B站 UP 主视频（补全 + 三层统计更新）
-      - 每天 03:00  自动轮换 SECRET_KEY
-      - 增量检查     B站 新视频（跑完一轮等 30 分钟再跑下一轮）
-      - 每天 03:00  自动清理 B站 视频历史快照
-
-    同时在进程退出和 SIGTERM 信号时执行安全关闭，避免挂起任务被杀死。
-    """
-    try:
-        from datetime import datetime, timedelta
-        from apscheduler.schedulers.background import BackgroundScheduler
-
-        from config import rotate_secret_key
-
-        scheduler = BackgroundScheduler()
-        # 每天 03:00 自动轮换 SECRET_KEY
-        scheduler.add_job(
-            func=lambda: rotate_secret_key(app),
-            trigger='cron',
-            hour=3,
-            minute=0,
-            id='rotate_secret_key',
-            replace_existing=True,
-        )
-        # 每天 02:00 深扫所有 UP 主 Hot/Warm/Cold 三层数据
-        from blog.bili_routes import run_daily_scrape
-
-        scheduler.add_job(
-            func=lambda: run_daily_scrape(app),
-            trigger='cron',
-            hour=2,
-            minute=0,
-            id='daily_bili_refresh',
-            replace_existing=True,
-        )
-        # B站 增量检查（首次 10 秒后触发，之后每轮跑完自调度 40 分钟）
-        scheduler.add_job(
-            func=lambda: _run_bili_incremental_check(app),
-            trigger='date',
-            run_date=datetime.now() + timedelta(seconds=10),
-            id='bili_incremental_check',
-            replace_existing=True,
-        )
-        # 每天 03:00 自动清理 B站视频历史快照（按 BiliCleanupConfig 配置）
-        from blog.bili_routes import auto_cleanup_history
-
-        scheduler.add_job(
-            func=lambda: auto_cleanup_history(app),
-            trigger='cron',
-            hour=3,
-            minute=0,
-            id='bili_auto_cleanup',
-            replace_existing=True,
-        )
-        # 每天 02:10 重新计算全站词云（博客 + B站）
-        from blog.wordcloud import precompute_all_wordclouds, precompute_bili_wordclouds
-
-        def _run_all_wc():
-            with app.app_context():
-                precompute_all_wordclouds()
-        scheduler.add_job(
-            func=_run_all_wc,
-            trigger='cron',
-            hour=2,
-            minute=10,
-            id='daily_wordcloud_recompute',
-            replace_existing=True,
-        )
-
-        def _run_bili_wc():
-            with app.app_context():
-                precompute_bili_wordclouds()
-        scheduler.add_job(
-            func=_run_bili_wc,
-            trigger='cron',
-            hour=2,
-            minute=15,
-            id='daily_bili_wordcloud_recompute',
-            replace_existing=True,
-        )
-        scheduler.start()
-        app.scheduler = scheduler
-
-        # 注册进程退出时的清理函数
-        # 在 Python 解释器正常退出时调用 scheduler.shutdown()
-        def _shutdown_scheduler():
-            """安全关闭调度器（忽略关闭过程中的异常）。"""
-            try:
-                scheduler.shutdown(wait=False)
-            except Exception:
-                pass
-        atexit.register(_shutdown_scheduler)
-
-        import signal
-        import sys
-
-        def _scheduler_sigterm(signum, frame):
-            """SIGTERM 信号处理：关闭调度器后退出进程。"""
-            _shutdown_scheduler()
-            sys.exit(0)
-
-        signal.signal(signal.SIGTERM, _scheduler_sigterm)
-
-        app.logger.info('定时任务: 03:00密钥/清理 / 每30minB站增量 / 02:00B站深扫')
-    except Exception as e:
-        app.logger.warning('定时任务启动失败（不影响运行）: %s', e)
-
-
-def _run_bili_incremental_check(app):
-    """增量检查所有 B站 UP 主是否有新视频发布。
-
-    分批并发执行，每批 _BATCH_SIZE 个 UP 主同时检查。
-    线程之间通过 _scrape_lock 互斥，避免同一个 UP 主被重复检查。
-    如果全局熔断（_circuit_open_until）未到期，则跳过本轮检查。
-
-    跑完一轮后自动调度下一轮（间隔 30 分钟），形成持续的增量检查循环。
-
-    若数据库不可达（MySQL 未启动），30 秒后重试而不是 30 分钟，
-    避免服务挂起期间人为等待过久，同时不会塞爆日志。
-    """
-    from datetime import datetime, timedelta
-
-    retry_seconds = 30 * 60  # 默认 30 分钟后重试
-    try:
-        with app.app_context():
-            import logging
-            import random
-            import threading
-            import time
-
-            logger = logging.getLogger(__name__)
-            from blog.models import BiliUp
-            from blog.bili_routes import (
-                _BATCH_SIZE,
-                _check_new_videos,
-                _scrape_progress,
-                _incremental_running,
-                _scrape_running,
-                _scrape_lock,
-                _circuit_open_until,
-            )
-
-            from blog.bili_routes import _circuit_lock
-            with _circuit_lock:
-                if time.time() < _circuit_open_until:
-                    remaining = int(_circuit_open_until - time.time()) // 60
-                    logger.warning('B站 增量检查取消: 全局熔断中，剩余 %d 分钟', remaining)
-                    return
-
-            THREAD_TIMEOUT = 10 * 60
-            # 全局并发限制：最多同时跑 _BATCH_SIZE 个增量检查线程
-            _inc_semaphore = threading.Semaphore(_BATCH_SIZE)
-            _inc_semaphore_acquired = False
-
-            ups = BiliUp.query.all()
-            active: list = []
-            for up in ups:
-                mid = up.mid
-                with _scrape_lock:
-                    if mid in _incremental_running or mid in _scrape_running:
-                        continue
-                    _scrape_progress[mid] = []
-                    _incremental_running.add(mid)
-                active.append(up)
-
-            for i in range(0, len(active), _BATCH_SIZE):
-                batch = active[i : i + _BATCH_SIZE]
-                thread_mids: list[tuple[threading.Thread, int]] = []
-                for up in batch:
-                    t = threading.Thread(
-                        target=_check_new_videos,
-                        args=(up.mid, app),
-                        daemon=True,
-                    )
-                    t.start()
-                    thread_mids.append((t, up.mid))
-                for t, mid in thread_mids:
-                    t.join(timeout=THREAD_TIMEOUT)
-                    if t.is_alive():
-                        with _scrape_lock:
-                            _incremental_running.discard(mid)
-                            _scrape_progress.pop(mid, None)
-                        logger.warning(
-                            'B站 增量检查: mid=%d 线程超时 (>%ds)，已清理运行状态',
-                            mid, THREAD_TIMEOUT
-                        )
-    except Exception as e:
-        err_str = str(e)
-        if 'Can\'t connect to MySQL' in err_str or '2003' in err_str:
-            app.logger.critical(
-                '❌ MySQL 服务不可达！请启动 MySQL 服务。30 秒后重试...'
-            )
-            retry_seconds = 30
-        else:
-            app.logger.error('B站 增量检查异常: %s', e, exc_info=True)
-            retry_seconds = 30
-    finally:
-        try:
-            app.scheduler.add_job(
-                func=lambda: _run_bili_incremental_check(app),
-                trigger='date',
-                run_date=datetime.now() + timedelta(seconds=retry_seconds),
-                id='bili_incremental_check',
-                replace_existing=True,
-            )
-        except Exception:
-            app.logger.warning('B站 增量检查无法重新调度（调度器可能已关闭）')
-
 
 if __name__ == '__main__':
     # ── 开发服务器启动 ──────────────────────────
@@ -590,34 +407,66 @@ if __name__ == '__main__':
     app = create_app()
     # 端口号优先从环境变量 PORT 读取，默认 5000
     port = int(os.environ.get('PORT', 5000))
-    # FLASK_ENV=development 时开启 debug 模式（热重载 + 详细错误页）
-    debug = os.environ.get('FLASK_ENV') == 'development'
+    # 使用独立的 DEBUG 环境变量控制调试模式
+    debug = os.environ.get('DEBUG', 'false').lower() in ('true', '1')
     host = '127.0.0.1' if debug else '0.0.0.0'
     logger = app.logger
     logger.info('=' * 50)
     logger.info('服务启动: http://%s:%d  debug=%s', host, port, debug)
     logger.info('=' * 50)
 
-    # ── 启动后台 Worker 进程（仅启动一个，所有后台任务统一由它处理）──
-    import subprocess, sys, atexit
+    # ── 启动后台 Worker 子进程 ──────────────────
+    # Worker 进程共享同一日志文件（blog/logs/hoshino.log），
+    # 终端输出通过 stderr 合并到同一控制台。
+    # 使用 creationflags 确保子进程随父进程退出。
+    import subprocess
+    import sys as _sys
+
     worker_py = os.path.join(os.path.dirname(__file__), 'worker.py')
-    worker_proc = subprocess.Popen(
-        [sys.executable, worker_py],
-        stdout=subprocess.DEVNULL,
-        stderr=sys.stderr,
-        stdin=subprocess.DEVNULL,
-        cwd=os.path.dirname(__file__),
-    )
-    app.logger.info('后台 Worker 进程已启动 (PID: %d)', worker_proc.pid)
+    _worker_proc = None
+
+    def _start_worker():
+        """启动 Worker 子进程，日志输出到同一 stderr。"""
+        global _worker_proc
+        if _worker_proc and _worker_proc.poll() is None:
+            return
+        kwargs = dict(
+            stdout=subprocess.DEVNULL,
+            stderr=_sys.stderr,
+            stdin=subprocess.DEVNULL,
+            cwd=os.path.dirname(__file__),
+            env={**os.environ, 'WORKER_PROCESS': '1'},
+        )
+        # Windows: 创建子进程组，确保 Ctrl+C 能同时终止
+        if os.name == 'nt':
+            kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
+        _worker_proc = subprocess.Popen([_sys.executable, worker_py], **kwargs)
+        logger.info('后台 Worker 进程已启动 (PID: %d)', _worker_proc.pid)
 
     def _stop_worker():
-        if worker_proc.poll() is None:
-            app.logger.info('正在停止 Worker 进程...')
+        """安全停止 Worker 子进程。"""
+        global _worker_proc
+        if _worker_proc is None:
+            return
+        if _worker_proc.poll() is not None:
+            _worker_proc = None
+            return
+        logger.info('正在停止 Worker 进程 (PID: %d)...', _worker_proc.pid)
+        try:
+            _worker_proc.terminate()
+            _worker_proc.wait(timeout=10)
+        except Exception:
             try:
-                worker_proc.terminate()
-                worker_proc.wait(timeout=5)
+                _worker_proc.kill()
+                _worker_proc.wait(timeout=5)
             except Exception:
-                worker_proc.kill()
+                pass
+        logger.info('Worker 进程已停止')
+        _worker_proc = None
+
+    _start_worker()
     atexit.register(_stop_worker)
 
-    app.run(host=host, port=port, debug=debug)
+    # debug 模式下防止 Flask 热重载重复启动 Worker
+    # use_reloader=False 确保主进程只启动一次
+    app.run(host=host, port=port, debug=debug, use_reloader=False)
