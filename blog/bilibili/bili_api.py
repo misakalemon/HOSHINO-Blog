@@ -101,7 +101,13 @@ def _sync(coro):
             logger.error('B站 API 请求超时 (%ds)', _API_TIMEOUT)
             try:
                 if not loop.is_closed():
-                    loop.run_until_complete(loop.shutdown_asyncgens())
+                    # shutdown_asyncgens 可能因未关闭的 aiohttp 连接永久挂起，加 5s 超时保护
+                    try:
+                        loop.run_until_complete(
+                            asyncio.wait_for(loop.shutdown_asyncgens(), timeout=5)
+                        )
+                    except Exception:
+                        pass  # 超时或失败不阻止关闭
                     loop.close()
             except Exception:
                 pass
@@ -111,7 +117,13 @@ def _sync(coro):
             # 任何其他异常也需清理循环资源
             try:
                 if not loop.is_closed():
-                    loop.run_until_complete(loop.shutdown_asyncgens())
+                    # 同上的 5s 超时保护
+                    try:
+                        loop.run_until_complete(
+                            asyncio.wait_for(loop.shutdown_asyncgens(), timeout=5)
+                        )
+                    except Exception:
+                        pass
                     loop.close()
             except Exception:
                 pass
