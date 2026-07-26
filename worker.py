@@ -255,8 +255,11 @@ def _init_worker_scheduler(app):
 
         # 02:10 全站词云预计算
         from blog.wordcloud import precompute_all_wordclouds
+        def _job_all_wc():
+            with app.app_context():
+                precompute_all_wordclouds()
         scheduler.add_job(
-            func=precompute_all_wordclouds,
+            func=_job_all_wc,
             trigger='cron',
             hour=2,
             minute=10,
@@ -266,8 +269,11 @@ def _init_worker_scheduler(app):
 
         # 02:15 B站词云预计算
         from blog.wordcloud import precompute_bili_wordclouds
+        def _job_bili_wc():
+            with app.app_context():
+                precompute_bili_wordclouds()
         scheduler.add_job(
-            func=precompute_bili_wordclouds,
+            func=_job_bili_wc,
             trigger='cron',
             hour=2,
             minute=15,
