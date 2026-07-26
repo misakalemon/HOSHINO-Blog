@@ -46,3 +46,19 @@ blog/bilibili/.bili_cookies.txt
 .bili_cookies.txt
 .bili_credential.json
 
+
+# IDE
+.arts/
+.codeartsdoer/
+.vscode/
+# Cache
+__pycache__/
+.ruff_cache/
+.pytest_cache/
+# Playwright
+.playwright-mcp/
+# Logs
+blog/logs/
+# OS
+Thumbs.db
+.DS_Store
