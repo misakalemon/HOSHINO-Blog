@@ -66,7 +66,7 @@ def _run_task(task, app):
     data = task.get('data', {})
     task_id = task.get('id', '?')
 
-    # 直接写终端，绕过 logging 缓存层（Windows 兼容）
+    logger = logging.getLogger(__name__)
     logger.info('[Worker] 任务到达: %s type=%s', task_id, task_type)
 
     try:
@@ -387,8 +387,8 @@ def main():
 
     logger.info('正在等待 %d 个爬取任务 + %d 个词云任务完成...',
                 len(scrape_futures), len(wc_futures))
-    wc_executor.shutdown(wait=True, timeout=30)
-    scrape_executor.shutdown(wait=True, timeout=30)
+    wc_executor.shutdown(wait=True)
+    scrape_executor.shutdown(wait=True)
     logger.info('Worker 已正常退出')
 
 
