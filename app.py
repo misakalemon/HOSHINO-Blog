@@ -25,6 +25,7 @@ HOSHINO Blog — Flask 应用入口
 """
 
 
+import atexit
 import os
 import re
 

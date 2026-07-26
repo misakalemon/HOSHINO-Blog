@@ -60,18 +60,17 @@ def setup_logging(app):
     Returns:
         logging.Logger: 配置好的根日志器
     """
+    import os as _os
+    _is_worker = _os.environ.get('WORKER_PROCESS') == '1'
 
     # ===== 1. 根日志器 =====
-    # 获取根日志器（所有模块的 logger 最终都继承自它）
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.DEBUG)
-    # 清空 Flask 默认的 handler，避免重复（Flask 会自动添加 StreamHandler）
+    # 清空已有 handler，避免重复
     for h in root_logger.handlers[:]:
         root_logger.removeHandler(h)
 
     # ===== 2. 文件 Handler（全部日志，每日轮转，保留30天） =====
-    # 使用 TimedRotatingFileHandler 按天轮转，避免单个日志文件过大
-    # 每天午夜自动创建新文件，旧文件保留 30 天
     file_handler = logging.handlers.TimedRotatingFileHandler(
         LOG_FILE, when='midnight', interval=1, backupCount=30, encoding='utf-8'
     )
@@ -79,8 +78,6 @@ def setup_logging(app):
     file_handler.setFormatter(logging.Formatter(DETAILED_FORMAT, DATE_FORMAT))
 
     # ===== 3. 错误文件 Handler（仅 ERROR 以上，单独文件） =====
-    # 使用 RotatingFileHandler 按大小轮转，专门记录错误信息
-    # 单个文件最大 10MB，保留最近 5 个备份
     error_handler = logging.handlers.RotatingFileHandler(
         ERROR_LOG_FILE, maxBytes=10 * 1024 * 1024, backupCount=5, encoding='utf-8'
     )
@@ -88,10 +85,14 @@ def setup_logging(app):
     error_handler.setFormatter(logging.Formatter(DETAILED_FORMAT, DATE_FORMAT))
 
     # ===== 4. 终端 Handler（INFO 级别，不显示 DEBUG 噪音） =====
-    # 终端日志使用 StreamHandler 输出到标准输出（stdout）
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(logging.Formatter(CONSOLE_FORMAT, CONSOLE_DATE_FORMAT))
+    # Worker 进程终端日志加 [W] 前缀，区分来源
+    if _is_worker:
+        _WORKER_FMT = '%(asctime)s  %(levelname)-6s  [W][%(name)s] %(message)s'
+        console_handler.setFormatter(logging.Formatter(_WORKER_FMT, CONSOLE_DATE_FORMAT))
+    else:
+        console_handler.setFormatter(logging.Formatter(CONSOLE_FORMAT, CONSOLE_DATE_FORMAT))
 
     # 添加到根日志器
     root_logger.addHandler(file_handler)
@@ -99,26 +100,19 @@ def setup_logging(app):
     root_logger.addHandler(console_handler)
 
     # ===== 5. Flask 自身日志也使用我们的配置 =====
-    # 覆盖 Flask、Werkzeug 内置的日志 handler。
-    # Werkzeug HTTP 请求日志仅在文件记录（DEBUG），
-    # 终端由自定义 log_request() 统一输出，避免重复。
     for logger_name in ('flask.app', 'flask.request', 'werkzeug'):
         log = logging.getLogger(logger_name)
         log.setLevel(logging.DEBUG)
-        # 清空默认 handler，改用我们自己的文件 + 终端 handler
         for h in log.handlers[:]:
             log.removeHandler(h)
-        # 终端 handler：仅 WARNING+（抑制 werkzeug HTTP 访问日志在终端的输出）
         console_h = logging.StreamHandler()
         console_h.setLevel(logging.WARNING)
         console_h.setFormatter(logging.Formatter(CONSOLE_FORMAT, CONSOLE_DATE_FORMAT))
         log.addHandler(file_handler)
         log.addHandler(console_h)
-        # 禁止 propagate，避免日志重复（父 logger 也会输出）
         log.propagate = False
 
     # ===== 6. 第三方库日志级别压制 =====
-    # Selenium WebDriver 远程调用日志（每条 HTTP 请求/响应都打 DEBUG，太吵）
     for logger_name in (
         'selenium.webdriver.remote.remote_connection',
         'selenium.webdriver.remote',
@@ -129,26 +123,28 @@ def setup_logging(app):
         log.handlers.clear()
         log.propagate = False
 
-    # urllib3 / requests 的连接池日志（频繁打印连接创建/回收信息，影响可读性）
     for logger_name in ('urllib3', 'urllib3.connectionpool', 'requests'):
         log = logging.getLogger(logger_name)
         log.setLevel(logging.WARNING)
 
     # ===== 7. SQLAlchemy 日志（仅记录 WARNING 以上） =====
     sql_logger = logging.getLogger('sqlalchemy.engine')
-    sql_logger.setLevel(logging.WARNING)  # WARNING 以上，减少日志噪音
+    sql_logger.setLevel(logging.WARNING)
     sql_logger.addHandler(file_handler)
 
-    # 将根日志器挂载到 app.logger，替换 Flask 默认的 Logger
+    # 将根日志器挂载到 app.logger
     app.logger = root_logger
     app.config['LOG_DIR'] = LOG_DIR
 
-    # 输出日志初始化完成的分隔线，方便在日志文件中定位应用启动点
-    root_logger.info('━' * 60)
-    root_logger.info('日志系统初始化完成')
-    root_logger.info('日志文件: %s', LOG_FILE)
-    root_logger.info('错误日志: %s', ERROR_LOG_FILE)
-    root_logger.info('━' * 60)
+    # 输出日志初始化分隔线（Worker 进程简化，不重复打印 banner）
+    if not _is_worker:
+        root_logger.info('━' * 60)
+        root_logger.info('日志系统初始化完成')
+        root_logger.info('日志文件: %s', LOG_FILE)
+        root_logger.info('错误日志: %s', ERROR_LOG_FILE)
+        root_logger.info('━' * 60)
+    else:
+        root_logger.info('Worker 日志系统已就绪（日志文件: %s）', LOG_FILE)
 
     return root_logger
 
