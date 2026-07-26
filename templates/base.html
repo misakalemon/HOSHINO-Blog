@@ -23,8 +23,8 @@
     <meta name="description" content="{% block description %}Hoshino Blog{% endblock %}">
     <meta name="theme-color" content="#0b0e17">
     <meta name="referrer" content="strict-origin-when-cross-origin">
-    <meta property="og:title" content="{% block title %}{{ site_name|default('Hoshino') }}{% endblock %}">
-    <meta property="og:description" content="{% block description %}Hoshino Blog{% endblock %}">
+    <meta property="og:title" content="{{ self.title() }}">
+    <meta property="og:description" content="{{ self.description() }}">
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{ request.url }}">
     <link rel="canonical" href="{{ request.url }}">
