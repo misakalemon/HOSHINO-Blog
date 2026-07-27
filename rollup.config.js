@@ -10,6 +10,7 @@ export default {
     format: 'iife',
     name: 'HoshinoEditor',
     sourcemap: true,
+    footer: 'window.HoshinoEditor = HoshinoEditor.default;',
   },
   plugins: [
     postcss({
