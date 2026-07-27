@@ -1,12 +1,34 @@
-import * as icons from 'lucide'
+import {
+  Scissors, Copy, Clipboard, Bold, Italic, Underline, Link, Image,
+  AlignLeft, AlignCenter, AlignRight, RemoveFormatting,
+} from 'lucide'
+
+const iconMap = {
+  Cut: Scissors,
+  Copy,
+  Paste: Clipboard,
+  Bold,
+  Italic,
+  Underline,
+  Link,
+  Image,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  RemoveFormatting,
+}
 
 function createIcon(name, size = 16) {
   const icon = document.createElement('i')
   icon.className = 'rte-icon'
-  const iconFn = icons[name]
+  const iconFn = iconMap[name]
   if (iconFn) {
-    const svg = iconFn.toSvg({ width: size, height: size })
-    icon.innerHTML = svg
+    const svg = iconFn({ width: size, height: size })
+    if (svg instanceof Element) {
+      icon.appendChild(svg)
+    } else {
+      icon.innerHTML = svg
+    }
   }
   return icon
 }

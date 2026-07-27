@@ -1,14 +1,29 @@
 import { showModal, uploadImageWithCrop, importFile, sanitizeHTML } from './utils'
-import * as icons from 'lucide'
+import {
+  Undo, Redo, Bold, Italic, Underline, Strikethrough, Superscript, Subscript,
+  AlignLeft, AlignCenter, AlignRight, AlignJustify, List, ListOrdered, CheckSquare,
+  Outdent, Indent, Link, Image, Table, Minus, Code, FileUp, Plus, Search,
+  RemoveFormatting,
+} from 'lucide'
+
+const iconMap = {
+  Undo, Redo, Bold, Italic, Underline, Strikethrough, Superscript, Subscript,
+  AlignLeft, AlignCenter, AlignRight, AlignJustify, List, ListOrdered, CheckSquare,
+  Outdent, Indent, Link, Image, Table, Minus, Code, FileUp, Plus, Search,
+  RemoveFormatting,
+}
 
 function createIcon(name, size = 18) {
   const icon = document.createElement('i')
   icon.className = 'rte-icon'
-  icon.setAttribute('data-icon', name)
-  const iconFn = icons[name]
+  const iconFn = iconMap[name]
   if (iconFn) {
-    const svg = iconFn.toSvg({ width: size, height: size })
-    icon.innerHTML = svg
+    const svg = iconFn({ width: size, height: size })
+    if (svg instanceof Element) {
+      icon.appendChild(svg)
+    } else {
+      icon.innerHTML = svg
+    }
   }
   return icon
 }
