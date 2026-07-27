@@ -53,6 +53,7 @@ from blog.models import (
 )
 from .admin import editor_required
 from .utils import now_cst, CST, get_client_ip, escape_like
+from .bilibili.bili_api import thread_sleep, ensure_semaphore
 
 logger = logging.getLogger(__name__)
 
@@ -461,9 +462,7 @@ _incremental_running: set[int] = set()
 _scrape_progress: dict[int, list[str]] = {}
 # 上述三个共享状态的互斥锁 — 读写均需持有
 _scrape_lock = threading.Lock()
-# 每视频请求后的睡眠（防风控）— BASE + [0, JITTER) 秒
-_VIDEO_SLEEP_BASE = float(os.environ.get('BILI_VIDEO_SLEEP', '10.0'))
-_VIDEO_SLEEP_JITTER = float(os.environ.get('BILI_VIDEO_JITTER', '5.0'))
+
 _UPDATE_THREADS = int(os.environ.get('BILI_UPDATE_THREADS', '3'))
 # 全局熔断器 — 检测到 412 IP封禁后自动暂停所有爬取直到此时间戳（Unix 秒）
 _circuit_open_until: float = 0.0
@@ -841,7 +840,7 @@ def _check_new_videos(mid: int, app):
                     stat = get_video_stat(bvid)
                     video_info.update(stat)
                     # 随机延时防 B 站风控
-                    time.sleep(_VIDEO_SLEEP_BASE + random.random() * _VIDEO_SLEEP_JITTER)
+                    thread_sleep()
                 except Exception as e:
                     logger.warning('视频 %s 统计获取失败: %s', bvid, e)
                     time.sleep(12.0)
@@ -994,7 +993,7 @@ def _check_new_videos(mid: int, app):
                     db.session.commit()
                     title_short = (v.title or '')[:30]
                     emit(f'[跟踪] 「{title_short}」')
-                    time.sleep(_VIDEO_SLEEP_BASE + random.random() * _VIDEO_SLEEP_JITTER)
+                    thread_sleep()
             except Exception as e:
                 logger.error('最新视频追踪失败 mid=%d: %s', mid, e)
 
@@ -1039,7 +1038,7 @@ def _check_new_videos(mid: int, app):
                     db.session.commit()
                     title_short = (v.title or '')[:30]
                     emit(f'[重点] 「{title_short}」')
-                    time.sleep(_VIDEO_SLEEP_BASE + random.random() * _VIDEO_SLEEP_JITTER)
+                    thread_sleep()
             except Exception as e:
                 logger.error('重点视频追踪失败 mid=%d: %s', mid, e)
 
@@ -1299,7 +1298,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                         try:
                             _fstat = get_video_stat(_fbvid)
                             vi.update(_fstat)
-                            time.sleep(_VIDEO_SLEEP_BASE + random.random() * _VIDEO_SLEEP_JITTER)
+                            thread_sleep()
                             return True
                         except Exception:
                             logger.warning('视频 %s 「%s」补全时统计获取失败', _fbvid, _fts)
@@ -1462,7 +1461,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                         local_retry_delay = 30
                         try:
                             stat = get_video_stat(bvid)
-                            time.sleep(_VIDEO_SLEEP_BASE + random.random() * _VIDEO_SLEEP_JITTER)
+                            thread_sleep()
                         except Exception as e:
                             if _is_risk_control(e):
                                 logger.warning('触发风控，等待 %ds 后跳过...', local_retry_delay)
@@ -1520,6 +1519,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                             pass
 
             # Hot 阶段: 发布时间 ≤7 天 — 全部更新，不跳过
+            ensure_semaphore(_UPDATE_THREADS)
             hot_query = BiliVideo.query.filter(
                 BiliVideo.up_id == up.id,
                 BiliVideo.pub_datetime >= cutoff_hot,

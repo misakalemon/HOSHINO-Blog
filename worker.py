@@ -193,6 +193,8 @@ def _run_bili_incremental_check(app):
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     max_workers = int(os.environ.get('BILI_INCREMENTAL_THREADS', '3'))
+    from blog.bilibili.bili_api import ensure_semaphore
+    ensure_semaphore(max_workers)
 
     with app.app_context():
         from blog.models import BiliUp

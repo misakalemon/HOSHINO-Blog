@@ -58,77 +58,128 @@ def was_recently_blocked(cooldown: float = 0) -> bool:
 # 按线程隔离的事件循环（每个线程独立，不互相干扰）
 _loop_local = threading.local()
 
+# ── 线程级资源绑定 ──────────────────────────────
+# 每个爬取线程首次调用 _sync() 时，从 UA 池中固定分配一个 UA + 随机 phase offset
+# 不同线程使用不同 UA，B站 看到的是多个"不同浏览器"在各自节奏下浏览
+# phase offset 让各线程的 sleep 节奏错开，避免所有线程在同一时刻发出请求
+_thread_local = threading.local()
+
 # 并发信号量 — 限制同时发往 B 站 API 的请求数，防风控
-# 从 5 降到 3，减少瞬时并发压力；B站对同一 IP 并发超过 3-4 容易触发 412
-_api_semaphore = threading.Semaphore(int(os.environ.get('BILI_SEMAPHORE', '3')))
+# BILI_SEMAPHORE=0（默认）时不限制，由各线程的 sleep 节奏自控并发
+# BILI_SEMAPHORE>0 时启用全局信号量限流
+_BILI_SEMAPHORE = int(os.environ.get('BILI_SEMAPHORE', '0'))
+_api_semaphore = threading.Semaphore(_BILI_SEMAPHORE) if _BILI_SEMAPHORE > 0 else None
+
+
+def ensure_semaphore(thread_count: int):
+    """按线程数自动初始化信号量（仅当 BILI_SEMAPHORE=0 时生效）。
+
+    若用户未显式设置 BILI_SEMAPHORE，则自动设为 thread_count + 1，
+    允许所有线程并发但留 1 个缓冲位。
+    """
+    global _api_semaphore
+    if _BILI_SEMAPHORE > 0 or _api_semaphore is not None:
+        return
+    _api_semaphore = threading.Semaphore(thread_count + 1)
+    logger.info('信号量自动初始化: Semaphore(%d)', thread_count + 1)
 
 # 单次 API 调用超时时间（秒）
 _API_TIMEOUT = float(os.environ.get('BILI_API_TIMEOUT', '30.0'))
 
+# 视频间 sleep 参数（供 bili_routes.py 的 thread_sleep 使用）
+_VIDEO_SLEEP_BASE = float(os.environ.get('BILI_VIDEO_SLEEP', '10.0'))
+_VIDEO_SLEEP_JITTER = float(os.environ.get('BILI_VIDEO_JITTER', '5.0'))
+
+
+def _ensure_thread_binding():
+    """首次调用时为当前线程绑定固定 UA 和随机 phase offset。
+
+    UA：从 USER_AGENTS 池中按 thread id 取模分配，保证不同线程用不同 UA。
+    phase：[0, base) 秒的随机偏移，让各线程的 sleep 节奏自然错开。
+    """
+    if hasattr(_thread_local, 'ua'):
+        return
+    tid = threading.current_thread().ident or 0
+    _thread_local.ua = USER_AGENTS[tid % len(USER_AGENTS)]
+    _thread_local.phase = random.random() * _VIDEO_SLEEP_BASE
+    logger.debug('线程 %d 绑定 UA=%s phase=%.1fs', tid, _thread_local.ua[:50], _thread_local.phase)
+
+
+def thread_sleep():
+    """线程级随机间隔 sleep。
+
+    每个线程有自己的 phase offset，最终 sleep = base + phase + random*jitter，
+    不同线程因 phase 不同自然错开请求时刻，降低同步并发触发风控的概率。
+    """
+    _ensure_thread_binding()
+    phase = getattr(_thread_local, 'phase', 0)
+    time.sleep(_VIDEO_SLEEP_BASE + phase + random.random() * _VIDEO_SLEEP_JITTER)
+
 
 def _sync(coro):
-    """在线程本地事件循环中执行协程，并发上限 3 路，单路 30s 超时。
+    """在线程本地事件循环中执行协程，单路 30s 超时。
 
     每个线程拥有独立的 asyncio 事件循环（threading.local 隔离）。
-    每次请求前随机轮换 User-Agent，降低 B站 风控识别概率。
+    首次调用时绑定固定 UA（不再每次随机轮换），模拟"一个浏览器持续浏览"。
     超时或异常后关闭循环并重建，防止 fd/异步生成器资源泄漏。
 
         coro:     要执行的 asyncio 协程对象。
         returns:  协程执行结果。
         raises:   TimeoutError — 请求超时（30s 未返回）。
     """
-    # 随机轮换 User-Agent 降低风控
+    _ensure_thread_binding()
     try:
         from bilibili_api import settings as _bili_settings
-        _bili_settings.settings['user-agent'] = USER_AGENTS[random.randrange(len(USER_AGENTS))]
+        _bili_settings.settings['user-agent'] = _thread_local.ua
     except Exception:
         pass
-    with _api_semaphore:
-        loop = getattr(_loop_local, 'loop', None)
-        if loop is None or loop.is_closed():
-            # 如果已有但已关闭的循环，先清理再新建
-            if loop is not None and loop.is_closed():
+    if _api_semaphore is not None:
+        with _api_semaphore:
+            return _sync_inner(coro)
+    return _sync_inner(coro)
+
+
+def _sync_inner(coro):
+    loop = getattr(_loop_local, 'loop', None)
+    if loop is None or loop.is_closed():
+        if loop is not None and loop.is_closed():
+            try:
+                loop.close()
+            except Exception:
+                pass
+        loop = asyncio.new_event_loop()
+        _loop_local.loop = loop
+    try:
+        return loop.run_until_complete(asyncio.wait_for(coro, timeout=_API_TIMEOUT))
+    except asyncio.TimeoutError:
+        logger.error('B站 API 请求超时 (%ds)', _API_TIMEOUT)
+        try:
+            if not loop.is_closed():
                 try:
-                    loop.close()
+                    loop.run_until_complete(
+                        asyncio.wait_for(loop.shutdown_asyncgens(), timeout=5)
+                    )
                 except Exception:
                     pass
-            loop = asyncio.new_event_loop()
-            _loop_local.loop = loop
-        try:
-            # 带超时的协程执行
-            return loop.run_until_complete(asyncio.wait_for(coro, timeout=_API_TIMEOUT))
-        except asyncio.TimeoutError:
-            logger.error('B站 API 请求超时 (%ds)', _API_TIMEOUT)
-            try:
-                if not loop.is_closed():
-                    # shutdown_asyncgens 可能因未关闭的 aiohttp 连接永久挂起，加 5s 超时保护
-                    try:
-                        loop.run_until_complete(
-                            asyncio.wait_for(loop.shutdown_asyncgens(), timeout=5)
-                        )
-                    except Exception:
-                        pass  # 超时或失败不阻止关闭
-                    loop.close()
-            except Exception:
-                pass
-            _loop_local.loop = None
-            raise TimeoutError(f'B站 API 请求超时 ({_API_TIMEOUT}s)')
+                loop.close()
         except Exception:
-            # 任何其他异常也需清理循环资源
-            try:
-                if not loop.is_closed():
-                    # 同上的 5s 超时保护
-                    try:
-                        loop.run_until_complete(
-                            asyncio.wait_for(loop.shutdown_asyncgens(), timeout=5)
-                        )
-                    except Exception:
-                        pass
-                    loop.close()
-            except Exception:
-                pass
-            _loop_local.loop = None
-            raise
+            pass
+        _loop_local.loop = None
+        raise TimeoutError(f'B站 API 请求超时 ({_API_TIMEOUT}s)')
+    except Exception:
+        try:
+            if not loop.is_closed():
+                try:
+                    loop.run_until_complete(
+                        asyncio.wait_for(loop.shutdown_asyncgens(), timeout=5)
+                    )
+                except Exception:
+                    pass
+                loop.close()
+        except Exception:
+            pass
+        _loop_local.loop = None
+        raise
 
 
 def _is_risk_control(e: Exception) -> bool:
@@ -406,8 +457,10 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
         pn += 1
 
         # 匿名访问时翻倍间隔，降低风控概率
+        # 加上线程级 phase offset，让并发翻页的线程自然错开
         sleep_base = REQUEST_INTERVAL * 4 if _credential is None else REQUEST_INTERVAL * 2
-        time.sleep(sleep_base + random.random() * 3.0)
+        phase = getattr(_thread_local, 'phase', 0)
+        time.sleep(sleep_base + phase + random.random() * REQUEST_INTERVAL_JITTER)
 
 
 def get_video_list_from_dynamics(mid: int) -> list[dict]:
