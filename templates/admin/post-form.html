@@ -263,11 +263,13 @@ document.getElementById('post-form').addEventListener('submit', function() {
 });
 
 // === 封面图片上传 ===
-(function() {
+document.addEventListener('DOMContentLoaded', function() {
   var input = document.getElementById('coverInput');
   if (!input) return;
-  bindCropUpload('coverInput', '{{ url_for("admin.upload_image") }}', '#coverHidden', '#coverPreview');
-})();
+  if (typeof bindCropUpload === 'function') {
+    bindCropUpload('coverInput', '{{ url_for("admin.upload_image") }}', '#coverHidden', '#coverPreview');
+  }
+});
 function removeCover(e) {
   e.stopPropagation();
   document.getElementById('coverHidden').value = '';
