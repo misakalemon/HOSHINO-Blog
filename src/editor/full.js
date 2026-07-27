@@ -88,6 +88,27 @@ export function createFullEditor(containerSelector, options = {}) {
   const editor = new Editor({
     element: editorEl,
     content: options.content || '',
+    editorProps: {
+      handleKeyDown: (view, event) => {
+        // Tab 键自动缩进
+        if (event.key === 'Tab') {
+          const { state } = view
+          const { $from } = state.selection
+          const node = $from.node()
+          
+          // 检查是否在代码块中
+          for (let depth = $from.depth; depth > 0; depth--) {
+            const parentNode = $from.node(depth)
+            if (parentNode.type.name === 'codeBlock') {
+              event.preventDefault()
+              editor.commands.insertContent('  ')
+              return true
+            }
+          }
+        }
+        return false
+      },
+    },
     extensions: [
       StarterKit.configure({
         codeBlock: false,
@@ -122,16 +143,6 @@ export function createFullEditor(containerSelector, options = {}) {
       TaskItem.configure({ nested: true }),
 
     ],
-  })
-
-  // 添加 Tab 键自动缩进支持
-  editor.on('keydown', ({ event }) => {
-    if (event.key === 'Tab' && editor.isActive('codeBlock')) {
-      event.preventDefault()
-      editor.commands.insertContent('  ')
-      return true
-    }
-    return false
   })
 
   const toolbar = createFullToolbar(editor, options)
