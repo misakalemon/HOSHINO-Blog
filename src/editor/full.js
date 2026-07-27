@@ -110,7 +110,10 @@ export function createFullEditor(containerSelector, options = {}) {
         openOnClick: false,
         HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' },
       }),
-      CodeBlockLowlight.configure({ lowlight }),
+      CodeBlockLowlight.configure({
+        lowlight,
+        defaultLanguage: 'plaintext',
+      }),
       Placeholder.configure({ placeholder: '开始写作…' }),
       FontSize,
       Indent,
@@ -119,6 +122,16 @@ export function createFullEditor(containerSelector, options = {}) {
       TaskItem.configure({ nested: true }),
 
     ],
+  })
+
+  // 添加 Tab 键自动缩进支持
+  editor.on('keydown', ({ event }) => {
+    if (event.key === 'Tab' && editor.isActive('codeBlock')) {
+      event.preventDefault()
+      editor.commands.insertContent('  ')
+      return true
+    }
+    return false
   })
 
   const toolbar = createFullToolbar(editor, options)
