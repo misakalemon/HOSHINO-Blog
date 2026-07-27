@@ -421,3 +421,139 @@
   padding: 8px 20px;
   font-size: 13px;
 }
+
+/* ── Bubble Menu (悬浮工具栏) ─────────────── */
+.rte-bubble-menu {
+  display: none;
+  position: fixed;
+  z-index: 99999;
+  background: rgba(20, 20, 30, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 4px 6px;
+  gap: 2px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.rte-bubble-menu button {
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-secondary, #8892a6);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+  outline: none;
+}
+.rte-bubble-menu button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--accent, #6c42d1);
+}
+.rte-bubble-menu button.is-active {
+  background: rgba(108, 66, 209, 0.2);
+  color: var(--accent, #6c42d1);
+  border-color: rgba(108, 66, 209, 0.3);
+}
+
+/* ── Image Resize Handle ──────────────────── */
+.rte-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 8px 0;
+  cursor: default;
+}
+.rte-content img.ProseMirror-selectednode {
+  outline: 2px solid var(--accent, #6c42d1);
+  outline-offset: 2px;
+}
+.rte-content img[data-resize-handle] {
+  position: relative;
+}
+
+/* ── Table Enhancement ────────────────────── */
+.rte-content .tableWrapper {
+  overflow-x: auto;
+  margin: 12px 0;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.rte-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0;
+}
+.rte-content th,
+.rte-content td {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 10px 14px;
+  text-align: left;
+  min-width: 60px;
+  position: relative;
+}
+.rte-content th {
+  background: rgba(255, 255, 255, 0.06);
+  font-weight: 600;
+  color: var(--text-primary, #e8edf5);
+}
+.rte-content td {
+  background: rgba(255, 255, 255, 0.02);
+}
+.rte-content th.selectedCell,
+.rte-content td.selectedCell {
+  background: rgba(108, 66, 209, 0.15);
+}
+.rte-content .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background-color: var(--accent, #6c42d1);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.rte-content table:hover .column-resize-handle {
+  opacity: 1;
+}
+
+/* ── Selection Highlight ──────────────────── */
+.rte-content ::selection {
+  background: rgba(108, 66, 209, 0.3);
+}
+.rte-content ::-moz-selection {
+  background: rgba(108, 66, 209, 0.3);
+}
+
+/* ── Focus Mode ──────────────────────────── */
+.rte-content:focus {
+  outline: none;
+  border-color: var(--accent, #6c42d1);
+  box-shadow: 0 0 0 2px rgba(108, 66, 209, 0.1);
+}
+
+/* ── Smooth Transitions ──────────────────── */
+.rte-content * {
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+/* ── Drag Handle for Blocks ──────────────── */
+.rte-content > *:hover::before {
+  content: '';
+  position: absolute;
+  left: -24px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 20px;
+  background: rgba(108, 66, 209, 0.3);
+  border-radius: 2px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.rte-content > *:hover::before {
+  opacity: 1;
+}

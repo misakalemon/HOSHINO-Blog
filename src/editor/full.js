@@ -44,6 +44,7 @@ import diff from 'highlight.js/lib/languages/diff'
 import plaintext from 'highlight.js/lib/languages/plaintext'
 import { FontSize, Indent, CustomImage } from './extensions'
 import { createFullToolbar } from './toolbar-full'
+import { createBubbleMenu } from './bubble-menu'
 
 const lowlight = createLowlight(common)
 lowlight.register('typescript', ts)
@@ -119,6 +120,8 @@ export function createFullEditor(containerSelector, options = {}) {
 
   const toolbar = createFullToolbar(editor, options)
   container.insertBefore(toolbar, editorEl)
+
+  createBubbleMenu(editor)
 
   return {
     editor,
