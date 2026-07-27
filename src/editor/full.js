@@ -101,7 +101,7 @@ export function createFullEditor(containerSelector, options = {}) {
             const parentNode = $from.node(depth)
             if (parentNode.type.name === 'codeBlock') {
               event.preventDefault()
-              editor.commands.insertContent('  ')
+              editor.commands.insertContent('    ')
               return true
             }
           }
