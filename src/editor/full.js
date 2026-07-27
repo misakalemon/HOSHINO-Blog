@@ -16,8 +16,7 @@ import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
 import Placeholder from '@tiptap/extension-placeholder'
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
-import Gapcursor from '@tiptap/extension-gapcursor'
-import Dropcursor from '@tiptap/extension-dropcursor'
+
 import { common, createLowlight } from 'lowlight'
 import ts from 'highlight.js/lib/languages/typescript'
 import go from 'highlight.js/lib/languages/go'
@@ -114,8 +113,7 @@ export function createFullEditor(containerSelector, options = {}) {
       Indent,
       TaskList,
       TaskItem.configure({ nested: true }),
-      Gapcursor,
-      Dropcursor,
+
     ],
   })
 
