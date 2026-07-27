@@ -13,6 +13,7 @@
 {% extends 'admin/base_admin.html' %}
 {% block title %}个人资料{% endblock %}
 {% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/tiptap-editor.css') }}">
 <style>
 #about-rte-toolbar { display:flex; align-items:center; gap:2px; flex-wrap:wrap; padding:6px 8px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.08); border-bottom:none; border-radius:12px 12px 0 0; }
 #about-rte-toolbar button { background:transparent; border:none; color:rgba(255,255,255,0.5); padding:4px 8px; border-radius:6px; cursor:pointer; font-size:13px; transition:all 0.2s; }
@@ -79,25 +80,7 @@
         {% if current_user.is_admin %}
         <div class="form-group" style="margin-top:24px">
             <label>关于页面内容（仅管理员可编辑）</label>
-            <div id="about-rte-toolbar">
-                <button type="button" onclick="aboutRte('undo')" title="撤销">↩</button>
-                <button type="button" onclick="aboutRte('redo')" title="重做">↪</button>
-                <span class="sep"></span>
-                <button type="button" onclick="aboutRte('bold')" title="粗体"><b>B</b></button>
-                <button type="button" onclick="aboutRte('italic')" title="斜体"><i>I</i></button>
-                <button type="button" onclick="aboutRte('underline')" title="下划线"><u>U</u></button>
-                <span class="sep"></span>
-                <button type="button" onclick="aboutRte('formatBlock','h2')" title="标题">H2</button>
-                <button type="button" onclick="aboutRte('formatBlock','h3')" title="小标题">H3</button>
-                <span class="sep"></span>
-                <button type="button" onclick="aboutRte('insertUnorderedList')" title="列表">• list</button>
-                <button type="button" onclick="aboutRte('insertOrderedList')" title="编号">1. list</button>
-                <span class="sep"></span>
-                <button type="button" onclick="aboutInsertLink()" title="链接">🔗</button>
-                <button type="button" onclick="aboutRte('formatBlock','pre')" title="代码块">&lt;/&gt;</button>
-                <button type="button" onclick="aboutRte('formatBlock','blockquote')" title="引用">❝</button>
-            </div>
-            <div id="about-rte-content" contenteditable="true">{{ (form.about_content.data or '')|bleach_clean }}</div>
+            <div id="about-rte-container"></div>
             <textarea name="about_content" id="aboutContentHidden" style="display:none">{{ form.about_content.data or '' }}</textarea>
         </div>
         {% endif %}
@@ -106,44 +89,20 @@
     </form>
 </div>
 
+<script src="{{ url_for('static', filename='js/tiptap-editor.js') }}"></script>
 <script>
-// 富文本命令
-function aboutRte(cmd, val) {
-  document.getElementById('about-rte-content').focus();
-  document.execCommand(cmd, false, val || null);
-}
-
-// 插入链接（使用自定义弹窗）
-function aboutInsertLink() {
-  var sel = window.getSelection().toString();
-  var ov = document.querySelector('.glow-modal-overlay');
-  if (!ov) return;
-  var gtitle = document.getElementById('gmd-title');
-  var gmsg = document.getElementById('gmd-msg');
-  var ginput = document.getElementById('gmd-input');
-  var gactions = document.getElementById('gmd-actions');
-  gtitle.textContent = '插入链接';
-  gmsg.innerHTML = '链接地址:';
-  ginput.style.display = 'block';
-  ginput.value = 'https://';
-  ginput.focus();
-  ginput.select();
-  gactions.innerHTML = '<button class="btn btn-ghost" style="flex:1;justify-content:center">取消</button><button class="btn btn-primary" style="flex:1;justify-content:center">确定</button>';
-  var btns = gactions.querySelectorAll('button');
-  btns[0].onclick = function(){ ov.style.display='none'; ginput.style.display='none'; };
-  btns[1].onclick = function(){
-    var url = ginput.value;
-    ov.style.display='none'; ginput.style.display='none';
-    if (url) aboutRte('insertHTML', '<a href="' + url.replace(/"/g,'&quot;') + '">' + (sel || url) + '</a>');
-  };
-  ov.style.display = 'flex';
-  ginput.onkeydown = function(e){ if(e.key==='Enter') btns[1].click(); if(e.key==='Escape') btns[0].click(); };
-}
+// === Tiptap 精简编辑器初始化 ===
+var aboutEditor = null;
+var aboutContent = {{ (form.about_content.data or '')|tojson }};
+aboutEditor = HoshinoEditor.createMinimal('#about-rte-container', {
+  content: aboutContent
+});
 
 // 提交前将编辑器内容同步到隐藏 textarea
 document.getElementById('profileForm').addEventListener('submit', function() {
-  var html = document.getElementById('about-rte-content').innerHTML;
-  document.getElementById('aboutContentHidden').value = html;
+  if (aboutEditor) {
+    document.getElementById('aboutContentHidden').value = aboutEditor.getHTML();
+  }
 });
 
 // 密码确认实时校验

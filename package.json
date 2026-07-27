@@ -1,0 +1,40 @@
+{
+  "name": "hoshino-blog-editor",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Tiptap rich text editor build for Hoshino Blog",
+  "scripts": {
+    "build:editor": "rollup -c",
+    "dev:editor": "rollup -c -w"
+  },
+  "dependencies": {
+    "@tiptap/core": "^2.11.0",
+    "@tiptap/extension-code-block-lowlight": "^2.11.0",
+    "@tiptap/extension-color": "^2.11.0",
+    "@tiptap/extension-dropcursor": "^2.11.0",
+    "@tiptap/extension-font-family": "^2.11.0",
+    "@tiptap/extension-gapcursor": "^2.11.0",
+    "@tiptap/extension-highlight": "^2.11.0",
+    "@tiptap/extension-image": "^2.11.0",
+    "@tiptap/extension-link": "^2.11.0",
+    "@tiptap/extension-placeholder": "^2.11.0",
+    "@tiptap/extension-subscript": "^2.11.0",
+    "@tiptap/extension-superscript": "^2.11.0",
+    "@tiptap/extension-table": "^2.11.0",
+    "@tiptap/extension-task-item": "^2.11.0",
+    "@tiptap/extension-task-list": "^2.11.0",
+    "@tiptap/extension-text-align": "^2.11.0",
+    "@tiptap/extension-text-style": "^2.11.0",
+    "@tiptap/extension-underline": "^2.11.0",
+    "@tiptap/starter-kit": "^2.11.0",
+    "lowlight": "^3.3.0"
+  },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^29.0.3",
+    "@rollup/plugin-node-resolve": "^16.0.3",
+    "@rollup/plugin-terser": "^1.0.0",
+    "postcss": "^8.5.23",
+    "rollup": "^4.62.3",
+    "rollup-plugin-postcss": "^4.0.2"
+  }
+}

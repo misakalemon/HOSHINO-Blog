@@ -1,0 +1,423 @@
+/* ═══════════════════════════════════════════════
+   Tiptap Editor Styles — Glow Design Theme
+   ═══════════════════════════════════════════════ */
+
+/* ── Container ──────────────────────────────── */
+.rte-container {
+  position: relative;
+}
+
+/* ── Toolbar ──────────────────────────────── */
+.rte-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  border-radius: 12px 12px 0 0;
+  border-bottom: none;
+}
+.rte-toolbar button,
+.rte-toolbar select {
+  padding: 5px 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-secondary, #8892a6);
+  font-size: 12px;
+  cursor: pointer;
+  font-family: system-ui, sans-serif;
+  transition: all 0.15s;
+  outline: none;
+}
+.rte-toolbar button:hover,
+.rte-toolbar select:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--accent, #6c42d1);
+}
+.rte-toolbar button.is-active {
+  background: rgba(108, 66, 209, 0.15);
+  color: var(--accent, #6c42d1);
+  border-color: rgba(108, 66, 209, 0.2);
+}
+.rte-sep {
+  width: 1px;
+  background: var(--border-subtle, rgba(255, 255, 255, 0.06));
+  margin: 4px 3px;
+}
+
+/* ── Select Dropdown ────────────────────────── */
+.rte-select-wrap {
+  position: relative;
+  display: inline-flex;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+.rte-select-wrap.is-open {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.rte-select-trigger {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  font-size: 12px;
+  color: var(--text-secondary, #8892a6);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s;
+  user-select: none;
+}
+.rte-select-trigger:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--accent, #6c42d1);
+}
+.rte-select-arrow {
+  font-size: 0.5rem;
+}
+.rte-select-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 120px;
+  background: rgba(20, 20, 30, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 4px;
+  margin-top: 4px;
+  z-index: 99999;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+.rte-select-wrap.is-open .rte-select-menu {
+  display: block;
+}
+.rte-select-option {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-secondary, #8892a6);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.rte-select-option:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--accent, #6c42d1);
+}
+
+/* ── Editor Content ────────────────────────── */
+.rte-content {
+  min-height: 400px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  border-radius: 0 0 12px 12px;
+  color: var(--text-primary, #e8edf5);
+  font-size: 15px;
+  line-height: 1.8;
+  outline: none;
+  overflow-y: auto;
+}
+.rte-content:focus {
+  border-color: var(--accent, #6c42d1);
+}
+.rte-toolbar-minimal + .rte-content {
+  min-height: 300px;
+}
+
+/* ── Tiptap Content Styles ──────────────────── */
+.rte-content .tiptap {
+  outline: none;
+}
+
+/* Headings */
+.rte-content h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary, #e8edf5);
+  margin: 16px 0 8px;
+}
+.rte-content h2 {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary, #e8edf5);
+  margin: 14px 0 6px;
+}
+.rte-content h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--accent, #6c42d1);
+  margin: 12px 0 6px;
+}
+.rte-content h4 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-secondary, #8892a6);
+  margin: 10px 0 4px;
+}
+
+/* Paragraph */
+.rte-content p {
+  margin-bottom: 8px;
+}
+
+/* Blockquote */
+.rte-content blockquote {
+  border-left: 3px solid var(--accent, #6c42d1);
+  padding: 8px 16px;
+  margin: 12px 0;
+  background: rgba(108, 66, 209, 0.06);
+  border-radius: 0 8px 8px 0;
+  color: var(--text-secondary, #8892a6);
+  font-style: italic;
+}
+
+/* Code */
+.rte-content pre {
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 8px;
+  padding: 14px 16px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 13px;
+  overflow-x: auto;
+  margin: 12px 0;
+  color: #e6e6e6;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.rte-content pre code {
+  background: none;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+  font-family: inherit;
+  line-height: 1.6;
+}
+.rte-content code {
+  background: rgba(255, 80, 140, 0.12);
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.85em;
+  color: #ff6b9d;
+  border: 1px solid rgba(255, 80, 140, 0.08);
+}
+
+/* Table */
+.rte-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 12px 0;
+}
+.rte-content th,
+.rte-content td {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 8px 12px;
+  text-align: left;
+  min-width: 80px;
+}
+.rte-content th {
+  background: rgba(255, 255, 255, 0.05);
+  font-weight: 600;
+}
+.rte-content td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* Lists */
+.rte-content ul {
+  list-style: disc;
+  padding-left: 24px;
+  margin: 8px 0;
+}
+.rte-content ol {
+  list-style: decimal;
+  padding-left: 24px;
+  margin: 8px 0;
+}
+.rte-content li {
+  margin: 2px 0;
+}
+.rte-content li p {
+  margin: 0;
+}
+
+/* Task List */
+.rte-content ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+}
+.rte-content ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.rte-content ul[data-type="taskList"] li label {
+  margin-top: 2px;
+}
+
+/* Horizontal Rule */
+.rte-content hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  margin: 16px 0;
+}
+
+/* Image */
+.rte-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 8px 0;
+}
+.rte-content img.ProseMirror-selectednode {
+  outline: 2px solid var(--accent, #6c42d1);
+  outline-offset: 2px;
+}
+
+/* Link */
+.rte-content a {
+  color: var(--accent-hover, #845ef7);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.rte-content a:hover {
+  color: var(--accent, #6c42d1);
+}
+
+/* Placeholder */
+.rte-content .is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--text-muted, #8b93b0);
+  pointer-events: none;
+  height: 0;
+  font-style: italic;
+}
+
+/* Highlight */
+.rte-content mark {
+  background-color: rgba(255, 235, 59, 0.3);
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+/* Superscript / Subscript */
+.rte-content sup {
+  font-size: 0.75em;
+  vertical-align: super;
+}
+.rte-content sub {
+  font-size: 0.75em;
+  vertical-align: sub;
+}
+
+/* Drop cursor */
+.rte-content .ProseMirror-dropcursor {
+  position: absolute;
+  pointer-events: none;
+  width: 1px;
+  background-color: var(--accent, #6c42d1);
+}
+
+/* Gap cursor */
+.rte-content .ProseMirror-gapcursor {
+  display: none;
+  pointer-events: none;
+  position: absolute;
+  margin: 0;
+}
+.rte-content .ProseMirror-gapcursor::after {
+  content: '';
+  display: block;
+  position: absolute;
+  top: -2px;
+  width: 20px;
+  border-top: 1px solid var(--accent, #6c42d1);
+  pointer-events: none;
+}
+
+/* Table resize handle */
+.rte-content .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: -2px;
+  width: 4px;
+  background-color: var(--accent, #6c42d1);
+  pointer-events: none;
+}
+.rte-content .tableWrapper {
+  overflow-x: auto;
+  margin: 12px 0;
+}
+.rte-content .resize-cursor {
+  cursor: ew-resize;
+  cursor: col-resize;
+}
+
+/* ── Modal ──────────────────────────────── */
+.rte-modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  align-items: center;
+  justify-content: center;
+}
+.rte-modal {
+  background: rgba(20, 20, 30, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 28px 32px;
+  max-width: 380px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.rte-modal h4 {
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0 0 20px;
+  text-align: center;
+}
+.rte-modal-fields label {
+  display: block;
+  font-size: 13px;
+  color: var(--text-secondary, #8892a6);
+  margin-bottom: 4px;
+  margin-top: 12px;
+}
+.rte-modal-fields label:first-child {
+  margin-top: 0;
+}
+.rte-modal-fields input,
+.rte-modal-fields select {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  color: var(--text-primary, #e8edf5);
+  font-size: 14px;
+  outline: none;
+  box-sizing: border-box;
+}
+.rte-modal-fields input:focus,
+.rte-modal-fields select:focus {
+  border-color: var(--accent, #6c42d1);
+}
+.rte-modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+.rte-modal-actions .btn {
+  padding: 8px 20px;
+  font-size: 13px;
+}
