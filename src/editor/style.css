@@ -269,6 +269,131 @@
   border: 1px solid rgba(255,255,255,0.06);
 }
 
+/* 显示语言标签 */
+.rte-content pre::before {
+  content: attr(data-language);
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  padding: 2px 8px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: system-ui, sans-serif;
+  color: #61afef;
+  text-transform: uppercase;
+}
+
+/* 如果没有 data-language，隐藏伪元素 */
+.rte-content pre:not([data-language])::before {
+  display: none;
+}
+
+.rte-content pre code {
+  background: none;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+  font-family: inherit;
+  line-height: 1.6;
+}
+
+/* Code Highlighting (highlight.js / lowlight) - 使用更高优先级的选择器 */
+/* Comment */
+.rte-content pre code .hljs-comment,
+.rte-content pre code .hljs-quote {
+  color: #5c6370 !important;
+  font-style: italic;
+}
+
+/* Keyword */
+.rte-content pre code .hljs-keyword,
+.rte-content pre code .hljs-selector-tag,
+.rte-content pre code .hljs-addition,
+.rte-content pre code .hljs-function {
+  color: #c678dd !important;
+}
+
+/* String */
+.rte-content pre code .hljs-string,
+.rte-content pre code .hljs-regexp,
+.rte-content pre code .hljs-attribute {
+  color: #98c379 !important;
+}
+
+/* Number */
+.rte-content pre code .hljs-number,
+.rte-content pre code .hljs-literal {
+  color: #d19a66 !important;
+}
+
+/* Title / Function name */
+.rte-content pre code .hljs-title,
+.rte-content pre code .hljs-section,
+.rte-content pre code .hljs-name {
+  color: #e06c75 !important;
+}
+
+/* Variable */
+.rte-content pre code .hljs-variable,
+.rte-content pre code .hljs-template-variable,
+.rte-content pre code .hljs-selector-class {
+  color: #e5c07b !important;
+}
+
+/* Built-in */
+.rte-content pre code .hljs-built_in {
+  color: #e6c07b !important;
+}
+
+/* Meta */
+.rte-content pre code .hljs-meta,
+.rte-content pre code .hljs-meta .hljs-string {
+  color: #61afef !important;
+}
+
+/* Type */
+.rte-content pre code .hljs-type {
+  color: #e5c07b !important;
+}
+
+/* Symbol */
+.rte-content pre code .hljs-symbol,
+.rte-content pre code .hljs-bullet {
+  color: #61afef !important;
+}
+
+/* Link */
+.rte-content pre code .hljs-link {
+  color: #61afef !important;
+  text-decoration: underline;
+}
+
+/* Deletion */
+.rte-content pre code .hljs-deletion {
+  color: #e06c75 !important;
+}
+
+/* Emphasis */
+.rte-content pre code .hljs-emphasis {
+  font-style: italic;
+}
+
+/* Strong */
+.rte-content pre code .hljs-strong {
+  font-weight: bold;
+}
+
+/* Inline code */
+.rte-content code {
+  background: rgba(255,80,140,0.12);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.9em;
+  color: #ff6b9d;
+}
+
 .rte-content pre::before {
   content: attr(data-language);
   position: absolute;
