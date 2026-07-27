@@ -30,16 +30,58 @@ export function showModal(options) {
     label.textContent = f.label
     fieldsDiv.appendChild(label)
     if (f.type === 'select') {
-      const select = document.createElement('select')
+      // 使用项目的 glow-select-wrap 组件
+      const wrap = document.createElement('div')
+      wrap.className = 'glow-select-wrap'
+      
+      const trigger = document.createElement('div')
+      trigger.className = 'glow-select-trigger'
+      
+      const valueSpan = document.createElement('span')
+      valueSpan.className = 'glow-select-value'
+      const selectedOption = (f.options || []).find(o => o.value === (f.value || ''))
+      valueSpan.textContent = selectedOption ? selectedOption.label : ''
+      
+      const arrow = document.createElement('span')
+      arrow.className = 'glow-select-arrow'
+      arrow.textContent = '▼'
+      
+      trigger.appendChild(valueSpan)
+      trigger.appendChild(arrow)
+      
+      const menu = document.createElement('div')
+      menu.className = 'glow-select-menu'
+      
+      let currentValue = f.value || ''
+      
       ;(f.options || []).forEach(o => {
-        const opt = document.createElement('option')
-        opt.value = o.value
-        opt.textContent = o.label
-        select.appendChild(opt)
+        const item = document.createElement('div')
+        item.className = 'glow-select-option'
+        if (o.value === currentValue) item.classList.add('is-selected')
+        item.textContent = o.label
+        item.addEventListener('click', (e) => {
+          e.stopPropagation()
+          valueSpan.textContent = o.label
+          currentValue = o.value
+          menu.querySelectorAll('.glow-select-option').forEach(opt => opt.classList.remove('is-selected'))
+          item.classList.add('is-selected')
+          wrap.classList.remove('is-open')
+        })
+        menu.appendChild(item)
       })
-      select.value = f.value || ''
-      inputs[f.key] = select
-      fieldsDiv.appendChild(select)
+      
+      trigger.addEventListener('click', (e) => {
+        e.stopPropagation()
+        document.querySelectorAll('.glow-select-wrap.is-open').forEach(w => {
+          if (w !== wrap) w.classList.remove('is-open')
+        })
+        wrap.classList.toggle('is-open')
+      })
+      
+      wrap.appendChild(trigger)
+      wrap.appendChild(menu)
+      inputs[f.key] = { getValue: () => currentValue }
+      fieldsDiv.appendChild(wrap)
     } else {
       const input = document.createElement('input')
       input.type = f.type || 'text'
@@ -66,7 +108,8 @@ export function showModal(options) {
   confirmBtn.onclick = () => {
     const result = {}
     ;(options.fields || []).forEach(f => {
-      result[f.key] = inputs[f.key].value
+      const input = inputs[f.key]
+      result[f.key] = input.getValue ? input.getValue() : input.value
     })
     overlay.style.display = 'none'
     if (options.onConfirm) options.onConfirm(result)
@@ -76,11 +119,18 @@ export function showModal(options) {
   modal.appendChild(actions)
   overlay.appendChild(modal)
   overlay.style.display = 'flex'
-  const first = modal.querySelector('input,select')
+  const first = modal.querySelector('input')
   if (first) setTimeout(() => first.focus(), 100)
   modal.addEventListener('keydown', e => {
     if (e.key === 'Enter') confirmBtn.click()
     if (e.key === 'Escape') cancelBtn.click()
+  })
+  
+  // 点击外部关闭下拉菜单
+  document.addEventListener('click', () => {
+    document.querySelectorAll('.glow-select-wrap.is-open').forEach(w => {
+      w.classList.remove('is-open')
+    })
   })
 }
 

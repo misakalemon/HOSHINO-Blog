@@ -559,8 +559,7 @@
   margin-top: 0;
 }
 
-.rte-modal-fields input,
-.rte-modal-fields select {
+.rte-modal-fields input {
   width: 100%;
   padding: 10px 14px;
   border-radius: 10px;
@@ -570,26 +569,11 @@
   font-size: 14px;
   outline: none;
   box-sizing: border-box;
-  cursor: pointer;
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238892a6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center;
-  padding-right: 36px;
 }
 
-.rte-modal-fields input:focus,
-.rte-modal-fields select:focus {
+.rte-modal-fields input:focus {
   border-color: var(--accent, #6c42d1);
   box-shadow: 0 0 0 2px rgba(108,66,209,0.15);
-}
-
-.rte-modal-fields select option {
-  background: var(--bg-card, #1a2235);
-  color: var(--text-primary, #e8edf5);
-  padding: 8px 12px;
 }
 
 .rte-modal-actions {
