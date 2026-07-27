@@ -19,10 +19,58 @@ import TaskItem from '@tiptap/extension-task-item'
 import Gapcursor from '@tiptap/extension-gapcursor'
 import Dropcursor from '@tiptap/extension-dropcursor'
 import { common, createLowlight } from 'lowlight'
+import ts from 'highlight.js/lib/languages/typescript'
+import go from 'highlight.js/lib/languages/go'
+import rust from 'highlight.js/lib/languages/rust'
+import java from 'highlight.js/lib/languages/java'
+import kotlin from 'highlight.js/lib/languages/kotlin'
+import swift from 'highlight.js/lib/languages/swift'
+import csharp from 'highlight.js/lib/languages/csharp'
+import cpp from 'highlight.js/lib/languages/cpp'
+import c from 'highlight.js/lib/languages/c'
+import scala from 'highlight.js/lib/languages/scala'
+import r from 'highlight.js/lib/languages/r'
+import matlab from 'highlight.js/lib/languages/matlab'
+import lua from 'highlight.js/lib/languages/lua'
+import perl from 'highlight.js/lib/languages/perl'
+import ruby from 'highlight.js/lib/languages/ruby'
+import php from 'highlight.js/lib/languages/php'
+import dart from 'highlight.js/lib/languages/dart'
+import xml from 'highlight.js/lib/languages/xml'
+import markdown from 'highlight.js/lib/languages/markdown'
+import dockerfile from 'highlight.js/lib/languages/dockerfile'
+import nginx from 'highlight.js/lib/languages/nginx'
+import ini from 'highlight.js/lib/languages/ini'
+import diff from 'highlight.js/lib/languages/diff'
+import plaintext from 'highlight.js/lib/languages/plaintext'
 import { FontSize, Indent, CustomImage } from './extensions'
 import { createFullToolbar } from './toolbar-full'
 
 const lowlight = createLowlight(common)
+lowlight.register('typescript', ts)
+lowlight.register('go', go)
+lowlight.register('rust', rust)
+lowlight.register('java', java)
+lowlight.register('kotlin', kotlin)
+lowlight.register('swift', swift)
+lowlight.register('csharp', csharp)
+lowlight.register('cpp', cpp)
+lowlight.register('c', c)
+lowlight.register('scala', scala)
+lowlight.register('r', r)
+lowlight.register('matlab', matlab)
+lowlight.register('lua', lua)
+lowlight.register('perl', perl)
+lowlight.register('ruby', ruby)
+lowlight.register('php', php)
+lowlight.register('dart', dart)
+lowlight.register('xml', xml)
+lowlight.register('markdown', markdown)
+lowlight.register('dockerfile', dockerfile)
+lowlight.register('nginx', nginx)
+lowlight.register('ini', ini)
+lowlight.register('diff', diff)
+lowlight.register('plaintext', plaintext)
 
 export function createFullEditor(containerSelector, options = {}) {
   const container = document.querySelector(containerSelector)
