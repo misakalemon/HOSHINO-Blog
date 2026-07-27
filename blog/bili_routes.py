@@ -34,6 +34,8 @@ import os
 import random
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import queue as _queue_mod
 
 from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 from flask_login import login_required
@@ -462,6 +464,7 @@ _scrape_lock = threading.Lock()
 # 每视频请求后的睡眠（防风控）— BASE + [0, JITTER) 秒
 _VIDEO_SLEEP_BASE = float(os.environ.get('BILI_VIDEO_SLEEP', '10.0'))
 _VIDEO_SLEEP_JITTER = float(os.environ.get('BILI_VIDEO_JITTER', '5.0'))
+_UPDATE_THREADS = int(os.environ.get('BILI_UPDATE_THREADS', '3'))
 # 全局熔断器 — 检测到 412 IP封禁后自动暂停所有爬取直到此时间戳（Unix 秒）
 _circuit_open_until: float = 0.0
 _circuit_lock = threading.Lock()
@@ -1288,43 +1291,87 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                     emit(f'[补全] DB 有 {total_in_db} 个视频，开始从 API 补齐...')
 
                 _batch_count = 0
-                # arc/search API 翻全量遍历
-                for video_info in _get_video_list(mid):
-                    bvid = video_info['bvid']
-                    aid = video_info['aid']
-                    title_short = (video_info.get('title') or '')[:30]
-                    is_known = bvid in existing_ids or aid in existing_aids
-                    logger.info('补全循环: bvid=%s title=%s known=%s', bvid, title_short, is_known)
-                    if is_known:
-                        continue
-                    try:
-                        # 获取统计数据并合并
-                        stat = get_video_stat(bvid)
-                        video_info.update(stat)
-                        # 随机延时防 B 站风控
-                        time.sleep(_VIDEO_SLEEP_BASE + random.random() * _VIDEO_SLEEP_JITTER)
-                    except Exception:
-                        logger.warning('视频 %s 「%s」补全时统计获取失败', bvid, title_short)
-                        time.sleep(12.0)
-                        continue
-                    video, ok = _insert_or_update_video(up, video_info, aid, bvid, title_short)
-                    if not ok:
-                        continue
 
-                    # 批量提交 — 每 20 条一次减少事务压力
-                    _batch_count += 1
-                    if _batch_count >= 20:
-                        db.session.commit()
-                        _batch_count = 0
+                def _fill_fetch_stat(vi):
+                    with app.app_context():
+                        _fbvid = vi['bvid']
+                        _fts = (vi.get('title') or '')[:30]
+                        try:
+                            _fstat = get_video_stat(_fbvid)
+                            vi.update(_fstat)
+                            time.sleep(_VIDEO_SLEEP_BASE + random.random() * _VIDEO_SLEEP_JITTER)
+                            return True
+                        except Exception:
+                            logger.warning('视频 %s 「%s」补全时统计获取失败', _fbvid, _fts)
+                            time.sleep(12.0)
+                            return False
 
-                    fill_count += 1
-                    existing_ids.add(bvid)
-                    existing_aids.add(aid)
-                    fill_new_bvids.add(bvid)
-                    emit(f'[补全] ({fill_count}) 「{title_short}」')
-                    # 如果已知准确数量且已补完，提前结束
-                    if need > 0 and fill_count >= need:
-                        break
+                _fill_q = _queue_mod.Queue(maxsize=_UPDATE_THREADS * 2)
+                _fill_stop_evt = threading.Event()
+
+                def _fill_producer():
+                    with app.app_context():
+                        try:
+                            for video_info in _get_video_list(mid):
+                                if _fill_stop_evt.is_set():
+                                    break
+                                _pbvid = video_info['bvid']
+                                _paid = video_info['aid']
+                                _pts = (video_info.get('title') or '')[:30]
+                                _pknown = _pbvid in existing_ids or _paid in existing_aids
+                                logger.info('补全循环: bvid=%s title=%s known=%s', _pbvid, _pts, _pknown)
+                                if _pknown:
+                                    continue
+                                _fill_q.put(video_info)
+                        except Exception as _pfe:
+                            logger.warning('补全生成器异常: %s', _pfe)
+                        finally:
+                            _fill_q.put(None)
+
+                _producer_t = threading.Thread(target=_fill_producer, daemon=True)
+                _producer_t.start()
+
+                with ThreadPoolExecutor(max_workers=_UPDATE_THREADS) as _fill_pool:
+                    _fill_futs = {}
+                    while True:
+                        try:
+                            _item = _fill_q.get(timeout=0.5)
+                        except _queue_mod.Empty:
+                            if not _producer_t.is_alive() and _fill_q.empty():
+                                break
+                            continue
+                        if _item is None:
+                            break
+                        if need > 0 and fill_count >= need:
+                            _fill_stop_evt.set()
+                            break
+                        _fill_futs[_fill_pool.submit(_fill_fetch_stat, _item)] = _item
+
+                    for _ff in as_completed(_fill_futs):
+                        _vi = _fill_futs[_ff]
+                        try:
+                            _ok_stat = _ff.result()
+                        except Exception:
+                            continue
+                        if not _ok_stat:
+                            continue
+                        _fbvid = _vi['bvid']
+                        _faid = _vi['aid']
+                        _fts = (_vi.get('title') or '')[:30]
+                        video, ok = _insert_or_update_video(up, _vi, _faid, _fbvid, _fts)
+                        if not ok:
+                            continue
+                        _batch_count += 1
+                        if _batch_count >= 20:
+                            db.session.commit()
+                            _batch_count = 0
+                        fill_count += 1
+                        existing_ids.add(_fbvid)
+                        existing_aids.add(_faid)
+                        fill_new_bvids.add(_fbvid)
+                        emit(f'[补全] ({fill_count}) 「{_fts}」')
+
+                _producer_t.join(timeout=30)
 
             # C. 动态发现兜底：始终执行，捕获 arc/search 可能遗漏的 shorts/新视频
             from blog.bilibili.bili_api import get_video_list_from_dynamics
@@ -1382,118 +1429,97 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             hot_done = 0
             warm_done = 0
             cold_done = 0
-            retry_delay = 30  # 风控退避初始延迟（秒）
-            # 使用东八区时间计算三层截止日期
             now = now_cst()
-            cutoff_hot = now - datetime.timedelta(days=7)   # 7 天内 → Hot
-            cutoff_warm = now - datetime.timedelta(days=30)  # 8~30 天 → Warm
+            cutoff_hot = now - datetime.timedelta(days=7)
+            cutoff_warm = now - datetime.timedelta(days=30)
 
-            def _update_video(v, label='', min_age_hours=1):
-                """更新单个视频的统计数据并写 BiliVideoHistory。
-
-                步骤：
-                  1. min_age_hours 跳过：如果视频在指定小时数内已更新过，跳过（force 模式除外）
-                  2. 调用 API 获取最新统计
-                  3. 若触发风控：指数退避（30s→600s），返回 False 让外层 continue
-                  4. 若成功：更新 ORM 字段 + 写入历史快照 + 记录日志
-
-                Args:
-                    v (BiliVideo): 视频 ORM 对象
-                    label (str):   日志标签（'Hot'/'Warm'/'Cold'）
-                    min_age_hours (int):
-                        最小间隔小时数。更新距上次更新不足此值的视频会被跳过。
-                        Hot=0（不跳过），Warm=1，Cold=24
-
-                Returns:
-                    True  — 成功或 min-age 跳过
-                    False — 风控/失败，需要外层 continue 跳到下一个视频
-                """
-                nonlocal count, retry_delay, hot_done, warm_done, cold_done
-                bvid = v.bvid
-
-                # 跳过近期已更新视频（force 模式下忽略此检查）
-                if (
-                    not force
-                    and v.updated_at
-                    and (now_cst() - v.updated_at).total_seconds()
-                    < min_age_hours * 3600
-                ):
-                    title_short = (v.title or '')[:30]
-                    emit(f'  跳过「{title_short}」— 最近 {min_age_hours} 小时内已更新')
-                    return True
-
-                # 记录旧值用于计算增量
-                old_view = v.view_count or 0
-                old_like = v.like_count or 0
-                old_coin = v.coin_count or 0
-                old_fav = v.favorite_count or 0
-                old_share = v.share_count or 0
-                old_comment = v.comment_count or 0
-                old_danmaku = v.danmaku_count or 0
-
-                try:
-                    stat = get_video_stat(bvid)
-                    retry_delay = 30  # 成功后重置退避延迟
-                    time.sleep(_VIDEO_SLEEP_BASE + random.random() * _VIDEO_SLEEP_JITTER)
-                except Exception as e:
-                    if _is_risk_control(e):
-                        logger.warning('触发风控，等待 %ds 后跳过...', retry_delay)
-                        time.sleep(retry_delay)
-                        retry_delay = min(retry_delay * 2, 600)
-                        return False
-                    logger.warning('视频 %s 统计获取失败: %s', bvid, e)
-                    time.sleep(8.0)
-                    return False
-
-                # 更新视频统计字段
-                for key, val in stat.items():
-                    setattr(v, key, val)
-                v.updated_at = now_cst()
-                count += 1
-                if label.startswith('Hot'):
-                    hot_done += 1
-                elif label.startswith('Warm'):
-                    warm_done += 1
-                elif label.startswith('Cold'):
-                    cold_done += 1
-
-                _prev_h = BiliVideoHistory.query.filter(
-                    BiliVideoHistory.video_id == v.id,
-                    BiliVideoHistory.recorded_at >= now_cst() - datetime.timedelta(seconds=30)
-                ).first()
-                if _prev_h:
-                    _prev_h.view_count = stat.get('view_count', 0)
-                    _prev_h.like_count = stat.get('like_count', 0)
-                    _prev_h.coin_count = stat.get('coin_count', 0)
-                    _prev_h.favorite_count = stat.get('favorite_count', 0)
-                    _prev_h.share_count = stat.get('share_count', 0)
-                    _prev_h.comment_count = stat.get('comment_count', 0)
-                    _prev_h.danmaku_count = stat.get('danmaku_count', 0)
-                else:
+            def _update_video(video_id, label='', min_age_hours=1):
+                with app.app_context():
                     try:
-                        # 写入统计历史快照
-                        db.session.add(
-                            BiliVideoHistory(
-                                video_id=v.id,
-                            view_count=stat.get('view_count', 0),
-                            like_count=stat.get('like_count', 0),
-                            coin_count=stat.get('coin_count', 0),
-                            favorite_count=stat.get('favorite_count', 0),
-                            share_count=stat.get('share_count', 0),
-                            comment_count=stat.get('comment_count', 0),
-                            danmaku_count=stat.get('danmaku_count', 0),
-                        )
-                    )
-                        db.session.commit()
-                    except Exception:
-                        db.session.rollback()
+                        v = BiliVideo.query.get(video_id)
+                        if not v:
+                            return {'status': 'skip', 'label': label, 'bvid': '', 'title_short': ''}
+                        bvid = v.bvid
+                        title_short = (v.title or '')[:30]
 
-                title_short = (v.title or '')[:30]
-                emit(f'[{count}] {label}「{title_short}」')
-                return True
+                        if (
+                            not force
+                            and v.updated_at
+                            and (now_cst() - v.updated_at).total_seconds()
+                            < min_age_hours * 3600
+                        ):
+                            emit(f'  跳过「{title_short}」— 最近 {min_age_hours} 小时内已更新')
+                            return {'status': 'skip', 'label': label, 'bvid': bvid, 'title_short': title_short}
+
+                        old_view = v.view_count or 0
+                        old_like = v.like_count or 0
+                        old_coin = v.coin_count or 0
+                        old_fav = v.favorite_count or 0
+                        old_share = v.share_count or 0
+                        old_comment = v.comment_count or 0
+                        old_danmaku = v.danmaku_count or 0
+
+                        local_retry_delay = 30
+                        try:
+                            stat = get_video_stat(bvid)
+                            time.sleep(_VIDEO_SLEEP_BASE + random.random() * _VIDEO_SLEEP_JITTER)
+                        except Exception as e:
+                            if _is_risk_control(e):
+                                logger.warning('触发风控，等待 %ds 后跳过...', local_retry_delay)
+                                time.sleep(local_retry_delay)
+                                return {'status': 'risk', 'label': label, 'bvid': bvid, 'title_short': title_short}
+                            logger.warning('视频 %s 统计获取失败: %s', bvid, e)
+                            time.sleep(8.0)
+                            return {'status': 'fail', 'label': label, 'bvid': bvid, 'title_short': title_short}
+
+                        for key, val in stat.items():
+                            setattr(v, key, val)
+                        v.updated_at = now_cst()
+
+                        _prev_h = BiliVideoHistory.query.filter(
+                            BiliVideoHistory.video_id == v.id,
+                            BiliVideoHistory.recorded_at >= now_cst() - datetime.timedelta(seconds=30)
+                        ).first()
+                        if _prev_h:
+                            _prev_h.view_count = stat.get('view_count', 0)
+                            _prev_h.like_count = stat.get('like_count', 0)
+                            _prev_h.coin_count = stat.get('coin_count', 0)
+                            _prev_h.favorite_count = stat.get('favorite_count', 0)
+                            _prev_h.share_count = stat.get('share_count', 0)
+                            _prev_h.comment_count = stat.get('comment_count', 0)
+                            _prev_h.danmaku_count = stat.get('danmaku_count', 0)
+                        else:
+                            try:
+                                db.session.add(
+                                    BiliVideoHistory(
+                                        video_id=v.id,
+                                    view_count=stat.get('view_count', 0),
+                                    like_count=stat.get('like_count', 0),
+                                    coin_count=stat.get('coin_count', 0),
+                                    favorite_count=stat.get('favorite_count', 0),
+                                    share_count=stat.get('share_count', 0),
+                                    comment_count=stat.get('comment_count', 0),
+                                    danmaku_count=stat.get('danmaku_count', 0),
+                                )
+                            )
+                            except Exception:
+                                db.session.rollback()
+                        try:
+                            db.session.commit()
+                        except Exception:
+                            db.session.rollback()
+
+                        return {'status': 'ok', 'label': label, 'bvid': bvid, 'title_short': title_short}
+                    except Exception as _uve:
+                        logger.warning('_update_video 异常: %s', _uve)
+                        return {'status': 'fail', 'label': label, 'bvid': '', 'title_short': ''}
+                    finally:
+                        try:
+                            db.session.remove()
+                        except Exception:
+                            pass
 
             # Hot 阶段: 发布时间 ≤7 天 — 全部更新，不跳过
-            # 排除本次新入库的视频（filled_bvids），它们已经有最新数据
             hot_query = BiliVideo.query.filter(
                 BiliVideo.up_id == up.id,
                 BiliVideo.pub_datetime >= cutoff_hot,
@@ -1501,13 +1527,21 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             if filled_bvids:
                 hot_query = hot_query.filter(~BiliVideo.bvid.in_(filled_bvids))
             hot_videos = hot_query.order_by(BiliVideo.pubdate.desc()).all()
-            emit(f'Hot 阶段: ≤7天视频共 {len(hot_videos)} 个')
-            for v in hot_videos:
-                if max_videos is not None and count >= max_videos:
-                    break
-                ok = _update_video(v, 'Hot', min_age_hours=0)
-                if ok is False:
-                    continue
+            hot_ids = [v.id for v in hot_videos]
+            emit(f'Hot 阶段: ≤7天视频共 {len(hot_ids)} 个')
+            if max_videos is not None:
+                hot_ids = hot_ids[:max(0, max_videos - count)]
+            with ThreadPoolExecutor(max_workers=_UPDATE_THREADS) as _hot_pool:
+                _hot_futs = {_hot_pool.submit(_update_video, _vid, 'Hot', 0): _vid for _vid in hot_ids}
+                for _hf in as_completed(_hot_futs):
+                    try:
+                        _hr = _hf.result()
+                        if _hr['status'] == 'ok':
+                            count += 1
+                            hot_done += 1
+                            emit(f'[{count}] {_hr["label"]}「{_hr["title_short"]}」')
+                    except Exception:
+                        pass
 
             # Warm 阶段: 发布时间 8~30 天（配额未满时执行，最久未更新优先，1h 跳过）
             if max_videos is None or count < max_videos:
@@ -1521,14 +1555,20 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                 if remaining is not None:
                     warm_query = warm_query.limit(remaining)
                 warm_videos = warm_query.all()
+                warm_ids = [v.id for v in warm_videos]
                 quota_str = '无限制' if remaining is None else str(remaining)
-                emit(f'Warm 阶段: 8~30天视频配额 {quota_str}（DB中共 {len(warm_videos)} 个待更新）')
-                for v in warm_videos:
-                    if remaining is not None and count >= max_videos:
-                        break
-                    ok = _update_video(v, 'Warm', min_age_hours=1)
-                    if ok is False:
-                        continue
+                emit(f'Warm 阶段: 8~30天视频配额 {quota_str}（DB中共 {len(warm_ids)} 个待更新）')
+                with ThreadPoolExecutor(max_workers=_UPDATE_THREADS) as _warm_pool:
+                    _warm_futs = {_warm_pool.submit(_update_video, _vid, 'Warm', 1): _vid for _vid in warm_ids}
+                    for _wf in as_completed(_warm_futs):
+                        try:
+                            _wr = _wf.result()
+                            if _wr['status'] == 'ok':
+                                count += 1
+                                warm_done += 1
+                                emit(f'[{count}] {_wr["label"]}「{_wr["title_short"]}」')
+                        except Exception:
+                            pass
 
             # Cold 阶段: 发布时间 >30 天（配额剩余时处理，24h 跳过）
             if max_videos is None or count < max_videos:
@@ -1540,18 +1580,25 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                 if remaining is not None:
                     cold_query = cold_query.limit(remaining)
                 cold_videos = cold_query.all()
-                if cold_videos:
+                cold_ids = [v.id for v in cold_videos]
+                if cold_ids:
                     quota_str = '无限制' if remaining is None else str(remaining)
                     emit(
-                        f'Cold 阶段: >30天视频配额 {quota_str}（DB中共 {len(cold_videos)} 个待更新）'
+                        f'Cold 阶段: >30天视频配额 {quota_str}（DB中共 {len(cold_ids)} 个待更新）'
                     )
-                    for v in cold_videos:
-                        if remaining is not None and count >= max_videos:
-                            break
-                        ok = _update_video(v, 'Cold', min_age_hours=24)
-                        if ok is False:
-                            continue
+                    with ThreadPoolExecutor(max_workers=_UPDATE_THREADS) as _cold_pool:
+                        _cold_futs = {_cold_pool.submit(_update_video, _vid, 'Cold', 24): _vid for _vid in cold_ids}
+                        for _cf in as_completed(_cold_futs):
+                            try:
+                                _cr = _cf.result()
+                                if _cr['status'] == 'ok':
+                                    count += 1
+                                    cold_done += 1
+                                    emit(f'[{count}] {_cr["label"]}「{_cr["title_short"]}」')
+                            except Exception:
+                                pass
             # 更新 UP 主的视频总数字段
+            db.session.expire_all()
             up.video_count = BiliVideo.query.filter_by(up_id=up.id).count()
             db.session.commit()
             emit(
