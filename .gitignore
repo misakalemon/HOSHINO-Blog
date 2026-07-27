@@ -6,6 +6,9 @@ venv/
 .env
 *.egg
 
+# Node.js
+node_modules/
+
 # Database
 *.db
 
