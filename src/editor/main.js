@@ -7,9 +7,8 @@ const HoshinoEditor = {
   createMinimal: createMinimalEditor,
 }
 
-if (typeof window !== 'undefined') {
-  window.HoshinoEditor = HoshinoEditor
-}
+// 直接赋值给 window，确保全局可访问
+window.HoshinoEditor = HoshinoEditor
 
 export default HoshinoEditor
 export { createFullEditor, createMinimalEditor }
