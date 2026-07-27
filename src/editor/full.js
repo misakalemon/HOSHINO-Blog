@@ -42,9 +42,10 @@ import nginx from 'highlight.js/lib/languages/nginx'
 import ini from 'highlight.js/lib/languages/ini'
 import diff from 'highlight.js/lib/languages/diff'
 import plaintext from 'highlight.js/lib/languages/plaintext'
-import { FontSize, Indent, CustomImage } from './extensions'
+import { FontSize, Indent, CustomImage, LineHeight } from './extensions'
 import { createFullToolbar } from './toolbar-full'
 import { createBubbleMenu } from './bubble-menu'
+import { createStatusBar } from './status-bar'
 
 const lowlight = createLowlight(common)
 lowlight.register('typescript', ts)
@@ -112,6 +113,7 @@ export function createFullEditor(containerSelector, options = {}) {
       Placeholder.configure({ placeholder: '开始写作…' }),
       FontSize,
       Indent,
+      LineHeight,
       TaskList,
       TaskItem.configure({ nested: true }),
 
@@ -122,6 +124,9 @@ export function createFullEditor(containerSelector, options = {}) {
   container.insertBefore(toolbar, editorEl)
 
   createBubbleMenu(editor)
+
+  const statusBar = createStatusBar(editor)
+  container.appendChild(statusBar)
 
   return {
     editor,

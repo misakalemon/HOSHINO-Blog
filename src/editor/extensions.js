@@ -1,4 +1,6 @@
 import { Mark, Extension, mergeAttributes } from '@tiptap/core'
+import { Plugin, PluginKey } from '@tiptap/pm/state'
+import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import Image from '@tiptap/extension-image'
 
 const FONT_SIZE_MAP = {
@@ -149,6 +151,22 @@ export const CustomImage = Image.extend({
   addAttributes() {
     return {
       ...this.parent?.(),
+      width: {
+        default: null,
+        parseHTML: element => element.getAttribute('width'),
+        renderHTML: attributes => {
+          if (!attributes.width) return {}
+          return { width: attributes.width }
+        },
+      },
+      height: {
+        default: null,
+        parseHTML: element => element.getAttribute('height'),
+        renderHTML: attributes => {
+          if (!attributes.height) return {}
+          return { height: attributes.height }
+        },
+      },
       style: {
         default: null,
         parseHTML: element => element.getAttribute('style'),
@@ -157,6 +175,107 @@ export const CustomImage = Image.extend({
           return { style: attributes.style }
         },
       },
+    }
+  },
+
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey('imageResize'),
+        props: {
+          handleDOMEvents: {
+            mousedown: (view, event) => {
+              const target = event.target
+              if (target.tagName !== 'IMG') return false
+
+              const img = target
+              const startX = event.clientX
+              const startY = event.clientY
+              const startWidth = img.offsetWidth
+              const startHeight = img.offsetHeight
+              const aspectRatio = startWidth / startHeight
+
+              const onMouseMove = (e) => {
+                const deltaX = e.clientX - startX
+                const deltaY = e.clientY - startY
+                const delta = Math.max(deltaX, deltaY)
+                const newWidth = Math.max(50, startWidth + delta)
+                const newHeight = Math.round(newWidth / aspectRatio)
+
+                img.style.width = newWidth + 'px'
+                img.style.height = newHeight + 'px'
+              }
+
+              const onMouseUp = () => {
+                document.removeEventListener('mousemove', onMouseMove)
+                document.removeEventListener('mouseup', onMouseUp)
+
+                const { from } = view.state.selection
+                const node = view.state.doc.nodeAt(from)
+                if (node && node.type.name === 'image') {
+                  const tr = view.state.tr.setNodeMarkup(from, null, {
+                    ...node.attrs,
+                    width: img.style.width,
+                    height: img.style.height,
+                  })
+                  view.dispatch(tr)
+                }
+              }
+
+              document.addEventListener('mousemove', onMouseMove)
+              document.addEventListener('mouseup', onMouseUp)
+
+              return true
+            },
+          },
+        },
+      }),
+    ]
+  },
+})
+
+export const LineHeight = Mark.create({
+  name: 'lineHeight',
+
+  addOptions() {
+    return { HTMLAttributes: {} }
+  },
+
+  addAttributes() {
+    return {
+      height: {
+        default: null,
+        parseHTML: element => {
+          const lh = element.style?.lineHeight
+          if (lh) return lh
+          return null
+        },
+        renderHTML: attributes => {
+          if (!attributes.height) return {}
+          return { style: `line-height: ${attributes.height}` }
+        },
+      },
+    }
+  },
+
+  parseHTML() {
+    return [{ tag: 'span[style*="line-height"]' }]
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ['span', mergeAttributes(this.options.HTMLAttributes, HTMLAttributes), 0]
+  },
+
+  addCommands() {
+    return {
+      setLineHeight:
+        height =>
+        ({ chain }) => {
+          if (!height || height === '1.8') {
+            return chain().unsetMark('lineHeight').run()
+          }
+          return chain().setMark('lineHeight', { height }).run()
+        },
     }
   },
 })

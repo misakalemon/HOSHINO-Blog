@@ -154,6 +154,20 @@ export function createFullToolbar(editor, options) {
     if (val) editor.chain().focus().setFontSize(val).run()
   })
   toolbar.appendChild(fontSizeSelect.wrap)
+
+  // Line height
+  const lineHeightSelect = createSelect('行距', [
+    { value: '', label: '行距' },
+    { value: '1', label: '单倍' },
+    { value: '1.5', label: '1.5倍' },
+    { value: '1.8', label: '1.8倍' },
+    { value: '2', label: '双倍' },
+    { value: '2.5', label: '2.5倍' },
+    { value: '3', label: '三倍' },
+  ], val => {
+    if (val) editor.chain().focus().setLineHeight(val).run()
+  })
+  toolbar.appendChild(lineHeightSelect.wrap)
   toolbar.appendChild(sep())
 
   // Bold / Italic / Underline / Strike / Superscript / Subscript
@@ -213,6 +227,33 @@ export function createFullToolbar(editor, options) {
           cols: parseInt(vals.cols),
           withHeaderRow: true,
         }).run()
+      },
+    })
+  }))
+  // Table operations
+  toolbar.appendChild(btn('⊞+', '添加行列', () => {
+    showModal({
+      title: '表格操作',
+      fields: [{
+        key: 'action', label: '操作', type: 'select', value: 'addColumnAfter',
+        options: [
+          { value: 'addColumnBefore', label: '在左侧插入列' },
+          { value: 'addColumnAfter', label: '在右侧插入列' },
+          { value: 'addRowBefore', label: '在上方插入行' },
+          { value: 'addRowAfter', label: '在下方插入行' },
+          { value: 'deleteColumn', label: '删除当前列' },
+          { value: 'deleteRow', label: '删除当前行' },
+          { value: 'mergeCells', label: '合并单元格' },
+          { value: 'splitCell', label: '拆分单元格' },
+          { value: 'toggleHeaderRow', label: '切换标题行' },
+        ],
+      }],
+      onConfirm: vals => {
+        const cmd = editor.chain().focus()
+        if (vals.action === 'mergeCells') cmd.mergeCells().run()
+        else if (vals.action === 'splitCell') cmd.splitCell().run()
+        else if (vals.action === 'toggleHeaderRow') cmd.toggleHeaderRow().run()
+        else cmd[vals.action]().run()
       },
     })
   }))
@@ -295,6 +336,76 @@ export function createFullToolbar(editor, options) {
     })
   }))
   toolbar.appendChild(sep())
+
+  // Find & Replace
+  toolbar.appendChild(btn('🔍', '查找替换', () => {
+    let dialog = document.getElementById('rte-find-dialog')
+    if (dialog) {
+      dialog.remove()
+      return
+    }
+    dialog = document.createElement('div')
+    dialog.id = 'rte-find-dialog'
+    dialog.className = 'rte-find-dialog'
+    dialog.innerHTML = `
+      <h4>查找与替换</h4>
+      <input type="text" id="rte-find-input" placeholder="查找内容">
+      <input type="text" id="rte-replace-input" placeholder="替换为">
+      <div class="rte-find-dialog-actions">
+        <button class="btn btn-ghost" id="rte-find-prev">上一个</button>
+        <button class="btn btn-ghost" id="rte-find-next">下一个</button>
+        <button class="btn btn-primary" id="rte-replace-btn">替换</button>
+        <button class="btn btn-ghost" id="rte-replace-all">全部</button>
+      </div>
+    `
+    document.body.appendChild(dialog)
+
+    const findInput = document.getElementById('rte-find-input')
+    const replaceInput = document.getElementById('rte-replace-input')
+    let matches = []
+    let currentMatch = -1
+
+    function findText(dir = 1) {
+      const query = findInput.value
+      if (!query) return
+      const text = editor.getText()
+      matches = []
+      let pos = 0
+      while ((pos = text.indexOf(query, pos)) !== -1) {
+        matches.push({ from: pos, to: pos + query.length })
+        pos++
+      }
+      if (matches.length === 0) return
+      currentMatch = (currentMatch + dir + matches.length) % matches.length
+      const m = matches[currentMatch]
+      editor.chain().focus().setTextSelection({ from: m.from + 1, to: m.to + 1 }).run()
+    }
+
+    document.getElementById('rte-find-prev').onclick = () => findText(-1)
+    document.getElementById('rte-find-next').onclick = () => findText(1)
+    document.getElementById('rte-replace-btn').onclick = () => {
+      const query = findInput.value
+      const replacement = replaceInput.value
+      if (!query || currentMatch < 0) return
+      const m = matches[currentMatch]
+      editor.chain().focus().setTextSelection({ from: m.from + 1, to: m.to + 1 }).insertContent(replacement).run()
+      findText(1)
+    }
+    document.getElementById('rte-replace-all').onclick = () => {
+      const query = findInput.value
+      const replacement = replaceInput.value
+      if (!query) return
+      const content = editor.getHTML()
+      const newContent = content.split(query).join(replacement)
+      editor.commands.setContent(newContent)
+    }
+
+    findInput.focus()
+    findInput.onkeydown = (e) => {
+      if (e.key === 'Enter') findText(1)
+      if (e.key === 'Escape') dialog.remove()
+    }
+  }))
 
   // Clear format
   toolbar.appendChild(btn('✕', '清除格式', () => {
