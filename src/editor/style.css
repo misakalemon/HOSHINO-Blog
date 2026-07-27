@@ -298,90 +298,134 @@
   line-height: 1.6;
 }
 
-/* Code Highlighting (highlight.js / lowlight) - 使用更高优先级的选择器 */
-/* Comment */
+/* Code Highlighting (highlight.js / lowlight) - 使用更丰富的配色 */
+/* Comment - 灰绿色斜体 */
 .rte-content pre code .hljs-comment,
 .rte-content pre code .hljs-quote {
-  color: #5c6370 !important;
+  color: #7f848e !important;
   font-style: italic;
 }
 
-/* Keyword */
+/* Keyword - 粉红色/紫色 */
 .rte-content pre code .hljs-keyword,
 .rte-content pre code .hljs-selector-tag,
-.rte-content pre code .hljs-addition,
-.rte-content pre code .hljs-function {
-  color: #c678dd !important;
+.rte-content pre code .hljs-addition {
+  color: #ff79c6 !important;
+  font-weight: 500;
 }
 
-/* String */
+/* Function - 蓝色 */
+.rte-content pre code .hljs-function {
+  color: #50fa7b !important;
+}
+
+/* String - 绿色 */
 .rte-content pre code .hljs-string,
 .rte-content pre code .hljs-regexp,
 .rte-content pre code .hljs-attribute {
-  color: #98c379 !important;
+  color: #f1fa8c !important;
 }
 
-/* Number */
+/* Number - 紫色 */
 .rte-content pre code .hljs-number,
 .rte-content pre code .hljs-literal {
-  color: #d19a66 !important;
+  color: #bd93f9 !important;
 }
 
-/* Title / Function name */
+/* Title / Function name - 橙红色 */
 .rte-content pre code .hljs-title,
 .rte-content pre code .hljs-section,
 .rte-content pre code .hljs-name {
-  color: #e06c75 !important;
+  color: #ffb86c !important;
 }
 
-/* Variable */
+/* Variable - 青色 */
 .rte-content pre code .hljs-variable,
 .rte-content pre code .hljs-template-variable,
-.rte-content pre code .hljs-selector-class {
-  color: #e5c07b !important;
+.rte-content pre code .hljs-selector-class,
+.rte-content pre code .hljs-selector-attr,
+.rte-content pre code .hljs-selector-pseudo {
+  color: #8be9fd !important;
 }
 
-/* Built-in */
+/* Built-in - 黄色 */
 .rte-content pre code .hljs-built_in {
-  color: #e6c07b !important;
+  color: #ffb86c !important;
 }
 
-/* Meta */
+/* Meta - 粉色 */
 .rte-content pre code .hljs-meta,
 .rte-content pre code .hljs-meta .hljs-string {
-  color: #61afef !important;
+  color: #ff79c6 !important;
 }
 
-/* Type */
+/* Type - 青色 */
 .rte-content pre code .hljs-type {
-  color: #e5c07b !important;
+  color: #8be9fd !important;
 }
 
-/* Symbol */
+/* Symbol - 紫色 */
 .rte-content pre code .hljs-symbol,
 .rte-content pre code .hljs-bullet {
-  color: #61afef !important;
+  color: #bd93f9 !important;
 }
 
-/* Link */
+/* Link - 蓝色 */
 .rte-content pre code .hljs-link {
-  color: #61afef !important;
+  color: #8be9fd !important;
   text-decoration: underline;
 }
 
-/* Deletion */
+/* Deletion - 红色 */
 .rte-content pre code .hljs-deletion {
-  color: #e06c75 !important;
+  color: #ff5555 !important;
+  background: rgba(255, 85, 85, 0.1);
 }
 
-/* Emphasis */
+/* Addition - 绿色 */
+.rte-content pre code .hljs-addition {
+  color: #50fa7b !important;
+  background: rgba(80, 250, 123, 0.1);
+}
+
+/* Emphasis - 斜体 */
 .rte-content pre code .hljs-emphasis {
   font-style: italic;
 }
 
-/* Strong */
+/* Strong - 粗体 */
 .rte-content pre code .hljs-strong {
   font-weight: bold;
+}
+
+/* Doctag - 粉色 */
+.rte-content pre code .hljs-doctag {
+  color: #ff79c6 !important;
+}
+
+/* Formula - 紫色 */
+.rte-content pre code .hljs-formula {
+  color: #bd93f9 !important;
+}
+
+/* Attr - 青色 */
+.rte-content pre code .hljs-attr {
+  color: #8be9fd !important;
+}
+
+/* Params - 橙色 */
+.rte-content pre code .hljs-params {
+  color: #ffb86c !important;
+}
+
+/* Property - 青色 */
+.rte-content pre code .hljs-property {
+  color: #8be9fd !important;
+}
+
+/* Subst - 粉色 */
+.rte-content pre code .hljs-subst {
+  color: #ff79c6 !important;
 }
 
 /* Inline code */
