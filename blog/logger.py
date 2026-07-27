@@ -20,6 +20,7 @@ import logging.handlers
 import os
 
 from flask import request
+from concurrent_log_handler import ConcurrentRotatingFileHandler
 
 # 日志目录（位于 blog/logs/）
 LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
@@ -71,14 +72,15 @@ def setup_logging(app):
         root_logger.removeHandler(h)
 
     # ===== 2. 文件 Handler（全部日志，每日轮转，保留30天） =====
-    file_handler = logging.handlers.TimedRotatingFileHandler(
-        LOG_FILE, when='midnight', interval=1, backupCount=30, encoding='utf-8'
+    # 使用 ConcurrentRotatingFileHandler 避免多进程/多线程文件锁定问题
+    file_handler = ConcurrentRotatingFileHandler(
+        LOG_FILE, maxBytes=50 * 1024 * 1024, backupCount=30, encoding='utf-8'
     )
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(logging.Formatter(DETAILED_FORMAT, DATE_FORMAT))
 
     # ===== 3. 错误文件 Handler（仅 ERROR 以上，单独文件） =====
-    error_handler = logging.handlers.RotatingFileHandler(
+    error_handler = ConcurrentRotatingFileHandler(
         ERROR_LOG_FILE, maxBytes=10 * 1024 * 1024, backupCount=5, encoding='utf-8'
     )
     error_handler.setLevel(logging.ERROR)
