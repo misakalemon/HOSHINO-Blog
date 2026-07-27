@@ -174,9 +174,19 @@
   line-height: 1.8;
   outline: none;
   overflow-y: auto;
+  cursor: text;
 }
 
 .rte-content:focus {
+  outline: none;
+}
+
+.rte-content .tiptap {
+  min-height: 100%;
+  outline: none;
+}
+
+.rte-content .tiptap:focus {
   outline: none;
 }
 
@@ -243,15 +253,31 @@
 
 /* Code */
 .rte-content pre {
+  position: relative;
   background: #282c34;
   border-radius: 6px;
   padding: 16px 20px;
+  padding-top: 40px;
   font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
   font-size: 14px;
   overflow-x: auto;
   margin: 16px 0;
   color: #abb2bf;
   border: 1px solid #3e4450;
+}
+
+.rte-content pre::before {
+  content: attr(data-language);
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: system-ui, sans-serif;
+  color: #61afef;
+  text-transform: uppercase;
 }
 
 .rte-content pre code {
