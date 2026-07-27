@@ -94,7 +94,7 @@
 // === Tiptap 精简编辑器初始化 ===
 var aboutEditor = null;
 var aboutContent = {{ (form.about_content.data or '')|tojson }};
-aboutEditor = HoshinoEditor.default.createMinimal('#about-rte-container', {
+aboutEditor = HoshinoEditor.createMinimal('#about-rte-container', {
   content: aboutContent
 });
 

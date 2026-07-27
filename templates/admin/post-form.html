@@ -227,7 +227,7 @@
 // === Tiptap 富文本编辑器初始化 ===
 var hoshinoEditor = null;
 var editorContent = {{ (form.content.data or '')|tojson }};
-hoshinoEditor = HoshinoEditor.default.createFull('#rte-container', {
+hoshinoEditor = HoshinoEditor.createFull('#rte-container', {
   content: editorContent,
   uploadUrl: '{{ url_for("admin.upload_image") }}',
   csrfToken: document.querySelector('meta[name="csrf-token"]').getAttribute('content')
