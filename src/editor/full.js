@@ -46,6 +46,7 @@ import { FontSize, Indent, CustomImage, LineHeight } from './extensions'
 import { createFullToolbar } from './toolbar-full'
 import { createBubbleMenu } from './bubble-menu'
 import { createStatusBar } from './status-bar'
+import { createContextMenu } from './context-menu'
 
 const lowlight = createLowlight(common)
 lowlight.register('typescript', ts)
@@ -124,6 +125,8 @@ export function createFullEditor(containerSelector, options = {}) {
   container.insertBefore(toolbar, editorEl)
 
   createBubbleMenu(editor)
+
+  createContextMenu(editor, options)
 
   const statusBar = createStatusBar(editor)
   container.appendChild(statusBar)

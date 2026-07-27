@@ -1,4 +1,17 @@
 import { showModal, uploadImageWithCrop, importFile, sanitizeHTML } from './utils'
+import * as icons from 'lucide'
+
+function createIcon(name, size = 18) {
+  const icon = document.createElement('i')
+  icon.className = 'rte-icon'
+  icon.setAttribute('data-icon', name)
+  const iconFn = icons[name]
+  if (iconFn) {
+    const svg = iconFn.toSvg({ width: size, height: size })
+    icon.innerHTML = svg
+  }
+  return icon
+}
 
 function el(tag, attrs, children) {
   const e = document.createElement(tag)
@@ -19,12 +32,17 @@ function el(tag, attrs, children) {
   return e
 }
 
+function group(className) {
+  return el('div', { className: `rte-toolbar-group ${className}` })
+}
+
 function sep() {
   return el('span', { className: 'rte-sep' })
 }
 
-function btn(label, title, onclick) {
-  const b = el('button', { type: 'button', title, innerHTML: label, onclick })
+function btn(iconName, title, onclick, size = 18) {
+  const b = el('button', { type: 'button', title, onclick })
+  b.appendChild(createIcon(iconName, size))
   return b
 }
 
@@ -34,16 +52,20 @@ function colorInput(title, onchange) {
     title,
   })
   input.style.cssText =
-    'width:28px;height:28px;padding:2px;border:1px solid var(--border-subtle);border-radius:6px;background:transparent;cursor:pointer'
+    'width:24px;height:24px;padding:0;border:1px solid rgba(255,255,255,0.15);border-radius:4px;background:transparent;cursor:pointer'
   input.addEventListener('input', e => onchange(e.target.value))
   return input
 }
 
-function createSelect(label, options, onchange) {
+function createSelect(label, options, onchange, iconName = null) {
   const wrap = el('div', { className: 'rte-select-wrap' })
   const trigger = el('div', { className: 'rte-select-trigger' })
+  if (iconName) {
+    trigger.appendChild(createIcon(iconName, 16))
+    trigger.appendChild(el('span', { className: 'rte-select-spacer' }, ' '))
+  }
   const valueSpan = el('span', { className: 'rte-select-value' }, label)
-  const arrow = el('span', { className: 'rte-select-arrow' }, '▼')
+  const arrow = el('span', { className: 'rte-select-arrow' }, '▾')
   trigger.appendChild(valueSpan)
   trigger.appendChild(arrow)
   const menu = el('div', { className: 'rte-select-menu' })
@@ -72,18 +94,23 @@ function createSelect(label, options, onchange) {
 export function createFullToolbar(editor, options) {
   const toolbar = el('div', { className: 'rte-toolbar' })
 
-  // Undo / Redo
-  toolbar.appendChild(btn('↩', '撤销', () => editor.chain().focus().undo().run()))
-  toolbar.appendChild(btn('↪', '重做', () => editor.chain().focus().redo().run()))
+  // ── Group 1: History ─────────────────────────────────────────
+  const historyGroup = group('rte-group-history')
+  historyGroup.appendChild(btn('Undo', '撤销 (Ctrl+Z)', () => editor.chain().focus().undo().run()))
+  historyGroup.appendChild(btn('Redo', '重做 (Ctrl+Y)', () => editor.chain().focus().redo().run()))
+  toolbar.appendChild(historyGroup)
   toolbar.appendChild(sep())
 
+  // ── Group 2: Font ────────────────────────────────────────────
+  const fontGroup = group('rte-group-font')
+
   // Format block
-  const formatSelect = createSelect('段落', [
-    { value: 'paragraph', label: '段落' },
-    { value: 'h1', label: 'H1 标题' },
-    { value: 'h2', label: 'H2 标题' },
-    { value: 'h3', label: 'H3 标题' },
-    { value: 'h4', label: 'H4 标题' },
+  const formatSelect = createSelect('正文', [
+    { value: 'paragraph', label: '正文' },
+    { value: 'h1', label: '标题 1' },
+    { value: 'h2', label: '标题 2' },
+    { value: 'h3', label: '标题 3' },
+    { value: 'h4', label: '标题 4' },
     { value: 'codeBlock', label: '代码块' },
     { value: 'blockquote', label: '引用' },
   ], val => {
@@ -107,24 +134,14 @@ export function createFullToolbar(editor, options) {
             { value: 'cpp', label: 'C++' },
             { value: 'csharp', label: 'C#' },
             { value: 'swift', label: 'Swift' },
-            { value: 'scala', label: 'Scala' },
             { value: 'php', label: 'PHP' },
             { value: 'ruby', label: 'Ruby' },
-            { value: 'perl', label: 'Perl' },
-            { value: 'lua', label: 'Lua' },
-            { value: 'dart', label: 'Dart' },
-            { value: 'r', label: 'R' },
-            { value: 'matlab', label: 'MATLAB' },
             { value: 'sql', label: 'SQL' },
-            { value: 'bash', label: 'Bash/Shell' },
+            { value: 'bash', label: 'Bash' },
             { value: 'json', label: 'JSON' },
             { value: 'yaml', label: 'YAML' },
             { value: 'xml', label: 'XML' },
             { value: 'markdown', label: 'Markdown' },
-            { value: 'dockerfile', label: 'Dockerfile' },
-            { value: 'nginx', label: 'Nginx' },
-            { value: 'ini', label: 'INI' },
-            { value: 'diff', label: 'Diff' },
             { value: 'plaintext', label: '纯文本' },
           ],
         }],
@@ -138,83 +155,114 @@ export function createFullToolbar(editor, options) {
       editor.chain().focus().toggleHeading({ level }).run()
     }
   })
-  toolbar.appendChild(formatSelect.wrap)
+  fontGroup.appendChild(formatSelect.wrap)
 
   // Font size
   const fontSizeSelect = createSelect('字号', [
-    { value: '', label: '字号' },
-    { value: '10', label: '极小' },
-    { value: '13', label: '小' },
-    { value: '16', label: '正常' },
-    { value: '18', label: '中大' },
-    { value: '24', label: '大' },
-    { value: '32', label: '很大' },
-    { value: '48', label: '极大' },
+    { value: '', label: '默认' },
+    { value: '10', label: '10' },
+    { value: '12', label: '12' },
+    { value: '14', label: '14' },
+    { value: '16', label: '16' },
+    { value: '18', label: '18' },
+    { value: '20', label: '20' },
+    { value: '24', label: '24' },
+    { value: '28', label: '28' },
+    { value: '32', label: '32' },
+    { value: '36', label: '36' },
   ], val => {
     if (val) editor.chain().focus().setFontSize(val).run()
   })
-  toolbar.appendChild(fontSizeSelect.wrap)
+  fontGroup.appendChild(fontSizeSelect.wrap)
+
+  fontGroup.appendChild(btn('Bold', '粗体 (Ctrl+B)', () => editor.chain().focus().toggleBold().run()))
+  fontGroup.appendChild(btn('Italic', '斜体 (Ctrl+I)', () => editor.chain().focus().toggleItalic().run()))
+  fontGroup.appendChild(btn('Underline', '下划线 (Ctrl+U)', () => editor.chain().focus().toggleUnderline().run()))
+  fontGroup.appendChild(btn('Strikethrough', '删除线', () => editor.chain().focus().toggleStrike().run()))
+  fontGroup.appendChild(btn('Superscript', '上标', () => editor.chain().focus().toggleSuperscript().run()))
+  fontGroup.appendChild(btn('Subscript', '下标', () => editor.chain().focus().toggleSubscript().run()))
+  fontGroup.appendChild(colorInput('文字颜色', val => {
+    editor.chain().focus().setColor(val).run()
+  }))
+  fontGroup.appendChild(colorInput('背景色', val => {
+    editor.chain().focus().toggleHighlight({ color: val }).run()
+  }))
+  toolbar.appendChild(fontGroup)
+  toolbar.appendChild(sep())
+
+  // ── Group 3: Paragraph ───────────────────────────────────────
+  const paraGroup = group('rte-group-paragraph')
+  paraGroup.appendChild(btn('AlignLeft', '左对齐', () => editor.chain().focus().setTextAlign('left').run()))
+  paraGroup.appendChild(btn('AlignCenter', '居中', () => editor.chain().focus().setTextAlign('center').run()))
+  paraGroup.appendChild(btn('AlignRight', '右对齐', () => editor.chain().focus().setTextAlign('right').run()))
+  paraGroup.appendChild(btn('AlignJustify', '两端对齐', () => editor.chain().focus().setTextAlign('justify').run()))
 
   // Line height
   const lineHeightSelect = createSelect('行距', [
-    { value: '', label: '行距' },
-    { value: '1', label: '单倍' },
-    { value: '1.5', label: '1.5倍' },
-    { value: '1.8', label: '1.8倍' },
-    { value: '2', label: '双倍' },
-    { value: '2.5', label: '2.5倍' },
-    { value: '3', label: '三倍' },
+    { value: '', label: '默认' },
+    { value: '1', label: '1.0' },
+    { value: '1.15', label: '1.15' },
+    { value: '1.5', label: '1.5' },
+    { value: '1.8', label: '1.8' },
+    { value: '2', label: '2.0' },
+    { value: '2.5', label: '2.5' },
+    { value: '3', label: '3.0' },
   ], val => {
     if (val) editor.chain().focus().setLineHeight(val).run()
   })
-  toolbar.appendChild(lineHeightSelect.wrap)
+  paraGroup.appendChild(lineHeightSelect.wrap)
+
+  paraGroup.appendChild(btn('List', '无序列表', () => editor.chain().focus().toggleBulletList().run()))
+  paraGroup.appendChild(btn('ListOrdered', '有序列表', () => editor.chain().focus().toggleOrderedList().run()))
+  paraGroup.appendChild(btn('CheckSquare', '任务列表', () => editor.chain().focus().toggleTaskList().run()))
+  paraGroup.appendChild(btn('Outdent', '减少缩进', () => editor.chain().focus().outdent().run()))
+  paraGroup.appendChild(btn('Indent', '增加缩进', () => editor.chain().focus().indent().run()))
+  toolbar.appendChild(paraGroup)
   toolbar.appendChild(sep())
 
-  // Bold / Italic / Underline / Strike / Superscript / Subscript
-  const boldBtn = btn('<b>B</b>', '粗体', () => editor.chain().focus().toggleBold().run())
-  const italicBtn = btn('<i>I</i>', '斜体', () => editor.chain().focus().toggleItalic().run())
-  const underlineBtn = btn('<u>U</u>', '下划线', () => editor.chain().focus().toggleUnderline().run())
-  const strikeBtn = btn('<s>S</s>', '删除线', () => editor.chain().focus().toggleStrike().run())
-  const superBtn = btn('x²', '上标', () => editor.chain().focus().toggleSuperscript().run())
-  const subBtn = btn('x₂', '下标', () => editor.chain().focus().toggleSubscript().run())
-  toolbar.appendChild(boldBtn)
-  toolbar.appendChild(italicBtn)
-  toolbar.appendChild(underlineBtn)
-  toolbar.appendChild(strikeBtn)
-  toolbar.appendChild(superBtn)
-  toolbar.appendChild(subBtn)
-  toolbar.appendChild(sep())
-
-  // Text color / Highlight color
-  toolbar.appendChild(colorInput('文字颜色', val => {
-    editor.chain().focus().setColor(val).run()
+  // ── Group 4: Insert ──────────────────────────────────────────
+  const insertGroup = group('rte-group-insert')
+  insertGroup.appendChild(btn('Link', '插入链接', () => {
+    showModal({
+      title: '插入链接',
+      fields: [{ key: 'url', label: '链接地址', type: 'text', placeholder: 'https://', value: 'https://' }],
+      onConfirm: vals => {
+        if (vals.url) {
+          if (vals.url.trim().toLowerCase().startsWith('javascript:')) {
+            if (typeof showToast === 'function') showToast('不允许 javascript: 链接', 'error')
+            return
+          }
+          editor.chain().focus().setLink({ href: vals.url }).run()
+        }
+      },
+    })
   }))
-  toolbar.appendChild(colorInput('背景高亮', val => {
-    editor.chain().focus().toggleHighlight({ color: val }).run()
+  insertGroup.appendChild(btn('Image', '插入图片', () => {
+    uploadImageWithCrop(options.uploadUrl, options.csrfToken).then(url => {
+      showModal({
+        title: '图片设置',
+        fields: [{
+          key: 'align', label: '对齐方式', type: 'select', value: 'none',
+          options: [
+            { value: 'none', label: '默认' },
+            { value: 'left', label: '左浮动' },
+            { value: 'center', label: '居中' },
+            { value: 'right', label: '右浮动' },
+          ],
+        }],
+        onConfirm: vals => {
+          let style = ''
+          if (vals.align === 'left') style = 'float:left; margin-right:16px; max-width:50%'
+          else if (vals.align === 'right') style = 'float:right; margin-left:16px; max-width:50%'
+          else if (vals.align === 'center') style = 'display:block; margin:0 auto; text-align:center'
+          editor.chain().focus().setImage({ src: url, style, alt: 'image' }).run()
+        },
+      })
+    }).catch(() => {
+      if (typeof showToast === 'function') showToast('图片上传失败', 'error')
+    })
   }))
-  toolbar.appendChild(sep())
-
-  // Text alignment
-  toolbar.appendChild(btn('◀', '左对齐', () => editor.chain().focus().setTextAlign('left').run()))
-  toolbar.appendChild(btn('≡', '居中', () => editor.chain().focus().setTextAlign('center').run()))
-  toolbar.appendChild(btn('▶', '右对齐', () => editor.chain().focus().setTextAlign('right').run()))
-  toolbar.appendChild(sep())
-
-  // Lists
-  const ulBtn = btn('UL', '无序列表', () => editor.chain().focus().toggleBulletList().run())
-  const olBtn = btn('OL', '有序列表', () => editor.chain().focus().toggleOrderedList().run())
-  toolbar.appendChild(ulBtn)
-  toolbar.appendChild(olBtn)
-  toolbar.appendChild(sep())
-
-  // Indent / Outdent
-  toolbar.appendChild(btn('⇤', '减少缩进', () => editor.chain().focus().outdent().run()))
-  toolbar.appendChild(btn('⇥', '增加缩进', () => editor.chain().focus().indent().run()))
-  toolbar.appendChild(sep())
-
-  // Horizontal rule / Table / Inline code / Link
-  toolbar.appendChild(btn('—', '分割线', () => editor.chain().focus().setHorizontalRule().run()))
-  toolbar.appendChild(btn('⊞', '插入表格', () => {
+  insertGroup.appendChild(btn('Table', '插入表格', () => {
     showModal({
       title: '插入表格',
       fields: [
@@ -230,8 +278,19 @@ export function createFullToolbar(editor, options) {
       },
     })
   }))
-  // Table operations
-  toolbar.appendChild(btn('⊞+', '添加行列', () => {
+  insertGroup.appendChild(btn('Minus', '分割线', () => editor.chain().focus().setHorizontalRule().run()))
+  insertGroup.appendChild(btn('Code', '行内代码', () => editor.chain().focus().toggleCode().run()))
+  insertGroup.appendChild(btn('FileUp', '导入文件', () => {
+    importFile().then(html => {
+      editor.chain().focus().insertContent(sanitizeHTML(html)).run()
+    })
+  }))
+  toolbar.appendChild(insertGroup)
+  toolbar.appendChild(sep())
+
+  // ── Group 5: Table Operations ────────────────────────────────
+  const tableGroup = group('rte-group-table')
+  tableGroup.appendChild(btn('Plus', '添加行列', () => {
     showModal({
       title: '表格操作',
       fields: [{
@@ -257,88 +316,12 @@ export function createFullToolbar(editor, options) {
       },
     })
   }))
-  toolbar.appendChild(btn('&lt;/&gt;', '行内代码', () => editor.chain().focus().toggleCode().run()))
-  toolbar.appendChild(btn('🔗', '插入链接', () => {
-    showModal({
-      title: '插入链接',
-      fields: [{ key: 'url', label: '链接地址', type: 'text', placeholder: 'https://', value: 'https://' }],
-      onConfirm: vals => {
-        if (vals.url) {
-          if (vals.url.trim().toLowerCase().startsWith('javascript:')) {
-            if (typeof showToast === 'function') showToast('不允许 javascript: 链接', 'error')
-            return
-          }
-          editor.chain().focus().setLink({ href: vals.url }).run()
-        }
-      },
-    })
-  }))
+  toolbar.appendChild(tableGroup)
   toolbar.appendChild(sep())
 
-  // Image upload
-  toolbar.appendChild(btn('🖼', '插入图片', () => {
-    uploadImageWithCrop(options.uploadUrl, options.csrfToken).then(url => {
-      showModal({
-        title: '图片对齐方式',
-        fields: [{
-          key: 'align', label: '对齐', type: 'select', value: 'none',
-          options: [
-            { value: 'none', label: '默认（无对齐）' },
-            { value: 'left', label: '左浮动（文字环绕）' },
-            { value: 'center', label: '居中显示' },
-            { value: 'right', label: '右浮动（文字环绕）' },
-          ],
-        }],
-        onConfirm: vals => {
-          let style = ''
-          if (vals.align === 'left') style = 'float:left; margin-right:16px; max-width:50%'
-          else if (vals.align === 'right') style = 'float:right; margin-left:16px; max-width:50%'
-          else if (vals.align === 'center') style = 'display:block; margin:0 auto; text-align:center'
-          editor.chain().focus().setImage({ src: url, style, alt: 'image' }).run()
-        },
-      })
-    }).catch(() => {
-      if (typeof showToast === 'function') showToast('图片上传失败', 'error')
-    })
-  }))
-  toolbar.appendChild(btn('<span style="font-size:10px">◀ 🖼</span>', '图片左浮动', () => {
-    uploadImageWithCrop(options.uploadUrl, options.csrfToken).then(url => {
-      editor.chain().focus().setImage({
-        src: url,
-        style: 'float:left; margin-right:16px; max-width:50%',
-        alt: 'image',
-      }).run()
-    })
-  }))
-  toolbar.appendChild(btn('<span style="font-size:10px">≡ 🖼</span>', '图片居中', () => {
-    uploadImageWithCrop(options.uploadUrl, options.csrfToken).then(url => {
-      editor.chain().focus().setImage({
-        src: url,
-        style: 'display:block; margin:0 auto; text-align:center',
-        alt: 'image',
-      }).run()
-    })
-  }))
-  toolbar.appendChild(btn('<span style="font-size:10px">🖼 ▶</span>', '图片右浮动', () => {
-    uploadImageWithCrop(options.uploadUrl, options.csrfToken).then(url => {
-      editor.chain().focus().setImage({
-        src: url,
-        style: 'float:right; margin-left:16px; max-width:50%',
-        alt: 'image',
-      }).run()
-    })
-  }))
-
-  // File import
-  toolbar.appendChild(btn('📄', '导入文件 (Markdown/PDF/DOCX/HTML)', () => {
-    importFile().then(html => {
-      editor.chain().focus().insertContent(sanitizeHTML(html)).run()
-    })
-  }))
-  toolbar.appendChild(sep())
-
-  // Find & Replace
-  toolbar.appendChild(btn('🔍', '查找替换', () => {
+  // ── Group 6: Tools ───────────────────────────────────────────
+  const toolsGroup = group('rte-group-tools')
+  toolsGroup.appendChild(btn('Search', '查找替换', () => {
     let dialog = document.getElementById('rte-find-dialog')
     if (dialog) {
       dialog.remove()
@@ -406,13 +389,21 @@ export function createFullToolbar(editor, options) {
       if (e.key === 'Escape') dialog.remove()
     }
   }))
-
-  // Clear format
-  toolbar.appendChild(btn('✕', '清除格式', () => {
+  toolsGroup.appendChild(btn('RemoveFormatting', '清除格式', () => {
     editor.chain().focus().clearNodes().unsetAllMarks().run()
   }))
+  toolbar.appendChild(toolsGroup)
 
-  // Update active states on selection change
+  // ── Update active states on selection change ────────────────
+  const boldBtn = fontGroup.querySelector('button[title*="粗体"]')
+  const italicBtn = fontGroup.querySelector('button[title*="斜体"]')
+  const underlineBtn = fontGroup.querySelector('button[title*="下划线"]')
+  const strikeBtn = fontGroup.querySelector('button[title*="删除线"]')
+  const superBtn = fontGroup.querySelector('button[title*="上标"]')
+  const subBtn = fontGroup.querySelector('button[title*="下标"]')
+  const ulBtn = paraGroup.querySelector('button[title*="无序列表"]')
+  const olBtn = paraGroup.querySelector('button[title*="有序列表"]')
+
   editor.on('selectionUpdate', () => {
     boldBtn.classList.toggle('is-active', editor.isActive('bold'))
     italicBtn.classList.toggle('is-active', editor.isActive('italic'))
@@ -424,13 +415,13 @@ export function createFullToolbar(editor, options) {
     olBtn.classList.toggle('is-active', editor.isActive('orderedList'))
 
     // Update format select display
-    if (editor.isActive('heading', { level: 1 })) formatSelect.setValue('H1 标题')
-    else if (editor.isActive('heading', { level: 2 })) formatSelect.setValue('H2 标题')
-    else if (editor.isActive('heading', { level: 3 })) formatSelect.setValue('H3 标题')
-    else if (editor.isActive('heading', { level: 4 })) formatSelect.setValue('H4 标题')
+    if (editor.isActive('heading', { level: 1 })) formatSelect.setValue('标题 1')
+    else if (editor.isActive('heading', { level: 2 })) formatSelect.setValue('标题 2')
+    else if (editor.isActive('heading', { level: 3 })) formatSelect.setValue('标题 3')
+    else if (editor.isActive('heading', { level: 4 })) formatSelect.setValue('标题 4')
     else if (editor.isActive('codeBlock')) formatSelect.setValue('代码块')
     else if (editor.isActive('blockquote')) formatSelect.setValue('引用')
-    else formatSelect.setValue('段落')
+    else formatSelect.setValue('正文')
   })
 
   // Close selects on outside click

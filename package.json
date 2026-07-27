@@ -30,7 +30,8 @@
     "@tiptap/extension-text-style": "^2.11.0",
     "@tiptap/extension-underline": "^2.11.0",
     "@tiptap/starter-kit": "^2.11.0",
-    "lowlight": "^3.3.0"
+    "lowlight": "^3.3.0",
+    "lucide": "^1.27.0"
   },
   "devDependencies": {
     "@rollup/plugin-commonjs": "^29.0.3",
