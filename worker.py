@@ -185,17 +185,47 @@ def _run_task(task, app):
 
 
 def _run_bili_incremental_check(app):
-    """增量检查调度入口 — 每 30 分钟对所有 UP 主执行增量检查。"""
+    """增量检查调度入口 — 每 30 分钟对所有 UP 主执行增量检查。
+
+    使用线程池并行检查多个 UP 主（默认 3 并发），
+    避免大量 UP 主时串行执行超过 30 分钟周期。
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    max_workers = int(os.environ.get('BILI_INCREMENTAL_THREADS', '3'))
+
     with app.app_context():
         from blog.models import BiliUp
         from blog.bili_routes import _check_new_videos, _incremental_running, _scrape_lock
         ups = BiliUp.query.all()
-        for up in ups:
-            with _scrape_lock:
-                if up.mid in _incremental_running:
-                    continue
-                _incremental_running.add(up.mid)
-            _check_new_videos(up.mid, app)
+        if not ups:
+            return
+
+        logger = logging.getLogger(__name__)
+        logger.info('增量检查启动: %d 个 UP 主, %d 并发', len(ups), max_workers)
+
+        def _check_one(up):
+            try:
+                _check_new_videos(up.mid, app)
+            finally:
+                with _scrape_lock:
+                    _incremental_running.discard(up.mid)
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {}
+            for up in ups:
+                with _scrape_lock:
+                    if up.mid in _incremental_running:
+                        continue
+                    _incremental_running.add(up.mid)
+                futures[executor.submit(_check_one, up)] = up
+
+            for future in as_completed(futures):
+                up = futures[future]
+                try:
+                    future.result()
+                except Exception as e:
+                    logger.warning('增量检查 mid=%d 异常: %s', up.mid, e)
 
 
 def _init_worker_scheduler(app):
