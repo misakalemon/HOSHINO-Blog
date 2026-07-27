@@ -8,6 +8,9 @@ import Highlight from '@tiptap/extension-highlight'
 import Superscript from '@tiptap/extension-superscript'
 import Subscript from '@tiptap/extension-subscript'
 import { Table } from '@tiptap/extension-table'
+import TableRow from '@tiptap/extension-table-row'
+import TableCell from '@tiptap/extension-table-cell'
+import TableHeader from '@tiptap/extension-table-header'
 import Link from '@tiptap/extension-link'
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -48,6 +51,9 @@ export function createFullEditor(containerSelector, options = {}) {
       Superscript,
       Subscript,
       Table.configure({ resizable: true }),
+      TableRow,
+      TableCell,
+      TableHeader,
 
       CustomImage.configure({ inline: true, allowBase64: true }),
       Link.configure({
