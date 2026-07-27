@@ -292,6 +292,77 @@
   line-height: 1.6;
 }
 
+/* Code Highlighting (highlight.js) */
+.rte-content pre .hljs-comment,
+.rte-content pre .hljs-quote {
+  color: #5c6370;
+  font-style: italic;
+}
+
+.rte-content pre .hljs-doctag,
+.rte-content pre .hljs-keyword,
+.rte-content pre .hljs-formula {
+  color: #c678dd;
+}
+
+.rte-content pre .hljs-section,
+.rte-content pre .hljs-name,
+.rte-content pre .hljs-selector-tag,
+.rte-content pre .hljs-deletion,
+.rte-content pre .hljs-subst {
+  color: #e06c75;
+}
+
+.rte-content pre .hljs-literal {
+  color: #56b6c2;
+}
+
+.rte-content pre .hljs-string,
+.rte-content pre .hljs-regexp,
+.rte-content pre .hljs-addition,
+.rte-content pre .hljs-attribute,
+.rte-content pre .hljs-meta .hljs-string {
+  color: #98c379;
+}
+
+.rte-content pre .hljs-attr,
+.rte-content pre .hljs-variable,
+.rte-content pre .hljs-template-variable,
+.rte-content pre .hljs-type,
+.rte-content pre .hljs-selector-class,
+.rte-content pre .hljs-selector-attr,
+.rte-content pre .hljs-selector-pseudo,
+.rte-content pre .hljs-number {
+  color: #d19a66;
+}
+
+.rte-content pre .hljs-symbol,
+.rte-content pre .hljs-bullet,
+.rte-content pre .hljs-link,
+.rte-content pre .hljs-meta,
+.rte-content pre .hljs-selector-id,
+.rte-content pre .hljs-title {
+  color: #61afef;
+}
+
+.rte-content pre .hljs-built-in,
+.rte-content pre .hljs-title.class_,
+.rte-content pre .hljs-class .hljs-title {
+  color: #e5c07b;
+}
+
+.rte-content pre .hljs-emphasis {
+  font-style: italic;
+}
+
+.rte-content pre .hljs-strong {
+  font-weight: bold;
+}
+
+.rte-content pre .hljs-link {
+  text-decoration: underline;
+}
+
 .rte-content code {
   background: rgba(255,80,140,0.12);
   padding: 2px 6px;
