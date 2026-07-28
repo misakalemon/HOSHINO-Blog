@@ -331,6 +331,10 @@ span.flatpickr-weekday { color: rgba(255,255,255,0.4) !important; }
         renderChart();
     };
     
+    // 获取数据日期范围
+    var minDate = parseDate(allLabels[0]);
+    var maxDate = parseDate(allLabels[allLabels.length - 1]);
+    
     // 初始化日期范围选择器
     flatpickr.localize(flatpickr.l10ns.zh);
     var dateRangePicker = flatpickr('#dateRangePicker', {
@@ -338,6 +342,8 @@ span.flatpickr-weekday { color: rgba(255,255,255,0.4) !important; }
         dateFormat: 'Y-m-d',
         locale: 'zh',
         defaultDate: null,
+        minDate: minDate,
+        maxDate: maxDate,
         onClose: function(selectedDates, dateStr, instance) {
             if (selectedDates.length === 2) {
                 currentDateRange = [selectedDates[0], selectedDates[1]];
