@@ -1222,20 +1222,21 @@ def add_single_video():
     if not owner_mid:
         return {'ok': False, 'error': '视频信息中缺少 UP 主 ID'}
 
-    # 查找或创建 UP 主
+    # 查找或创建 UP 主（只保存基本信息：mid、名称、头像）
     up = BiliUp.query.filter_by(mid=owner_mid).first()
     if not up:
+        # 创建 UP 主记录，不爬取完整信息
         up = BiliUp(
             mid=owner_mid,
             name=video_info['owner_name'],
             avatar=video_info['owner_face'],
-            video_count=1,
-            follower_count=0,
+            video_count=0,  # 不统计，需要时单独爬取
+            follower_count=0,  # 不统计，需要时单独爬取
         )
         db.session.add(up)
         db.session.flush()
     else:
-        # 更新 UP 主信息
+        # 只更新名称和头像，不更新其他统计信息
         if video_info['owner_name']:
             up.name = video_info['owner_name']
         if video_info['owner_face']:
