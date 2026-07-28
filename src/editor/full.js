@@ -149,20 +149,41 @@ export function createFullEditor(containerSelector, options = {}) {
   container.insertBefore(toolbar, editorEl)
 
   // 工具栏固定定位
+  // 由于 .admin-card 有 backdrop-filter，会创建新的包含块，导致 position: fixed 不工作
+  // 解决方案：将工具栏移到 body 下，使其脱离 backdrop-filter 的影响
   let isFixed = false
+  let toolbarPlaceholder = null
+  const originalParent = toolbar.parentNode
+  const originalNextSibling = toolbar.nextSibling
+  
   const toolbarFixed = () => {
     const rect = container.getBoundingClientRect()
-    const shouldFix = rect.top < 0
+    const shouldFix = rect.top < 0 && rect.bottom > 100
     
     if (shouldFix && !isFixed) {
+      // 创建占位符保持布局
+      if (!toolbarPlaceholder) {
+        toolbarPlaceholder = document.createElement('div')
+        toolbarPlaceholder.className = 'rte-toolbar-placeholder'
+        toolbarPlaceholder.style.height = toolbar.offsetHeight + 'px'
+      }
+      originalParent.insertBefore(toolbarPlaceholder, toolbar)
+      
+      // 将工具栏移到 body
       toolbar.classList.add('is-fixed')
       toolbar.style.left = rect.left + 'px'
       toolbar.style.width = rect.width + 'px'
+      document.body.appendChild(toolbar)
       isFixed = true
     } else if (!shouldFix && isFixed) {
+      // 将工具栏移回原位置
       toolbar.classList.remove('is-fixed')
       toolbar.style.left = ''
       toolbar.style.width = ''
+      if (toolbarPlaceholder && toolbarPlaceholder.parentNode) {
+        toolbarPlaceholder.parentNode.removeChild(toolbarPlaceholder)
+      }
+      originalParent.insertBefore(toolbar, originalNextSibling)
       isFixed = false
     } else if (shouldFix && isFixed) {
       // 更新位置
@@ -173,7 +194,9 @@ export function createFullEditor(containerSelector, options = {}) {
   
   window.addEventListener('scroll', toolbarFixed, { passive: true })
   window.addEventListener('resize', toolbarFixed, { passive: true })
-  toolbarFixed()
+  
+  // 延迟初始检查，确保 DOM 完全渲染
+  setTimeout(toolbarFixed, 100)
 
   createBubbleMenu(editor)
 
@@ -189,6 +212,16 @@ export function createFullEditor(containerSelector, options = {}) {
     destroy: () => {
       window.removeEventListener('scroll', toolbarFixed)
       window.removeEventListener('resize', toolbarFixed)
+      // 如果工具栏在 body 中，移回原位置
+      if (isFixed && toolbar.parentNode === document.body) {
+        toolbar.classList.remove('is-fixed')
+        toolbar.style.left = ''
+        toolbar.style.width = ''
+        originalParent.insertBefore(toolbar, originalNextSibling)
+      }
+      if (toolbarPlaceholder && toolbarPlaceholder.parentNode) {
+        toolbarPlaceholder.parentNode.removeChild(toolbarPlaceholder)
+      }
       editor.destroy()
     },
   }
