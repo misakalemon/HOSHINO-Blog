@@ -1158,8 +1158,11 @@ def add_single_video():
     Returns:
         JSON: {ok: True, video: {...}, up: {...}}
               或 {ok: False, error: str}
+              或 {exists: True, video: {...}}  # 视频已存在，需用户确认
     """
     video_input = request.form.get('video_input', '').strip()
+    force_update = request.form.get('force_update', '0') == '1'  # 强制更新标记
+    
     if not video_input:
         return {'ok': False, 'error': '请输入 BV 号或视频链接'}
 
@@ -1188,6 +1191,24 @@ def add_single_video():
 
     if not bvid:
         return {'ok': False, 'error': '无法识别 BV 号或视频链接'}
+
+    # 检查视频是否已存在
+    existing_video = BiliVideo.query.filter_by(bvid=bvid).first()
+    if existing_video and not force_update:
+        # 返回已存在提示，让前端确认是否更新
+        up = BiliUp.query.get(existing_video.up_id)
+        return {
+            'exists': True,
+            'video': {
+                'bvid': bvid,
+                'title': existing_video.title,
+                'view_count': existing_video.view_count,
+            },
+            'up': {
+                'mid': up.mid if up else 0,
+                'name': up.name if up else '未知',
+            },
+        }
 
     # 获取视频完整信息
     try:

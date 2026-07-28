@@ -207,7 +207,7 @@ function pollScrapeLog(mid, attempt) {
 }
 
 // ── 添加单个视频 ────────────────────────────────
-function addSingleVideo() {
+function addSingleVideo(forceUpdate) {
     var input = document.getElementById('videoInput');
     var videoInput = input.value.trim();
     if (!videoInput) {
@@ -222,6 +222,9 @@ function addSingleVideo() {
     var formData = new FormData();
     formData.append('video_input', videoInput);
     formData.append('csrf_token', document.querySelector('meta[name="csrf-token"]').content);
+    if (forceUpdate) {
+        formData.append('force_update', '1');
+    }
 
     fetch('{{ url_for("bili.add_single_video") }}', {
         method: 'POST',
@@ -229,18 +232,34 @@ function addSingleVideo() {
     })
         .then(function(r) { return r.json(); })
         .then(function(d) {
-            if (d.ok) {
+            if (d.exists && !forceUpdate) {
+                // 视频已存在，询问用户是否更新
+                var confirmMsg = '⚠️ 视频已存在！\n\n' +
+                    '标题: ' + d.video.title + '\n' +
+                    'UP主: ' + d.up.name + '\n' +
+                    '播放: ' + d.video.view_count.toLocaleString() + '\n\n' +
+                    '是否更新统计数据？';
+                if (confirm(confirmMsg)) {
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                    addSingleVideo(true);  // 递归调用，强制更新
+                } else {
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                    input.value = '';
+                }
+            } else if (d.ok) {
                 var msg = d.is_new 
                     ? '✅ 视频添加成功！\n标题: ' + d.video.title + '\nUP主: ' + d.up.name
-                    : '✅ 视频已存在，统计已更新！\n标题: ' + d.video.title + '\n播放: ' + d.video.view_count.toLocaleString();
+                    : '✅ 视频统计已更新！\n标题: ' + d.video.title + '\n播放: ' + d.video.view_count.toLocaleString();
                 alert(msg);
                 input.value = '';
                 setTimeout(function() { location.reload(); }, 1000);
             } else {
                 alert('❌ ' + d.error);
+                btn.disabled = false;
+                btn.textContent = originalText;
             }
-            btn.disabled = false;
-            btn.textContent = originalText;
         })
         .catch(function(e) {
             alert('❌ 请求失败: ' + e);
