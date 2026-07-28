@@ -529,7 +529,8 @@
             document.getElementById('dateRangePicker').value = startStr + ' - ' + endStr;
             
             // 设置日期范围并更新图表
-            currentDateRange = [selectedStart, selectedEnd];
+            currentDateRange = [new Date(selectedStart), new Date(selectedEnd)];
+            currentDateRange[0].setHours(0, 0, 0, 0);
             currentDateRange[1].setHours(23, 59, 59);
             
             // 关闭日历
