@@ -939,13 +939,14 @@ def _check_new_videos(mid: int, app):
                 except Exception as e:
                     logger.error('发送新视频通知失败 mid=%d: %s', mid, e)
 
-            # ── 追踪最新 10 个视频的统计（每 30 分钟快照）──
+            # ── 追踪最新 N 个视频的统计（每 30 分钟快照）──
             tracked_ids: set[int] = set()
             try:
+                from blog.bilibili.config import TRACK_LATEST_VIDEOS
                 latest = (
                     BiliVideo.query.filter_by(up_id=up.id)
                     .order_by(BiliVideo.pubdate.desc())
-                    .limit(10)
+                    .limit(TRACK_LATEST_VIDEOS)
                     .all()
                 )
                 if latest:
