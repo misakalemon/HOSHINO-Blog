@@ -172,9 +172,12 @@ def video_detail(video_id):
     """视频详情页 — 多指标折线图（用户可点击图例开关曲线）
 
     展示播放/点赞/投币/收藏/转发/评论/弹幕 7 项指标的历史变化曲线。
-    历史数据取所有 BiliVideoHistory 记录，并进行采样以提高加载速度：
-      - 数据点 ≤ 100：全部返回
-      - 数据点 > 100：按间隔采样，保留首尾点，最多返回约 150 个点
+    历史数据取所有 BiliVideoHistory 记录，并进行智能采样以提高加载速度：
+      - 数据点 ≤ 80：全部返回
+      - 数据点 > 80：时间加权采样
+        * 最近 30 个点：全部保留（近期变化更详细）
+        * 中期数据：每隔 3 个取 1 个
+        * 早期数据：每隔 6 个取 1 个
 
     前端使用 Chart.js 渲染，用户可点击图例单独显示/隐藏某条曲线。
 
@@ -196,22 +199,35 @@ def video_detail(video_id):
     )
     all_history.reverse()  # 逆序：时间从早到晚
     
-    # 数据采样：提高加载速度
+    # 智能采样：时间加权，近期数据更密集
     total_points = len(all_history)
-    max_points = 150  # 目标最大点数
     
-    if total_points <= max_points:
+    if total_points <= 80:
         # 数据点较少，全部返回
         history = all_history
     else:
-        # 计算采样间隔
-        interval = (total_points - 1) // (max_points - 1)
-        # 采样：保留首尾点，中间按间隔采样
-        sampled_indices = [0]  # 第一个点
-        sampled_indices.extend(range(interval, total_points - 1, interval))
-        sampled_indices.append(total_points - 1)  # 最后一个点
-        # 去重并排序
-        sampled_indices = sorted(set(sampled_indices))
+        # 分段采样
+        recent_count = 30  # 最近30个点全部保留
+        sampled_indices = set()
+        
+        # 1. 保留最近的数据点（最详细）
+        for i in range(max(0, total_points - recent_count), total_points):
+            sampled_indices.add(i)
+        
+        # 2. 中期数据：每隔3个取1个
+        mid_start = max(0, total_points - 150)
+        for i in range(mid_start, total_points - recent_count, 3):
+            sampled_indices.add(i)
+        
+        # 3. 早期数据：每隔6个取1个
+        for i in range(0, mid_start, 6):
+            sampled_indices.add(i)
+        
+        # 4. 始终保留第一个点
+        sampled_indices.add(0)
+        
+        # 排序并提取数据
+        sampled_indices = sorted(sampled_indices)
         history = [all_history[i] for i in sampled_indices]
     
     # 时间标签 & 各指标数值数组，供 Chart.js 渲染
@@ -235,7 +251,6 @@ def video_detail(video_id):
         first = all_history[0]
         last = all_history[-1]
         prev = all_history[-2]
-        prev = history[-2]
         for m in metrics:
             attr = m + '_count'
             total = getattr(last, attr) - getattr(first, attr)
