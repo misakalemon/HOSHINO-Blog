@@ -148,6 +148,30 @@ export function createFullEditor(containerSelector, options = {}) {
   const toolbar = createFullToolbar(editor, options)
   container.insertBefore(toolbar, editorEl)
 
+  // 工具栏固定定位
+  const toolbarFixed = () => {
+    const rect = container.getBoundingClientRect()
+    if (rect.top < 0) {
+      toolbar.style.position = 'fixed'
+      toolbar.style.top = '0'
+      toolbar.style.left = rect.left + 'px'
+      toolbar.style.width = rect.width + 'px'
+      toolbar.style.borderRadius = '0'
+      toolbar.style.zIndex = '9999'
+    } else {
+      toolbar.style.position = 'sticky'
+      toolbar.style.top = '0'
+      toolbar.style.left = ''
+      toolbar.style.width = ''
+      toolbar.style.borderRadius = '12px 12px 0 0'
+      toolbar.style.zIndex = '100'
+    }
+  }
+  
+  window.addEventListener('scroll', toolbarFixed, { passive: true })
+  window.addEventListener('resize', toolbarFixed, { passive: true })
+  toolbarFixed()
+
   createBubbleMenu(editor)
 
   createContextMenu(editor, options)
@@ -159,6 +183,10 @@ export function createFullEditor(containerSelector, options = {}) {
     editor,
     getHTML: () => editor.getHTML(),
     setHTML: html => editor.commands.setContent(html),
-    destroy: () => editor.destroy(),
+    destroy: () => {
+      window.removeEventListener('scroll', toolbarFixed)
+      window.removeEventListener('resize', toolbarFixed)
+      editor.destroy()
+    },
   }
 }
