@@ -622,6 +622,85 @@ def get_video_stat(bvid: str) -> dict:
     }
 
 
+def get_video_full_info(bvid: str) -> dict:
+    """获取单个视频的完整信息，用于单独添加视频。
+
+    Args:
+        bvid: 视频 BV 号（如 "BV1xx411c7mD"）
+
+    Returns:
+        dict: {
+            'aid': int,
+            'bvid': str,
+            'title': str,
+            'description': str,
+            'duration': int,
+            'pubdate': int,
+            'pub_date': date,
+            'pub_datetime': datetime,
+            'owner_mid': int,
+            'owner_name': str,
+            'owner_face': str,
+            'view_count': int,
+            'like_count': int,
+            'coin_count': int,
+            'favorite_count': int,
+            'share_count': int,
+            'comment_count': int,
+            'danmaku_count': int,
+            'pic': str,  # 封面图
+        }
+
+    Raises:
+        RuntimeError: 重试耗尽后仍失败
+    """
+    retry_delay = 30
+    for attempt in range(4):
+        try:
+            v = _video_mod.Video(bvid=bvid, credential=_credential)
+            info = _sync(v.get_info())
+        except Exception as e:
+            if _credential and _is_auth_error(e) and attempt == 0:
+                logger.warning('视频信息获取凭证过期，使用匿名: %s', e)
+                v = _video_mod.Video(bvid=bvid)
+                continue
+            if _is_risk_control(e) and attempt < 3:
+                logger.warning('视频 %s 触发风控，等待 %ds 后重试 (第 %d/3 次)', bvid, retry_delay, attempt + 1)
+                time.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, 600)
+                continue
+            raise
+        break
+    else:
+        raise RuntimeError(f'视频 {bvid} 信息获取重试耗尽')
+
+    stat = info.get('stat', {})
+    owner = info.get('owner', {})
+    pubdate_ts = info.get('pubdate', 0)
+
+    return {
+        'aid': int(info.get('aid', 0)),
+        'bvid': bvid,
+        'title': info.get('title', ''),
+        'description': info.get('desc', ''),
+        'duration': info.get('duration', 0),
+        'pubdate': pubdate_ts,
+        'pub_date': datetime.fromtimestamp(pubdate_ts, tz=CST).date() if pubdate_ts else None,
+        'pub_datetime': datetime.fromtimestamp(pubdate_ts, tz=CST) if pubdate_ts else None,
+        'owner_mid': owner.get('mid', 0),
+        'owner_name': owner.get('name', ''),
+        'owner_face': owner.get('face', ''),
+        'view_count': stat.get('view', 0),
+        'like_count': stat.get('like', 0),
+        'coin_count': stat.get('coin', 0),
+        'favorite_count': stat.get('favorite', 0),
+        'share_count': stat.get('share', 0),
+        'comment_count': stat.get('reply', 0),
+        'danmaku_count': stat.get('danmaku', 0),
+        'pic': info.get('pic', ''),
+    }
+
+
 def get_video_tags(bvid: str) -> list[str]:
     """获取视频标签列表。
 

@@ -52,6 +52,18 @@
     <div style="font-size:0.75rem;color:rgba(255,255,255,0.3);margin-top:8px">爬取将后台执行，实时显示进度</div>
 </div>
 
+<!-- 添加单个视频 -->
+<div class="admin-card" style="padding:20px;margin-bottom:20px">
+    <h5 style="margin-bottom:12px">添加单个视频</h5>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <input type="text" id="videoInput" placeholder="BV1xx411c7mD 或 https://www.bilibili.com/video/BV1xx411c7mD" required
+               style="flex:1;min-width:240px;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;color:#e8edf5;font-size:0.85rem;outline:none"
+               onkeydown="if(event.key==='Enter')addSingleVideo()">
+        <button type="button" class="btn btn-primary" onclick="addSingleVideo()">➕ 添加视频</button>
+    </div>
+    <div style="font-size:0.75rem;color:rgba(255,255,255,0.3);margin-top:8px">支持 BV 号、AV 号或视频链接，自动获取视频信息并入库</div>
+</div>
+
 <!-- 爬取进度日志 -->
 <div id="scrapeLog" class="admin-card" style="padding:16px;margin-bottom:20px;display:none">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
@@ -191,6 +203,49 @@ function pollScrapeLog(mid, attempt) {
             } else {
                 scrapeTimer = setTimeout(function() { location.reload(); }, 2000);
             }
+        });
+}
+
+// ── 添加单个视频 ────────────────────────────────
+function addSingleVideo() {
+    var input = document.getElementById('videoInput');
+    var videoInput = input.value.trim();
+    if (!videoInput) {
+        alert('请输入 BV 号或视频链接');
+        return;
+    }
+    var btn = event.target;
+    var originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '⏳ 添加中...';
+
+    var formData = new FormData();
+    formData.append('video_input', videoInput);
+    formData.append('csrf_token', document.querySelector('meta[name="csrf-token"]').content);
+
+    fetch('{{ url_for("bili.add_single_video") }}', {
+        method: 'POST',
+        body: formData
+    })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.ok) {
+                var msg = d.is_new 
+                    ? '✅ 视频添加成功！\n标题: ' + d.video.title + '\nUP主: ' + d.up.name
+                    : '✅ 视频已存在，统计已更新！\n标题: ' + d.video.title + '\n播放: ' + d.video.view_count.toLocaleString();
+                alert(msg);
+                input.value = '';
+                setTimeout(function() { location.reload(); }, 1000);
+            } else {
+                alert('❌ ' + d.error);
+            }
+            btn.disabled = false;
+            btn.textContent = originalText;
+        })
+        .catch(function(e) {
+            alert('❌ 请求失败: ' + e);
+            btn.disabled = false;
+            btn.textContent = originalText;
         });
 }
 

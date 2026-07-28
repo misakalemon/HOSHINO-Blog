@@ -1143,6 +1143,164 @@ def scrape():
     return {'ok': False, 'error': '任务提交失败，请稍后重试'}
 
 
+@bili_bp.route('/add-video', methods=['POST'])
+@editor_required
+def add_single_video():
+    """添加单个视频（通过 BV 号）
+
+    支持输入：
+        - BV 号（如 BV1xx411c7mD）
+        - 视频链接（如 https://www.bilibili.com/video/BV1xx411c7mD）
+        - AV 号（如 av2，会自动转换为 BV 号）
+
+    自动获取视频信息并入库，同时自动创建或更新对应的 UP 主记录。
+
+    Returns:
+        JSON: {ok: True, video: {...}, up: {...}}
+              或 {ok: False, error: str}
+    """
+    video_input = request.form.get('video_input', '').strip()
+    if not video_input:
+        return {'ok': False, 'error': '请输入 BV 号或视频链接'}
+
+    # 提取 BV 号
+    import re
+    bvid = None
+
+    # 尝试匹配 BV 号
+    bv_match = re.search(r'(BV[a-zA-Z0-9]{10})', video_input)
+    if bv_match:
+        bvid = bv_match.group(1)
+
+    # 尝试匹配 AV 号并转换为 BV 号
+    if not bvid:
+        av_match = re.search(r'av(\d+)', video_input, re.IGNORECASE)
+        if av_match:
+            aid = int(av_match.group(1))
+            # AV 转 BV 算法
+            table = 'fZodR9XQDSUm21yCkr6zBqiveYah8bt4xsWpHnJE7jL5VG3guMTNNPAcF'
+            tr = {c: i for i, c in enumerate(table)}
+            aid = (aid ^ 177456) // 100
+            arr = [0] * 9
+            for i in range(9):
+                arr[i] = table[aid // 58**i % 58]
+            bvid = 'BV' + ''.join(arr[::-1])
+
+    if not bvid:
+        return {'ok': False, 'error': '无法识别 BV 号或视频链接'}
+
+    # 获取视频完整信息
+    try:
+        from blog.bilibili.bili_api import get_video_full_info
+        video_info = get_video_full_info(bvid)
+    except Exception as e:
+        logger.error('获取视频 %s 信息失败: %s', bvid, e)
+        return {'ok': False, 'error': f'获取视频信息失败: {str(e)}'}
+
+    owner_mid = video_info['owner_mid']
+    if not owner_mid:
+        return {'ok': False, 'error': '视频信息中缺少 UP 主 ID'}
+
+    # 查找或创建 UP 主
+    up = BiliUp.query.filter_by(mid=owner_mid).first()
+    if not up:
+        up = BiliUp(
+            mid=owner_mid,
+            name=video_info['owner_name'],
+            avatar=video_info['owner_face'],
+            video_count=1,
+            follower_count=0,
+        )
+        db.session.add(up)
+        db.session.flush()
+    else:
+        # 更新 UP 主信息
+        if video_info['owner_name']:
+            up.name = video_info['owner_name']
+        if video_info['owner_face']:
+            up.avatar = video_info['owner_face']
+
+    # 查找或创建视频记录
+    video = BiliVideo.query.filter_by(bvid=bvid).first()
+    is_new = not video
+
+    if not video:
+        video = BiliVideo(
+            up_id=up.id,
+            aid=video_info['aid'],
+            bvid=bvid,
+            title=video_info['title'],
+            description=video_info['description'],
+            duration=video_info['duration'],
+            pub_date=video_info['pub_date'],
+            pub_datetime=video_info['pub_datetime'],
+            view_count=video_info['view_count'],
+            like_count=video_info['like_count'],
+            coin_count=video_info['coin_count'],
+            favorite_count=video_info['favorite_count'],
+            share_count=video_info['share_count'],
+            comment_count=video_info['comment_count'],
+            danmaku_count=video_info['danmaku_count'],
+            pic=video_info['pic'],
+        )
+        db.session.add(video)
+        db.session.flush()
+
+        # 创建初始历史记录
+        history = BiliVideoHistory(
+            video_id=video.id,
+            view_count=video_info['view_count'],
+            like_count=video_info['like_count'],
+            coin_count=video_info['coin_count'],
+            favorite_count=video_info['favorite_count'],
+            share_count=video_info['share_count'],
+            comment_count=video_info['comment_count'],
+            danmaku_count=video_info['danmaku_count'],
+        )
+        db.session.add(history)
+    else:
+        # 更新现有视频的统计
+        video.view_count = video_info['view_count']
+        video.like_count = video_info['like_count']
+        video.coin_count = video_info['coin_count']
+        video.favorite_count = video_info['favorite_count']
+        video.share_count = video_info['share_count']
+        video.comment_count = video_info['comment_count']
+        video.danmaku_count = video_info['danmaku_count']
+        video.title = video_info['title']
+        video.pic = video_info['pic']
+
+        # 创建新的历史记录
+        history = BiliVideoHistory(
+            video_id=video.id,
+            view_count=video_info['view_count'],
+            like_count=video_info['like_count'],
+            coin_count=video_info['coin_count'],
+            favorite_count=video_info['favorite_count'],
+            share_count=video_info['share_count'],
+            comment_count=video_info['comment_count'],
+            danmaku_count=video_info['danmaku_count'],
+        )
+        db.session.add(history)
+
+    up.updated_at = now_cst()
+    db.session.commit()
+
+    return {
+        'ok': True,
+        'is_new': is_new,
+        'video': {
+            'bvid': bvid,
+            'title': video_info['title'],
+            'view_count': video_info['view_count'],
+        },
+        'up': {
+            'mid': owner_mid,
+            'name': video_info['owner_name'],
+        },
+    }
+
+
 def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, force: bool = False):
     """深扫 — 每日刷新或手动触发的完整爬取。
 
