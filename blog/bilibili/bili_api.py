@@ -443,6 +443,7 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
                 'view_count': item.get('play', 0),
                 'comment_count': item.get('comment', 0),
                 'danmaku_count': item.get('video_review', 0),
+                'pic': item.get('pic', ''),
             }
 
         page = data.get('page', {})
@@ -568,6 +569,7 @@ def get_video_list_from_dynamics(mid: int) -> list[dict]:
                 'share_count': stat.get('share', 0),
                 'comment_count': stat.get('reply', 0),
                 'danmaku_count': stat.get('danmaku', 0),
+                'pic': info.get('pic', ''),
             }
         )
 

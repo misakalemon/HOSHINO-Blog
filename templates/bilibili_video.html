@@ -19,6 +19,11 @@
 
     <!-- 视频信息 -->
     <div style="padding:24px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:20px;margin-bottom:24px">
+        {% if video.pic %}
+        <div style="margin-bottom:20px">
+            <img src="{{ video.pic }}" alt="视频封面" referrerpolicy="no-referrer" loading="lazy" style="width:100%;max-width:640px;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.3)">
+        </div>
+        {% endif %}
         <h1 style="font-size:1.3rem;font-weight:500;color:rgba(255,255,255,0.9);margin:0 0 12px;line-height:1.4">{{ video.title }}</h1>
         <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:0.8rem;color:rgba(255,255,255,0.35)">
             <span>BV: <a href="https://www.bilibili.com/video/{{ video.bvid }}" target="_blank" rel="noopener" style="color:#a78bfa;text-decoration:none" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">{{ video.bvid }}</a></span>
