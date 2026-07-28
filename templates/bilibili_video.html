@@ -278,8 +278,9 @@
         var parts = label.split(' ');
         var datePart = parts[0].split('/');
         var timePart = parts[1] ? parts[1].split(':') : [0, 0];
-        // 格式：YYYY/MM/DD HH:MM
-        return new Date(parseInt(datePart[0]), parseInt(datePart[1]) - 1, parseInt(datePart[2]), 
+        // 格式：MM/DD HH:MM，年份从系统时间读取
+        var currentYear = new Date().getFullYear();
+        return new Date(currentYear, parseInt(datePart[0]) - 1, parseInt(datePart[1]), 
                         parseInt(timePart[0]), parseInt(timePart[1]));
     }
     
