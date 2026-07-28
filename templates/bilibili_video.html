@@ -121,6 +121,7 @@
                     <input type="text" id="dateRangePicker" placeholder="选择日期范围" 
                            style="width:220px;padding:4px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.6);font-size:0.75rem;cursor:pointer"
                            readonly onclick="toggleCalendar()">
+                    <button onclick="clearDateSelection()" style="padding:4px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.5);font-size:0.75rem;cursor:pointer;transition:all 0.2s" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'">清除</button>
                     <!-- 自定义日历容器 -->
                     <div id="customCalendar" style="display:none;position:absolute;top:100%;left:0;margin-top:8px;z-index:99999;background:rgba(18,16,34,0.98);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:16px;box-shadow:0 8px 32px rgba(0,0,0,0.5);width:320px">
                         <!-- 年份选择 -->
@@ -620,7 +621,16 @@
             }
         }
     });
-
+    
+    // 清除日期选择
+    window.clearDateSelection = function() {
+        selectedStart = null;
+        selectedEnd = null;
+        currentDateRange = null;
+        document.getElementById('dateRangePicker').value = '';
+        document.getElementById('customCalendar').style.display = 'none';
+        renderChart();
+    };
     
     // 切换年份
     window.changeYear = function(delta) {
