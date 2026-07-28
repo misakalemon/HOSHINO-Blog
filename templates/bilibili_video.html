@@ -271,17 +271,44 @@
     
     // 当前筛选状态
     var currentDateRange = null;  // [startDate, endDate] 或 null（全部）
-
     
-    // 解析时间标签为 Date 对象
-    function parseDate(label) {
+    // 智能解析时间标签为 Date 对象（处理跨年数据）
+    function parseDate(label, prevDate) {
         var parts = label.split(' ');
         var datePart = parts[0].split('/');
         var timePart = parts[1] ? parts[1].split(':') : [0, 0];
-        // 格式：MM/DD HH:MM，年份从系统时间读取
+        var month = parseInt(datePart[0]) - 1;
+        var day = parseInt(datePart[1]);
+        var hour = parseInt(timePart[0]);
+        var minute = parseInt(timePart[1]);
+        
         var currentYear = new Date().getFullYear();
-        return new Date(currentYear, parseInt(datePart[0]) - 1, parseInt(datePart[1]), 
-                        parseInt(timePart[0]), parseInt(timePart[1]));
+        
+        if (!prevDate) {
+            // 第一个数据点，使用系统年份
+            return new Date(currentYear, month, day, hour, minute);
+        }
+        
+        // 根据前一个日期推断年份
+        var prevMonth = prevDate.getMonth();
+        var year = prevDate.getFullYear();
+        
+        if (month < prevMonth - 1) {
+            // 月份跳跃超过 1，说明跨年了（如 12月 -> 1月）
+            year += 1;
+        } else if (month > prevMonth + 1) {
+            // 月份倒退超过 1，说明是前一年（如 1月 -> 12月，数据逆序）
+            year -= 1;
+        }
+        
+        return new Date(year, month, day, hour, minute);
+    }
+    
+    // 预处理所有日期（智能推断年份）
+    var parsedDates = [];
+    for (var i = 0; i < allLabels.length; i++) {
+        var prevDate = i > 0 ? parsedDates[i - 1] : null;
+        parsedDates.push(parseDate(allLabels[i], prevDate));
     }
     
     // 根据时间区间筛选数据
@@ -293,7 +320,7 @@
             if (!currentDateRange) {
                 filteredIndices.push(i);
             } else {
-                var date = parseDate(allLabels[i]);
+                var date = parsedDates[i];
                 if (date >= currentDateRange[0] && date <= currentDateRange[1]) {
                     filteredIndices.push(i);
                 }
@@ -389,8 +416,8 @@
     };
     
     // 获取数据日期范围
-    var minDate = parseDate(allLabels[0]);
-    var maxDate = parseDate(allLabels[allLabels.length - 1]);
+    var minDate = parsedDates[0];
+    var maxDate = parsedDates[parsedDates.length - 1];
     
     // 自定义日历状态
     var calYear = minDate.getFullYear();
