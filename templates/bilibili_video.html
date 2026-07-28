@@ -421,8 +421,10 @@
     };
     
     // 获取数据日期范围
-    var minDate = parsedDates[0];
-    var maxDate = parsedDates[parsedDates.length - 1];
+    var minDate = new Date(parsedDates[0]);
+    minDate.setHours(0, 0, 0, 0);
+    var maxDate = new Date(parsedDates[parsedDates.length - 1]);
+    maxDate.setHours(23, 59, 59);
     
     // 自定义日历状态
     var calYear = minDate.getFullYear();
