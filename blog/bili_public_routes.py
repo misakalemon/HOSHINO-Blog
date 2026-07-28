@@ -190,7 +190,7 @@ def video_detail(video_id):
     history = (
         BiliVideoHistory.query.filter_by(video_id=video_id)
         .order_by(BiliVideoHistory.recorded_at.desc())
-        .limit(170)  # 限制最多 170 条历史记录
+
         .all()
     )
     history.reverse()  # 逆序：时间从早到晚
