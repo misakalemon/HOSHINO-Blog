@@ -124,16 +124,16 @@
                     <!-- 自定义日历容器 -->
                     <div id="customCalendar" style="display:none;position:absolute;top:100%;left:0;margin-top:8px;z-index:99999;background:rgba(18,16,34,0.98);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:16px;box-shadow:0 8px 32px rgba(0,0,0,0.5);width:320px">
                         <!-- 年份选择 -->
-                        <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:8px">
-                            <button onclick="changeYear(-1)" class="cal-nav-btn" style="padding:4px 8px;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.5);cursor:pointer;font-size:14px;transition:all 0.2s">‹</button>
-                            <span id="calendarYear" style="font-size:16px;font-weight:600;color:rgba(255,255,255,0.9);min-width:60px;text-align:center">2026</span>
-                            <button onclick="changeYear(1)" class="cal-nav-btn" style="padding:4px 8px;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.5);cursor:pointer;font-size:14px;transition:all 0.2s">›</button>
+                        <div style="display:grid;grid-template-columns:1fr 5fr 1fr;gap:2px;margin-bottom:8px">
+                            <button onclick="changeYear(-1)" class="cal-nav-btn" style="padding:8px 0;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.5);cursor:pointer;font-size:14px;transition:all 0.2s">‹</button>
+                            <span id="calendarYear" style="display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;color:rgba(255,255,255,0.9)">2026</span>
+                            <button onclick="changeYear(1)" class="cal-nav-btn" style="padding:8px 0;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.5);cursor:pointer;font-size:14px;transition:all 0.2s">›</button>
                         </div>
                         <!-- 月份选择 -->
-                        <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:12px">
-                            <button onclick="changeMonth(-1)" class="cal-nav-btn" style="padding:4px 8px;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.5);cursor:pointer;font-size:14px;transition:all 0.2s">‹</button>
-                            <span id="calendarMonth" style="font-size:16px;font-weight:600;color:rgba(255,255,255,0.9);min-width:60px;text-align:center">7月</span>
-                            <button onclick="changeMonth(1)" class="cal-nav-btn" style="padding:4px 8px;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.5);cursor:pointer;font-size:14px;transition:all 0.2s">›</button>
+                        <div style="display:grid;grid-template-columns:1fr 5fr 1fr;gap:2px;margin-bottom:12px">
+                            <button onclick="changeMonth(-1)" class="cal-nav-btn" style="padding:8px 0;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.5);cursor:pointer;font-size:14px;transition:all 0.2s">‹</button>
+                            <span id="calendarMonth" style="display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;color:rgba(255,255,255,0.9)">7月</span>
+                            <button onclick="changeMonth(1)" class="cal-nav-btn" style="padding:8px 0;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.5);cursor:pointer;font-size:14px;transition:all 0.2s">›</button>
                         </div>
                         <!-- 星期表头 -->
                         <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px">
