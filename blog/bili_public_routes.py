@@ -172,8 +172,9 @@ def video_detail(video_id):
     """视频详情页 — 多指标折线图（用户可点击图例开关曲线）
 
     展示播放/点赞/投币/收藏/转发/评论/弹幕 7 项指标的历史变化曲线。
-    历史数据取最近 170 条 BiliVideoHistory 记录，同时计算每项指标的
-    总增长量和最近一次变化量。
+    历史数据取所有 BiliVideoHistory 记录，并进行采样以提高加载速度：
+      - 数据点 ≤ 100：全部返回
+      - 数据点 > 100：按间隔采样，保留首尾点，最多返回约 150 个点
 
     前端使用 Chart.js 渲染，用户可点击图例单独显示/隐藏某条曲线。
 
@@ -187,13 +188,32 @@ def video_detail(video_id):
     up = video.up
     import json
 
-    history = (
+    # 获取所有历史数据
+    all_history = (
         BiliVideoHistory.query.filter_by(video_id=video_id)
         .order_by(BiliVideoHistory.recorded_at.desc())
-
         .all()
     )
-    history.reverse()  # 逆序：时间从早到晚
+    all_history.reverse()  # 逆序：时间从早到晚
+    
+    # 数据采样：提高加载速度
+    total_points = len(all_history)
+    max_points = 150  # 目标最大点数
+    
+    if total_points <= max_points:
+        # 数据点较少，全部返回
+        history = all_history
+    else:
+        # 计算采样间隔
+        interval = (total_points - 1) // (max_points - 1)
+        # 采样：保留首尾点，中间按间隔采样
+        sampled_indices = [0]  # 第一个点
+        sampled_indices.extend(range(interval, total_points - 1, interval))
+        sampled_indices.append(total_points - 1)  # 最后一个点
+        # 去重并排序
+        sampled_indices = sorted(set(sampled_indices))
+        history = [all_history[i] for i in sampled_indices]
+    
     # 时间标签 & 各指标数值数组，供 Chart.js 渲染
     time_labels = json.dumps([h.recorded_at.strftime('%m/%d %H:%M') for h in history])
     chart_data = json.dumps(
@@ -210,10 +230,11 @@ def video_detail(video_id):
 
     metrics = ['view', 'like', 'coin', 'favorite', 'share', 'comment', 'danmaku']
     growth = {}
-    if len(history) >= 2:
-        # 计算总增长（最后一个值 - 第一个值）和最近一次变化（最后一个值 - 倒数第二个值）
-        first = history[0]
-        last = history[-1]
+    if len(all_history) >= 2:
+        # 计算总增长（使用全部历史数据的第一个和最后一个）
+        first = all_history[0]
+        last = all_history[-1]
+        prev = all_history[-2]
         prev = history[-2]
         for m in metrics:
             attr = m + '_count'
