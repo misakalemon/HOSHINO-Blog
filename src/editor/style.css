@@ -15,9 +15,7 @@
 
 /* ── Toolbar ──────────────────────────────── */
 .rte-toolbar {
-  position: sticky;
-  top: 0;
-  z-index: 100;
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -29,6 +27,14 @@
   border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,0.06));
   border-radius: 12px 12px 0 0;
   box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.rte-toolbar.is-fixed {
+  position: fixed !important;
+  top: 0 !important;
+  z-index: 9999 !important;
+  border-radius: 0 !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3) !important;
 }
 
 .rte-toolbar-group {

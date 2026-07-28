@@ -149,22 +149,25 @@ export function createFullEditor(containerSelector, options = {}) {
   container.insertBefore(toolbar, editorEl)
 
   // 工具栏固定定位
+  let isFixed = false
   const toolbarFixed = () => {
     const rect = container.getBoundingClientRect()
-    if (rect.top < 0) {
-      toolbar.style.position = 'fixed'
-      toolbar.style.top = '0'
+    const shouldFix = rect.top < 0
+    
+    if (shouldFix && !isFixed) {
+      toolbar.classList.add('is-fixed')
       toolbar.style.left = rect.left + 'px'
       toolbar.style.width = rect.width + 'px'
-      toolbar.style.borderRadius = '0'
-      toolbar.style.zIndex = '9999'
-    } else {
-      toolbar.style.position = 'sticky'
-      toolbar.style.top = '0'
+      isFixed = true
+    } else if (!shouldFix && isFixed) {
+      toolbar.classList.remove('is-fixed')
       toolbar.style.left = ''
       toolbar.style.width = ''
-      toolbar.style.borderRadius = '12px 12px 0 0'
-      toolbar.style.zIndex = '100'
+      isFixed = false
+    } else if (shouldFix && isFixed) {
+      // 更新位置
+      toolbar.style.left = rect.left + 'px'
+      toolbar.style.width = rect.width + 'px'
     }
   }
   
