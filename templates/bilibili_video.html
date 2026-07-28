@@ -278,7 +278,8 @@
         var parts = label.split(' ');
         var datePart = parts[0].split('/');
         var timePart = parts[1] ? parts[1].split(':') : [0, 0];
-        return new Date(2026, parseInt(datePart[0]) - 1, parseInt(datePart[1]), 
+        // 格式：YYYY/MM/DD HH:MM
+        return new Date(parseInt(datePart[0]), parseInt(datePart[1]) - 1, parseInt(datePart[2]), 
                         parseInt(timePart[0]), parseInt(timePart[1]));
     }
     

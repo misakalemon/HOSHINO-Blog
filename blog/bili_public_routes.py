@@ -231,7 +231,7 @@ def video_detail(video_id):
         history = [all_history[i] for i in sampled_indices]
     
     # 时间标签 & 各指标数值数组，供 Chart.js 渲染
-    time_labels = json.dumps([h.recorded_at.strftime('%m/%d %H:%M') for h in history])
+    time_labels = json.dumps([h.recorded_at.strftime('%Y/%m/%d %H:%M') for h in history])
     chart_data = json.dumps(
         {
             'view': [h.view_count for h in history],
