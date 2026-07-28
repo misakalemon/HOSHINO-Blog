@@ -10,18 +10,25 @@
   border-radius: 12px;
   background: var(--bg-card, #1a2235);
   box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  overflow: visible;
 }
 
 /* ── Toolbar ──────────────────────────────── */
 .rte-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 2px;
   padding: 8px 12px;
-  background: rgba(255,255,255,0.02);
+  background: rgba(26, 34, 53, 0.98);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,0.06));
   border-radius: 12px 12px 0 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
 }
 
 .rte-toolbar-group {
