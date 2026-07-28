@@ -134,7 +134,7 @@ def create_app():
     返回:
         Flask: 配置完毕的应用实例
     """
-    app = Flask(__name__, static_folder='blog/static')
+    app = Flask(__name__)
 
     # ── 基础配置 ────────────────────────────────
     # 从 config.py 中 Config 类加载所有配置项
