@@ -398,6 +398,12 @@
     var today = new Date();
     today.setHours(0, 0, 0, 0);
     
+    // 拖拽状态
+    var isDragging = false;
+    var dragStart = null;
+    var dragEnd = null;
+    var autoScrollInterval = null;
+    
     var monthNames = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
     
     // 判断闰年
@@ -465,8 +471,31 @@
                     dayEl.classList.add('in-range');
                 }
                 
-                dayEl.onclick = function() {
-                    selectDate(new Date(calYear, calMonth, parseInt(this.textContent)));
+                // 拖拽预览高亮
+                if (isDragging && dragStart && dragEnd) {
+                    var minDrag = dragStart < dragEnd ? dragStart : dragEnd;
+                    var maxDrag = dragStart < dragEnd ? dragEnd : dragStart;
+                    if (date >= minDrag && date <= maxDrag) {
+                        dayEl.classList.add('in-range');
+                    }
+                }
+                
+                // 拖拽事件
+                dayEl.onmousedown = function(e) {
+                    e.preventDefault();
+                    isDragging = true;
+                    dragStart = new Date(calYear, calMonth, parseInt(this.textContent));
+                    dragStart.setHours(0, 0, 0, 0);
+                    dragEnd = dragStart;
+                    renderCalendar();
+                };
+                
+                dayEl.onmouseenter = function(e) {
+                    if (isDragging) {
+                        dragEnd = new Date(calYear, calMonth, parseInt(this.textContent));
+                        dragEnd.setHours(0, 0, 0, 0);
+                        renderCalendar();
+                    }
                 };
             }
             
@@ -484,20 +513,11 @@
         }
     }
     
-    // 选择日期
-    function selectDate(date) {
-        date.setHours(0, 0, 0, 0);
-        
-        if (!selectedStart || (selectedStart && selectedEnd)) {
-            selectedStart = date;
-            selectedEnd = null;
-        } else {
-            if (date < selectedStart) {
-                selectedEnd = selectedStart;
-                selectedStart = date;
-            } else {
-                selectedEnd = date;
-            }
+    // 确认拖拽选择
+    function confirmDragSelection() {
+        if (isDragging && dragStart && dragEnd) {
+            selectedStart = dragStart < dragEnd ? new Date(dragStart) : new Date(dragEnd);
+            selectedEnd = dragStart < dragEnd ? new Date(dragEnd) : new Date(dragStart);
             
             // 更新输入框显示
             var startStr = selectedStart.getFullYear() + '-' + (selectedStart.getMonth() + 1) + '-' + selectedStart.getDate();
@@ -507,6 +527,61 @@
             // 设置日期范围并更新图表
             currentDateRange = [selectedStart, selectedEnd];
             currentDateRange[1].setHours(23, 59, 59);
+            
+            // 关闭日历
+            document.getElementById('customCalendar').style.display = 'none';
+            
+            renderChart();
+        }
+        
+        isDragging = false;
+        dragStart = null;
+        dragEnd = null;
+        if (autoScrollInterval) {
+            clearInterval(autoScrollInterval);
+            autoScrollInterval = null;
+        }
+    }
+    
+    // 鼠标松开事件
+    document.addEventListener('mouseup', function(e) {
+        if (isDragging) {
+            confirmDragSelection();
+        }
+    });
+    
+    // 鼠标移动事件（处理跨月份拖拽）
+    document.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+        
+        var cal = document.getElementById('customCalendar');
+        var rect = cal.getBoundingClientRect();
+        var threshold = 30;
+        
+        // 检查是否接近左边缘（上个月）
+        if (e.clientX < rect.left + threshold) {
+            if (!autoScrollInterval) {
+                autoScrollInterval = setInterval(function() {
+                    changeMonth(-1);
+                }, 300);
+            }
+        }
+        // 检查是否接近右边缘（下个月）
+        else if (e.clientX > rect.right - threshold) {
+            if (!autoScrollInterval) {
+                autoScrollInterval = setInterval(function() {
+                    changeMonth(1);
+                }, 300);
+            }
+        }
+        // 停止自动滚动
+        else {
+            if (autoScrollInterval) {
+                clearInterval(autoScrollInterval);
+                autoScrollInterval = null;
+            }
+        }
+    });
             
             // 关闭日历
             document.getElementById('customCalendar').style.display = 'none';
