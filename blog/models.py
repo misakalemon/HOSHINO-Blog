@@ -522,6 +522,7 @@ class BiliVideo(db.Model):
     share_count = db.Column(db.Integer, default=0, comment='转发数')
     comment_count = db.Column(db.Integer, default=0, comment='评论数')
     danmaku_count = db.Column(db.Integer, default=0, comment='弹幕数')
+    pic = db.Column(db.String(512), nullable=True, comment='视频封面URL')
     created_at = db.Column(db.DateTime, default=now_cst)
     tags = db.Column(db.JSON, nullable=True, comment='视频标签名数组')
     subtitle_text = db.Column(MEDIUMTEXT, nullable=True, comment='AI 字幕文本（自动语音识别生成）')

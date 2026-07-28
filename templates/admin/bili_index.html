@@ -39,29 +39,43 @@
     </div>
 </div>
 
-<!-- 添加 UP 主 -->
-<div class="admin-card" style="padding:20px;margin-bottom:20px">
-    <h5 style="margin-bottom:12px">添加 UP 主</h5>
-    <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <input type="text" id="scrapeUrl" placeholder="https://space.bilibili.com/2" required
-               style="flex:1;min-width:240px;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;color:#e8edf5;font-size:0.85rem;outline:none"
-               onkeydown="if(event.key==='Enter')startScrape()">
-        <button type="button" class="btn btn-primary" onclick="startScrape()">🚀 开始爬取</button>
-        <button type="button" id="checkMissingBtn" class="btn btn-ghost" onclick="checkMissing()">🔍 检查遗漏</button>
+<!-- ━━━━━━━━━━━━ UP 主区域 ━━━━━━━━━━━━ -->
+<div style="margin-bottom:24px">
+    <h4 style="margin-bottom:16px;font-size:1.1rem;font-weight:500;color:rgba(255,255,255,0.85);display:flex;align-items:center;gap:8px">
+        <span style="font-size:1.3rem">👤</span> UP 主管理
+    </h4>
+    
+    <!-- 添加 UP 主 -->
+    <div class="admin-card" style="padding:20px;margin-bottom:20px">
+        <h5 style="margin-bottom:12px">添加 UP 主</h5>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <input type="text" id="scrapeUrl" placeholder="https://space.bilibili.com/2" required
+                   style="flex:1;min-width:240px;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;color:#e8edf5;font-size:0.85rem;outline:none"
+                   onkeydown="if(event.key==='Enter')startScrape()">
+            <button type="button" class="btn btn-primary" onclick="startScrape()">🚀 开始爬取</button>
+            <button type="button" id="checkMissingBtn" class="btn btn-ghost" onclick="checkMissing()">🔍 检查遗漏</button>
+        </div>
+        <div style="font-size:0.75rem;color:rgba(255,255,255,0.3);margin-top:8px">爬取将后台执行，实时显示进度</div>
     </div>
-    <div style="font-size:0.75rem;color:rgba(255,255,255,0.3);margin-top:8px">爬取将后台执行，实时显示进度</div>
 </div>
 
-<!-- 添加单个视频 -->
-<div class="admin-card" style="padding:20px;margin-bottom:20px">
-    <h5 style="margin-bottom:12px">添加单个视频</h5>
-    <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <input type="text" id="videoInput" placeholder="BV1xx411c7mD 或 https://www.bilibili.com/video/BV1xx411c7mD" required
-               style="flex:1;min-width:240px;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;color:#e8edf5;font-size:0.85rem;outline:none"
-               onkeydown="if(event.key==='Enter')addSingleVideo()">
-        <button type="button" class="btn btn-primary" onclick="addSingleVideo()">➕ 添加视频</button>
+<!-- ━━━━━━━━━━━━ 单个视频区域 ━━━━━━━━━━━━ -->
+<div style="margin-bottom:24px">
+    <h4 style="margin-bottom:16px;font-size:1.1rem;font-weight:500;color:rgba(255,255,255,0.85);display:flex;align-items:center;gap:8px">
+        <span style="font-size:1.3rem">🎬</span> 单个视频
+    </h4>
+    
+    <!-- 添加单个视频 -->
+    <div class="admin-card" style="padding:20px;margin-bottom:20px">
+        <h5 style="margin-bottom:12px">添加单个视频</h5>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <input type="text" id="videoInput" placeholder="BV1xx411c7mD 或 https://www.bilibili.com/video/BV1xx411c7mD" required
+                   style="flex:1;min-width:240px;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;color:#e8edf5;font-size:0.85rem;outline:none"
+                   onkeydown="if(event.key==='Enter')addSingleVideo()">
+            <button type="button" class="btn btn-primary" onclick="addSingleVideo()">➕ 添加视频</button>
+        </div>
+        <div style="font-size:0.75rem;color:rgba(255,255,255,0.3);margin-top:8px">支持 BV 号、AV 号或视频链接，自动获取视频信息和封面</div>
     </div>
-    <div style="font-size:0.75rem;color:rgba(255,255,255,0.3);margin-top:8px">支持 BV 号、AV 号或视频链接，自动获取视频信息并入库</div>
 </div>
 
 <!-- 爬取进度日志 -->
