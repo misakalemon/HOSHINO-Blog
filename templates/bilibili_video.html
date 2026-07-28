@@ -232,34 +232,23 @@ span.flatpickr-weekday { color: rgba(255,255,255,0.4) !important; }
             }
         }
         
-        // 数据点采样（如果点数超过 100）
+        // 数据点采样（基于比例）
         var sampledIndices;
-        if (filteredIndices.length <= 100) {
+        var total = filteredIndices.length;
+        
+        if (total <= 120) {
             sampledIndices = filteredIndices;
         } else {
+            // 目标保留约 120 个点，根据比例计算采样间隔
+            var targetPoints = 120;
+            var interval = (total - 1) / (targetPoints - 1);
+            
             sampledIndices = [];
-            var total = filteredIndices.length;
-            
-            // 保留第一个点
-            sampledIndices.push(filteredIndices[0]);
-            
-            // 最近 30 个点全部保留
-            var recentStart = Math.max(1, total - 30);
-            
-            // 中期数据：每隔 2 个取 1 个
-            var midStart = Math.max(1, Math.floor(total * 0.3));
-            for (var j = 1; j < midStart; j += 4) {
-                if (j < total) sampledIndices.push(filteredIndices[j]);
-            }
-            
-            // 中期到近期：每隔 2 个取 1 个
-            for (var k = midStart; k < recentStart; k += 2) {
-                if (k < total) sampledIndices.push(filteredIndices[k]);
-            }
-            
-            // 最近 30 个点全部保留
-            for (var m = recentStart; m < total; m++) {
-                sampledIndices.push(filteredIndices[m]);
+            for (var j = 0; j < targetPoints; j++) {
+                var idx = Math.round(j * interval);
+                if (idx < total) {
+                    sampledIndices.push(filteredIndices[idx]);
+                }
             }
             
             // 确保包含最后一个点
