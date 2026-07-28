@@ -177,6 +177,7 @@
     border-radius: 12px !important;
     padding: 12px !important;
     z-index: 99999 !important;
+    width: 307px !important;
 }
 .flatpickr-months .flatpickr-month { background: transparent !important; }
 .flatpickr-current-month { 
@@ -307,14 +308,20 @@ span.flatpickr-weekday {
 .flatpickr-months .flatpickr-next-month.flatpickr-disabled:hover {
     background: transparent !important;
 }
-.flatpickr-rContainer { border-radius: 8px !important; }
+.flatpickr-rContainer { 
+    border-radius: 8px !important;
+    width: 100% !important;
+}
 .flatpickr-days { 
     border-radius: 8px !important;
-    overflow: hidden !important;
+    width: 100% !important;
 }
 .dayContainer { 
     padding: 4px !important;
     border-radius: 8px !important;
+    width: 100% !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
 }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
