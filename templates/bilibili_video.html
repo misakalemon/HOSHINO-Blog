@@ -122,15 +122,7 @@
                            style="width:180px;padding:4px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.6);font-size:0.75rem;cursor:pointer"
                            readonly>
                 </div>
-                
-                <!-- 数据点数量 -->
-                <div style="display:flex;align-items:center;gap:6px">
-                    <span style="font-size:0.75rem;color:rgba(255,255,255,0.4)">点数:</span>
-                    <input type="range" id="chartPointsSlider" min="20" max="100" value="100" 
-                           style="width:80px;accent-color:#a78bfa;cursor:pointer"
-                           oninput="setChartPoints(this.value)">
-                    <span id="chartPointsValue" style="font-size:0.75rem;color:rgba(255,255,255,0.5);min-width:30px">100</span>
-                </div>
+
             </div>
         </div>
         <div id="videoChart" style="width:100%;height:280px"></div>
@@ -213,13 +205,7 @@ span.flatpickr-weekday { color: rgba(255,255,255,0.4) !important; }
     
     // 当前筛选状态
     var currentDateRange = null;  // [startDate, endDate] 或 null（全部）
-    var currentMaxPoints = allLabels.length;
-    
-    // 动态设置滑块上限
-    var slider = document.getElementById('chartPointsSlider');
-    slider.max = allLabels.length;
-    slider.value = allLabels.length;
-    document.getElementById('chartPointsValue').textContent = allLabels.length;
+
     
     // 解析时间标签为 Date 对象
     function parseDate(label) {
@@ -230,11 +216,11 @@ span.flatpickr-weekday { color: rgba(255,255,255,0.4) !important; }
                         parseInt(timePart[0]), parseInt(timePart[1]));
     }
     
-    // 根据时间区间和数据点数量筛选数据
+    // 根据时间区间筛选数据
     function filterData() {
         var filteredIndices = [];
         
-        // 1. 时间区间筛选
+        // 时间区间筛选
         for (var i = 0; i < allLabels.length; i++) {
             if (!currentDateRange) {
                 filteredIndices.push(i);
@@ -246,33 +232,11 @@ span.flatpickr-weekday { color: rgba(255,255,255,0.4) !important; }
             }
         }
         
-        // 2. 数据点采样（如果点数超过限制）
-        var totalPoints = filteredIndices.length;
-        var sampledIndices;
-        
-        if (totalPoints <= currentMaxPoints) {
-            sampledIndices = filteredIndices;
-        } else {
-            // 智能采样：保留首尾，中间均匀采样
-            var interval = (totalPoints - 1) / (currentMaxPoints - 1);
-            sampledIndices = [];
-            for (var j = 0; j < currentMaxPoints; j++) {
-                var idx = Math.round(j * interval);
-                if (idx < totalPoints) {
-                    sampledIndices.push(filteredIndices[idx]);
-                }
-            }
-            // 确保包含最后一个点
-            if (sampledIndices[sampledIndices.length - 1] !== filteredIndices[totalPoints - 1]) {
-                sampledIndices.push(filteredIndices[totalPoints - 1]);
-            }
-        }
-        
-        // 3. 构建筛选后的数据
-        var labels = sampledIndices.map(function(i) { return allLabels[i]; });
+        // 构建筛选后的数据
+        var labels = filteredIndices.map(function(i) { return allLabels[i]; });
         var data = {};
         Object.keys(allData).forEach(function(m) {
-            data[m] = sampledIndices.map(function(i) { return allData[m][i]; });
+            data[m] = filteredIndices.map(function(i) { return allData[m][i]; });
         });
         
         return { labels: labels, data: data };
@@ -353,26 +317,9 @@ span.flatpickr-weekday { color: rgba(255,255,255,0.4) !important; }
                 currentDateRange = null;
             }
             
-            // 联动调整数据点数量
-            var filteredCount = filterData().labels.length;
-            var slider = document.getElementById('chartPointsSlider');
-            slider.max = filteredCount;
-            if (currentMaxPoints > filteredCount) {
-                slider.value = Math.max(20, filteredCount);
-                currentMaxPoints = parseInt(slider.value);
-                document.getElementById('chartPointsValue').textContent = currentMaxPoints;
-            }
-            
             renderChart();
         }
     });
-    
-    // 设置数据点数量
-    window.setChartPoints = function(value) {
-        currentMaxPoints = parseInt(value);
-        document.getElementById('chartPointsValue').textContent = value;
-        renderChart();
-    };
 
     renderChart();
     window.addEventListener('resize', function(){ chart.resize(); });
