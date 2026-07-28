@@ -254,7 +254,11 @@
 (function() {
     var allLabels = {{ time_labels|safe }};
     var allData = {{ chart_data|safe }};
-    if (!allLabels || allLabels.length < 2) return;
+    
+    if (!allLabels || allLabels.length < 2) {
+        console.log('图表数据不足：', allLabels ? allLabels.length : 0);
+        return;
+    }
 
     var METRICS = {
         'view':     { name:'播放', color:'#c4b5fd', area:'#c4b5fd' },
