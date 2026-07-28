@@ -1,6 +1,6 @@
 # Hoshino Blog 完整技术文档
 
-> 最后更新：2026-07-24
+> 最后更新：2026-07-28
 
 ---
 
@@ -1157,8 +1157,45 @@ _sanitize_html(html) → bleach.clean(html, tags=tags, attributes=attrs, strip=T
 | `/admin/bilibili/check-missing` | GET | @editor_required | `check_missing()` | 对比 API 与 DB 视频数 |
 | `/admin/bilibili/scrape-status` | GET | @editor_required | `scrape_status()` | 查看爬取进度 |
 | `/admin/bilibili/scrape` | POST | @editor_required | `scrape()` | 添加新 UP 主并爬取 |
+| `/admin/bilibili/add-video` | POST | @editor_required | `add_single_video()` | **添加单个视频（BV/AV 号）** |
 
 ### 13.2 爬取核心函数
+
+#### `add_single_video()` — 单个视频添加（2026-07-28 新增）
+
+```
+流程图：
+┌─ 1. 解析输入
+│   ├─ BV 号：直接提取（如 BV1xx411c7mD）
+│   ├─ AV 号：转换为 BV 号（AV→BV 算法）
+│   └─ 视频链接：正则提取 BV 号
+│
+├─ 2. 检查是否已存在
+│   ├─ 存在 → 返回 {exists: True} → 前端确认 → force_update=True
+│   └─ 不存在 → 继续
+│
+├─ 3. 获取视频完整信息
+│   └─ get_video_full_info(bvid) → 标题/播放量/封面/UP主信息
+│
+├─ 4. 创建/更新 UP 主（仅基本信息）
+│   ├─ 只保存：mid、名称、头像
+│   └─ 不爬取：video_count、follower_count
+│
+├─ 5. 创建/更新视频记录
+│   ├─ 保存：aid、bvid、title、description、duration、pic
+│   ├─ 保存统计：view/like/coin/favorite/share/comment/danmaku
+│   └─ 创建历史记录：BiliVideoHistory
+│
+└─ 6. 返回成功提示
+```
+
+**AV 转 BV 算法**：
+```python
+table = 'fZodR9XQDSUm21yCkr6zBqiveYah8bt4xsWpHnJE7jL5VG3guMTNNPAcF'
+aid = (aid ^ 177456) // 100
+arr = [table[aid // 58**i % 58] for i in range(9)]
+bvid = 'BV' + ''.join(arr[::-1])
+```
 
 #### `_run_scrape(mid, space_url, app, max_videos=None, force=False)`
 
