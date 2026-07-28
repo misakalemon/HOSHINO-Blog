@@ -158,10 +158,9 @@ def _get_thumbnail_lock(cache_path: str) -> threading.Lock:
 def _get_sidebar_data():
     """获取侧边栏数据（分类列表 + 最新文章），带 Redis 缓存。
 
-    使用 ThreadPoolExecutor 并行执行 3 个独立的数据获取操作：
-      1. 分类列表查询
-      2. 分类文章数聚合查询
-      3. 最新文章（Redis 缓存命中则跳过 DB）
+    使用缓存减少数据库查询：
+      1. 分类列表 + 文章数统计（缓存 5 分钟）
+      2. 最新文章（缓存 5 分钟）
 
     当 Redis 不可用时，回退到数据库查询，不影响页面渲染。
 
@@ -177,6 +176,12 @@ def _get_sidebar_data():
 
     ttl = current_app.config.get('CACHE_TTL_SIDEBAR', 300)
 
+    # 尝试从缓存获取完整侧边栏数据
+    cached_sidebar = cache_get('sidebar:full_data')
+    if cached_sidebar is not None:
+        return cached_sidebar['categories'], cached_sidebar['recent_posts'], cached_sidebar['cat_post_counts']
+
+    # 缓存未命中，查询数据库
     categories = Category.query.order_by(Category.name).all()
 
     cat_post_counts = dict(
@@ -189,30 +194,32 @@ def _get_sidebar_data():
         .all()
     )
 
-    cached = cache_get('sidebar:recent_posts')
-    if cached is not None:
-        recent_posts = cached
-    else:
-        posts = (
-            Post.query.filter_by(is_published=True)
-            .options(
-                load_only(Post.id, Post.title, Post.slug, Post.cover_image, Post.created_at)
-            )
-            .order_by(Post.created_at.desc())
-            .limit(4)
-            .all()
+    posts = (
+        Post.query.filter_by(is_published=True)
+        .options(
+            load_only(Post.id, Post.title, Post.slug, Post.cover_image, Post.created_at)
         )
-        recent_posts = [
-            {
-                'id': p.id,
-                'title': p.title,
-                'slug': p.slug,
-                'cover_image': p.cover_image,
-                'created_at': p.created_at.isoformat() if p.created_at else None,
-            }
-            for p in posts
-        ]
-        cache_set('sidebar:recent_posts', recent_posts, ttl)
+        .order_by(Post.created_at.desc())
+        .limit(4)
+        .all()
+    )
+    recent_posts = [
+        {
+            'id': p.id,
+            'title': p.title,
+            'slug': p.slug,
+            'cover_image': p.cover_image,
+            'created_at': p.created_at.isoformat() if p.created_at else None,
+        }
+        for p in posts
+    ]
+
+    # 缓存完整侧边栏数据
+    cache_set('sidebar:full_data', {
+        'categories': categories,
+        'recent_posts': recent_posts,
+        'cat_post_counts': cat_post_counts,
+    }, ttl)
 
     return categories, recent_posts, cat_post_counts
 

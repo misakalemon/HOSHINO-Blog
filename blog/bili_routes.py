@@ -409,8 +409,17 @@ def check_missing():
 
     results = []
     ups = BiliUp.query.order_by(BiliUp.updated_at.desc()).all()
+    
+    # 批量统计所有 UP 主的视频数（避免 N+1 查询）
+    from sqlalchemy import func
+    video_counts = dict(
+        db.session.query(BiliVideo.up_id, func.count(BiliVideo.id))
+        .group_by(BiliVideo.up_id)
+        .all()
+    )
+    
     for up in ups:
-        db_count = BiliVideo.query.filter_by(up_id=up.id).count()
+        db_count = video_counts.get(up.id, 0)
         try:
             ui = get_user_info(up.mid)
             api_count = ui.get('video_count', 0)

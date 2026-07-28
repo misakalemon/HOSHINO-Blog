@@ -63,14 +63,14 @@ def index():
             .all()
         )
         videos = (
-            BiliVideo.query.filter(BiliVideo.title.contains(q_escaped))
+            BiliVideo.query.options(db.joinedload(BiliVideo.up))
+            .filter(BiliVideo.title.contains(q_escaped))
             .order_by(BiliVideo.pubdate.desc())
             .limit(50)
             .all()
         )
-        # 构建视频所属 UP 主的映射表，供前端显示
-        up_ids = {v.up_id for v in videos}
-        up_map = {u.id: u for u in BiliUp.query.filter(BiliUp.id.in_(up_ids)).all()}
+        # 构建视频所属 UP 主的映射表，供前端显示（使用预加载的关联）
+        up_map = {v.up.id: v.up for v in videos if v.up}
         bili_wordcloud = None
         return render_template(
             'bilibili.html',
