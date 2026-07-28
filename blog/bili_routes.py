@@ -1262,7 +1262,7 @@ def add_single_video():
             share_count=video_info['share_count'],
             comment_count=video_info['comment_count'],
             danmaku_count=video_info['danmaku_count'],
-            pic=video_info['pic'],
+
         )
         db.session.add(video)
         db.session.flush()
@@ -1289,7 +1289,7 @@ def add_single_video():
         video.comment_count = video_info['comment_count']
         video.danmaku_count = video_info['danmaku_count']
         video.title = video_info['title']
-        video.pic = video_info['pic']
+
 
         # 创建新的历史记录
         history = BiliVideoHistory(
