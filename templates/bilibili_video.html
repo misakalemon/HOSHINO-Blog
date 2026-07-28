@@ -116,11 +116,38 @@
             <!-- 控制面板 -->
             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
                 <!-- 时间区间选择 -->
-                <div style="display:flex;align-items:center;gap:6px">
+                <div style="display:flex;align-items:center;gap:6px;position:relative">
                     <span style="font-size:0.75rem;color:rgba(255,255,255,0.4)">时间:</span>
                     <input type="text" id="dateRangePicker" placeholder="选择日期范围" 
                            style="width:180px;padding:4px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.6);font-size:0.75rem;cursor:pointer"
-                           readonly>
+                           readonly onclick="toggleCalendar()">
+                    <!-- 自定义日历容器 -->
+                    <div id="customCalendar" style="display:none;position:absolute;top:100%;left:0;margin-top:8px;z-index:99999;background:rgba(18,16,34,0.98);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:16px;box-shadow:0 8px 32px rgba(0,0,0,0.5);width:320px">
+                        <!-- 年份选择 -->
+                        <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:8px">
+                            <button onclick="changeYear(-1)" class="cal-nav-btn" style="padding:4px 8px;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.5);cursor:pointer;font-size:14px;transition:all 0.2s">‹</button>
+                            <span id="calendarYear" style="font-size:16px;font-weight:600;color:rgba(255,255,255,0.9);min-width:60px;text-align:center">2026</span>
+                            <button onclick="changeYear(1)" class="cal-nav-btn" style="padding:4px 8px;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.5);cursor:pointer;font-size:14px;transition:all 0.2s">›</button>
+                        </div>
+                        <!-- 月份选择 -->
+                        <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:12px">
+                            <button onclick="changeMonth(-1)" class="cal-nav-btn" style="padding:4px 8px;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.5);cursor:pointer;font-size:14px;transition:all 0.2s">‹</button>
+                            <span id="calendarMonth" style="font-size:16px;font-weight:600;color:rgba(255,255,255,0.9);min-width:60px;text-align:center">7月</span>
+                            <button onclick="changeMonth(1)" class="cal-nav-btn" style="padding:4px 8px;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.5);cursor:pointer;font-size:14px;transition:all 0.2s">›</button>
+                        </div>
+                        <!-- 星期表头 -->
+                        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px">
+                            <span style="text-align:center;font-size:12px;color:rgba(255,255,255,0.5);font-weight:500">日</span>
+                            <span style="text-align:center;font-size:12px;color:rgba(255,255,255,0.5);font-weight:500">一</span>
+                            <span style="text-align:center;font-size:12px;color:rgba(255,255,255,0.5);font-weight:500">二</span>
+                            <span style="text-align:center;font-size:12px;color:rgba(255,255,255,0.5);font-weight:500">三</span>
+                            <span style="text-align:center;font-size:12px;color:rgba(255,255,255,0.5);font-weight:500">四</span>
+                            <span style="text-align:center;font-size:12px;color:rgba(255,255,255,0.5);font-weight:500">五</span>
+                            <span style="text-align:center;font-size:12px;color:rgba(255,255,255,0.5);font-weight:500">六</span>
+                        </div>
+                        <!-- 日期网格 -->
+                        <div id="calendarDays" style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px"></div>
+                    </div>
                 </div>
 
             </div>
@@ -168,228 +195,61 @@
     {% endif %}
 </div>
 
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <style>
-.flatpickr-calendar { 
-    background: rgba(18, 16, 34, 0.98) !important; 
-    border: 1px solid rgba(255,255,255,0.1) !important; 
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5) !important; 
-    border-radius: 12px !important;
-    padding: 16px !important;
-    z-index: 99999 !important;
-    width: 320px !important;
-}
-.flatpickr-months {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 8px !important;
-    margin-bottom: 12px !important;
-}
-.flatpickr-months .flatpickr-month { 
-    background: transparent !important;
-    display: flex !important;
-    justify-content: center !important;
-    align-items: center !important;
-    position: relative !important;
-}
-.flatpickr-current-month { 
-    padding: 0 !important;
-    z-index: 100000 !important;
-    position: static !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    gap: 8px !important;
-}
-.flatpickr-current-month span.cur-month, 
-.flatpickr-current-month input.cur-year { 
-    color: rgba(255,255,255,0.9) !important; 
-    font-weight: 600 !important;
-    font-size: 16px !important;
-    background: transparent !important;
-    border: none !important;
-    padding: 0 !important;
-    text-align: center !important;
-}
-.flatpickr-current-month input.cur-year {
-    width: 60px !important;
-    text-align: center !important;
-}
-.flatpickr-monthDropdown-months {
-    background: transparent !important;
-    border: none !important;
-    color: rgba(255,255,255,0.9) !important;
-    padding: 0 !important;
-    cursor: pointer !important;
-    font-size: 16px !important;
-    font-weight: 600 !important;
-    outline: none !important;
-    appearance: none !important;
-    -webkit-appearance: none !important;
-    text-align: center !important;
-    width: auto !important;
-}
-.flatpickr-monthDropdown-months:hover,
-.flatpickr-monthDropdown-months:focus {
+.cal-nav-btn:hover {
+    background: rgba(167, 139, 250, 0.2) !important;
+    border-color: rgba(167, 139, 250, 0.5) !important;
     color: #a78bfa !important;
 }
-.flatpickr-monthDropdown-month {
-    background: rgba(18, 16, 34, 0.98) !important;
-    color: rgba(255,255,255,0.9) !important;
-    padding: 8px 16px !important;
+.cal-day {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    color: rgba(255,255,255,0.6);
+    transition: all 0.2s;
+    user-select: none;
 }
-.numInputWrapper { 
-    position: static !important;
-    display: flex !important;
-    align-items: center !important;
+.cal-day:hover {
+    background: rgba(167, 139, 250, 0.2);
+    color: rgba(255,255,255,0.9);
 }
-.numInputWrapper .cur-year {
-    background: transparent !important;
-    border: none !important;
-    color: rgba(255,255,255,0.9) !important;
-    padding: 0 !important;
-    font-weight: 600 !important;
-    font-size: 16px !important;
-    width: 60px !important;
-    text-align: center !important;
+.cal-day.disabled {
+    color: rgba(255,255,255,0.2);
+    cursor: not-allowed;
 }
-.numInputWrapper .arrowUp, .numInputWrapper .arrowDown {
-    display: none !important;
+.cal-day.disabled:hover {
+    background: transparent;
+    color: rgba(255,255,255,0.2);
 }
-.flatpickr-months .flatpickr-prev-month, 
-.flatpickr-months .flatpickr-next-month {
-    padding: 4px !important;
-    border-radius: 6px !important;
-    transition: all 0.2s !important;
-    position: absolute !important;
-    top: 50% !important;
-    transform: translateY(-50%) !important;
+.cal-day.today {
+    border: 1px solid #a78bfa;
+    color: #a78bfa;
+    font-weight: 600;
 }
-.flatpickr-months .flatpickr-prev-month {
-    left: 0 !important;
+.cal-day.selected {
+    background: #a78bfa;
+    color: #fff;
+    font-weight: 600;
 }
-.flatpickr-months .flatpickr-next-month {
-    right: 0 !important;
+.cal-day.selected:hover {
+    background: #9f7aea;
 }
-.flatpickr-months .flatpickr-prev-month svg, 
-.flatpickr-months .flatpickr-next-month svg { 
-    fill: rgba(255,255,255,0.5) !important; 
-    width: 16px !important;
-    height: 16px !important;
+.cal-day.in-range {
+    background: rgba(167, 139, 250, 0.15);
 }
-.flatpickr-months .flatpickr-prev-month:hover, 
-.flatpickr-months .flatpickr-next-month:hover { 
-    background: rgba(167, 139, 250, 0.2) !important;
+.cal-day.range-start {
+    border-radius: 6px 0 0 6px;
 }
-.flatpickr-months .flatpickr-prev-month:hover svg, 
-.flatpickr-months .flatpickr-next-month:hover svg { 
-    fill: #a78bfa !important; 
-}
-.flatpickr-months .flatpickr-prev-month.flatpickr-disabled,
-.flatpickr-months .flatpickr-next-month.flatpickr-disabled {
-    opacity: 0.3 !important;
-    cursor: not-allowed !important;
-}
-.flatpickr-months .flatpickr-prev-month.flatpickr-disabled:hover,
-.flatpickr-months .flatpickr-next-month.flatpickr-disabled:hover {
-    background: transparent !important;
-}
-.flatpickr-day { 
-    color: rgba(255,255,255,0.6) !important; 
-    border-radius: 6px !important; 
-    margin: 2px !important;
-    width: 36px !important;
-    height: 36px !important;
-    line-height: 36px !important;
-    transition: all 0.2s !important;
-}
-.flatpickr-day:hover { 
-    background: rgba(167, 139, 250, 0.2) !important; 
-    color: rgba(255,255,255,0.9) !important;
-}
-.flatpickr-day.selected { 
-    background: #a78bfa !important; 
-    border-color: #a78bfa !important; 
-    color: #fff !important; 
-    font-weight: 600 !important;
-}
-.flatpickr-day.selected:hover {
-    background: #9f7aea !important;
-}
-.flatpickr-day.inRange { 
-    background: rgba(167, 139, 250, 0.15) !important; 
-    border-color: rgba(167, 139, 250, 0.3) !important; 
-}
-.flatpickr-day.startRange { 
-    border-radius: 6px 0 0 6px !important; 
-}
-.flatpickr-day.endRange { 
-    border-radius: 0 6px 6px 0 !important; 
-}
-.flatpickr-day.today { 
-    border: 1px solid #a78bfa !important;
-    color: #a78bfa !important;
-    font-weight: 600 !important;
-}
-.flatpickr-day.flatpickr-disabled { 
-    color: rgba(255,255,255,0.2) !important;
-    cursor: not-allowed !important;
-}
-.flatpickr-day.flatpickr-disabled:hover {
-    background: transparent !important;
-}
-span.flatpickr-weekday { 
-    color: rgba(255,255,255,0.5) !important; 
-    font-weight: 500 !important;
-}
-.flatpickr-months .flatpickr-prev-month, 
-.flatpickr-months .flatpickr-next-month {
-    padding: 8px !important;
-    border-radius: 6px !important;
-    transition: all 0.2s !important;
-}
-.flatpickr-months .flatpickr-prev-month svg, 
-.flatpickr-months .flatpickr-next-month svg { 
-    fill: rgba(255,255,255,0.5) !important; 
-    width: 14px !important;
-    height: 14px !important;
-}
-.flatpickr-months .flatpickr-prev-month:hover, 
-.flatpickr-months .flatpickr-next-month:hover { 
-    background: rgba(167, 139, 250, 0.2) !important;
-}
-.flatpickr-months .flatpickr-prev-month:hover svg, 
-.flatpickr-months .flatpickr-next-month:hover svg { 
-    fill: #a78bfa !important; 
-}
-.flatpickr-months .flatpickr-prev-month.flatpickr-disabled,
-.flatpickr-months .flatpickr-next-month.flatpickr-disabled {
-    opacity: 0.3 !important;
-    cursor: not-allowed !important;
-}
-.flatpickr-months .flatpickr-prev-month.flatpickr-disabled:hover,
-.flatpickr-months .flatpickr-next-month.flatpickr-disabled:hover {
-    background: transparent !important;
-}
-.flatpickr-rContainer { 
-    border-radius: 8px !important;
-    width: 100% !important;
-}
-.flatpickr-days { 
-    border-radius: 8px !important;
-    width: 100% !important;
-}
-.dayContainer { 
-    padding: 4px !important;
-    border-radius: 8px !important;
-    width: 100% !important;
-    display: flex !important;
-    flex-wrap: wrap !important;
+.cal-day.range-end {
+    border-radius: 0 6px 6px 0;
 }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/zh.js"></script>
 <script>
 (function() {
     var allLabels = {{ time_labels|safe }};
@@ -530,25 +390,167 @@ span.flatpickr-weekday {
     var minDate = parseDate(allLabels[0]);
     var maxDate = parseDate(allLabels[allLabels.length - 1]);
     
-    // 初始化日期范围选择器
-    flatpickr.localize(flatpickr.l10ns.zh);
-    var dateRangePicker = flatpickr('#dateRangePicker', {
-        mode: 'range',
-        dateFormat: 'Y-m-d',
-        locale: 'zh',
-        defaultDate: null,
-        minDate: minDate,
-        maxDate: maxDate,
-        onClose: function(selectedDates, dateStr, instance) {
-            if (selectedDates.length === 2) {
-                currentDateRange = [selectedDates[0], selectedDates[1]];
-                // 设置结束日期为当天的 23:59:59
-                currentDateRange[1].setHours(23, 59, 59);
-            } else if (selectedDates.length === 0) {
-                currentDateRange = null;
+    // 自定义日历状态
+    var calYear = minDate.getFullYear();
+    var calMonth = minDate.getMonth();
+    var selectedStart = null;
+    var selectedEnd = null;
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    var monthNames = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+    
+    // 判断闰年
+    function isLeapYear(year) {
+        return (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+    }
+    
+    // 获取月份天数
+    function getDaysInMonth(year, month) {
+        var days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        if (month === 1 && isLeapYear(year)) return 29;
+        return days[month];
+    }
+    
+    // 渲染日历
+    function renderCalendar() {
+        document.getElementById('calendarYear').textContent = calYear;
+        document.getElementById('calendarMonth').textContent = monthNames[calMonth];
+        
+        var daysContainer = document.getElementById('calendarDays');
+        daysContainer.innerHTML = '';
+        
+        var firstDay = new Date(calYear, calMonth, 1).getDay();
+        var daysInMonth = getDaysInMonth(calYear, calMonth);
+        var daysInPrevMonth = getDaysInMonth(calYear, calMonth - 1 < 0 ? 11 : calMonth - 1, calMonth - 1 < 0 ? 11 : calMonth - 1);
+        
+        // 上个月的末尾几天
+        for (var i = firstDay - 1; i >= 0; i--) {
+            var day = daysInPrevMonth - i;
+            var dayEl = document.createElement('div');
+            dayEl.className = 'cal-day disabled';
+            dayEl.textContent = day;
+            daysContainer.appendChild(dayEl);
+        }
+        
+        // 当前月的日期
+        for (var d = 1; d <= daysInMonth; d++) {
+            var date = new Date(calYear, calMonth, d);
+            date.setHours(0, 0, 0, 0);
+            
+            var dayEl = document.createElement('div');
+            dayEl.className = 'cal-day';
+            dayEl.textContent = d;
+            dayEl.dataset.date = calYear + '-' + (calMonth + 1) + '-' + d;
+            
+            // 检查是否在有效范围内
+            if (date < minDate || date > maxDate) {
+                dayEl.classList.add('disabled');
+            } else {
+                // 今天高亮
+                if (date.getTime() === today.getTime()) {
+                    dayEl.classList.add('today');
+                }
+                
+                // 选中状态
+                if (selectedStart && date.getTime() === selectedStart.getTime()) {
+                    dayEl.classList.add('selected', 'range-start');
+                }
+                if (selectedEnd && date.getTime() === selectedEnd.getTime()) {
+                    dayEl.classList.add('selected', 'range-end');
+                }
+                
+                // 范围内高亮
+                if (selectedStart && selectedEnd && date > selectedStart && date < selectedEnd) {
+                    dayEl.classList.add('in-range');
+                }
+                
+                dayEl.onclick = function() {
+                    selectDate(new Date(calYear, calMonth, parseInt(this.textContent)));
+                };
             }
             
+            daysContainer.appendChild(dayEl);
+        }
+        
+        // 下个月的开头几天
+        var totalCells = 42;
+        var remaining = totalCells - firstDay - daysInMonth;
+        for (var n = 1; n <= remaining; n++) {
+            var dayEl = document.createElement('div');
+            dayEl.className = 'cal-day disabled';
+            dayEl.textContent = n;
+            daysContainer.appendChild(dayEl);
+        }
+    }
+    
+    // 选择日期
+    function selectDate(date) {
+        date.setHours(0, 0, 0, 0);
+        
+        if (!selectedStart || (selectedStart && selectedEnd)) {
+            selectedStart = date;
+            selectedEnd = null;
+        } else {
+            if (date < selectedStart) {
+                selectedEnd = selectedStart;
+                selectedStart = date;
+            } else {
+                selectedEnd = date;
+            }
+            
+            // 更新输入框显示
+            var startStr = selectedStart.getFullYear() + '-' + (selectedStart.getMonth() + 1) + '-' + selectedStart.getDate();
+            var endStr = selectedEnd.getFullYear() + '-' + (selectedEnd.getMonth() + 1) + '-' + selectedEnd.getDate();
+            document.getElementById('dateRangePicker').value = startStr + ' 至 ' + endStr;
+            
+            // 设置日期范围并更新图表
+            currentDateRange = [selectedStart, selectedEnd];
+            currentDateRange[1].setHours(23, 59, 59);
+            
+            // 关闭日历
+            document.getElementById('customCalendar').style.display = 'none';
+            
             renderChart();
+        }
+        
+        renderCalendar();
+    }
+    
+    // 切换年份
+    window.changeYear = function(delta) {
+        calYear += delta;
+        renderCalendar();
+    };
+    
+    // 切换月份
+    window.changeMonth = function(delta) {
+        calMonth += delta;
+        if (calMonth < 0) {
+            calMonth = 11;
+            calYear--;
+        } else if (calMonth > 11) {
+            calMonth = 0;
+            calYear++;
+        }
+        renderCalendar();
+    };
+    
+    // 切换日历显示
+    window.toggleCalendar = function() {
+        var cal = document.getElementById('customCalendar');
+        cal.style.display = cal.style.display === 'none' ? 'block' : 'none';
+        if (cal.style.display === 'block') {
+            renderCalendar();
+        }
+    };
+    
+    // 点击外部关闭日历
+    document.addEventListener('click', function(e) {
+        var cal = document.getElementById('customCalendar');
+        var input = document.getElementById('dateRangePicker');
+        if (cal && !cal.contains(e.target) && e.target !== input) {
+            cal.style.display = 'none';
         }
     });
 
