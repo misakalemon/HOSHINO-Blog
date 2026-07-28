@@ -118,16 +118,15 @@
                 <!-- 时间区间选择 -->
                 <div style="display:flex;align-items:center;gap:6px">
                     <span style="font-size:0.75rem;color:rgba(255,255,255,0.4)">时间:</span>
-                    <button onclick="setTimeRange('all')" class="chart-range-btn active" data-range="all" style="padding:4px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.6);font-size:0.75rem;cursor:pointer;transition:all 0.2s">全部</button>
-                    <button onclick="setTimeRange(90)" class="chart-range-btn" data-range="90" style="padding:4px 10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:6px;color:rgba(255,255,255,0.4);font-size:0.75rem;cursor:pointer;transition:all 0.2s">90天</button>
-                    <button onclick="setTimeRange(30)" class="chart-range-btn" data-range="30" style="padding:4px 10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:6px;color:rgba(255,255,255,0.4);font-size:0.75rem;cursor:pointer;transition:all 0.2s">30天</button>
-                    <button onclick="setTimeRange(7)" class="chart-range-btn" data-range="7" style="padding:4px 10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:6px;color:rgba(255,255,255,0.4);font-size:0.75rem;cursor:pointer;transition:all 0.2s">7天</button>
+                    <input type="text" id="dateRangePicker" placeholder="选择日期范围" 
+                           style="width:180px;padding:4px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.6);font-size:0.75rem;cursor:pointer"
+                           readonly>
                 </div>
                 
                 <!-- 数据点数量 -->
                 <div style="display:flex;align-items:center;gap:6px">
                     <span style="font-size:0.75rem;color:rgba(255,255,255,0.4)">点数:</span>
-                    <input type="range" id="chartPointsSlider" min="20" max="200" value="100" 
+                    <input type="range" id="chartPointsSlider" min="20" max="100" value="100" 
                            style="width:80px;accent-color:#a78bfa;cursor:pointer"
                            oninput="setChartPoints(this.value)">
                     <span id="chartPointsValue" style="font-size:0.75rem;color:rgba(255,255,255,0.5);min-width:30px">100</span>
@@ -177,7 +176,22 @@
     {% endif %}
 </div>
 
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<style>
+.flatpickr-calendar { background: rgba(18, 16, 34, 0.95) !important; border: 1px solid rgba(255,255,255,0.1) !important; box-shadow: 0 8px 24px rgba(0,0,0,0.4) !important; }
+.flatpickr-months .flatpickr-month { background: transparent !important; }
+.flatpickr-current-month span.cur-month, .flatpickr-current-month input.cur-year { color: rgba(255,255,255,0.8) !important; }
+.flatpickr-day { color: rgba(255,255,255,0.6) !important; border-radius: 4px !important; }
+.flatpickr-day:hover { background: rgba(167, 139, 250, 0.2) !important; }
+.flatpickr-day.selected { background: #a78bfa !important; border-color: #a78bfa !important; color: #fff !important; }
+.flatpickr-day.inRange { background: rgba(167, 139, 250, 0.15) !important; border-color: rgba(167, 139, 250, 0.3) !important; }
+span.flatpickr-weekday { color: rgba(255,255,255,0.4) !important; }
+.flatpickr-months .flatpickr-prev-month svg, .flatpickr-months .flatpickr-next-month svg { fill: rgba(255,255,255,0.5) !important; }
+.flatpickr-months .flatpickr-prev-month:hover svg, .flatpickr-months .flatpickr-next-month:hover svg { fill: #a78bfa !important; }
+</style>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/zh.js"></script>
 <script>
 (function() {
     var allLabels = {{ time_labels|safe }};
@@ -198,8 +212,14 @@
     var chart = echarts.init(document.getElementById('videoChart'));
     
     // 当前筛选状态
-    var currentTimeRange = 'all';  // 'all' 或天数
-    var currentMaxPoints = 100;
+    var currentDateRange = null;  // [startDate, endDate] 或 null（全部）
+    var currentMaxPoints = allLabels.length;
+    
+    // 动态设置滑块上限
+    var slider = document.getElementById('chartPointsSlider');
+    slider.max = allLabels.length;
+    slider.value = allLabels.length;
+    document.getElementById('chartPointsValue').textContent = allLabels.length;
     
     // 解析时间标签为 Date 对象
     function parseDate(label) {
@@ -212,17 +232,15 @@
     
     // 根据时间区间和数据点数量筛选数据
     function filterData() {
-        var now = new Date();
         var filteredIndices = [];
         
         // 1. 时间区间筛选
         for (var i = 0; i < allLabels.length; i++) {
-            if (currentTimeRange === 'all') {
+            if (!currentDateRange) {
                 filteredIndices.push(i);
             } else {
                 var date = parseDate(allLabels[i]);
-                var daysDiff = (now - date) / (1000 * 60 * 60 * 24);
-                if (daysDiff <= currentTimeRange) {
+                if (date >= currentDateRange[0] && date <= currentDateRange[1]) {
                     filteredIndices.push(i);
                 }
             }
@@ -313,37 +331,35 @@
         renderChart();
     };
     
-    // 设置时间区间
-    window.setTimeRange = function(range) {
-        currentTimeRange = range;
-        
-        // 更新按钮样式
-        document.querySelectorAll('.chart-range-btn').forEach(function(btn) {
-            var btnRange = btn.getAttribute('data-range');
-            if (btnRange === String(range)) {
-                btn.style.background = 'rgba(255,255,255,0.06)';
-                btn.style.borderColor = 'rgba(255,255,255,0.1)';
-                btn.style.color = 'rgba(255,255,255,0.6)';
-                btn.classList.add('active');
-            } else {
-                btn.style.background = 'rgba(255,255,255,0.03)';
-                btn.style.borderColor = 'rgba(255,255,255,0.06)';
-                btn.style.color = 'rgba(255,255,255,0.4)';
-                btn.classList.remove('active');
+    // 初始化日期范围选择器
+    flatpickr.localize(flatpickr.l10ns.zh);
+    var dateRangePicker = flatpickr('#dateRangePicker', {
+        mode: 'range',
+        dateFormat: 'Y-m-d',
+        locale: 'zh',
+        defaultDate: null,
+        onClose: function(selectedDates, dateStr, instance) {
+            if (selectedDates.length === 2) {
+                currentDateRange = [selectedDates[0], selectedDates[1]];
+                // 设置结束日期为当天的 23:59:59
+                currentDateRange[1].setHours(23, 59, 59);
+            } else if (selectedDates.length === 0) {
+                currentDateRange = null;
             }
-        });
-        
-        // 联动调整数据点数量
-        var filteredCount = filterData().labels.length;
-        var slider = document.getElementById('chartPointsSlider');
-        if (filteredCount < currentMaxPoints) {
-            slider.value = Math.max(20, filteredCount);
-            currentMaxPoints = parseInt(slider.value);
-            document.getElementById('chartPointsValue').textContent = currentMaxPoints;
+            
+            // 联动调整数据点数量
+            var filteredCount = filterData().labels.length;
+            var slider = document.getElementById('chartPointsSlider');
+            slider.max = filteredCount;
+            if (currentMaxPoints > filteredCount) {
+                slider.value = Math.max(20, filteredCount);
+                currentMaxPoints = parseInt(slider.value);
+                document.getElementById('chartPointsValue').textContent = currentMaxPoints;
+            }
+            
+            renderChart();
         }
-        
-        renderChart();
-    };
+    });
     
     // 设置数据点数量
     window.setChartPoints = function(value) {
