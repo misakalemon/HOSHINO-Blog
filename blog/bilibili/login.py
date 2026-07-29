@@ -137,6 +137,16 @@ def poll_qr_v2(qrcode_key: str) -> dict:
         if cred is None:
             logger.error('V2 扫码登录失败: get_credential() 返回 None')
             return {'ok': False, 'error': '无法获取登录凭证，请重试'}
+        
+        # 补充设备指纹字段（buvid3/buvid4），如果缺失则自动生成
+        import uuid
+        if not cred.buvid3:
+            cred.buvid3 = str(uuid.uuid4())
+            logger.info('自动生成 buvid3: %s', cred.buvid3)
+        if not cred.buvid4:
+            cred.buvid4 = str(uuid.uuid4())
+            logger.info('自动生成 buvid4: %s', cred.buvid4)
+        
         # 直接设置全局 Credential，保留完整状态（含 refresh_token 等）
         _set_api_credential(cred)
         logger.info('✅ 全局 Credential 已设置')
@@ -241,6 +251,7 @@ def load_credential():
     """
     from bilibili_api import Credential
     import json
+    import uuid
 
     path = CREDENTIAL_FILE
     if not os.path.exists(path):
@@ -248,12 +259,23 @@ def load_credential():
     try:
         with open(path, 'r', encoding='utf-8') as f:
             data = json.load(f)
+        
+        # 补充设备指纹字段，如果缺失则自动生成
+        buvid3 = data.get('buvid3')
+        buvid4 = data.get('buvid4')
+        if not buvid3:
+            buvid3 = str(uuid.uuid4())
+            logger.info('自动生成 buvid3: %s', buvid3)
+        if not buvid4:
+            buvid4 = str(uuid.uuid4())
+            logger.info('自动生成 buvid4: %s', buvid4)
+        
         cred = Credential(
             sessdata=data.get('sessdata'),
             bili_jct=data.get('bili_jct'),
             dedeuserid=data.get('dedeuserid'),
-            buvid3=data.get('buvid3'),
-            buvid4=data.get('buvid4'),
+            buvid3=buvid3,
+            buvid4=buvid4,
             ac_time_value=data.get('ac_time_value'),
         )
         logger.info('✅ 已从文件加载 B站 Credential（含 refresh_token）')
