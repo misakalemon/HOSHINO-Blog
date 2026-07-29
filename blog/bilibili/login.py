@@ -139,14 +139,31 @@ def poll_qr_v2(qrcode_key: str) -> dict:
             return {'ok': False, 'error': '无法获取登录凭证，请重试'}
         # 直接设置全局 Credential，保留完整状态（含 refresh_token 等）
         _set_api_credential(cred)
+        logger.info('✅ 全局 Credential 已设置')
+        
         # 保存完整 Credential JSON（含 refresh_token，支持自动续期）
+        logger.info('准备保存 Credential 到: %s', CREDENTIAL_FILE)
         save_credential(cred)
+        
+        # 验证文件是否保存成功
+        if os.path.exists(CREDENTIAL_FILE):
+            logger.info('✅ Credential 文件已确认保存成功: %s', CREDENTIAL_FILE)
+        else:
+            logger.error('❌ Credential 文件保存失败: %s', CREDENTIAL_FILE)
+        
         # 同时保存 Cookie 字符串（向后兼容）
         cookie_dict = cred.get_cookies()
         # Cookie 值可能被 URL 编码，统一 decode 后再保存
         decoded = {k: urllib.parse.unquote(v) for k, v in cookie_dict.items()}
         cookie_str = '; '.join([f'{k}={v}' for k, v in decoded.items()])
         save_cookies(cookie_str)
+        
+        # 验证 Cookie 文件是否保存成功
+        if os.path.exists(COOKIE_FILE):
+            logger.info('✅ Cookie 文件已确认保存成功: %s', COOKIE_FILE)
+        else:
+            logger.error('❌ Cookie 文件保存失败: %s', COOKIE_FILE)
+        
         logger.info('✅ B站登录成功，Credential 已设置，Cookie 已保存')
         return {'ok': True, 'status': 'success', 'msg': '登录成功'}
     elif status == QrCodeLoginEvents.CONF:
@@ -263,6 +280,12 @@ def apply_cookies():
 
         returns: True 表示已成功设置有效凭证，False 表示无可用凭证。
     """
+    logger.info('开始加载 B站登录凭证...')
+    logger.info('CREDENTIAL_FILE: %s', CREDENTIAL_FILE)
+    logger.info('COOKIE_FILE: %s', COOKIE_FILE)
+    logger.info('CREDENTIAL_FILE exists: %s', os.path.exists(CREDENTIAL_FILE))
+    logger.info('COOKIE_FILE exists: %s', os.path.exists(COOKIE_FILE))
+    
     global _BILI_LOGGED_IN
     if _BILI_LOGGED_IN:
         logger.info('✅ 已通过 V2 登录，直接使用')
@@ -277,6 +300,7 @@ def apply_cookies():
     # 优先加载完整 Credential（含 refresh_token，支持自动续期）
     cred = load_credential()
     if cred is not None:
+        logger.info('成功加载 Credential 对象')
         set_credential(cred)
         if is_logged_in():
             logger.info('✅ 已从文件加载 B站 Credential（含 refresh_token）')
