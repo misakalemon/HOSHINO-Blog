@@ -166,10 +166,15 @@ def save_cookies(cookie_str: str):
         cookie_str: 形如 "SESSDATA=xxx; bili_jct=xxx; buvid3=xxx" 的 Cookie 字符串。
     """
     path = COOKIE_FILE
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, 'w', encoding='utf-8') as f:
-        f.write(cookie_str)
-    logger.info('B站 Cookie 已保存到: %s', path)
+    try:
+        dir_path = os.path.dirname(path)
+        if dir_path:
+            os.makedirs(dir_path, exist_ok=True)
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(cookie_str)
+        logger.info('B站 Cookie 已保存到: %s', path)
+    except Exception as e:
+        logger.error('保存 Cookie 失败: %s', e)
 
 
 def load_cookies() -> str | None:
@@ -199,15 +204,17 @@ def save_credential(cred):
     import json
 
     path = CREDENTIAL_FILE
-    os.makedirs(os.path.dirname(path), exist_ok=True)
     try:
+        dir_path = os.path.dirname(path)
+        if dir_path:
+            os.makedirs(dir_path, exist_ok=True)
         # 仅序列化非 None 字段，减少冗余
         data = {k: v for k, v in cred.__dict__.items() if v is not None}
         with open(path, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
         logger.info('✅ B站 Credential 已保存到: %s', path)
     except Exception as e:
-        logger.warning('保存 Credential 失败: %s', e)
+        logger.error('保存 Credential 失败: %s', e)
 
 
 def load_credential():
