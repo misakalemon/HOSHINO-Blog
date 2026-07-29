@@ -269,8 +269,11 @@ def is_logged_in() -> bool:
     if _credential is None:
         return False
     try:
-        return _sync(_credential.verify())
-    except Exception:
+        result = _sync(_credential.verify())
+        logger.info('Credential.verify() 返回: %s', result)
+        return result
+    except Exception as e:
+        logger.warning('Credential.verify() 异常: %s', e)
         return False
 
 
