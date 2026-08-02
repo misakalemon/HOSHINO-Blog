@@ -192,7 +192,7 @@ def _run_bili_incremental_check(app):
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    max_workers = int(os.environ.get('BILI_INCREMENTAL_THREADS', '3'))
+    max_workers = int(os.environ.get('BILI_INCREMENTAL_THREADS', '5'))
     from blog.bilibili.bili_api import ensure_semaphore
     ensure_semaphore(max_workers)
 
@@ -265,11 +265,12 @@ def _init_worker_scheduler(app):
             replace_existing=True,
         )
 
-        # 增量检查：每 30 分钟自调度
+        # 增量检查：每 N 分钟自调度（默认 15 分钟，可用 BILI_INCREMENTAL_MINUTES 覆盖）
+        _inc_minutes = int(os.environ.get('BILI_INCREMENTAL_MINUTES', '15'))
         scheduler.add_job(
             func=lambda: _run_bili_incremental_check(app),
             trigger='interval',
-            minutes=30,
+            minutes=_inc_minutes,
             id='bili_incremental_check',
             replace_existing=True,
         )

@@ -805,7 +805,7 @@ def _check_new_videos(mid: int, app):
     with app.app_context():
         try:
 
-            from blog.bilibili.bili_api import get_video_list, get_video_stat
+            from blog.bilibili.bili_api import get_video_list, get_video_stats_batch
 
             up = BiliUp.query.filter_by(mid=mid).first()
             if not up:
@@ -827,7 +827,8 @@ def _check_new_videos(mid: int, app):
             _batch_count = 0
             # 连续 30 个视频全部已知 → 认为已经扫描到已入库的尾部，提前停止
             MAX_CONSECUTIVE_KNOWN = 30
-            # arc/search API 逐页遍历（最多 10 页）
+            # 先收集新视频列表（不逐个请求统计），再并发批量获取，缩短增量耗时
+            _new_videos: list = []
             for video_info in get_video_list(mid, max_pages=10):
                 bvid = video_info['bvid']
                 aid = video_info['aid']
@@ -843,33 +844,33 @@ def _check_new_videos(mid: int, app):
                 logger.info(
                     '增量检查: bvid=%s aid=%s title=%s known=%s', bvid, aid, title_short, is_known
                 )
+                _new_videos.append(video_info)
 
-                try:
-                    # 获取视频统计数据并合并到 video_info 中
-                    stat = get_video_stat(bvid)
-                    video_info.update(stat)
-                    # 随机延时防 B 站风控
-                    thread_sleep()
-                except Exception as e:
-                    logger.warning('视频 %s 统计获取失败: %s', bvid, e)
-                    time.sleep(12.0)
-                    continue
+            # 并发批量获取新视频统计（替代逐视频串行 API + sleep）
+            if _new_videos:
+                _stat_batch = get_video_stats_batch([v['bvid'] for v in _new_videos])
+                for video_info in _new_videos:
+                    bvid = video_info['bvid']
+                    aid = video_info['aid']
+                    title_short = (video_info.get('title') or '')[:30]
+                    stat = _stat_batch.get(bvid)
+                    if stat:
+                        video_info.update(stat)
+                    video, ok = _insert_or_update_video(up, video_info, aid, bvid, title_short)
+                    if not ok:
+                        continue
 
-                video, ok = _insert_or_update_video(up, video_info, aid, bvid, title_short)
-                if not ok:
-                    continue
+                    # 批量提交 — 每 20 条 flush 一次减少事务压力
+                    _batch_count += 1
+                    if _batch_count >= 20:
+                        db.session.commit()
+                        _batch_count = 0
 
-                # 批量提交 — 每 20 条 flush 一次减少事务压力
-                _batch_count += 1
-                if _batch_count >= 20:
-                    db.session.commit()
-                    _batch_count = 0
-
-                count += 1
-                existing_bvids.add(bvid)
-                existing_aids.add(aid)
-                title_short = (video_info.get('title') or '')[:30]
-                emit(f'发现新视频 [{count}] {title_short}')
+                    count += 1
+                    existing_bvids.add(bvid)
+                    existing_aids.add(aid)
+                    title_short = (video_info.get('title') or '')[:30]
+                    emit(f'发现新视频 [{count}] {title_short}')
 
             # 动态发现兜底：arc/search 可能遗漏 shorts / 新投稿
             # B 站动态接口会返回 UP 主最近发布的视频，作为补充
@@ -880,13 +881,20 @@ def _check_new_videos(mid: int, app):
             except Exception as e:
                 logger.warning('动态发现失败 mid=%d: %s', mid, e)
                 dyn_videos = []
+            # 动态发现的新视频也并发批量获取统计
+            _dyn_new = [v for v in dyn_videos
+                        if v['bvid'] not in existing_bvids and v['aid'] not in existing_aids]
+            _dyn_stat_batch = (
+                get_video_stats_batch([v['bvid'] for v in _dyn_new]) if _dyn_new else {}
+            )
             _batch_count = 0
-            for video_info in dyn_videos:
+            for video_info in _dyn_new:
                 bvid = video_info['bvid']
                 aid = video_info['aid']
                 title_short = (video_info.get('title') or '')[:30]
-                if bvid in existing_bvids or aid in existing_aids:
-                    continue
+                stat = _dyn_stat_batch.get(bvid)
+                if stat:
+                    video_info.update(stat)
                 video, ok = _insert_or_update_video(up, video_info, aid, bvid, title_short)
                 if not ok:
                     continue
@@ -948,8 +956,9 @@ def _check_new_videos(mid: int, app):
                 except Exception as e:
                     logger.error('发送新视频通知失败 mid=%d: %s', mid, e)
 
-            # ── 追踪最新 N 个视频的统计（每 30 分钟快照）──
+            # ── 追踪最新 N 个视频 + 重点视频的统计（每轮快照，并发批量获取）──
             tracked_ids: set[int] = set()
+            snap_videos: list = []  # 需要更新统计的视频 ORM 对象
             try:
                 from blog.bilibili.config import TRACK_LATEST_VIDEOS
                 latest = (
@@ -958,57 +967,12 @@ def _check_new_videos(mid: int, app):
                     .limit(TRACK_LATEST_VIDEOS)
                     .all()
                 )
-                if latest:
-                    emit(f'追踪最新 {len(latest)} 个视频统计')
                 for v in latest:
                     tracked_ids.add(v.id)
-                    # 记录更新前的旧值，用于计算增量
-                    old_view = v.view_count or 0
-                    old_like = v.like_count or 0
-                    old_coin = v.coin_count or 0
-                    old_fav = v.favorite_count or 0
-                    old_share = v.share_count or 0
-                    old_comment = v.comment_count or 0
-                    old_danmaku = v.danmaku_count or 0
+                    snap_videos.append(v)
+                if latest:
+                    emit(f'追踪最新 {len(latest)} 个视频统计')
 
-                    stat = get_video_stat(v.bvid)
-                    for key, val in stat.items():
-                        setattr(v, key, val)
-                    # 记录历史快照（预检避免重复数据点）
-                    _prev_h = BiliVideoHistory.query.filter(
-                        BiliVideoHistory.video_id == v.id,
-                        BiliVideoHistory.recorded_at >= now_cst() - datetime.timedelta(seconds=30)
-                    ).first()
-                    if _prev_h:
-                        _prev_h.view_count = stat.get('view_count', 0)
-                        _prev_h.like_count = stat.get('like_count', 0)
-                        _prev_h.coin_count = stat.get('coin_count', 0)
-                        _prev_h.favorite_count = stat.get('favorite_count', 0)
-                        _prev_h.share_count = stat.get('share_count', 0)
-                        _prev_h.comment_count = stat.get('comment_count', 0)
-                        _prev_h.danmaku_count = stat.get('danmaku_count', 0)
-                    else:
-                        db.session.add(
-                            BiliVideoHistory(
-                                video_id=v.id,
-                                view_count=stat.get('view_count', 0),
-                                like_count=stat.get('like_count', 0),
-                                coin_count=stat.get('coin_count', 0),
-                                favorite_count=stat.get('favorite_count', 0),
-                                share_count=stat.get('share_count', 0),
-                                comment_count=stat.get('comment_count', 0),
-                                danmaku_count=stat.get('danmaku_count', 0),
-                        )
-                    )
-                    db.session.commit()
-                    title_short = (v.title or '')[:30]
-                    emit(f'[跟踪] 「{title_short}」')
-                    thread_sleep()
-            except Exception as e:
-                logger.error('最新视频追踪失败 mid=%d: %s', mid, e)
-
-            # ── 追踪用户标记的重点关注视频 ────────────
-            try:
                 watched_q = BiliVideo.query.join(BiliWatchedVideo).filter(BiliVideo.up_id == up.id)
                 if tracked_ids:
                     watched_q = watched_q.filter(BiliVideo.id.notin_(tracked_ids))
@@ -1016,41 +980,49 @@ def _check_new_videos(mid: int, app):
                 if watched:
                     emit(f'追踪 {len(watched)} 个重点视频')
                     count += len(watched)
-                for v in watched:
-                    stat = get_video_stat(v.bvid)
-                    for key, val in stat.items():
-                        setattr(v, key, val)
-                    _prev_h = BiliVideoHistory.query.filter(
-                        BiliVideoHistory.video_id == v.id,
-                        BiliVideoHistory.recorded_at >= now_cst() - datetime.timedelta(seconds=30)
-                    ).first()
-                    if _prev_h:
-                        _prev_h.view_count = stat.get('view_count', 0)
-                        _prev_h.like_count = stat.get('like_count', 0)
-                        _prev_h.coin_count = stat.get('coin_count', 0)
-                        _prev_h.favorite_count = stat.get('favorite_count', 0)
-                        _prev_h.share_count = stat.get('share_count', 0)
-                        _prev_h.comment_count = stat.get('comment_count', 0)
-                        _prev_h.danmaku_count = stat.get('danmaku_count', 0)
-                    else:
-                        db.session.add(
-                            BiliVideoHistory(
-                                video_id=v.id,
-                                view_count=stat.get('view_count', 0),
-                            like_count=stat.get('like_count', 0),
-                            coin_count=stat.get('coin_count', 0),
-                            favorite_count=stat.get('favorite_count', 0),
-                            share_count=stat.get('share_count', 0),
-                            comment_count=stat.get('comment_count', 0),
-                            danmaku_count=stat.get('danmaku_count', 0),
-                        )
-                    )
-                    db.session.commit()
-                    title_short = (v.title or '')[:30]
-                    emit(f'[重点] 「{title_short}」')
-                    thread_sleep()
+                snap_videos.extend(watched)
+
+                if snap_videos:
+                    from blog.bilibili.bili_api import get_video_stats_batch
+                    # 并发批量获取统计数据（避免逐视频串行 sleep 导致耗时过长）
+                    batch = get_video_stats_batch([v.bvid for v in snap_videos])
+                    for v in snap_videos:
+                        stat = batch.get(v.bvid)
+                        if not stat:
+                            continue
+                        for key, val in stat.items():
+                            setattr(v, key, val)
+                        # 记录历史快照（预检避免重复数据点）
+                        _prev_h = BiliVideoHistory.query.filter(
+                            BiliVideoHistory.video_id == v.id,
+                            BiliVideoHistory.recorded_at >= now_cst() - datetime.timedelta(seconds=30)
+                        ).first()
+                        if _prev_h:
+                            _prev_h.view_count = stat.get('view_count', 0)
+                            _prev_h.like_count = stat.get('like_count', 0)
+                            _prev_h.coin_count = stat.get('coin_count', 0)
+                            _prev_h.favorite_count = stat.get('favorite_count', 0)
+                            _prev_h.share_count = stat.get('share_count', 0)
+                            _prev_h.comment_count = stat.get('comment_count', 0)
+                            _prev_h.danmaku_count = stat.get('danmaku_count', 0)
+                        else:
+                            db.session.add(
+                                BiliVideoHistory(
+                                    video_id=v.id,
+                                    view_count=stat.get('view_count', 0),
+                                    like_count=stat.get('like_count', 0),
+                                    coin_count=stat.get('coin_count', 0),
+                                    favorite_count=stat.get('favorite_count', 0),
+                                    share_count=stat.get('share_count', 0),
+                                    comment_count=stat.get('comment_count', 0),
+                                    danmaku_count=stat.get('danmaku_count', 0),
+                                )
+                            )
+                        db.session.commit()
+                        title_short = (v.title or '')[:30]
+                        emit(f'[快照] 「{title_short}」')
             except Exception as e:
-                logger.error('重点视频追踪失败 mid=%d: %s', mid, e)
+                logger.error('视频统计快照失败 mid=%d: %s', mid, e)
 
             # 检查 B站 API 层是否已检测到 412（可能在 get_video_list 内部处理，未抛异常到此处）
             from blog.bilibili.bili_api import was_recently_blocked

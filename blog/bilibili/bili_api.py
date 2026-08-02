@@ -580,6 +580,36 @@ def get_video_list_from_dynamics(mid: int) -> list[dict]:
     return results
 
 
+def get_video_stats_batch(bvids: list[str], max_workers: int | None = None) -> dict[str, dict]:
+    """并发批量获取多个视频的统计数据。
+
+    使用 ThreadPoolExecutor 并发调用 get_video_stat，
+    每个线程绑定独立 UA + 随机 phase offset，请求节奏自然错开，
+    相比串行逐个获取可大幅缩短统计快照耗时。
+
+        bvids:       视频 BV 号列表。
+        max_workers: 并发数，默认取 BILI_STAT_WORKERS（默认 5）。
+        returns:     { bvid: {view_count, like_count, ...} }
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    n = max_workers or int(os.environ.get('BILI_STAT_WORKERS', '5'))
+    if not bvids:
+        return {}
+    results: dict[str, dict] = {}
+    with ThreadPoolExecutor(max_workers=n) as executor:
+        futures = {executor.submit(get_video_stat, bvid): bvid for bvid in bvids}
+        for future in as_completed(futures):
+            bvid = futures[future]
+            try:
+                stat = future.result()
+                if stat:
+                    results[bvid] = stat
+            except Exception as e:
+                logger.warning('批量统计获取失败 bvid=%s: %s', bvid, e)
+    return results
+
+
 def get_video_stat(bvid: str) -> dict:
     """获取单个视频的详细统计数据，Cookie 过期时自动降级为匿名，风控时指数退避重试
 
