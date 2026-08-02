@@ -910,20 +910,28 @@ def _check_new_videos(mid: int, app):
             # 大多数 UP 主无新视频时只需这 1 个请求，跳过 arc/search 翻页（节省 2-5 个请求）
             from blog.bilibili.bili_api import get_video_list_from_dynamics
 
+            _dyn_error = False  # 动态流接口是否异常（区别于正常返回空）
             try:
                 dyn_videos = get_video_list_from_dynamics(mid)
             except Exception as e:
                 logger.warning('动态发现失败 mid=%d: %s', mid, e)
                 dyn_videos = []
+                _dyn_error = True
             _dyn_new = [v for v in dyn_videos
                         if v['bvid'] not in existing_bvids and v['aid'] not in existing_aids]
 
             # arc/search 翻页收集新视频
-            # 动态流成功且无新视频 → 跳过 arc/search（节省 API 请求，降低风控概率）
-            # 动态流有新视频或动态流失败 → arc/search 翻页补充
+            # 默认仅依赖动态流（1 个请求即可覆盖最近活跃视频），
+            # 历史视频首次入库时已全量抓取，增量阶段无需翻页补历史。
+            # arc/search 翻页接口（get_video_list）是风控 412 的高发点，
+            # 因此默认完全跳过；仅当显式设置 BILI_INCREMENTAL_ARC_SEARCH=1 时才启用。
             _new_videos: list = []
             _inc_max_pages = int(os.environ.get('BILI_INCREMENTAL_PAGES', '2'))
-            _need_arc_search = bool(_dyn_new) or not dyn_videos
+            _inc_arc_search = int(os.environ.get('BILI_INCREMENTAL_ARC_SEARCH', '0'))
+            # 仅当动态流接口异常（_dyn_error）或显式启用开关时翻页；
+            # 动态流正常返回（即使为空）也跳过 arc/search —— 历史视频已在 DB，
+            # 翻页接口 get_video_list 是风控 412 高发点，应尽量规避。
+            _need_arc_search = bool(_dyn_error) or bool(_inc_arc_search)
             if _need_arc_search:
                 for video_info in get_video_list(mid, max_pages=_inc_max_pages):
                     bvid = video_info['bvid']
