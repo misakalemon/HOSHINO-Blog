@@ -478,7 +478,7 @@ _scrape_progress: dict[int, list[str]] = {}
 # 上述三个共享状态的互斥锁 — 读写均需持有
 _scrape_lock = threading.Lock()
 
-_UPDATE_THREADS = min(int(os.environ.get('BILI_UPDATE_THREADS', '3')), 4)
+_UPDATE_THREADS = min(int(os.environ.get('BILI_UPDATE_THREADS', '2')), 4)
 # 全局熔断器 — 检测到 412 IP封禁后自动暂停所有爬取直到此时间戳（Unix 秒）
 _circuit_open_until: float = 0.0
 _circuit_lock = threading.Lock()
@@ -1969,7 +1969,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             db.session.remove()
 
 
-_BATCH_SIZE = min(int(os.environ.get('BILI_BATCH', '3')), 4)
+_BATCH_SIZE = min(int(os.environ.get('BILI_BATCH', '1')), 4)
 
 
 def run_daily_scrape(app):

@@ -71,6 +71,41 @@ _BILI_SEMAPHORE = int(os.environ.get('BILI_SEMAPHORE', '0'))
 _api_semaphore = threading.Semaphore(_BILI_SEMAPHORE) if _BILI_SEMAPHORE > 0 else None
 
 
+# ── 全局令牌桶 — 限制所有 B站 API 请求的总速率（核心防风控）─────────
+# 无论多少个线程/任务并行，全局每秒最多放行 BILI_GLOBAL_RATE 个请求。
+# 默认 0.33 请求/秒 ≈ 20 请求/分钟（家庭宽带安全阈值内），
+# 可通过环境变量 BILI_GLOBAL_RATE 调整（如 0.2 = 12 请求/分钟）。
+class _TokenBucket:
+    """线程安全令牌桶：以恒定速率补充令牌，控制全局请求速率。"""
+
+    def __init__(self, rate: float, capacity: float):
+        self.rate = max(rate, 0.01)  # 每秒补充令牌数
+        self.capacity = max(capacity, 1.0)  # 桶容量（突发上限）
+        self.tokens = capacity
+        self.lock = threading.Lock()
+        self.last = time.time()
+
+    def acquire(self):
+        """获取一个令牌；不足则等待补充。返回消耗的等待时间。"""
+        with self.lock:
+            now = time.time()
+            self.tokens = min(self.capacity, self.tokens + (now - self.last) * self.rate)
+            self.last = now
+            if self.tokens >= 1.0:
+                self.tokens -= 1.0
+                return 0.0
+            wait = (1.0 - self.tokens) / self.rate
+            self.tokens = 0.0
+        if wait > 0:
+            time.sleep(wait)
+        return wait
+
+
+_BILI_RATE = float(os.environ.get('BILI_GLOBAL_RATE', '0.33'))  # 20 请求/分钟
+_BILI_RATE_CAP = float(os.environ.get('BILI_GLOBAL_RATE_CAP', '3'))  # 突发上限 3
+_BILI_RATE_LIMITER = _TokenBucket(rate=_BILI_RATE, capacity=_BILI_RATE_CAP)
+
+
 def ensure_semaphore(thread_count: int):
     """按线程数自动初始化信号量（仅当 BILI_SEMAPHORE=0 时生效）。
 
@@ -133,6 +168,9 @@ def _sync(coro):
         _bili_settings.settings['user-agent'] = _thread_local.ua
     except Exception:
         pass
+    # 全局令牌桶限速：所有请求（翻页/统计/动态流/字幕/评论）统一受全局速率约束，
+    # 从根本上限制同一 IP 的请求密度，是降低 412 风控的核心手段。
+    _BILI_RATE_LIMITER.acquire()
     if _api_semaphore is not None:
         with _api_semaphore:
             return _sync_inner(coro)
