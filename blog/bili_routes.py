@@ -125,19 +125,25 @@ def qr_poll():
 @bili_bp.route('/logout-bili', methods=['POST'])
 @editor_required
 def logout_bili():
-    """清除 B 站登录 Cookie 文件
+    """清除 B 站登录凭证文件与内存状态
 
-    删除本地 COOKIE_FILE 以退出 B 站登录态。
-    POST 请求，成功/失败均重定向到管理首页。
+    删除本地 CREDENTIAL_FILE + COOKIE_FILE，并清除内存中的全局 Credential
+    与登录标志，确保下次 apply_cookies 返回 False。
 
     Returns:
         HTTP 重定向到 bili.index
     """
-    from blog.bilibili.config import COOKIE_FILE
+    from blog.bilibili.config import COOKIE_FILE, CREDENTIAL_FILE
+    from blog.bilibili import login as _bili_login
+    from blog.bilibili.bili_api import set_credential
 
     try:
-        if os.path.exists(COOKIE_FILE):
-            os.remove(COOKIE_FILE)
+        for f in (CREDENTIAL_FILE, COOKIE_FILE):
+            if os.path.exists(f):
+                os.remove(f)
+        # 清除内存中的登录态（否则当前进程仍保持登录）
+        set_credential(None)
+        _bili_login._BILI_LOGGED_IN = False
         flash('已退出 B站 登录', 'success')
     except Exception as e:
         flash(f'退出失败: {e}', 'error')
