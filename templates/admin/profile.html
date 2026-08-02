@@ -13,7 +13,7 @@
 {% extends 'admin/base_admin.html' %}
 {% block title %}个人资料{% endblock %}
 {% block extra_head %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/tiptap-editor.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/tiptap-editor.css') }}?v=2">
 <style>
 #about-rte-toolbar { display:flex; align-items:center; gap:2px; flex-wrap:wrap; padding:6px 8px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.08); border-bottom:none; border-radius:12px 12px 0 0; }
 #about-rte-toolbar button { background:transparent; border:none; color:rgba(255,255,255,0.5); padding:4px 8px; border-radius:6px; cursor:pointer; font-size:13px; transition:all 0.2s; }
@@ -89,7 +89,7 @@
     </form>
 </div>
 
-<script src="{{ url_for('static', filename='js/tiptap-editor.js') }}"></script>
+<script src="{{ url_for('static', filename='js/tiptap-editor.js') }}?v=2"></script>
 <script>
 // === Tiptap 精简编辑器初始化 ===
 var aboutEditor = null;

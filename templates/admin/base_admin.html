@@ -16,7 +16,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex,nofollow">
     <title>{% block title %}管理后台{% endblock %} · Hoshino</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/glow-design.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/glow-design.css') }}?v=2">
     {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -67,7 +67,7 @@
 </div>
 
 {% include 'admin/_cookie_banner.html' %}
-<script src="{{ url_for('static', filename='js/cookie-banner.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/cookie-banner.js') }}?v=2" defer></script>
 
 <!-- 主内容区 -->
 <div class="admin-main">
@@ -81,7 +81,7 @@
     {% endif %}
     {% endwith %}
 
-<script src="{{ url_for('static', filename='js/admin.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/admin.js') }}?v=2" defer></script>
 
     <!-- admin_content 块：子模板填充 -->
     {% block admin_content %}{% endblock %}

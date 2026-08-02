@@ -28,7 +28,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{ request.url }}">
     <link rel="canonical" href="{{ request.url }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/glow-design.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/glow-design.css') }}?v=2">
     <link rel="shortcut icon" href="{{ url_for('static', filename='images/logo/favicon.svg') }}">
     <!-- extra_head 块：子模板可注入额外的 <link>/<script>/<meta> -->
     {% block extra_head %}{% endblock %}
@@ -105,10 +105,10 @@
 </footer>
 
 {% include 'admin/_cookie_banner.html' %}
-<script src="{{ url_for('static', filename='js/cookie-banner.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/cookie-banner.js') }}?v=2" defer></script>
 
 <!-- 提取的全局 JS（抽屉 / 灯箱 / 下拉框 / 弹窗 / showConfirm） -->
-<script src="{{ url_for('static', filename='js/base.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/base.js') }}?v=2" defer></script>
 
 {% block scripts %}{% endblock %}
 

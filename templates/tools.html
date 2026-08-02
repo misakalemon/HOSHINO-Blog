@@ -344,7 +344,7 @@
 </div>
 
 <!-- DOMContentLoaded 时初始化时间戳 + 密码工具 -->
-<script src="{{ url_for('static', filename='js/tools.js') }}"></script>
+<script src="{{ url_for('static', filename='js/tools.js') }}?v=2"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() { initTimestamp(); if (document.getElementById('pwOutput')) pwGenerate(); });
 </script>

@@ -15,7 +15,7 @@
 {% block title %}{{ '编辑' if editing else '新建' }}文章{% endblock %}
 {% block extra_head %}
 <meta name="csrf-token" content="{{ csrf_token() }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/tiptap-editor.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/tiptap-editor.css') }}?v=2">
 <style>
 /* --- 多步骤导航 --- */
 .steps { display:flex; gap:0; margin-bottom:28px; background:rgba(255,255,255,0.02); border-radius:14px; padding:4px; border:1px solid var(--border-subtle); }
@@ -224,7 +224,7 @@
     </div>
 </form>
 
-<script src="{{ url_for('static', filename='js/tiptap-editor.js') }}"></script>
+<script src="{{ url_for('static', filename='js/tiptap-editor.js') }}?v=2"></script>
 <script>
 // === Tiptap 富文本编辑器初始化 ===
 var hoshinoEditor = null;
