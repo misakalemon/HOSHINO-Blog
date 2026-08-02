@@ -62,7 +62,7 @@ def _setup_signal_handlers(shutdown_flag):
 def _run_task(task, app):
     """在线程池中执行单个任务，确保 mark_done 始终被调用。"""
     from blog import db
-    from blog.task_queue import mark_done
+    from blog.task_queue import mark_done, ack_task
 
     task_type = task.get('type')
     data = task.get('data', {})
@@ -204,6 +204,8 @@ def _run_task(task, app):
             mid = data.get('mid') or data.get('up_id')
             if mid:
                 mark_done(mid)
+        # 确认任务完成：从备份列表移除（防止 Worker 崩溃导致任务永久丢失）
+        ack_task(task)
 
 
 def _run_bili_incremental_check(app):

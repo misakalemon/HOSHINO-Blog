@@ -25,8 +25,8 @@
         <tr>
             <td data-label="名称"><strong>{{ cat.name }}</strong></td>
             <td data-label="Slug">{{ cat.slug }}</td>
-            <!-- 调用 post_count() 获取该分类下文章数 -->
-            <td data-label="文章数">{{ cat.post_count() }}</td>
+            <!-- 使用路由预聚合的 post_counts，避免逐行 COUNT -->
+            <td data-label="文章数">{{ post_counts.get(cat.id, 0) }}</td>
             <td data-label="操作" style="white-space:nowrap">
                 <a href="{{ url_for('admin.edit_category', id=cat.id) }}" class="btn btn-primary btn-sm">编辑</a>
                 <!-- 删除确认：提示相关文章将变为未分类 -->

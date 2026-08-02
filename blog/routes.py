@@ -267,12 +267,21 @@ def _post_version_sig():
     """文章表最新更新时间的版本签名，用于整页缓存自动失效。
 
     返回最大 updated_at 的 Unix 时间戳字符串；无文章时返回 '0'。
+    签名值短缓存到 Redis（10s TTL），避免每次请求都执行
+    SELECT max(updated_at) —— 该查询原本抵消整页缓存的收益。
     """
+    from .cache import cache_get, cache_set
+
+    cached = cache_get('post_version_sig')
+    if cached is not None:
+        return str(cached)
     max_updated = db.session.query(func.max(Post.updated_at)).scalar()
     if max_updated is None:
-        return '0'
-    ts = max_updated.timestamp()
-    return f'{ts:.0f}'
+        sig = '0'
+    else:
+        sig = f'{max_updated.timestamp():.0f}'
+    cache_set('post_version_sig', sig, ttl=10)
+    return sig
 
 
 def _render_page_cached(cache_key, render_fn, ttl=300):
@@ -930,6 +939,11 @@ def thumbnail():
     # ── 生成缩略图 ──────────────────────────
     try:
         from PIL import Image
+
+        # 解压炸弹防护：拒绝超大像素图片，防止恶意构造的 PNG/JPEG 耗尽内存
+        if not hasattr(Image, 'MAX_IMAGE_PIXELS'):
+            Image.MAX_IMAGE_PIXELS = 50_000_000  # ~50M 像素，覆盖常见相机原图
+        Image.MAX_IMAGE_PIXELS = 50_000_000
 
         # 使用线程锁防止同一缩略图的并发写入
         lock = _get_thumbnail_lock(cache_path)

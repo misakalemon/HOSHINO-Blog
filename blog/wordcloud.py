@@ -96,8 +96,11 @@ def _ensure_worker():
 def _run_heavy_task(task_type: str, kwargs: dict):
     """在独立线程中执行重型词云任务，不阻塞 _worker_loop。
 
+    阻塞式获取信号量（并发上限为 2），获取失败则等待，保证任务不丢弃；
     执行完毕或异常时均释放 _heavy_task_semaphore，让后续重型任务可进入。
     """
+    # 阻塞等待并发槽位（线程内等待，不影响提交方 / HTTP 请求线程）
+    _heavy_task_semaphore.acquire()
     try:
         with _wc_app.app_context():
             try:
@@ -160,12 +163,12 @@ def submit_task(task_type: str, **kwargs):
     """
     _ensure_worker()
     if task_type in ('bili_up', 'all'):
-        # 重型任务独立线程，不阻塞 _worker_loop
-        # Semaphore 非阻塞获取：已满则跳过，避免阻塞 HTTP 请求
-        if not _heavy_task_semaphore.acquire(blocking=False):
-            logger.warning('词云重型任务已达上限(2)，跳过 %s', task_type)
-            return
-        t = threading.Thread(target=_run_heavy_task, args=(task_type, kwargs), daemon=True)
+        # 重型任务独立线程，不阻塞 _worker_loop。
+        # 阻塞式获取信号量（在独立线程中等待，不影响 HTTP 请求线程），
+        # 保证任务不会因并发上限被静默丢弃。
+        t = threading.Thread(
+            target=_run_heavy_task, args=(task_type, kwargs), daemon=True
+        )
         t.start()
     else:
         _task_queue.put_nowait(dict(type=task_type, **kwargs))

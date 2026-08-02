@@ -774,7 +774,25 @@ def category_list():
     Template: admin/category-list.html
     """
     categories = Category.query.order_by(Category.name).all()
-    return render_template('admin/category-list.html', categories=categories)
+    # 一次性 GROUP BY 聚合各分类已发布文章数，避免模板逐行 COUNT（N+1）
+    from sqlalchemy import func as _sa_func
+    from .models import post_categories
+
+    post_counts: dict[int, int] = {}
+    try:
+        rows = (
+            db.session.query(post_categories.c.category_id, _sa_func.count(post_categories.c.post_id))
+            .join(Post, Post.id == post_categories.c.post_id)
+            .filter(Post.is_published.is_(True))
+            .group_by(post_categories.c.category_id)
+            .all()
+        )
+        post_counts = {cid: cnt for cid, cnt in rows}
+    except Exception:
+        pass
+    return render_template(
+        'admin/category-list.html', categories=categories, post_counts=post_counts
+    )
 
 
 @admin_bp.route('/categories/new', methods=['GET', 'POST'])

@@ -71,7 +71,7 @@ post_categories = db.Table(
     # post_id 和 category_id 组成联合主键，确保同一对关系不重复
     # ondelete='CASCADE'：删除文章或分类时自动清除关联记录
     db.Column('post_id', db.Integer, db.ForeignKey('posts.id', ondelete='CASCADE'), primary_key=True),
-    db.Column('category_id', db.Integer, db.ForeignKey('categories.id', ondelete='CASCADE'), primary_key=True),
+    db.Column('category_id', db.Integer, db.ForeignKey('categories.id', ondelete='CASCADE'), primary_key=True, index=True),  # category_id 前导索引，加速按分类查询/计数
 )
 
 
@@ -306,6 +306,7 @@ class Post(db.Model):
         db.DateTime,
         default=now_cst,
         onupdate=now_cst,
+        index=True,  # _post_version_sig() 的 max(updated_at) 每请求执行
     )
 
     # ── 关联关系 ────────────────────────────────
@@ -369,7 +370,7 @@ class Comment(db.Model):
     author_email = db.Column(db.String(120), nullable=True)  # 评论者邮箱（选填，用于回复通知）
     content = db.Column(db.Text, nullable=False)  # 评论正文
     is_approved = db.Column(db.Boolean, default=False, index=True)  # 管理员审核标记（默认未审核）
-    created_at = db.Column(db.DateTime, default=now_cst)
+    created_at = db.Column(db.DateTime, default=now_cst, index=True)  # 与 is_approved 形成 (is_approved, created_at) 复合索引
 
 
 class ContactMessage(db.Model):

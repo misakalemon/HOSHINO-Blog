@@ -24,6 +24,9 @@ _KEY_PREFIX = 'hblog:task'
 _TASK_QUEUE_KEY = f'{_KEY_PREFIX}:queue'
 _TASK_PROGRESS_KEY = f'{_KEY_PREFIX}:progress'
 _TASK_RUNNING_KEY = f'{_KEY_PREFIX}:running'
+# 任务备份列表：get_task 用 brpoplpush 把任务原子移到这里，
+# Worker 完成后 ack_task 移除；若 Worker 崩溃，任务留在备份列表可重新入队。
+_TASK_BACKUP_KEY = f'{_KEY_PREFIX}:backup'
 
 _redis_client = None
 # 任务运行超时时间（秒）：超过此时间仍未完成的任务视为卡死
@@ -76,12 +79,34 @@ def get_task():
     if redis_client is None:
         return None
     try:
-        _, data = redis_client.brpop(_TASK_QUEUE_KEY, timeout=5)
+        # brpoplpush 原子地把队尾任务弹出并压入备份列表，
+        # 避免 BRPOP 取出即删导致 Worker 崩溃时任务永久丢失。
+        data = redis_client.brpoplpush(_TASK_QUEUE_KEY, _TASK_BACKUP_KEY, timeout=5)
         if data:
             return json.loads(data)
     except Exception:
         pass
     return None
+
+
+def ack_task(task):
+    """确认任务已完成：从备份列表移除该任务。
+
+    若 Worker 在处理中崩溃（任务仍在备份列表），下次启动 worker 时
+    可扫描备份列表重新入队。
+    """
+    redis_client = _get_redis()
+    if redis_client is None or not task:
+        return
+    task_id = task.get('id')
+    if not task_id:
+        return
+    try:
+        raw = json.dumps(task)
+        # LREM 精确删除该任务；若已被超时重投，忽略即可
+        redis_client.lrem(_TASK_BACKUP_KEY, 1, raw)
+    except Exception:
+        pass
 
 
 def update_progress(mid, lines):
