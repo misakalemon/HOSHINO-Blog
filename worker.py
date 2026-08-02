@@ -214,7 +214,7 @@ def _run_bili_incremental_check(app):
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    max_workers = int(os.environ.get('BILI_INCREMENTAL_THREADS', '5'))
+    max_workers = min(int(os.environ.get('BILI_INCREMENTAL_THREADS', '3')), 4)
     from blog.bilibili.bili_api import ensure_semaphore
     ensure_semaphore(max_workers)
 
@@ -235,6 +235,7 @@ def _run_bili_incremental_check(app):
                 with _scrape_lock:
                     _incremental_running.discard(up.mid)
 
+        import random
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {}
             for up in ups:
@@ -243,6 +244,8 @@ def _run_bili_incremental_check(app):
                         continue
                     _incremental_running.add(up.mid)
                 futures[executor.submit(_check_one, up)] = up
+                # 错峰启动：避免前 N 个线程同一秒发出第 1 页请求触发风控
+                time.sleep(random.uniform(0.8, 2.5))
 
             for future in as_completed(futures):
                 up = futures[future]

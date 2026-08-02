@@ -352,6 +352,8 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
         max_pages: 最大翻页数，None 表示无限制（直到 API 返回空或页数耗尽）。
         yields:    视频信息 dict，包含 aid/bvid/title/description/duration/pubdate 等字段。
     """
+    # 首次请求前随机短延迟，避免多线程同一秒发出第 1 页请求触发风控
+    time.sleep(random.uniform(0.5, 2.0))
     u = _user_mod.User(mid, credential=_credential)
     pn = 1                     # 当前页码，从第 1 页开始
     retry_delay = 30           # 风控指数退避初始等待时间（秒）
