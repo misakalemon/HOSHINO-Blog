@@ -845,10 +845,16 @@ def _check_new_videos(mid: int, app):
         prog = _scrape_progress.get(mid, [])
     _up_name = ['?']
 
-    def emit(line: str):
-        """向进度日志追加一行并同时输出到日志系统"""
-        prog.append(f'[{time.strftime("%H:%M:%S")}] [{_up_name[0]}] {line}')
-        logger.info('[%s] %s', _up_name[0], line)
+    def emit(line: str, typ: str = ''):
+        """向进度日志追加一行并同时输出到日志系统
+
+        Args:
+            line: 日志内容
+            typ: 类型标签（NEW/SNAP/HOT/FILL/ERR 等），用于前端着色区分
+        """
+        tag = f'[{typ}] ' if typ else ''
+        prog.append(f'[{time.strftime("%H:%M:%S")}] [{_up_name[0]}] {tag}{line}')
+        logger.info('[%s] %s%s', _up_name[0], tag, line)
         try:
             from blog.task_queue import update_progress
             update_progress(mid, prog[:])
@@ -873,6 +879,9 @@ def _check_new_videos(mid: int, app):
             )
             existing_bvids = {r[0] for r in existing_rows}
             existing_aids = {r[1] for r in existing_rows}
+
+            _t_start = time.time()
+            emit(f'开始增量检查 (DB 已有 {len(existing_bvids)} 个视频)', 'SYS')
 
             count = 0
             consecutive_known = 0  # 连续已知视频计数 — 超阈值说明已无新视频
@@ -932,7 +941,7 @@ def _check_new_videos(mid: int, app):
                     existing_bvids.add(bvid)
                     existing_aids.add(aid)
                     title_short = (video_info.get('title') or '')[:30]
-                    emit(f'发现新视频 [{count}] {title_short}')
+                    emit(f'发现新视频 [{count}] {title_short}', 'NEW')
 
             # 动态发现兜底：arc/search 可能遗漏 shorts / 新投稿
             # B 站动态接口会返回 UP 主最近发布的视频，作为补充
@@ -970,16 +979,16 @@ def _check_new_videos(mid: int, app):
                 count += 1
                 existing_bvids.add(bvid)
                 existing_aids.add(aid)
-                emit(f'[动态发现] 新视频 [{count}] {title_short}')
+                emit(f'[动态发现] 新视频 [{count}] {title_short}', 'DYN')
             if dyn_videos:
-                emit(f'动态发现完成，共扫描 {len(dyn_videos)} 个视频')
+                emit(f'动态发现完成，共扫描 {len(dyn_videos)} 个视频', 'DYN')
             db.session.commit()
 
             # 更新 UP 主的视频总数
             up.video_count = BiliVideo.query.filter_by(up_id=up.id).count()
             db.session.commit()
             if count:
-                emit(f'增量完成，新增 {count} 个视频')
+                emit(f'增量完成，新增 {count} 个视频，耗时 {time.time() - _t_start:.0f}s', 'OK')
                 # ── 发送邮件通知给已订阅的用户 ──────────
                 try:
                     new_videos = (
@@ -1007,7 +1016,7 @@ def _check_new_videos(mid: int, app):
                     if subs:
                         from blog.mail import send_new_video_notify
 
-                        emit(f'发送邮件通知给 {len(subs)} 个订阅者')
+                        emit(f'发送邮件通知给 {len(subs)} 个订阅者', 'MAIL')
                         for sub in subs:
                             unsub_url = url_for(
                                 'bili_public.unsubscribe', token=sub.token, _external=True
@@ -1033,14 +1042,14 @@ def _check_new_videos(mid: int, app):
                     tracked_ids.add(v.id)
                     snap_videos.append(v)
                 if latest:
-                    emit(f'追踪最新 {len(latest)} 个视频统计')
+                    emit(f'追踪最新 {len(latest)} 个视频统计', 'SNAP')
 
                 watched_q = BiliVideo.query.join(BiliWatchedVideo).filter(BiliVideo.up_id == up.id)
                 if tracked_ids:
                     watched_q = watched_q.filter(BiliVideo.id.notin_(tracked_ids))
                 watched = watched_q.all()
                 if watched:
-                    emit(f'追踪 {len(watched)} 个重点视频')
+                    emit(f'追踪 {len(watched)} 个重点视频', 'SNAP')
                     count += len(watched)
                 snap_videos.extend(watched)
 
@@ -1084,9 +1093,10 @@ def _check_new_videos(mid: int, app):
                                 )
                             )
                         title_short = (v.title or '')[:30]
-                        emit(f'[快照] 「{title_short}」')
+                        emit(f'[快照] 「{title_short}」', 'SNAP')
                     # 合并为一次提交，减少事务开销
                     db.session.commit()
+                    emit(f'快照完成，共更新 {len(snap_videos)} 个视频', 'SNAP')
             except Exception as e:
                 logger.error('视频统计快照失败 mid=%d: %s', mid, e)
 
@@ -1429,10 +1439,16 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
     prog = _scrape_progress.get(mid, [])
     _up_name = ['?']
 
-    def emit(line: str):
-        """向进度日志追加一行并同时输出到日志系统"""
-        prog.append(f'[{time.strftime("%H:%M:%S")}] [{_up_name[0]}] {line}')
-        logger.info('[%s] %s', _up_name[0], line)
+    def emit(line: str, typ: str = ''):
+        """向进度日志追加一行并同时输出到日志系统
+
+        Args:
+            line: 日志内容
+            typ: 类型标签（NEW/SNAP/HOT/FILL/ERR 等），用于前端着色区分
+        """
+        tag = f'[{typ}] ' if typ else ''
+        prog.append(f'[{time.strftime("%H:%M:%S")}] [{_up_name[0]}] {tag}{line}')
+        logger.info('[%s] %s%s', _up_name[0], tag, line)
         try:
             from blog.task_queue import update_progress
             update_progress(mid, prog[:])
@@ -1474,10 +1490,11 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                     db.session.rollback()
                 _up_name[0] = ui.get('name', str(mid))
                 emit(
-                    f'UP主信息  |  粉丝: {ui.get("follower_count", 0):,}  |  视频总数: {ui.get("video_count", 0)}'
+                    f'UP主信息  |  粉丝: {ui.get("follower_count", 0):,}  |  视频总数: {ui.get("video_count", 0)}',
+                    'UP',
                 )
             except Exception as e:
-                emit(f'获取 UP 主信息失败: {e}')
+                emit(f'获取 UP 主信息失败: {e}', 'ERR')
                 if not up:
                     # 最低限度创建 UP 主记录
                     up = BiliUp(mid=mid, space_url=space_url)
@@ -1485,7 +1502,8 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                     db.session.commit()
                 _up_name[0] = up.name or str(mid)
 
-            emit('初始化数据库...')
+            _t_start = time.time()
+            emit('初始化数据库...', 'SYS')
 
             # B. 补全缺失视频 — 判断是否需要从 API 拉取
             total_in_db = BiliVideo.query.filter_by(up_id=up.id).count()
@@ -1512,9 +1530,9 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                 # 计算需补数量：-1 表示数量未知，翻全量
                 need = (total_in_api - total_in_db) if total_in_api is not None and total_in_api > 0 else -1
                 if need > 0:
-                    emit(f'[补全] 发现 {need} 个缺失视频，开始补齐...')
+                    emit(f'[补全] 发现 {need} 个缺失视频，开始补齐...', 'FILL')
                 else:
-                    emit(f'[补全] DB 有 {total_in_db} 个视频，开始从 API 补齐...')
+                    emit(f'[补全] DB 有 {total_in_db} 个视频，开始从 API 补齐...', 'FILL')
 
                 _batch_count = 0
 
@@ -1595,7 +1613,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                         existing_ids.add(_fbvid)
                         existing_aids.add(_faid)
                         fill_new_bvids.add(_fbvid)
-                        emit(f'[补全] ({fill_count}) 「{_fts}」')
+                        emit(f'[补全] ({fill_count}) 「{_fts}」', 'FILL')
 
                 _producer_t.join(timeout=30)
 
@@ -1628,13 +1646,13 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                 existing_ids.add(bvid)
                 existing_aids.add(aid)
                 fill_new_bvids.add(bvid)
-                emit(f'[补全/动态] ({fill_count}) 「{title_short}」')
+                emit(f'[补全/动态] ({fill_count}) 「{title_short}」', 'FILL')
             if dyn_videos:
-                emit(f'补全动态扫描完成，共 {len(dyn_videos)} 个')
+                emit(f'补全动态扫描完成，共 {len(dyn_videos)} 个', 'DYN')
             db.session.commit()
 
             if fill_count:
-                emit(f'[补全] 完成，新增 {fill_count} 个视频')
+                emit(f'[补全] 完成，新增 {fill_count} 个视频', 'OK')
 
             # ── D. 三层统计更新 ──────────────────────
             # 将视频按发布时间分为三层，优先更新近期热门视频：
@@ -1674,7 +1692,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                             and (now_cst() - v.updated_at).total_seconds()
                             < min_age_hours * 3600
                         ):
-                            emit(f'  跳过「{title_short}」— 最近 {min_age_hours} 小时内已更新')
+                            emit(f'  跳过「{title_short}」— 最近 {min_age_hours} 小时内已更新', 'SKIP')
                             return {'status': 'skip', 'label': label, 'bvid': bvid, 'title_short': title_short}
 
 
@@ -1685,9 +1703,11 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                         except Exception as e:
                             if _is_risk_control(e):
                                 logger.warning('触发风控，等待 %ds 后跳过...', local_retry_delay)
+                                emit(f'⚠ 触发风控，等待 {local_retry_delay}s 后跳过「{title_short}」', 'RISK')
                                 time.sleep(local_retry_delay)
                                 return {'status': 'risk', 'label': label, 'bvid': bvid, 'title_short': title_short}
                             logger.warning('视频 %s 统计获取失败: %s', bvid, e)
+                            emit(f'「{title_short}」统计获取失败: {e}', 'WARN')
                             time.sleep(8.0)
                             return {'status': 'fail', 'label': label, 'bvid': bvid, 'title_short': title_short}
 
@@ -1752,7 +1772,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                 hot_query = hot_query.filter(~BiliVideo.bvid.in_(filled_bvids))
             hot_videos = hot_query.order_by(BiliVideo.pubdate.desc()).all()
             hot_ids = [v.id for v in hot_videos]
-            emit(f'Hot 阶段: ≤7天视频共 {len(hot_ids)} 个')
+            emit(f'Hot 阶段: ≤7天视频共 {len(hot_ids)} 个', 'HOT')
             if max_videos is not None:
                 hot_ids = hot_ids[:max(0, max_videos - count)]
             _hot_hist = (
@@ -1771,7 +1791,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                         if _hr['status'] == 'ok':
                             count += 1
                             hot_done += 1
-                            emit(f'[{count}] {_hr["label"]}「{_hr["title_short"]}」')
+                            emit(f'[{count}] {_hr["label"]}「{_hr["title_short"]}」', 'HOT')
                     except Exception:
                         pass
 
@@ -1789,7 +1809,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                 warm_videos = warm_query.all()
                 warm_ids = [v.id for v in warm_videos]
                 quota_str = '无限制' if remaining is None else str(remaining)
-                emit(f'Warm 阶段: 8~30天视频配额 {quota_str}（DB中共 {len(warm_ids)} 个待更新）')
+                emit(f'Warm 阶段: 8~30天视频配额 {quota_str}（DB中共 {len(warm_ids)} 个待更新）', 'WARM')
                 _warm_hist = (
                     _load_recent_hist_ids(warm_ids, now - datetime.timedelta(seconds=30))
                     if warm_ids
@@ -1806,7 +1826,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                             if _wr['status'] == 'ok':
                                 count += 1
                                 warm_done += 1
-                                emit(f'[{count}] {_wr["label"]}「{_wr["title_short"]}」')
+                                emit(f'[{count}] {_wr["label"]}「{_wr["title_short"]}」', 'WARM')
                         except Exception:
                             pass
 
@@ -1824,7 +1844,8 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                 if cold_ids:
                     quota_str = '无限制' if remaining is None else str(remaining)
                     emit(
-                        f'Cold 阶段: >30天视频配额 {quota_str}（DB中共 {len(cold_ids)} 个待更新）'
+                        f'Cold 阶段: >30天视频配额 {quota_str}（DB中共 {len(cold_ids)} 个待更新）',
+                        'COLD',
                     )
                     _cold_hist = (
                         _load_recent_hist_ids(cold_ids, now - datetime.timedelta(seconds=30))
@@ -1842,7 +1863,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                                 if _cr['status'] == 'ok':
                                     count += 1
                                     cold_done += 1
-                                    emit(f'[{count}] {_cr["label"]}「{_cr["title_short"]}」')
+                                    emit(f'[{count}] {_cr["label"]}「{_cr["title_short"]}」', 'COLD')
                             except Exception:
                                 pass
             # 更新 UP 主的视频总数字段
@@ -1850,19 +1871,21 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             up.video_count = BiliVideo.query.filter_by(up_id=up.id).count()
             db.session.commit()
             emit(
-                f'刷新完成  Hot={hot_done}  Warm={warm_done}  Cold={cold_done}  共 {count} 个  |  DB 总视频数: {up.video_count}'
+                f'刷新完成  Hot={hot_done}  Warm={warm_done}  Cold={cold_done}  共 {count} 个  |  DB 总视频数: {up.video_count}  |  耗时 {time.time() - _t_start:.0f}s',
+                'OK',
             )
             # 完整性检查：对比 API 声明数量与实际入库数量
             if total_in_api:
                 db_total = up.video_count
                 if db_total >= total_in_api:
-                    emit(f'完整性检查: {db_total}/{total_in_api} ✅ 全部视频已入库')
+                    emit(f'完整性检查: {db_total}/{total_in_api} ✅ 全部视频已入库', 'OK')
                 else:
                     emit(
-                        f'完整性检查: {db_total}/{total_in_api} ⚠️ 缺失 {total_in_api - db_total} 个视频'
+                        f'完整性检查: {db_total}/{total_in_api} ⚠️ 缺失 {total_in_api - db_total} 个视频',
+                        'WARN',
                     )
             elif total_in_api is not None and total_in_api == 0 and total_in_db > 0:
-                emit(f'完整性检查: Cookie 可能过期，API 返回 video_count=0')
+                emit(f'完整性检查: Cookie 可能过期，API 返回 video_count=0', 'WARN')
 
             # 检查 B站 API 层是否已检测到 412（可能在 get_video_list 内部处理，未抛异常到此处）
             from blog.bilibili.bili_api import was_recently_blocked
@@ -1891,12 +1914,12 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                     try:
                         from blog.task_queue import submit_task
                         submit_task('comment_refresh', bvid=v.bvid)
-                        emit(f'评论 [{v.bvid[:8]}…] 已投递到任务队列')
+                        emit(f'评论 [{v.bvid[:8]}…] 已投递到任务队列', 'CMT')
                     except Exception as e:
                         logger.warning('视频 %s 评论任务投递失败: %s', v.bvid, e)
 
         except Exception as e:
-            emit(f'爬取失败: {e}')
+            emit(f'爬取失败: {e}', 'ERR')
             logger.exception('爬取失败 mid=%d', mid)
             from blog.bilibili.bili_api import _is_ip_blocked
             if _is_ip_blocked(e):

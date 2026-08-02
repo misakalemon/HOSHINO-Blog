@@ -18,6 +18,7 @@ HOSHINO Blog 日志模块
 import logging
 import logging.handlers
 import os
+import time
 
 from flask import request
 from concurrent_log_handler import ConcurrentRotatingFileHandler
@@ -37,12 +38,59 @@ LOG_FILE = os.path.join(LOG_DIR, 'hoshino.log')
 ERROR_LOG_FILE = os.path.join(LOG_DIR, 'error.log')
 
 # 日志格式
-#   DETAILED_FORMAT — 文件日志：包含时间、级别、模块名、函数名、行号，便于追踪问题
+#   DETAILED_FORMAT — 文件日志：包含时间、级别、模块名、函数名、行号、线程名，便于追踪问题
 #   CONSOLE_FORMAT  — 终端日志：精简，仅时间+级别+消息，方便实时查看
-DETAILED_FORMAT = '[%(asctime)s] %(levelname)-8s [%(name)s:%(funcName)s:%(lineno)d] %(message)s'
+DETAILED_FORMAT = (
+    '[%(asctime)s] %(levelname)-8s [%(name)s:%(funcName)s:%(lineno)d] '
+    '[%(threadName)s] %(message)s'
+)
 CONSOLE_FORMAT = '%(asctime)s  %(levelname)-6s  [%(name)s] %(message)s'
 DATE_FORMAT = '%m/%d %H:%M:%S'
 CONSOLE_DATE_FORMAT = '%m/%d %H:%M:%S'
+
+
+class _ColorFormatter(logging.Formatter):
+    """终端彩色格式化器 — 按日志级别为级别名着色（ERROR 红 / WARNING 黄 / INFO 绿 / DEBUG 灰）"""
+
+    _COLORS = {
+        logging.DEBUG: '\033[90m',
+        logging.INFO: '\033[32m',
+        logging.WARNING: '\033[33m',
+        logging.ERROR: '\033[31m',
+        logging.CRITICAL: '\033[35m',
+    }
+    _RESET = '\033[0m'
+
+    def __init__(self, fmt=None, datefmt=None, enable_color: bool = True):
+        super().__init__(fmt, datefmt)
+        self._enable_color = enable_color
+
+    def format(self, record):
+        if not self._enable_color:
+            return super().format(record)
+        color = self._COLORS.get(record.levelno)
+        if color:
+            origin = record.levelname
+            record.levelname = f'{color}{origin}{self._RESET}'
+            try:
+                return super().format(record)
+            finally:
+                record.levelname = origin
+        return super().format(record)
+
+
+def _enable_ansi():
+    """Windows 下启用 ANSI VT 转义支持（Python 3.6+ / Win10+）"""
+    if os.name == 'nt':
+        try:
+            os.system('')
+        except Exception:
+            pass
+
+
+def _record_request_start():
+    """请求开始钩子 — 记录起始时间戳，供 log_request 计算处理耗时"""
+    request.environ['_ts_start'] = time.time()
 
 
 def setup_logging(app):
@@ -87,14 +135,25 @@ def setup_logging(app):
     error_handler.setFormatter(logging.Formatter(DETAILED_FORMAT, DATE_FORMAT))
 
     # ===== 4. 终端 Handler（INFO 级别，不显示 DEBUG 噪音） =====
+    _enable_ansi()
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
+    _console_stream = console_handler.stream
+    _color_enabled = bool(
+        _console_stream is not None
+        and getattr(_console_stream, 'isatty', None)
+        and _console_stream.isatty()
+    )
     # Worker 进程终端日志加 [W] 前缀，区分来源
     if _is_worker:
         _WORKER_FMT = '%(asctime)s  %(levelname)-6s  [W][%(name)s] %(message)s'
-        console_handler.setFormatter(logging.Formatter(_WORKER_FMT, CONSOLE_DATE_FORMAT))
+        console_handler.setFormatter(
+            _ColorFormatter(_WORKER_FMT, CONSOLE_DATE_FORMAT, _color_enabled)
+        )
     else:
-        console_handler.setFormatter(logging.Formatter(CONSOLE_FORMAT, CONSOLE_DATE_FORMAT))
+        console_handler.setFormatter(
+            _ColorFormatter(CONSOLE_FORMAT, CONSOLE_DATE_FORMAT, _color_enabled)
+        )
 
     # 添加到根日志器
     root_logger.addHandler(file_handler)
@@ -109,7 +168,9 @@ def setup_logging(app):
             log.removeHandler(h)
         console_h = logging.StreamHandler()
         console_h.setLevel(logging.WARNING)
-        console_h.setFormatter(logging.Formatter(CONSOLE_FORMAT, CONSOLE_DATE_FORMAT))
+        console_h.setFormatter(
+            _ColorFormatter(CONSOLE_FORMAT, CONSOLE_DATE_FORMAT, _color_enabled)
+        )
         log.addHandler(file_handler)
         log.addHandler(console_h)
         log.propagate = False
@@ -137,6 +198,12 @@ def setup_logging(app):
     # 将根日志器挂载到 app.logger
     app.logger = root_logger
     app.config['LOG_DIR'] = LOG_DIR
+
+    # 记录每个请求的开始时间，供 log_request 计算处理耗时
+    try:
+        app.before_request(_record_request_start)
+    except Exception:
+        pass
 
     # 输出日志初始化分隔线（Worker 进程简化，不重复打印 banner）
     if not _is_worker:
@@ -188,12 +255,16 @@ def log_request(response):
         'user_agent': request.user_agent.string[:80] if request.user_agent else '-',
     }
 
+    # 请求耗时（毫秒）
+    _ts_start = request.environ.get('_ts_start')
+    _elapsed = f'{int((time.time() - _ts_start) * 1000)}ms' if _ts_start else '-'
+
     # ---- 终端日志：精简版 ----
-    # 只显示状态码、方法、短路径（超过 36 字符截断），不包含 IP 和 UA
+    # 只显示状态码、方法、短路径（超过 36 字符截断）、耗时，不包含 IP 和 UA
     short_path = extra['path'].split('?')[0]
     if len(short_path) > 36:
         short_path = short_path[:33] + '...'
-    console_msg = f'{extra["status"]} {extra["method"]:<6} {short_path}'
+    console_msg = f'{extra["status"]} {extra["method"]:<6} {short_path}  ({_elapsed})'
 
     # ---- 文件日志：详细版 ----
     # 清理敏感信息：移除 URL 中的 token/secret/key 等参数，防止泄露到日志文件
@@ -207,7 +278,7 @@ def log_request(response):
         safe_path = base + ('?' + safe_qs if safe_qs else '')
     file_msg = (
         f'{extra["ip"]:>15} {extra["method"]:<7} '
-        f'{extra["status"]}  {safe_path:<40} '
+        f'{extra["status"]}  {safe_path:<40} {_elapsed:<8} '
         f'{extra["user_agent"]}'
     )
 

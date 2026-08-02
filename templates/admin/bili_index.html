@@ -80,11 +80,12 @@
 
 <!-- 爬取进度日志 -->
 <div id="scrapeLog" class="admin-card" style="padding:16px;margin-bottom:20px;display:none">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap">
         <h5 style="margin:0">📋 爬取日志</h5>
+        <span id="scrapeStats" style="font-size:0.75rem;color:rgba(255,255,255,0.55);flex:1;min-width:0"></span>
         <button class="btn-ghost-sm" onclick="document.getElementById('scrapeLog').style.display='none';document.getElementById('scrapeLogContent').innerHTML=''">✕ 关闭</button>
     </div>
-    <pre id="scrapeLogContent" style="max-height:400px;overflow-y:auto;background:rgba(0,0,0,0.3);border-radius:10px;padding:12px;font-size:0.75rem;line-height:1.5;color:#b0b8d0;font-family:'SF Mono','Fira Code',monospace;margin:0;white-space:pre-wrap;word-break:break-all"></pre>
+    <div id="scrapeLogContent" style="max-height:400px;overflow-y:auto;background:rgba(0,0,0,0.3);border-radius:10px;padding:12px;font-size:0.75rem;line-height:1.5;font-family:'SF Mono','Fira Code',monospace;margin:0;white-space:pre-wrap;word-break:break-all"></div>
 </div>
 
 <!-- 遗漏检查结果 -->
@@ -185,6 +186,62 @@ function closeBiliQr() {
 }
 
 // ── 爬取进度 ────────────────────────────────
+// 日志行类型标签 → 颜色（与后端 emit(..., typ) 的标签对应）
+var LOG_TAG_STYLE = {
+    SYS: '#8a93a8', UP: '#4fc3f7', FILL: '#ba68c8', DYN: '#9575cd',
+    NEW: '#3dd68c', SNAP: '#ffb74d', HOT: '#ef5350', WARM: '#ffa726',
+    COLD: '#42a5f5', OK: '#3dd68c', SKIP: '#6c7486', RISK: '#ff5252',
+    WARN: '#ffca28', ERR: '#ff5252', MAIL: '#ec407a', CMT: '#66bb6a',
+};
+var LOG_MSG_TAG = { ERR: 1, RISK: 1, WARN: 1, OK: 1, NEW: 1 };
+function escapeHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+// 解析 "[时间] [UP名] [TAG] 消息" 并渲染为彩色一行
+function renderScrapeLine(line) {
+    var m = line.match(/^(\[\d{2}:\d{2}:\d{2}\])\s*(?:\[([^\]]*)\]\s*)?(?:\[([A-Z]{2,6})\]\s*)?([\s\S]*)$/);
+    var time = m ? m[1] : '';
+    var up = m && m[2] ? m[2] : '';
+    var tag = m && m[3] ? m[3] : '';
+    var msg = m ? m[4] : line;
+    var tagColor = LOG_TAG_STYLE[tag] || '#8a93a8';
+    var msgColor = (tag === 'ERR' || tag === 'RISK') ? '#ff6b6b'
+                 : (tag === 'WARN') ? '#ffd166'
+                 : (tag === 'OK' || tag === 'NEW') ? '#7ee2a8'
+                 : '#c9d1e0';
+    var html = '';
+    if (time) html += '<span style="color:#5a6b8a">' + escapeHtml(time) + '</span> ';
+    if (up) html += '<span style="color:#7f8db3">' + escapeHtml('[' + up + ']') + '</span> ';
+    if (tag) html += '<span style="color:' + tagColor + ';font-weight:600">' + escapeHtml('[' + tag + ']') + '</span> ';
+    html += '<span style="color:' + msgColor + '">' + escapeHtml(msg) + '</span>';
+    return '<div>' + html + '</div>';
+}
+// 渲染全部日志行 + 顶部统计汇总
+function renderScrapeLog(lines) {
+    var el = document.getElementById('scrapeLogContent');
+    if (!el) return;
+    var stats = {}, html = '';
+    for (var i = 0; i < lines.length; i++) {
+        var tm = lines[i].match(/\[([A-Z]{2,6})\]\s/);
+        if (tm) stats[tm[1]] = (stats[tm[1]] || 0) + 1;
+        html += renderScrapeLine(lines[i]);
+    }
+    el.innerHTML = html;
+    el.scrollTop = el.scrollHeight;
+    var st = document.getElementById('scrapeStats');
+    if (st) {
+        var parts = [];
+        if (stats.NEW) parts.push('🆕 新视频 ' + stats.NEW);
+        if (stats.SNAP) parts.push('🖼 快照 ' + stats.SNAP);
+        if (stats.FILL) parts.push('📥 补全 ' + stats.FILL);
+        if (stats.HOT) parts.push('🔥 Hot ' + stats.HOT);
+        if (stats.WARM) parts.push('🌤 Warm ' + stats.WARM);
+        if (stats.COLD) parts.push('❄️ Cold ' + stats.COLD);
+        if (stats.DYN) parts.push('🔄 动态 ' + stats.DYN);
+        if (stats.ERR || stats.RISK) parts.push('⚠️ 异常 ' + ((stats.ERR || 0) + (stats.RISK || 0)));
+        st.textContent = parts.join(' · ');
+    }
+}
 var scrapeTimer = null;
 function startScrape() {
     var url = document.getElementById('scrapeUrl').value.trim();
@@ -198,7 +255,8 @@ function startScrape() {
     .then(function(d) {
         if (!d.ok) { alert(d.error || '启动失败'); return; }
         document.getElementById('scrapeLog').style.display = 'block';
-        document.getElementById('scrapeLogContent').textContent = '';
+        document.getElementById('scrapeLogContent').innerHTML = '';
+        document.getElementById('scrapeStats').textContent = '';
         pollScrapeLog(d.mid);
     });
 }
@@ -209,9 +267,7 @@ function pollScrapeLog(mid, attempt) {
     fetch('{{ url_for("bili.scrape_status") }}?mid=' + mid)
         .then(function(r) { return r.json(); })
         .then(function(d) {
-            var el = document.getElementById('scrapeLogContent');
-            if (d.lines && d.lines.length) el.textContent = d.lines.join('\n');
-            el.scrollTop = el.scrollHeight;
+            if (d.lines && d.lines.length) renderScrapeLog(d.lines);
             if (d.running) {
                 scrapeTimer = setTimeout(function() { pollScrapeLog(mid, attempt + 1); }, 1000);
             } else {
