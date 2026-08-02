@@ -25,18 +25,18 @@ HOSHINO Blog — Flask 应用入口
 """
 
 
-import atexit
-import os
-import re
+import atexit  # 用于注册程序退出时的清理函数
+import os  # 提供操作系统接口功能，如环境变量读取和路径操作
+import re  # 提供正则表达式匹配和替换操作
 
-import time
+import time  # 提供时间相关的功能，如获取当前时间戳和休眠
 
-from dotenv import load_dotenv
-from flask import Flask, render_template, request
-from flask_compress import Compress
-from flask_login import LoginManager
-from flask_wtf.csrf import CSRFProtect
-from flask_migrate import Migrate
+from dotenv import load_dotenv  # 从.env文件中加载环境变量到系统环境中
+from flask import Flask, render_template, request  # 导入Flask核心对象、模板渲染函数和请求上下文对象
+from flask_compress import Compress  # 为Flask响应提供Gzip压缩支持，减少传输数据量
+from flask_login import LoginManager  # 导入Flask-Login的用户会话与认证管理器
+from flask_wtf.csrf import CSRFProtect  # 导入Flask-WTF的CSRF防护模块，防止跨站请求伪造攻击
+from flask_migrate import Migrate  # 导入Flask-Migrate的数据库迁移处理类，用于管理数据库模式变更
 
 # ── 多密钥 session 支持 ─────────────────────────
 # 默认 Flask 只用 SECRET_KEY 签名 session，
@@ -54,36 +54,62 @@ class _MultiKeySessionInterface(SecureCookieSessionInterface):
     """
 
     def get_signing_serializer(self, app):
+        """
+        获取用于签名序列化的序列化器对象。
+        
+        该方法支持密钥轮换机制：使用当前主密钥进行签名（dumps），
+        并在反序列化（loads）时依次尝试主密钥和历史备用密钥，
+        以实现密钥的无缝平滑过渡。
+    
+        Args:
+            app: Flask 应用实例，用于获取配置中的密钥和盐值。
+    
+        Returns:
+            Union[URLSafeTimedSerializer, _MultiKeyWrapper, None]: 
+                返回配置好的序列化器实例。如果应用未配置 secret_key，则返回 None。
+                若存在备用密钥，则返回支持多密钥尝试的包装器实例。
+        """
         secret_key = app.secret_key
         if not secret_key:
             return None
+        # 获取历史备用密钥列表，用于密钥轮换场景下的验证
         fallbacks = app.config.get('SECRET_KEY_FALLBACKS', [])
+        # 获取用于签名的盐值，增加特定上下文的安全性
         salt = self.get_cookie_salt(app)
         serializer = self.serializer
+        # 构建签名器的参数配置，包含密钥派生方式和摘要算法
         signer_kwargs = dict(
             key_derivation=self.key_derivation,
             digest_method=self.digest_method,
         )
-
+    
+        # 创建基于主密钥的序列化器，用于默认的签名和验证操作
         primary = URLSafeTimedSerializer(
-            secret_key, salt=salt, serializer=serializer, signer_kwargs=signer_kwargs
+            secret_key, 
+            salt=salt, 
+            serializer=serializer, 
+            signer_kwargs=signer_kwargs
         )
-
+    
         if not fallbacks:
             return primary  # 无历史密钥，退化为标准行为
-
+    
         class _MultiKeyWrapper:
             """包装器：dumps 用当前密钥，loads 逐个尝试所有密钥。"""
-
+    
             def dumps(self, obj):
+                # 签名操作始终使用最新的主密钥
                 return primary.dumps(obj)
-
+    
             def loads(self, s, max_age=None, return_timestamp=False):
+                # 优先尝试使用主密钥进行验证，成功则直接返回
                 try:
                     return primary.loads(s, max_age=max_age, return_timestamp=return_timestamp)
                 except BadSignature:
+                    # 主密钥验证失败，遍历尝试所有备用历史密钥
                     for fb_key in fallbacks:
                         try:
+                            # 为每个备用密钥创建临时序列化器进行验证尝试
                             fb = URLSafeTimedSerializer(
                                 fb_key,
                                 salt=salt,
@@ -93,8 +119,9 @@ class _MultiKeySessionInterface(SecureCookieSessionInterface):
                             return fb.loads(s, max_age=max_age, return_timestamp=return_timestamp)
                         except BadSignature:
                             continue
+                    # 所有密钥尝试均失败，抛出原始异常
                     raise
-
+    
         return _MultiKeyWrapper()
 
     @staticmethod
