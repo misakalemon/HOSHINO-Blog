@@ -761,6 +761,54 @@ def _crawl_video_comments(video, hot_pages: int = _COMMENT_HOT_PAGES, newest_pag
     return total
 
 
+def _load_recent_hist_map(video_ids, cutoff):
+    """批量加载 video_ids 在 cutoff 之后最近的一条历史快照。
+
+    按 video_id 分组取 recorded_at 最新的一条，返回
+    {video_id: BiliVideoHistory}。仅可在同一线程的 session 中
+    使用返回的 ORM 对象（避免跨线程共享 session）。
+    """
+    if not video_ids:
+        return {}
+    rows = (
+        BiliVideoHistory.query.filter(
+            BiliVideoHistory.video_id.in_(video_ids),
+            BiliVideoHistory.recorded_at >= cutoff,
+        )
+        .order_by(BiliVideoHistory.recorded_at.desc())
+        .all()
+    )
+    hist_map: dict[int, BiliVideoHistory] = {}
+    for h in rows:
+        hist_map.setdefault(h.video_id, h)
+    return hist_map
+
+
+def _load_recent_hist_ids(video_ids, cutoff):
+    """批量加载 video_ids 在 cutoff 之后最近一条历史快照的主键 ID。
+
+    返回 {video_id: history_id}（纯标量），可安全跨线程传递；
+    子线程可通过 query.get(history_id) 获取 ORM 对象。
+    """
+    if not video_ids:
+        return {}
+    rows = (
+        BiliVideoHistory.query.with_entities(
+            BiliVideoHistory.video_id, BiliVideoHistory.id
+        )
+        .filter(
+            BiliVideoHistory.video_id.in_(video_ids),
+            BiliVideoHistory.recorded_at >= cutoff,
+        )
+        .order_by(BiliVideoHistory.recorded_at.desc())
+        .all()
+    )
+    hist_id_map: dict[int, int] = {}
+    for vid, hid in rows:
+        hist_id_map.setdefault(vid, hid)
+    return hist_id_map
+
+
 def _check_new_videos(mid: int, app):
     """增量检查 — 每 30 分钟执行，发现新视频并更新统计数据。
 
@@ -817,15 +865,14 @@ def _check_new_videos(mid: int, app):
                 return
             _up_name[0] = up.name or str(mid)
 
-            # 取数据库已有的 bvid 和 aid 集合 — 用于快速判重
-            existing_bvids = {
-                r[0]
-                for r in BiliVideo.query.with_entities(BiliVideo.bvid).filter_by(up_id=up.id).all()
-            }
-            existing_aids = {
-                r[0]
-                for r in BiliVideo.query.with_entities(BiliVideo.aid).filter_by(up_id=up.id).all()
-            }
+            # 取数据库已有的 bvid 和 aid 集合 — 用于快速判重（一次查询取两列）
+            existing_rows = (
+                BiliVideo.query.with_entities(BiliVideo.bvid, BiliVideo.aid)
+                .filter_by(up_id=up.id)
+                .all()
+            )
+            existing_bvids = {r[0] for r in existing_rows}
+            existing_aids = {r[1] for r in existing_rows}
 
             count = 0
             consecutive_known = 0  # 连续已知视频计数 — 超阈值说明已无新视频
@@ -1001,6 +1048,12 @@ def _check_new_videos(mid: int, app):
                     # 并发批量获取完整 7 项统计（播放/点赞/投币/收藏/转发/评论/弹幕）
                     from blog.bilibili.bili_api import get_video_stats_batch
                     _batch = get_video_stats_batch([v.bvid for v in snap_videos])
+                    # 一次性批量加载近 30s 窗口内的历史快照（按 video_id 取最新一条），
+                    # 避免循环内为每个视频单独执行一次窗口查询（N+1）
+                    _snap_cutoff = now_cst() - datetime.timedelta(seconds=30)
+                    _hist_map = _load_recent_hist_map(
+                        [v.id for v in snap_videos], _snap_cutoff
+                    )
                     for v in snap_videos:
                         stat = _batch.get(v.bvid)
                         if not stat:
@@ -1008,10 +1061,7 @@ def _check_new_videos(mid: int, app):
                         for key, val in stat.items():
                             setattr(v, key, val)
                         # 记录历史快照（预检避免重复数据点）
-                        _prev_h = BiliVideoHistory.query.filter(
-                            BiliVideoHistory.video_id == v.id,
-                            BiliVideoHistory.recorded_at >= now_cst() - datetime.timedelta(seconds=30)
-                        ).first()
+                        _prev_h = _hist_map.get(v.id)
                         if _prev_h:
                             _prev_h.view_count = stat.get('view_count', 0)
                             _prev_h.like_count = stat.get('like_count', 0)
@@ -1033,9 +1083,10 @@ def _check_new_videos(mid: int, app):
                                     danmaku_count=stat.get('danmaku_count', 0),
                                 )
                             )
-                        db.session.commit()
                         title_short = (v.title or '')[:30]
                         emit(f'[快照] 「{title_short}」')
+                    # 合并为一次提交，减少事务开销
+                    db.session.commit()
             except Exception as e:
                 logger.error('视频统计快照失败 mid=%d: %s', mid, e)
 
@@ -1447,15 +1498,14 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             )
             fill_count = 0
             fill_new_bvids: set[str] = set()
-            # 预加载现有 BVID/AID 集合用于判重
-            existing_ids = {
-                r[0]
-                for r in BiliVideo.query.with_entities(BiliVideo.bvid).filter_by(up_id=up.id).all()
-            }
-            existing_aids = {
-                r[0]
-                for r in BiliVideo.query.with_entities(BiliVideo.aid).filter_by(up_id=up.id).all()
-            }
+            # 预加载现有 BVID/AID 集合用于判重（一次查询取两列）
+            existing_rows = (
+                BiliVideo.query.with_entities(BiliVideo.bvid, BiliVideo.aid)
+                .filter_by(up_id=up.id)
+                .all()
+            )
+            existing_ids = {r[0] for r in existing_rows}
+            existing_aids = {r[1] for r in existing_rows}
             if should_fill:
                 from blog.bilibili.bili_api import get_video_list as _get_video_list
 
@@ -1609,7 +1659,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             cutoff_hot = now - datetime.timedelta(days=7)
             cutoff_warm = now - datetime.timedelta(days=30)
 
-            def _update_video(video_id, label='', min_age_hours=1):
+            def _update_video(video_id, label='', min_age_hours=1, hist_id_map=None):
                 with app.app_context():
                     try:
                         v = BiliVideo.query.get(video_id)
@@ -1627,13 +1677,6 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                             emit(f'  跳过「{title_short}」— 最近 {min_age_hours} 小时内已更新')
                             return {'status': 'skip', 'label': label, 'bvid': bvid, 'title_short': title_short}
 
-                        old_view = v.view_count or 0
-                        old_like = v.like_count or 0
-                        old_coin = v.coin_count or 0
-                        old_fav = v.favorite_count or 0
-                        old_share = v.share_count or 0
-                        old_comment = v.comment_count or 0
-                        old_danmaku = v.danmaku_count or 0
 
                         local_retry_delay = 30
                         try:
@@ -1652,10 +1695,14 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                             setattr(v, key, val)
                         v.updated_at = now_cst()
 
-                        _prev_h = BiliVideoHistory.query.filter(
-                            BiliVideoHistory.video_id == v.id,
-                            BiliVideoHistory.recorded_at >= now_cst() - datetime.timedelta(seconds=30)
-                        ).first()
+                        # 历史快照：主线程已批量预加载 video_id → 最近历史记录 ID，
+                        # 子线程按主键查询（避免逐视频 30s 窗口二级索引查询）
+                        _hist_id = (hist_id_map or {}).get(v.id)
+                        _prev_h = BiliVideoHistory.query.get(_hist_id) if _hist_id else None
+                        if _prev_h is not None and (
+                            now_cst() - _prev_h.recorded_at
+                        ).total_seconds() > 30:
+                            _prev_h = None
                         if _prev_h:
                             _prev_h.view_count = stat.get('view_count', 0)
                             _prev_h.like_count = stat.get('like_count', 0)
@@ -1708,8 +1755,16 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             emit(f'Hot 阶段: ≤7天视频共 {len(hot_ids)} 个')
             if max_videos is not None:
                 hot_ids = hot_ids[:max(0, max_videos - count)]
+            _hot_hist = (
+                _load_recent_hist_ids(hot_ids, now - datetime.timedelta(seconds=30))
+                if hot_ids
+                else {}
+            )
             with ThreadPoolExecutor(max_workers=_UPDATE_THREADS) as _hot_pool:
-                _hot_futs = {_hot_pool.submit(_update_video, _vid, 'Hot', 0): _vid for _vid in hot_ids}
+                _hot_futs = {
+                    _hot_pool.submit(_update_video, _vid, 'Hot', 0, _hot_hist): _vid
+                    for _vid in hot_ids
+                }
                 for _hf in as_completed(_hot_futs):
                     try:
                         _hr = _hf.result()
@@ -1735,8 +1790,16 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                 warm_ids = [v.id for v in warm_videos]
                 quota_str = '无限制' if remaining is None else str(remaining)
                 emit(f'Warm 阶段: 8~30天视频配额 {quota_str}（DB中共 {len(warm_ids)} 个待更新）')
+                _warm_hist = (
+                    _load_recent_hist_ids(warm_ids, now - datetime.timedelta(seconds=30))
+                    if warm_ids
+                    else {}
+                )
                 with ThreadPoolExecutor(max_workers=_UPDATE_THREADS) as _warm_pool:
-                    _warm_futs = {_warm_pool.submit(_update_video, _vid, 'Warm', 1): _vid for _vid in warm_ids}
+                    _warm_futs = {
+                        _warm_pool.submit(_update_video, _vid, 'Warm', 1, _warm_hist): _vid
+                        for _vid in warm_ids
+                    }
                     for _wf in as_completed(_warm_futs):
                         try:
                             _wr = _wf.result()
@@ -1763,8 +1826,16 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                     emit(
                         f'Cold 阶段: >30天视频配额 {quota_str}（DB中共 {len(cold_ids)} 个待更新）'
                     )
+                    _cold_hist = (
+                        _load_recent_hist_ids(cold_ids, now - datetime.timedelta(seconds=30))
+                        if cold_ids
+                        else {}
+                    )
                     with ThreadPoolExecutor(max_workers=_UPDATE_THREADS) as _cold_pool:
-                        _cold_futs = {_cold_pool.submit(_update_video, _vid, 'Cold', 24): _vid for _vid in cold_ids}
+                        _cold_futs = {
+                            _cold_pool.submit(_update_video, _vid, 'Cold', 24, _cold_hist): _vid
+                            for _vid in cold_ids
+                        }
                         for _cf in as_completed(_cold_futs):
                             try:
                                 _cr = _cf.result()
