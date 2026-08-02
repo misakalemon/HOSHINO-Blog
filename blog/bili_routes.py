@@ -993,20 +993,11 @@ def _check_new_videos(mid: int, app):
                 snap_videos.extend(watched)
 
                 if snap_videos:
-                    # 分类：命中 arc/search 缓存（0 额外请求）vs 未命中（并发批量获取）
+                    # 并发批量获取完整 7 项统计（播放/点赞/投币/收藏/转发/评论/弹幕）
                     from blog.bilibili.bili_api import get_video_stats_batch
-                    _uncached = [v for v in snap_videos if v.bvid not in _page_stats]
-                    _batch = get_video_stats_batch([v.bvid for v in _uncached]) if _uncached else {}
+                    _batch = get_video_stats_batch([v.bvid for v in snap_videos])
                     for v in snap_videos:
-                        if v.bvid in _page_stats:
-                            # 复用 arc/search 已返回的统计（view/comment/danmaku/favorite）
-                            stat = dict(_page_stats[v.bvid])
-                            # 缺失的 like/coin/share 用旧值补齐，保持历史快照字段完整
-                            for k in ('like_count', 'coin_count', 'share_count'):
-                                if k not in stat:
-                                    stat[k] = getattr(v, k, 0) or 0
-                        else:
-                            stat = _batch.get(v.bvid)
+                        stat = _batch.get(v.bvid)
                         if not stat:
                             continue
                         for key, val in stat.items():
