@@ -827,12 +827,22 @@ def _check_new_videos(mid: int, app):
             _batch_count = 0
             # 连续 30 个视频全部已知 → 认为已经扫描到已入库的尾部，提前停止
             MAX_CONSECUTIVE_KNOWN = 30
+            # arc/search 返回的统计缓存（bvid → view/comment/danmaku/favorite）
+            # 供统计快照复用，避免为最新视频再发独立统计请求（不增加风控压力）
+            _page_stats: dict[str, dict] = {}
             # 先收集新视频列表（不逐个请求统计），再并发批量获取，缩短增量耗时
             _new_videos: list = []
             for video_info in get_video_list(mid, max_pages=10):
                 bvid = video_info['bvid']
                 aid = video_info['aid']
                 title_short = (video_info.get('title') or '')[:30]
+                # 缓存本页已返回的统计字段，供统计快照复用
+                _page_stats[bvid] = {
+                    'view_count': video_info.get('view_count', 0),
+                    'comment_count': video_info.get('comment_count', 0),
+                    'danmaku_count': video_info.get('danmaku_count', 0),
+                    'favorite_count': video_info.get('favorite_count', 0),
+                }
                 is_known = bvid in existing_bvids or aid in existing_aids
                 if is_known:
                     consecutive_known += 1
@@ -983,11 +993,20 @@ def _check_new_videos(mid: int, app):
                 snap_videos.extend(watched)
 
                 if snap_videos:
+                    # 分类：命中 arc/search 缓存（0 额外请求）vs 未命中（并发批量获取）
                     from blog.bilibili.bili_api import get_video_stats_batch
-                    # 并发批量获取统计数据（避免逐视频串行 sleep 导致耗时过长）
-                    batch = get_video_stats_batch([v.bvid for v in snap_videos])
+                    _uncached = [v for v in snap_videos if v.bvid not in _page_stats]
+                    _batch = get_video_stats_batch([v.bvid for v in _uncached]) if _uncached else {}
                     for v in snap_videos:
-                        stat = batch.get(v.bvid)
+                        if v.bvid in _page_stats:
+                            # 复用 arc/search 已返回的统计（view/comment/danmaku/favorite）
+                            stat = dict(_page_stats[v.bvid])
+                            # 缺失的 like/coin/share 用旧值补齐，保持历史快照字段完整
+                            for k in ('like_count', 'coin_count', 'share_count'):
+                                if k not in stat:
+                                    stat[k] = getattr(v, k, 0) or 0
+                        else:
+                            stat = _batch.get(v.bvid)
                         if not stat:
                             continue
                         for key, val in stat.items():
