@@ -1704,7 +1704,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                         if (
                             not force
                             and v.updated_at
-                            and (now_cst() - v.updated_at).total_seconds()
+                            and (now_cst().replace(tzinfo=None) - v.updated_at).total_seconds()
                             < min_age_hours * 3600
                         ):
                             emit(f'  跳过「{title_short}」— 最近 {min_age_hours} 小时内已更新', 'SKIP')
@@ -1735,7 +1735,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                         _hist_id = (hist_id_map or {}).get(v.id)
                         _prev_h = BiliVideoHistory.query.get(_hist_id) if _hist_id else None
                         if _prev_h is not None and (
-                            now_cst() - _prev_h.recorded_at
+                            now_cst().replace(tzinfo=None) - _prev_h.recorded_at
                         ).total_seconds() > 30:
                             _prev_h = None
                         if _prev_h:

@@ -269,11 +269,21 @@ def is_logged_in() -> bool:
     if _credential is None:
         return False
     try:
-        result = _sync(_credential.verify())
-        logger.info('Credential.verify() 返回: %s', result)
-        return result
+        # bilibili-api-python 不同版本 API 不同：优先 verify()，其次 check_valid()，
+        # 都不可用时（旧版本）假定已登录，避免误判导致扫描重登。
+        if hasattr(_credential, 'verify'):
+            result = _sync(_credential.verify())
+            logger.info('Credential.verify() 返回: %s', result)
+            return bool(result)
+        if hasattr(_credential, 'check_valid'):
+            result = _sync(_credential.check_valid())
+            logger.info('Credential.check_valid() 返回: %s', result)
+            return bool(result)
+        # 无验证方法：返回 True，后续真实 API 调用会自然暴露失效
+        logger.info('Credential 无 verify/check_valid 方法，假定已登录')
+        return True
     except Exception as e:
-        logger.warning('Credential.verify() 异常: %s', e)
+        logger.warning('Credential 登录态检查异常: %s', e)
         return False
 
 
