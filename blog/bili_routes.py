@@ -897,60 +897,9 @@ def _check_new_videos(mid: int, app):
             # arc/search 返回的统计缓存（bvid → view/comment/danmaku/favorite）
             # 供统计快照复用，避免为最新视频再发独立统计请求（不增加风控压力）
             _page_stats: dict[str, dict] = {}
-            # 先收集新视频列表（不逐个请求统计），再并发批量获取，缩短增量耗时
-            _new_videos: list = []
-            for video_info in get_video_list(mid, max_pages=10):
-                bvid = video_info['bvid']
-                aid = video_info['aid']
-                title_short = (video_info.get('title') or '')[:30]
-                # 缓存本页已返回的统计字段，供统计快照复用
-                _page_stats[bvid] = {
-                    'view_count': video_info.get('view_count', 0),
-                    'comment_count': video_info.get('comment_count', 0),
-                    'danmaku_count': video_info.get('danmaku_count', 0),
-                    'favorite_count': video_info.get('favorite_count', 0),
-                }
-                is_known = bvid in existing_bvids or aid in existing_aids
-                if is_known:
-                    consecutive_known += 1
-                    if consecutive_known > MAX_CONSECUTIVE_KNOWN:
-                        logger.info('连续 %d 个视频已知，跳过后续页', consecutive_known)
-                        break
-                    continue
-                consecutive_known = 0
-                logger.info(
-                    '增量检查: bvid=%s aid=%s title=%s known=%s', bvid, aid, title_short, is_known
-                )
-                _new_videos.append(video_info)
-
-            # 并发批量获取新视频统计（替代逐视频串行 API + sleep）
-            if _new_videos:
-                _stat_batch = get_video_stats_batch([v['bvid'] for v in _new_videos])
-                for video_info in _new_videos:
-                    bvid = video_info['bvid']
-                    aid = video_info['aid']
-                    title_short = (video_info.get('title') or '')[:30]
-                    stat = _stat_batch.get(bvid)
-                    if stat:
-                        video_info.update(stat)
-                    video, ok = _insert_or_update_video(up, video_info, aid, bvid, title_short)
-                    if not ok:
-                        continue
-
-                    # 批量提交 — 每 20 条 flush 一次减少事务压力
-                    _batch_count += 1
-                    if _batch_count >= 20:
-                        db.session.commit()
-                        _batch_count = 0
-
-                    count += 1
-                    existing_bvids.add(bvid)
-                    existing_aids.add(aid)
-                    title_short = (video_info.get('title') or '')[:30]
-                    emit(f'发现新视频 [{count}] {title_short}', 'NEW')
-
-            # 动态发现兜底：arc/search 可能遗漏 shorts / 新投稿
-            # B 站动态接口会返回 UP 主最近发布的视频，作为补充
+            # ── 动态流优先：先检查动态流是否有新视频 ──
+            # B站动态接口 1 个请求即可获取最近 ~12 条动态，
+            # 大多数 UP 主无新视频时只需这 1 个请求，跳过 arc/search 翻页（节省 2-5 个请求）
             from blog.bilibili.bili_api import get_video_list_from_dynamics
 
             try:
@@ -958,9 +907,69 @@ def _check_new_videos(mid: int, app):
             except Exception as e:
                 logger.warning('动态发现失败 mid=%d: %s', mid, e)
                 dyn_videos = []
-            # 动态发现的新视频也并发批量获取统计
             _dyn_new = [v for v in dyn_videos
                         if v['bvid'] not in existing_bvids and v['aid'] not in existing_aids]
+
+            # arc/search 翻页收集新视频
+            # 动态流成功且无新视频 → 跳过 arc/search（节省 API 请求，降低风控概率）
+            # 动态流有新视频或动态流失败 → arc/search 翻页补充
+            _new_videos: list = []
+            _inc_max_pages = int(os.environ.get('BILI_INCREMENTAL_PAGES', '2'))
+            _need_arc_search = bool(_dyn_new) or not dyn_videos
+            if _need_arc_search:
+                for video_info in get_video_list(mid, max_pages=_inc_max_pages):
+                    bvid = video_info['bvid']
+                    aid = video_info['aid']
+                    title_short = (video_info.get('title') or '')[:30]
+                    # 缓存本页已返回的统计字段，供统计快照复用
+                    _page_stats[bvid] = {
+                        'view_count': video_info.get('view_count', 0),
+                        'comment_count': video_info.get('comment_count', 0),
+                        'danmaku_count': video_info.get('danmaku_count', 0),
+                        'favorite_count': video_info.get('favorite_count', 0),
+                    }
+                    is_known = bvid in existing_bvids or aid in existing_aids
+                    if is_known:
+                        consecutive_known += 1
+                        if consecutive_known > MAX_CONSECUTIVE_KNOWN:
+                            logger.info('连续 %d 个视频已知，跳过后续页', consecutive_known)
+                            break
+                        continue
+                    consecutive_known = 0
+                    logger.info(
+                        '增量检查: bvid=%s aid=%s title=%s known=%s', bvid, aid, title_short, is_known
+                    )
+                    _new_videos.append(video_info)
+
+                # 并发批量获取新视频统计（替代逐视频串行 API + sleep）
+                if _new_videos:
+                    _stat_batch = get_video_stats_batch([v['bvid'] for v in _new_videos])
+                    for video_info in _new_videos:
+                        bvid = video_info['bvid']
+                        aid = video_info['aid']
+                        title_short = (video_info.get('title') or '')[:30]
+                        stat = _stat_batch.get(bvid)
+                        if stat:
+                            video_info.update(stat)
+                        video, ok = _insert_or_update_video(up, video_info, aid, bvid, title_short)
+                        if not ok:
+                            continue
+
+                        # 批量提交 — 每 20 条 flush 一次减少事务压力
+                        _batch_count += 1
+                        if _batch_count >= 20:
+                            db.session.commit()
+                            _batch_count = 0
+
+                        count += 1
+                        existing_bvids.add(bvid)
+                        existing_aids.add(aid)
+                        title_short = (video_info.get('title') or '')[:30]
+                        emit(f'发现新视频 [{count}] {title_short}', 'NEW')
+            else:
+                emit(f'动态流无新视频，跳过 arc/search 翻页（节省 {_inc_max_pages} 个 API 请求）', 'SYS')
+
+            # 处理动态发现的新视频（复用上面的 dyn_videos / _dyn_new）
             _dyn_stat_batch = (
                 get_video_stats_batch([v['bvid'] for v in _dyn_new]) if _dyn_new else {}
             )

@@ -214,7 +214,7 @@ def _run_bili_incremental_check(app):
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    max_workers = min(int(os.environ.get('BILI_INCREMENTAL_THREADS', '3')), 4)
+    max_workers = min(int(os.environ.get('BILI_INCREMENTAL_THREADS', '2')), 2)
     from blog.bilibili.bili_api import ensure_semaphore
     ensure_semaphore(max_workers)
 
@@ -245,7 +245,7 @@ def _run_bili_incremental_check(app):
                     _incremental_running.add(up.mid)
                 futures[executor.submit(_check_one, up)] = up
                 # 错峰启动：避免前 N 个线程同一秒发出第 1 页请求触发风控
-                time.sleep(random.uniform(0.8, 2.5))
+                time.sleep(random.uniform(2.0, 5.0))
 
             for future in as_completed(futures):
                 up = futures[future]
@@ -290,8 +290,8 @@ def _init_worker_scheduler(app):
             replace_existing=True,
         )
 
-        # 增量检查：每 N 分钟自调度（默认 15 分钟，可用 BILI_INCREMENTAL_MINUTES 覆盖）
-        _inc_minutes = int(os.environ.get('BILI_INCREMENTAL_MINUTES', '15'))
+        # 增量检查：每 N 分钟自调度（默认 30 分钟，可用 BILI_INCREMENTAL_MINUTES 覆盖）
+        _inc_minutes = int(os.environ.get('BILI_INCREMENTAL_MINUTES', '30'))
         scheduler.add_job(
             func=lambda: _run_bili_incremental_check(app),
             trigger='interval',

@@ -27,7 +27,7 @@ TIMEOUT = 15                    # HTTP 请求超时（秒，login.py 使用；AP
 
 # ── 增量检查配置 ────────────────────────────────
 # 控制增量检查（每 30 分钟）的行为
-TRACK_LATEST_VIDEOS = int(os.environ.get('BILI_TRACK_LATEST', '10'))  # 追踪最新 N 个视频的统计数据
+TRACK_LATEST_VIDEOS = int(os.environ.get('BILI_TRACK_LATEST', '5'))  # 追踪最新 N 个视频的统计数据
 
 # ── 凭证持久化路径 ────────────────────────────────
 # V2 扫码登录后，凭证保存到本地文件，下次启动自动加载
