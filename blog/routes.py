@@ -34,7 +34,7 @@ import time
 import atexit
 
 import bleach
-from flask import Response, abort, current_app, make_response, redirect, render_template, request, url_for
+from flask import Response, abort, current_app, make_response, redirect, render_template, request, session, url_for
 
 from sqlalchemy import func
 from sqlalchemy.orm import load_only
@@ -183,6 +183,11 @@ def _get_sidebar_data():
 
     # 缓存未命中，查询数据库
     categories = Category.query.order_by(Category.name).all()
+    # 序列化为 dict 列表（ORM 对象无法被 json.dumps 序列化，会导致缓存写入失败）
+    categories_data = [
+        {'id': c.id, 'name': c.name, 'slug': c.slug}
+        for c in categories
+    ]
 
     cat_post_counts = dict(
         db.session.query(
@@ -216,12 +221,12 @@ def _get_sidebar_data():
 
     # 缓存完整侧边栏数据
     cache_set('sidebar:full_data', {
-        'categories': categories,
+        'categories': categories_data,
         'recent_posts': recent_posts,
         'cat_post_counts': cat_post_counts,
     }, ttl)
 
-    return categories, recent_posts, cat_post_counts
+    return categories_data, recent_posts, cat_post_counts
 
 
 def _cached_featured_cards():
@@ -252,6 +257,52 @@ def _cached_featured_cards():
     ]
     cache_set('home:featured_cards', cards_data, 300)
     return cards_data
+
+
+# ── 整页缓存（仅匿名用户 + 无 flash 消息时生效） ─────────
+# 登录用户与带 flash 消息的请求不缓存，避免泄露登录态/吞掉提示消息。
+
+
+def _post_version_sig():
+    """文章表最新更新时间的版本签名，用于整页缓存自动失效。
+
+    返回最大 updated_at 的 Unix 时间戳字符串；无文章时返回 '0'。
+    """
+    max_updated = db.session.query(func.max(Post.updated_at)).scalar()
+    if max_updated is None:
+        return '0'
+    ts = max_updated.timestamp()
+    return f'{ts:.0f}'
+
+
+def _render_page_cached(cache_key, render_fn, ttl=300):
+    """渲染页面并缓存整页 HTML（仅匿名 GET 请求）。
+
+    登录用户 / 带 flash 消息的请求直接渲染不缓存：
+      1. 登录导航与前台不同（后台/写文章入口），缓存会泄露登录态
+      2. flash 消息是会话级的一次性提示，缓存整页会吞掉提示
+
+    Args:
+        cache_key: 缓存键（应包含参数与数据版本签名）
+        render_fn: 无参可调用对象，返回渲染后的 HTML 字符串
+        ttl: 缓存存活秒数
+
+    Returns:
+        str: 渲染后的 HTML
+    """
+    from flask_login import current_user
+
+    from .cache import cache_get, cache_set
+
+    if current_user.is_authenticated or session.get('_flashes'):
+        return render_fn()
+
+    html = cache_get(cache_key)
+    if html is not None:
+        return html
+    html = render_fn()
+    cache_set(cache_key, html, ttl)
+    return html
 
 
 # ═══════════════════════════════════════════════
@@ -292,7 +343,22 @@ def index():
     """
     page = request.args.get('page', 1, type=int)
     category_slug = request.args.get('category', None)
+    per_page = request.args.get('per_page', current_app.config['POSTS_PER_PAGE'], type=int)
 
+    # ── 整页缓存（仅匿名 GET）──
+    page_ttl = current_app.config.get('CACHE_TTL_PAGE', 300)
+    cache_key = (
+        f'page:index:{page}:{category_slug or "":}:{per_page}:{_post_version_sig()}'
+    )
+    return _render_page_cached(
+        cache_key,
+        lambda: _render_index(page, category_slug, per_page),
+        ttl=page_ttl,
+    )
+
+
+def _render_index(page, category_slug, per_page):
+    """渲染首页 HTML（供整页缓存调用）。"""
     # 基础查询：只取已发布的文章，同时使用 joinedload 预加载作者和分类信息
     # 避免 N+1 查询问题（遍历文章时不再逐条查询关联表）
     query = Post.query.options(
@@ -306,14 +372,12 @@ def index():
         query = query.filter(Post.categories.any(id=cat.id))
 
     # 分页（按创建时间倒序）
-    # per_page 优先级：URL 查询参数 ?per_page= → 无则取 config.POSTS_PER_PAGE（.env 可配）
-    per_page = request.args.get('per_page', current_app.config['POSTS_PER_PAGE'], type=int)
     posts = query.order_by(Post.created_at.desc()).paginate(
         page=page, per_page=per_page, error_out=False
     )
     categories, recent_posts, cat_post_counts = _get_sidebar_data()
     featured_cards = _cached_featured_cards()
-    cat_lookup = {c.slug: c.name for c in categories}
+    cat_lookup = {c['slug']: c['name'] for c in categories}
 
     from blog.models import HeroImage
 
@@ -503,6 +567,20 @@ def category(slug):
     page = request.args.get('page', 1, type=int)
     # per_page 取自 URL 参数或配置默认值，与首页一致
     per_page = request.args.get('per_page', current_app.config['POSTS_PER_PAGE'], type=int)
+
+    page_ttl = current_app.config.get('CACHE_TTL_PAGE', 300)
+    cache_key = (
+        f'page:category:{slug}:{page}:{per_page}:{_post_version_sig()}'
+    )
+    return _render_page_cached(
+        cache_key,
+        lambda: _render_category(cat, page, per_page),
+        ttl=page_ttl,
+    )
+
+
+def _render_category(cat, page, per_page):
+    """渲染分类文章列表 HTML（供整页缓存调用）。"""
     posts = (
         Post.query.options(
             load_only(Post.id, Post.title, Post.slug, Post.cover_image, Post.created_at),
@@ -536,6 +614,17 @@ def about():
     内容取自管理员账号的 about_content 字段（富文本 HTML）。
     Template: about.html
     """
+    page_ttl = current_app.config.get('CACHE_TTL_PAGE', 300)
+    cache_key = f'page:about:{_post_version_sig()}'
+    return _render_page_cached(
+        cache_key,
+        _render_about,
+        ttl=page_ttl,
+    )
+
+
+def _render_about():
+    """渲染关于页 HTML（供整页缓存调用）。"""
     categories, recent_posts, cat_post_counts = _get_sidebar_data()
     from .models import User
 

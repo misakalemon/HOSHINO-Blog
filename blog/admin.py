@@ -148,14 +148,32 @@ logger = logging.getLogger(__name__)
 
 # ── 缓存失效辅助函数 ─────────────────────────
 def _invalidate_sidebar_cache():
-    """使侧边栏和 RSS 缓存失效。
+    """使侧边栏、RSS 和前台整页缓存失效。
 
     在文章或分类发生变更时调用，确保前台能及时看到最新内容。
+    删除旧文章时 max(updated_at) 可能不变，整页缓存键不会自动失效，
+    因此这里同时显式清除 page:* 前缀的前台页面缓存。
     """
     from .cache import cache_delete_pattern
 
     cache_delete_pattern('sidebar:*')
     cache_delete_pattern('rss:*')
+    cache_delete_pattern('page:index:*')
+    cache_delete_pattern('page:category:*')
+    cache_delete_pattern('page:about:*')
+
+
+def _invalidate_page_cache(*prefixes):
+    """使前台整页缓存失效（如 'page:index' / 'page:about'）。
+
+    前台只读页面缓存键为 page:<路由>:<参数>:<版本签名>，
+    使用前缀模式批量删除即可使相关页面失效。
+    """
+    from .cache import cache_delete_pattern
+
+    patterns = prefixes or ('page:index', 'page:category', 'page:about')
+    for prefix in patterns:
+        cache_delete_pattern(f'{prefix}:*')
 
 
 # ═══════════════════════════════════════════════
@@ -1119,6 +1137,9 @@ def profile():
         )
 
         db.session.commit()
+        from .cache import cache_delete
+        cache_delete('admin:social_links')
+        _invalidate_page_cache('page:about')
         flash('个人资料已更新', 'success')
         return redirect(url_for('admin.profile'))
     return render_template('admin/profile.html', form=form)
@@ -1274,6 +1295,9 @@ def new_featured_card():
             db.session.rollback()
             flash(f'创建失败: {e}', 'error')
             return render_template('admin/featured-card-form.html', form=form, editing=False)
+        from .cache import cache_delete
+        cache_delete('home:featured_cards')
+        _invalidate_page_cache('page:index')
         flash('特色卡片已创建', 'success')
         return redirect(url_for('admin.featured_card_list'))
     for field, errors in form.errors.items():
@@ -1322,6 +1346,9 @@ def edit_featured_card(id):
             db.session.rollback()
             flash(f'更新失败: {e}', 'error')
             return render_template('admin/featured-card-form.html', form=form, editing=True)
+        from .cache import cache_delete
+        cache_delete('home:featured_cards')
+        _invalidate_page_cache('page:index')
         flash('特色卡片已更新', 'success')
         return redirect(url_for('admin.featured_card_list'))
     for field, errors in form.errors.items():
@@ -1345,6 +1372,9 @@ def delete_featured_card(id):
     card = FeaturedCard.query.get_or_404(id)
     db.session.delete(card)
     db.session.commit()
+    from .cache import cache_delete
+    cache_delete('home:featured_cards')
+    _invalidate_page_cache('page:index')
     flash('特色卡片已删除', 'success')
     return redirect(url_for('admin.featured_card_list'))
 
@@ -1557,6 +1587,7 @@ def new_hero_image():
         )
         db.session.add(image)
         db.session.commit()
+        _invalidate_page_cache('page:index')
         flash('Hero 画像已添加', 'success')
         return redirect(url_for('admin.hero_image_list'))
     for field, errors in form.errors.items():
@@ -1597,6 +1628,7 @@ def edit_hero_image(id):
             else:
                 image.image_url = raw_url
         db.session.commit()
+        _invalidate_page_cache('page:index')
         flash('Hero 画像已更新', 'success')
         return redirect(url_for('admin.hero_image_list'))
     for field, errors in form.errors.items():
@@ -1622,6 +1654,7 @@ def delete_hero_image(id):
     image = HeroImage.query.get_or_404(id)
     db.session.delete(image)
     db.session.commit()
+    _invalidate_page_cache('page:index')
     flash('Hero 画像已删除', 'success')
     return redirect(url_for('admin.hero_image_list'))
 
@@ -1700,6 +1733,7 @@ def wordcloud_config():
             config.shape = 'custom'
         config.updated_at = now_cst()
         db.session.commit()
+        _invalidate_page_cache()
         flash('词云配置已保存', 'success')
         # 自动投递全量词云重算（使屏蔽词等立即生效）
         from .wordcloud import submit_task
@@ -1716,5 +1750,6 @@ def refresh_wordcloud():
     from .wordcloud import submit_task
 
     submit_task('all')
+    _invalidate_page_cache()
     flash('词云数据已投递到后台计算（博客 + B站）', 'success')
     return redirect(url_for('admin.wordcloud_config'))

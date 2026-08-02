@@ -591,10 +591,19 @@ def precompute_bili_wordclouds():
     _log_memory(logger, 'precompute_bili_wordclouds start')
 
     # ── 全量 B站词云 ──
-    total = BiliVideo.query.count()
     full_parts: list[str] = []
-    for offset in range(0, total, _BILI_BATCH):
-        batch = BiliVideo.query.offset(offset).limit(_BILI_BATCH).all()
+    # keyset 分页（WHERE id > last_id），避免 OFFSET 深翻页全表扫描
+    _last_id = 0
+    while True:
+        batch = (
+            BiliVideo.query.filter(BiliVideo.id > _last_id)
+            .order_by(BiliVideo.id)
+            .limit(_BILI_BATCH)
+            .all()
+        )
+        if not batch:
+            break
+        _last_id = batch[-1].id
         for text in _bili_texts_from_videos(batch):
             full_parts.append(text)
         del batch
@@ -605,23 +614,36 @@ def precompute_bili_wordclouds():
     _log_memory(logger, 'full done')
 
     # ── 按月分段 ──
+    # 单月过滤用 pub_datetime 范围查询（可走索引），替代 DATE_FORMAT 函数全表扫描
+    from datetime import datetime as _dt
     months = (
-        db.session.query(func.date_format(BiliVideo.pubdate, '%Y-%m'))
-        .filter(BiliVideo.pubdate.isnot(None))
+        db.session.query(func.date_format(BiliVideo.pub_datetime, '%Y-%m'))
+        .filter(BiliVideo.pub_datetime.isnot(None))
         .distinct()
-        .order_by(func.date_format(BiliVideo.pubdate, '%Y-%m'))
+        .order_by(func.date_format(BiliVideo.pub_datetime, '%Y-%m'))
         .all()
     )
     for (month_pubdate,) in months:
         try:
             month_parts: list[str] = []
-            month_total = BiliVideo.query.filter(
-                func.date_format(BiliVideo.pubdate, '%Y-%m') == month_pubdate,
-            ).count()
-            for offset in range(0, month_total, _BILI_BATCH):
-                batch = BiliVideo.query.filter(
-                    func.date_format(BiliVideo.pubdate, '%Y-%m') == month_pubdate,
-                ).offset(offset).limit(_BILI_BATCH).all()
+            _year, _mon = map(int, month_pubdate.split('-'))
+            _m_start = _dt(_year, _mon, 1)
+            _m_end = _dt(_year + 1, 1, 1) if _mon == 12 else _dt(_year, _mon + 1, 1)
+            _last_id = 0
+            while True:
+                batch = (
+                    BiliVideo.query.filter(
+                        BiliVideo.pub_datetime >= _m_start,
+                        BiliVideo.pub_datetime < _m_end,
+                        BiliVideo.id > _last_id,
+                    )
+                    .order_by(BiliVideo.id)
+                    .limit(_BILI_BATCH)
+                    .all()
+                )
+                if not batch:
+                    break
+                _last_id = batch[-1].id
                 for text in _bili_texts_from_videos(batch):
                     month_parts.append(text)
                 del batch
@@ -636,12 +658,28 @@ def precompute_bili_wordclouds():
 
     # ── 按 UP 主分段 ──
     for up in BiliUp.query.all():
+        up_parts: list[str] = []
         try:
-            up_videos = BiliVideo.query.filter_by(up_id=up.id).all()
-            if not up_videos:
-                continue
-            up_texts = list(_bili_texts_from_videos(up_videos))
-            up_full = ' '.join(up_texts)
+            # keyset 分页，避免单 UP 数千视频一次性加载（subtitle_text 大字段）
+            _last_id = 0
+            while True:
+                batch = (
+                    BiliVideo.query.filter(
+                        BiliVideo.up_id == up.id,
+                        BiliVideo.id > _last_id,
+                    )
+                    .order_by(BiliVideo.id)
+                    .limit(_BILI_BATCH)
+                    .all()
+                )
+                if not batch:
+                    break
+                _last_id = batch[-1].id
+                for text in _bili_texts_from_videos(batch):
+                    up_parts.append(text)
+                del batch
+                _maybe_collect()
+            up_full = ' '.join(up_parts)
             if not up_full.strip():
                 continue
             up_data = compute_word_frequencies(up_full, top_n=top_n) or []
@@ -659,7 +697,7 @@ def precompute_bili_wordclouds():
             db.session.flush()
         except Exception as e:
             logger.warning('📊 UP %s 词云失败: %s', up.id, e)
-        del up_videos, up_texts
+        del up_parts
         _maybe_collect()
 
     db.session.commit()

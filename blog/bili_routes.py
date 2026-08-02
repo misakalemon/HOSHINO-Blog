@@ -685,6 +685,15 @@ def _crawl_video_comments(video, hot_pages: int = _COMMENT_HOT_PAGES, newest_pag
     _bvid = video.bvid
     _video_id = video.id
 
+    # 一次性加载该视频已有评论的 (ctime, content) 集合到内存，
+    # 在内存中判重，避免逐条 filter_by 查库（每视频上千条时性能关键）
+    _existing_comments = set(
+        (r[0], r[1])
+        for r in BiliVideoComment.query.with_entities(
+            BiliVideoComment.ctime, BiliVideoComment.content
+        ).filter_by(video_id=_video_id).all()
+    )
+
     def _crawl_page(page, order):
         if was_recently_blocked():
             return 0
@@ -707,12 +716,7 @@ def _crawl_video_comments(video, hot_pages: int = _COMMENT_HOT_PAGES, newest_pag
             content = (c.get('content') or '')[:2000]
             if not content:
                 continue
-            existing = BiliVideoComment.query.filter_by(
-                video_id=_video_id,
-                ctime=ctime,
-                content=content,
-            ).first()
-            if existing:
+            if (ctime, content) in _existing_comments:
                 continue
             db.session.add(BiliVideoComment(
                 video_id=_video_id,
@@ -721,6 +725,7 @@ def _crawl_video_comments(video, hot_pages: int = _COMMENT_HOT_PAGES, newest_pag
                 ctime=ctime,
                 like_count=c.get('like_count', 0),
             ))
+            _existing_comments.add((ctime, content))
             count += 1
 
         db.session.commit()

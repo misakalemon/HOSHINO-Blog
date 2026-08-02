@@ -37,6 +37,8 @@ _startup_time = time.time()
 MAX_WORKER_THREADS = int(os.environ.get('WORKER_THREADS', '3'))
 # 词云线程数，可通过环境变量 WC_THREADS 覆盖
 MAX_WC_THREADS = int(os.environ.get('WC_THREADS', '3'))
+# 评论/字幕刷新视频并发数，可通过环境变量 BILI_COMMENT_WORKERS 覆盖
+MAX_COMMENT_WORKERS = int(os.environ.get('BILI_COMMENT_WORKERS', '3'))
 
 
 def _setup_signal_handlers(shutdown_flag):
@@ -112,55 +114,75 @@ def _run_task(task, app):
             elif task_type == 'refresh_up_comments':
                 from blog.bili_routes import _crawl_video_comments
                 from blog.models import BiliVideo
+                from concurrent.futures import ThreadPoolExecutor, as_completed
                 up_id = data['up_id']
                 video_ids = [r[0] for r in BiliVideo.query.filter_by(
                     up_id=up_id
                 ).order_by(BiliVideo.pubdate.desc()).with_entities(BiliVideo.id).limit(50).all()]
                 total = len(video_ids)
-                logger.info('评论刷新: UP %s 共 %d 个视频', up_id, total)
-                for i, vid in enumerate(video_ids, 1):
+                logger.info('评论刷新: UP %s 共 %d 个视频, 并发 %d', up_id, total, MAX_COMMENT_WORKERS)
+
+                def _crawl_one(vid):
                     v = BiliVideo.query.get(vid)
                     if not v:
-                        continue
+                        return 0
                     try:
-                        logger.info('  [%d/%d] %s 正在爬取评论...', i, total, v.bvid)
                         n = _crawl_video_comments(v)
                         if n:
-                            logger.info('  [%d/%d] %s ✅ %d 条', i, total, v.bvid[:8], n)
+                            logger.info('%s ✅ %d 条', v.bvid[:8], n)
+                        return n
                     except Exception as e:
-                        logger.warning('  [%d/%d] %s 评论失败: %s', i, total, v.bvid, e)
+                        logger.warning('%s 评论失败: %s', v.bvid, e)
+                        return 0
                     finally:
                         db.session.remove()
-                        time.sleep(3.0 + __import__('random').random() * 2.0)
+
+                with ThreadPoolExecutor(max_workers=MAX_COMMENT_WORKERS) as executor:
+                    futures = {executor.submit(_crawl_one, vid): vid for vid in video_ids}
+                    for future in as_completed(futures):
+                        try:
+                            future.result()
+                        except Exception as e:
+                            logger.warning('评论爬取线程异常: %s', e)
                 from blog.task_queue import submit_task
                 submit_task('bili_wordcloud', up_id=up_id)
             elif task_type == 'refresh_up_subtitles':
                 from blog.models import BiliVideo
+                from concurrent.futures import ThreadPoolExecutor, as_completed
                 up_id = data['up_id']
                 video_ids = [r[0] for r in BiliVideo.query.filter_by(
                     up_id=up_id
                 ).order_by(BiliVideo.pubdate.desc()).with_entities(BiliVideo.id).limit(50).all()]
                 total = len(video_ids)
-                logger.info('字幕刷新: UP %s 共 %d 个视频', up_id, total)
-                ok = 0
-                for i, vid in enumerate(video_ids, 1):
+                logger.info('字幕刷新: UP %s 共 %d 个视频, 并发 %d', up_id, total, MAX_COMMENT_WORKERS)
+
+                def _fetch_subtitle(vid):
                     v = BiliVideo.query.get(vid)
                     if not v:
-                        continue
+                        return 0
                     try:
                         from blog.bilibili.bili_api import get_video_subtitle
-                        logger.info('  [%d/%d] %s 正在获取字幕...', i, total, v.bvid)
                         subtitle = get_video_subtitle(v.bvid)
                         if subtitle:
                             v.subtitle_text = subtitle
                             db.session.commit()
-                            ok += 1
+                            return 1
+                        return 0
                     except Exception as e:
                         db.session.rollback()
-                        logger.warning('  [%d/%d] %s 字幕失败: %s', i, total, v.bvid, e)
+                        logger.warning('%s 字幕失败: %s', v.bvid, e)
+                        return 0
                     finally:
                         db.session.remove()
-                        time.sleep(1.0 + __import__('random').random())
+
+                ok = 0
+                with ThreadPoolExecutor(max_workers=MAX_COMMENT_WORKERS) as executor:
+                    futures = {executor.submit(_fetch_subtitle, vid): vid for vid in video_ids}
+                    for future in as_completed(futures):
+                        try:
+                            ok += future.result() or 0
+                        except Exception as e:
+                            logger.warning('字幕爬取线程异常: %s', e)
                 logger.info('字幕刷新完成: UP %s 成功 %d/%d', up_id, ok, total)
                 from blog.task_queue import submit_task
                 submit_task('bili_wordcloud', up_id=up_id)
@@ -275,18 +297,18 @@ def _init_worker_scheduler(app):
             replace_existing=True,
         )
 
-        # 03:00 历史数据自动清理
+        # 03:30 历史数据自动清理（与深扫/词云错开，避免资源竞争）
         from blog.bili_routes import auto_cleanup_history
         scheduler.add_job(
             func=lambda: auto_cleanup_history(app),
             trigger='cron',
             hour=3,
-            minute=0,
+            minute=30,
             id='auto_cleanup_history',
             replace_existing=True,
         )
 
-        # 02:10 全站词云预计算
+        # 04:00 全站词云预计算（深扫完成后，且与 B站词云错开）
         from blog.wordcloud import precompute_all_wordclouds
         def _job_all_wc():
             with app.app_context():
@@ -294,13 +316,13 @@ def _init_worker_scheduler(app):
         scheduler.add_job(
             func=_job_all_wc,
             trigger='cron',
-            hour=2,
-            minute=10,
+            hour=4,
+            minute=0,
             id='precompute_all_wordclouds',
             replace_existing=True,
         )
 
-        # 02:15 B站词云预计算
+        # 04:30 B站词云预计算（全站词云完成后再跑，避免两个大遍历并发）
         from blog.wordcloud import precompute_bili_wordclouds
         def _job_bili_wc():
             with app.app_context():
@@ -308,8 +330,8 @@ def _init_worker_scheduler(app):
         scheduler.add_job(
             func=_job_bili_wc,
             trigger='cron',
-            hour=2,
-            minute=15,
+            hour=4,
+            minute=30,
             id='precompute_bili_wordclouds',
             replace_existing=True,
         )
@@ -337,8 +359,8 @@ def _init_worker_scheduler(app):
             pass
 
         app.logger.info(
-            'Worker 定时任务: 02:00深扫 02:10全站词云 02:15B站词云 '
-            '03:00密钥轮换+历史清理 每30min增量检查'
+            'Worker 定时任务: 02:00深扫 03:00密钥轮换 03:30历史清理 '
+            '04:00全站词云 04:30B站词云 每15min增量检查'
         )
     except Exception as e:
         app.logger.warning('定时任务启动失败（不影响运行）: %s', e)
