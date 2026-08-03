@@ -258,7 +258,16 @@ def _run_bili_incremental_check(app):
 
     with app.app_context():
         from blog.models import BiliUp
-        from blog.bili_routes import _check_new_videos, _incremental_running, _scrape_lock
+        from blog.bili_routes import _check_new_videos, _incremental_running, _scrape_lock, _scrape_running
+        # 批次级协调：若已有任意 UP 正在深扫（新UP爬取/手动刷新），整批增量检查直接跳过。
+        # 深扫与增量并发会叠加 B站 API 请求（不同 UA 多线程同时打同一 IP），
+        # 触发 -352 风控；增量每 30 分钟一次，让路一轮不影响时效。
+        with _scrape_lock:
+            if _scrape_running:
+                logger = logging.getLogger(__name__)
+                logger.warning('深扫进行中(%s)，跳过整批增量检查',
+                               list(_scrape_running)[:3])
+                return
         ups = BiliUp.query.all()
         if not ups:
             return

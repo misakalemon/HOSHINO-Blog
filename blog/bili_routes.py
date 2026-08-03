@@ -863,10 +863,14 @@ def _check_new_videos(mid: int, app):
             logger.warning('全局熔断中，跳过增量检查 mid=%d', mid)
             return
 
-    # 深扫/手动刷新互斥检查：若该 mid 正在深扫，跳过增量避免重复请求
+    # 深扫/手动刷新互斥检查：若有任意 UP 正在深扫，跳过本次增量检查。
+    # 注意是「任意」而非「同一 mid」：新 UP 深扫期间，若存量 UP 的增量检查
+    # 仍并发进行，两者叠加请求会触发 B站 -352 风控（v_voucher 校验）。
+    # 增量检查每 30 分钟一次，让路一次不影响数据时效（下轮会补上）。
     with _scrape_lock:
-        if mid in _scrape_running:
-            logger.warning('mid=%d 深扫进行中，跳过增量检查', mid)
+        if _scrape_running:
+            logger.warning('深扫进行中(%s)，跳过增量检查 mid=%d',
+                           list(_scrape_running)[:3], mid)
             return
 
     # 获取该 mid 的进度日志列表（引用，后续直接 append）
@@ -1487,6 +1491,21 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
     else:
         with _scrape_lock:
             _scrape_running.add(mid)
+
+    # 与正在进行的增量检查协调：若已有任意 UP 正在增量检查，等待其收尾再开始请求。
+    # 深扫（尤其新UP全量爬取）与增量检查并发，会让多线程用不同 UA 同时打同一 IP，
+    # 触发 B站 -352 风控。等待上限 60s：增量检查单 UP 通常 30s 内完成，避免长阻塞。
+    if not force:
+        wait_start = time.time()
+        while time.time() - wait_start < 60:
+            with _scrape_lock:
+                if not _incremental_running:
+                    break
+            time.sleep(1.0)
+        with _scrape_lock:
+            if _incremental_running:
+                logger.warning('增量检查仍在进行(%d个)，深扫 mid=%d 继续执行（受全局串行限速保护）',
+                               len(_incremental_running), mid)
 
     # 获取该 mid 的进度日志列表引用
     prog = _scrape_progress.get(mid, [])

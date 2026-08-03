@@ -104,7 +104,11 @@ class _TokenBucket:
 
 
 _BILI_RATE = float(os.environ.get('BILI_GLOBAL_RATE', '0.33'))  # 20 请求/分钟
-_BILI_RATE_CAP = float(os.environ.get('BILI_GLOBAL_RATE_CAP', '3'))  # 突发上限 3
+# 突发上限：默认 1，即全局同时最多 1 个 B站 请求在途，所有请求严格串行。
+# 新UP深扫与存量UP增量检查并发时，若允许突发（如 3），多个不同 UA 线程会
+# 在同一瞬间打向同一 IP，触发 B站 -352 风控（v_voucher 校验）。
+# 串行后同一时刻只有一个 UA 活跃，最接近"单浏览器浏览"指纹。
+_BILI_RATE_CAP = float(os.environ.get('BILI_GLOBAL_RATE_CAP', '1'))
 _BILI_RATE_LIMITER = _TokenBucket(rate=_BILI_RATE, capacity=_BILI_RATE_CAP)
 
 
