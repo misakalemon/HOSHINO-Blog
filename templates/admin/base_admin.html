@@ -83,7 +83,8 @@
     {% endif %}
     {% endwith %}
 
-<script src="{{ url_for('static', filename='js/admin.js') }}?v=2" defer></script>
+    <script src="{{ url_for('static', filename='js/admin.js') }}?v=2" defer></script>
+    <script src="{{ url_for('static', filename='js/scroll-restore.js') }}?v=1" defer></script>
 
     <!-- admin_content 块：子模板填充 -->
     {% block admin_content %}{% endblock %}

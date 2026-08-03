@@ -207,14 +207,14 @@
                 <ul class="pagination">
                     <!-- 上一页按钮 -->
                     {% if posts.has_prev %}
-                    <li><a href="{{ url_for('blog.index', page=posts.prev_num, per_page=current_per_page, q=search_query if search_query is defined and search_query else None) }}">←</a></li>
+                    <li><a class="js-scroll-restore" href="{{ url_for('blog.index', page=posts.prev_num, per_page=current_per_page, q=search_query if search_query is defined and search_query else None) }}">←</a></li>
                     {% endif %}
                     <!-- 迭代页码，left_edge/right_edge 控制两端页码，left_current/right_current 控制当前页两侧 -->
                     {% for page_num in posts.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                         {% if page_num %}
                         <!-- 当前页高亮 -->
                         <li {% if page_num == posts.page %}class="active"{% endif %}>
-                            <a href="{{ url_for('blog.index', page=page_num, per_page=current_per_page, q=search_query if search_query is defined and search_query else None) }}">{{ page_num }}</a>
+                            <a class="js-scroll-restore" href="{{ url_for('blog.index', page=page_num, per_page=current_per_page, q=search_query if search_query is defined and search_query else None) }}">{{ page_num }}</a>
                         </li>
                         {% else %}
                         <!-- 页码不连续时显示省略号 -->
@@ -223,7 +223,7 @@
                     {% endfor %}
                     <!-- 下一页按钮 -->
                     {% if posts.has_next %}
-                    <li><a href="{{ url_for('blog.index', page=posts.next_num, per_page=current_per_page, q=search_query if search_query is defined and search_query else None) }}">→</a></li>
+                    <li><a class="js-scroll-restore" href="{{ url_for('blog.index', page=posts.next_num, per_page=current_per_page, q=search_query if search_query is defined and search_query else None) }}">→</a></li>
                     {% endif %}
                 </ul>
                 <div class="page-jump">

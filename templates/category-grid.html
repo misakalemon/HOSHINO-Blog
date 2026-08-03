@@ -62,17 +62,17 @@
             <div class="pagination-wrap">
                 <ul class="pagination">
                     {% if posts.has_prev %}
-                    <li><a href="{{ url_for('blog.category', slug=category.slug, page=posts.prev_num, per_page=current_per_page) }}">←</a></li>
+                    <li><a class="js-scroll-restore" href="{{ url_for('blog.category', slug=category.slug, page=posts.prev_num, per_page=current_per_page) }}">←</a></li>
                     {% endif %}
                     {% for pn in posts.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                         {% if pn %}
-                        <li {% if pn==posts.page %}class="active"{% endif %}><a href="{{ url_for('blog.category', slug=category.slug, page=pn, per_page=current_per_page) }}">{{ pn }}</a></li>
+                        <li {% if pn==posts.page %}class="active"{% endif %}><a class="js-scroll-restore" href="{{ url_for('blog.category', slug=category.slug, page=pn, per_page=current_per_page) }}">{{ pn }}</a></li>
                         {% else %}
                         <li><span>···</span></li>
                         {% endif %}
                     {% endfor %}
                     {% if posts.has_next %}
-                    <li><a href="{{ url_for('blog.category', slug=category.slug, page=posts.next_num, per_page=current_per_page) }}">→</a></li>
+                    <li><a class="js-scroll-restore" href="{{ url_for('blog.category', slug=category.slug, page=posts.next_num, per_page=current_per_page) }}">→</a></li>
                     {% endif %}
                 </ul>
                 <div class="page-jump">
