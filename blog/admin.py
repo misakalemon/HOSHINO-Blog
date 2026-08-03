@@ -146,6 +146,31 @@ from .models import BiliSubscription, BiliUp, Category, Comment, FeaturedCard, H
 logger = logging.getLogger(__name__)
 
 
+def _redirect_list(endpoint):
+    """重定向到列表页并透传当前查询参数（保留页码/搜索词，避免操作后丢失上下文）。
+
+    依据目标列表自动携带对应参数：
+      - admin.post_list / category_list / user_list: page, q
+      - admin.comment_list: pending_page, approved_page, q
+    """
+    args = {}
+    q = request.args.get('q', '')
+    if endpoint == 'admin.comment_list':
+        for key in ('pending_page', 'approved_page'):
+            val = request.args.get(key)
+            if val:
+                args[key] = val
+        if q:
+            args['q'] = q
+    else:
+        page = request.args.get('page')
+        if page:
+            args['page'] = page
+        if q:
+            args['q'] = q
+    return redirect(url_for(endpoint, **args))
+
+
 # ── 缓存失效辅助函数 ─────────────────────────
 def _invalidate_sidebar_cache():
     """使侧边栏、RSS 和前台整页缓存失效。
@@ -355,7 +380,7 @@ def login():
         ]
         if len(_login_attempts[ip]) >= LOGIN_RATE_LIMIT:
             flash('登录尝试过于频繁，请稍后再试', 'error')
-            return render_template('admin/login.html', form=LoginForm())
+            return render_template('admin/login.html', form=LoginForm(), register_enabled=current_app.config.get('ENABLE_REGISTRATION', False))
 
     form = LoginForm()
     if form.validate_on_submit():
@@ -363,7 +388,7 @@ def login():
         if user and user.check_password(form.password.data):
             if not user.is_active:
                 flash('账号已被禁用，请联系管理员', 'error')
-                return render_template('admin/login.html', form=form)
+                return render_template('admin/login.html', form=form, register_enabled=current_app.config.get('ENABLE_REGISTRATION', False))
             # ── 登录成功：清除该 IP 的失败记录，更新用户统计信息 ─
             with _login_attempts_lock:
                 _login_attempts[ip] = []
@@ -381,7 +406,7 @@ def login():
         with _login_attempts_lock:
             _login_attempts[ip].append(now)
         flash('用户名或密码错误', 'error')
-    return render_template('admin/login.html', form=form)
+    return render_template('admin/login.html', form=form, register_enabled=current_app.config.get('ENABLE_REGISTRATION', False))
 
 
 @admin_bp.route('/register', methods=['GET', 'POST'])
@@ -637,7 +662,7 @@ def new_post():
         from .wordcloud import submit_task
         submit_task('post', post_id=post.id)
         flash('文章已发布', 'success')
-        return redirect(url_for('admin.post_list'))
+        return _redirect_list('admin.post_list')
     return render_template('admin/post-form.html', form=form, editing=False)
 
 
@@ -717,7 +742,7 @@ def edit_post(id):
         from .wordcloud import submit_task
         submit_task('post', post_id=post.id)
         flash('文章已更新', 'success')
-        return redirect(url_for('admin.post_list'))
+        return _redirect_list('admin.post_list')
     # ── 编辑时回填已选的分类 ─────────────────
     form.categories.data = [c.id for c in post.categories]
     return render_template('admin/post-form.html', form=form, editing=True, post=post)
@@ -758,7 +783,7 @@ def delete_post(id):
     from .wordcloud import submit_task
     submit_task('site')
     flash('文章已删除', 'success')
-    return redirect(url_for('admin.post_list'))
+    return _redirect_list('admin.post_list')
 
 
 # ═══════════════════════════════════════════════
@@ -817,7 +842,7 @@ def new_category():
         db.session.commit()
         _invalidate_sidebar_cache()
         flash('分类已创建', 'success')
-        return redirect(url_for('admin.category_list'))
+        return _redirect_list('admin.category_list')
     return render_template('admin/category-form.html', form=form, editing=False)
 
 
@@ -840,7 +865,7 @@ def edit_category(id):
         db.session.commit()
         _invalidate_sidebar_cache()
         flash('分类已更新', 'success')
-        return redirect(url_for('admin.category_list'))
+        return _redirect_list('admin.category_list')
     return render_template('admin/category-form.html', form=form, editing=True, cat=cat)
 
 
@@ -869,7 +894,7 @@ def delete_category(id):
     db.session.commit()
     _invalidate_sidebar_cache()
     flash('分类已删除', 'success')
-    return redirect(url_for('admin.category_list'))
+    return _redirect_list('admin.category_list')
 
 
 # ═══════════════════════════════════════════════
@@ -925,7 +950,7 @@ def approve_comment(id):
     comment.is_approved = True
     db.session.commit()
     flash('评论已审核通过', 'success')
-    return redirect(url_for('admin.comment_list'))
+    return _redirect_list('admin.comment_list')
 
 
 @admin_bp.route('/comments/<int:id>/delete', methods=['POST'])
@@ -940,7 +965,7 @@ def delete_comment(id):
     db.session.delete(comment)
     db.session.commit()
     flash('评论已删除', 'success')
-    return redirect(url_for('admin.comment_list'))
+    return _redirect_list('admin.comment_list')
 
 
 # ═══════════════════════════════════════════════
@@ -985,7 +1010,7 @@ def new_user():
         db.session.add(user)
         db.session.commit()
         flash('用户已创建', 'success')
-        return redirect(url_for('admin.user_list'))
+        return _redirect_list('admin.user_list')
     return render_template('admin/user-form.html', form=form, user=None)
 
 
@@ -1011,7 +1036,7 @@ def edit_user(id):
         user.role = form.role.data
         db.session.commit()
         flash('用户角色已更新', 'success')
-        return redirect(url_for('admin.user_list'))
+        return _redirect_list('admin.user_list')
     return render_template('admin/user-form.html', form=form, user=user, editing=True)
 
 
@@ -1030,7 +1055,7 @@ def delete_user(id):
     user = User.query.get_or_404(id)
     if user.id == current_user.id:
         flash('不能删除自己', 'error')
-        return redirect(url_for('admin.user_list'))
+        return _redirect_list('admin.user_list')
     # 删除该用户的所有文章（及关联评论）
     post_ids = [p.id for p in user.posts.all()]
     if post_ids:
@@ -1040,7 +1065,7 @@ def delete_user(id):
     db.session.commit()
     db.session.expire_all()
     flash('用户已删除', 'success')
-    return redirect(url_for('admin.user_list'))
+    return _redirect_list('admin.user_list')
 
 
 @admin_bp.route('/users/<int:id>/toggle-active', methods=['POST'])
@@ -1053,12 +1078,12 @@ def toggle_user_active(id):
     user = User.query.get_or_404(id)
     if user.id == current_user.id:
         flash('不能禁用自己', 'error')
-        return redirect(url_for('admin.user_list'))
+        return _redirect_list('admin.user_list')
     user.is_active = not user.is_active
     db.session.commit()
     status = '已启用' if user.is_active else '已禁用'
     flash(f'用户 {user.username} {status}', 'success')
-    return redirect(url_for('admin.user_list'))
+    return _redirect_list('admin.user_list')
 
 
 # ═══════════════════════════════════════════════
@@ -1284,7 +1309,7 @@ def new_featured_card():
     categories = Category.query.order_by(Category.name).all()
     if not categories:
         flash('请先创建分类，再添加特色卡片', 'error')
-        return redirect(url_for('admin.category_list'))
+        return _redirect_list('admin.category_list')
     form = FeaturedCardForm()
     form.tag.choices = [(c.slug, c.name) for c in categories]
     def _validate_url_protocol_local(val):

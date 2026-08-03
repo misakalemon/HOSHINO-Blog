@@ -41,7 +41,7 @@
                 <td>{{ img.created_at.strftime('%Y-%m-%d') if img.created_at else '-' }}</td>
                 <td>
                     <a href="{{ url_for('admin.edit_hero_image', id=img.id) }}" class="btn btn-primary btn-sm">编辑</a>
-                    <form method="POST" action="{{ url_for('admin.delete_hero_image', id=img.id) }}" style="display:inline" onsubmit="return confirm('确定删除这张画像？')">
+                    <form method="POST" action="{{ url_for('admin.delete_hero_image', id=img.id) }}" style="display:inline" onsubmit="var _f=this;event.preventDefault();showConfirm('确定删除这张画像？',function(r){if(r){_f.onsubmit=null;_f.submit()}})">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button class="btn btn-danger btn-sm">删除</button>
                     </form>

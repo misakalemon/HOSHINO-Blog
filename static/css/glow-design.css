@@ -196,6 +196,17 @@ ul { list-style: none; }
   background-clip: text;
 }
 /* 导航链接组：低对比度默认、悬停变亮、激活最亮 */
+.nav-hamburger { display: none; background: transparent; border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; color: rgba(255,255,255,0.7); padding: 6px 10px; cursor: pointer; line-height: 1; transition: all 0.3s; align-items:center; justify-content:center; }
+.nav-hamburger:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.9); }
+.nav-hamburger-icon { display: inline-block; width: 18px; height: 14px; position: relative; }
+.nav-hamburger-icon::before, .nav-hamburger-icon::after {
+  content: ''; position: absolute; left: 0; width: 100%; height: 2px; background: currentColor; border-radius: 2px;
+}
+.nav-hamburger-icon::before { top: 0; }
+.nav-hamburger-icon::after { bottom: 0; }
+.nav-hamburger-icon { background: currentColor; border-radius: 2px; height: 2px; position: absolute; top: 50%; transform: translateY(-50%); width: 100%; }
+.nav-drawer-close { background: transparent; border: none; color: rgba(255,255,255,0.6); font-size: 1.4rem; line-height: 1; cursor: pointer; padding: 4px 8px; }
+.nav-drawer-close:hover { color: rgba(255,255,255,0.9); }
 .nav-links { display: flex; gap: 28px; font-size: 0.85rem; color: rgba(255,255,255,0.6); }
 .nav-links a { transition: color 0.3s; text-decoration: none; color: inherit; }
 .nav-links a:hover { color: rgba(255,255,255,0.8); }
@@ -1849,7 +1860,7 @@ ul { list-style: none; }
   .mobile-drawer {
     display: flex; flex-direction: column; gap: 2px;
     position: fixed; top: 0; left: -280px; width: 260px; height: 100vh;
-    z-index: 100000; padding: 80px 16px 20px;
+    z-index: 100000; padding: 8px 16px 20px;
     background: rgba(8,10,15,0.55);
     backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
     border-right: 1px solid rgba(255,255,255,0.06);
@@ -1872,6 +1883,7 @@ ul { list-style: none; }
   /* 移动端其他响应式调优 */
   .hero h1 { font-size: 2.8rem; }
   .nav-links { display: none; }        /* 隐藏桌面导航链接 */
+  .nav-hamburger { display: inline-flex; align-items: center; justify-content: center; } /* 移动端显示汉堡按钮 */
   .footer { flex-direction: column; align-items: center; gap: 8px; }
   .sidebar { position: static; }       /* 侧边栏取消 sticky，跟随流式布局 */
   .post-content { font-size: 0.9rem; }

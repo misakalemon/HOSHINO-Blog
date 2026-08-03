@@ -309,15 +309,17 @@ function addSingleVideo(forceUpdate) {
                     'UP主: ' + d.up.name + '\n' +
                     '播放: ' + d.video.view_count.toLocaleString() + '\n\n' +
                     '是否更新统计数据？';
-                if (confirm(confirmMsg)) {
+                showConfirm(confirmMsg, function(r) {
                     btn.disabled = false;
                     btn.textContent = originalText;
-                    addSingleVideo(true);  // 递归调用，强制更新
-                } else {
-                    btn.disabled = false;
-                    btn.textContent = originalText;
-                    input.value = '';
-                }
+                    if (r) {
+                        addSingleVideo(true);  // 递归调用，强制更新
+                    } else {
+                        input.value = '';
+                        btn.disabled = false;
+                        btn.textContent = originalText;
+                    }
+                });
             } else if (d.ok) {
                 var msg = d.is_new 
                     ? '✅ 视频添加成功！\n标题: ' + d.video.title + '\nUP主: ' + d.up.name

@@ -91,7 +91,8 @@
 </section>
 {% endif %}
 
-<!-- 特色卡片网格：遍历所有特色卡片 -->
+<!-- 特色卡片网格：遍历所有特色卡片（搜索时隐藏，避免误导） -->
+{% if not (search_query is defined and search_query) %}
 <div class="featured-grid">
     {% for card in featured_cards %}
     <div class="featured-card">
@@ -112,8 +113,9 @@
     </div>
     {% endfor %}
 </div>
+{% endif %}
 
-{% if wordcloud_periods and wc_config.get('enabled_site', True) %}
+{% if not (search_query is defined and search_query) and wordcloud_periods and wc_config.get('enabled_site', True) %}
 {% set wc_keys = wordcloud_periods.keys() | list %}
 {% set wc_first = wordcloud_periods[wc_keys[0]] %}
 <!-- 全站词云 -->
@@ -144,7 +146,11 @@
 <div class="content">
     <div class="row">
         <div class="col-8">
+            {% if search_query is defined and search_query %}
+            <div class="section-title">搜索 <span>「{{ search_query }}」</span> 的结果</div>
+            {% else %}
             <div class="section-title">精选 <span>文章</span></div>
+            {% endif %}
 
             <!-- 如果存在文章数据 -->
             {% if posts.items %}
@@ -201,14 +207,14 @@
                 <ul class="pagination">
                     <!-- 上一页按钮 -->
                     {% if posts.has_prev %}
-                    <li><a href="{{ url_for('blog.index', page=posts.prev_num, per_page=current_per_page) }}">←</a></li>
+                    <li><a href="{{ url_for('blog.index', page=posts.prev_num, per_page=current_per_page, q=search_query if search_query is defined and search_query else None) }}">←</a></li>
                     {% endif %}
                     <!-- 迭代页码，left_edge/right_edge 控制两端页码，left_current/right_current 控制当前页两侧 -->
                     {% for page_num in posts.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                         {% if page_num %}
                         <!-- 当前页高亮 -->
                         <li {% if page_num == posts.page %}class="active"{% endif %}>
-                            <a href="{{ url_for('blog.index', page=page_num, per_page=current_per_page) }}">{{ page_num }}</a>
+                            <a href="{{ url_for('blog.index', page=page_num, per_page=current_per_page, q=search_query if search_query is defined and search_query else None) }}">{{ page_num }}</a>
                         </li>
                         {% else %}
                         <!-- 页码不连续时显示省略号 -->
@@ -217,13 +223,13 @@
                     {% endfor %}
                     <!-- 下一页按钮 -->
                     {% if posts.has_next %}
-                    <li><a href="{{ url_for('blog.index', page=posts.next_num, per_page=current_per_page) }}">→</a></li>
+                    <li><a href="{{ url_for('blog.index', page=posts.next_num, per_page=current_per_page, q=search_query if search_query is defined and search_query else None) }}">→</a></li>
                     {% endif %}
                 </ul>
                 <div class="page-jump">
                     <span style="color:rgba(255,255,255,0.25);font-size:0.7rem">共 {{ posts.pages }} 页</span>
                     <!-- 跳转输入框：Enter 触发跳转 -->
-                    <input type="number" min="1" max="{{ posts.pages }}" placeholder="跳转" onkeydown="if(event.key=='Enter'){var p=parseInt(this.value);if(p>=1&&p<={{ posts.pages }})window.location='{{ url_for('blog.index') }}?page='+p+'&per_page={{ current_per_page }}';}">
+                    <input type="number" min="1" max="{{ posts.pages }}" placeholder="跳转" onkeydown="if(event.key=='Enter'){var p=parseInt(this.value);if(p>=1&&p<={{ posts.pages }}){var _s=new URLSearchParams(location.search);_s.set('page',p);window.location='{{ url_for('blog.index') }}?'+_s.toString();}}">
                     <!-- 每页条数选择器 -->
                     <div class="glow-select-wrap" style="display:inline-flex;background:transparent;border:none;vertical-align:middle">
                         <div class="glow-select-trigger" onclick="toggleGlowSelect(this)" style="padding:4px 8px;font-size:0.7rem;color:rgba(255,255,255,0.5);gap:4px">
@@ -245,11 +251,16 @@
             </div>
             {% endif %}
 
-            <!-- 无文章时的空状态 -->
+            <!-- 无文章时的空状态（区分搜索无结果 vs 博客暂无内容） -->
             {% else %}
             <div class="empty-state">
+                {% if search_query is defined and search_query %}
+                <h2>未找到与「{{ search_query }}」相关的文章</h2>
+                <p>换个关键词试试，或<a href="{{ url_for('blog.index') }}" style="color:#7abfff">清除搜索</a>。</p>
+                {% else %}
                 <h2>暂无文章</h2>
                 <p>发布后文章将在此显示。</p>
+                {% endif %}
             </div>
             {% endif %}
         </div>

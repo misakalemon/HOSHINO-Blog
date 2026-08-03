@@ -17,14 +17,17 @@
 {% extends 'admin/base_admin.html' %}
 {% block title %}仪表盘{% endblock %}
 {% block admin_content %}
-<div class="admin-header"><h3>仪表盘</h3></div>
+<div class="admin-header">
+    <h3>仪表盘</h3>
+    <a href="{{ url_for('admin.new_post') }}" class="btn btn-primary btn-sm">+ 新建文章</a>
+</div>
 
-<!-- 统计卡片 -->
+<!-- 统计卡片（可点击跳转） -->
 <div class="card-grid">
-    <div class="admin-card stat-card"><div class="num">{{ post_count }}</div><div class="label">文章总数</div></div>
-    <div class="admin-card stat-card"><div class="num">{{ published_count }}</div><div class="label">已发布</div></div>
-    <div class="admin-card stat-card"><div class="num">{{ comment_count }}</div><div class="label">待审核评论</div></div>
-    <div class="admin-card stat-card"><div class="num">{{ user_count }}</div><div class="label">用户数</div></div>
+    <a href="{{ url_for('admin.post_list') }}" class="admin-card stat-card" style="text-decoration:none;display:block"><div class="num">{{ post_count }}</div><div class="label">文章总数</div></a>
+    <a href="{{ url_for('admin.post_list') }}" class="admin-card stat-card" style="text-decoration:none;display:block"><div class="num">{{ published_count }}</div><div class="label">已发布</div></a>
+    <a href="{{ url_for('admin.comment_list') }}" class="admin-card stat-card" style="text-decoration:none;display:block"><div class="num">{{ comment_count }}</div><div class="label">待审核评论</div></a>
+    <a href="{{ url_for('admin.user_list') }}" class="admin-card stat-card" style="text-decoration:none;display:block"><div class="num">{{ user_count }}</div><div class="label">用户数</div></a>
 </div>
 
 <div class="admin-row">
@@ -37,7 +40,7 @@
                 <!-- 遍历 recent_posts，限制标题显示长度 -->
                 {% for p in recent_posts %}
                 <tr>
-                    <td data-label="标题">{{ p.title[:40] }}{% if p.title|length > 40 %}…{% endif %}</td>
+                    <td data-label="标题"><a href="{{ url_for('admin.edit_post', id=p.id) }}" style="color:inherit;text-decoration:none;transition:color 0.2s">{{ p.title[:40] }}{% if p.title|length > 40 %}…{% endif %}</a></td>
                     <!-- 根据 is_published 显示不同状态徽章 -->
                     <td data-label="状态"><span class="badge {{ 'badge-published' if p.is_published else 'badge-draft' }}">{{ '已发布' if p.is_published else '草稿' }}</span></td>
                     <td data-label="日期">{{ format_date(p.created_at, '%Y-%m-%d') }}</td>
@@ -56,7 +59,7 @@
                 <tr><th>内容</th><th>文章</th><th>日期</th></tr>
                 {% for c in recent_comments %}
                 <tr>
-                    <td data-label="内容">{{ c.content[:30] }}{% if c.content|length > 30 %}…{% endif %}</td>
+                    <td data-label="内容"><a href="{{ url_for('admin.comment_list') }}" style="color:inherit;text-decoration:none;transition:color 0.2s">{{ c.content[:30] }}{% if c.content|length > 30 %}…{% endif %}</a></td>
                     <td data-label="文章">{{ c.post.title[:20] }}{% if c.post.title|length > 20 %}…{% endif %}</td>
                     <td data-label="日期">{{ format_date(c.created_at, '%m/%d') }}</td>
                 </tr>

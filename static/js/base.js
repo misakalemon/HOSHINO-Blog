@@ -47,15 +47,30 @@
 
 // ── 移动端抽屉菜单 ─────────────────────────
 /** 切换移动端侧滑抽屉菜单的展开/收起状态 */
-function toggleDrawer(){
-  document.getElementById('mobileDrawer').classList.toggle('open');
-  document.getElementById('drawerOverlay').classList.toggle('show');
+// 智能返回：同源历史可退则返回，否则跳转到显式链接（避免直接离开网站）
+function smartBack(fallbackUrl) {
+  try {
+    var ref = document.referrer;
+    if (ref && ref.indexOf(location.origin) === 0) { history.back(); return; }
+  } catch (e) {}
+  if (fallbackUrl) { location.href = fallbackUrl; }
 }
-// 抽屉 logo 点击（小屏时触发抽屉）+ 遮罩层点击关闭
+function toggleDrawer(){
+  var drawer = document.getElementById('mobileDrawer');
+  var overlay = document.getElementById('drawerOverlay');
+  if (!drawer) return;
+  var isOpen = drawer.classList.toggle('open');
+  if (overlay) overlay.classList.toggle('show', isOpen);
+  // 同步汉堡按钮的 aria-expanded 状态
+  var hamburger = document.querySelector('.nav-hamburger');
+  if (hamburger) hamburger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  // 同步关闭按钮 aria-label
+  var closeBtn = drawer.querySelector('.nav-drawer-close');
+  if (closeBtn) closeBtn.setAttribute('aria-label', isOpen ? '关闭菜单' : '打开菜单');
+}
+// 抽屉遮罩层点击关闭
 // 使用 addEventListener 而非 onclick，兼容 CSP 策略
-document.getElementById('navLogo')?.addEventListener('click', function(e) {
-  if (window.innerWidth < 640) { e.preventDefault(); toggleDrawer(); }
-});
+document.getElementById('drawerOverlay')?.addEventListener('click', toggleDrawer);
 document.getElementById('drawerOverlay')?.addEventListener('click', toggleDrawer);
 
 // ── 图片灯箱 ───────────────────────────────

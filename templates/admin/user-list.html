@@ -17,6 +17,7 @@
         {% for u in users.items %}
         <tr>
             <td data-label="头像"><img src="{{ url_for('blog.thumbnail', path=u.avatar or 'images/avatar/main-avatar.jpg', w=40) }}" alt="" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:1px solid rgba(255,255,255,0.08);vertical-align:middle"></td>
+            <td data-label="ID">{{ u.id }}</td>
             <td data-label="用户名"><strong>{{ u.username }}</strong></td>
             <td data-label="邮箱">{{ u.email }}</td>
             <td data-label="显示名">{{ u.display_name or '-' }}</td>
@@ -49,7 +50,7 @@
             </td>
         </tr>
         {% else %}
-        <tr><td colspan="11">暂无用户</td></tr>
+        <tr><td colspan="12">暂无用户</td></tr>
         {% endfor %}
     </table>
     </div>
