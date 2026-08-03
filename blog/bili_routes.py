@@ -328,6 +328,12 @@ def delete_up(up_id):
     if is_running(up.mid) or up.mid in _scrape_running or up.mid in _incremental_running:
         flash('该 UP 主正在爬取中，请等待完成后再删除', 'error')
         return redirect(url_for('bili.index'))
+    # 手动按依赖顺序删除，避免 ORM 级联置 NULL 触发 video_id NOT NULL 冲突：
+    # 先删历史快照 → 再删视频 → 最后删 UP 主
+    video_ids = [v.id for v in up.videos]
+    if video_ids:
+        BiliVideoHistory.query.filter(BiliVideoHistory.video_id.in_(video_ids)).delete(synchronize_session=False)
+    BiliVideo.query.filter(BiliVideo.up_id == up.id).delete(synchronize_session=False)
     db.session.delete(up)
     db.session.commit()
     flash(f'已删除 UP 主「{up.name or up.mid}」及其视频数据', 'success')
@@ -347,6 +353,8 @@ def delete_video(video_id):
     """
     video = BiliVideo.query.get_or_404(video_id)
     up_id = video.up_id
+    # 先删历史快照，再删视频（避免 ORM 级联置 NULL 触发 NOT NULL 冲突）
+    BiliVideoHistory.query.filter(BiliVideoHistory.video_id == video.id).delete(synchronize_session=False)
     db.session.delete(video)
     db.session.commit()
     flash(f'已删除视频 {video.bvid}', 'success')

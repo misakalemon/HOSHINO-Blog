@@ -627,7 +627,9 @@ class BiliVideoHistory(db.Model):
 
     # lazy='joined'：查询时 JOIN BiliVideo，避免 N+1
     # 因为历史快照总是需要关联视频信息，所以使用 joined 加载
-    video = db.relationship('BiliVideo', backref='history_records', lazy='joined')
+    # passive_deletes=True：外键在数据库层已有 ON DELETE CASCADE，
+    # 通知 ORM 删除视频时不要在应用层置 NULL 子记录，避免 video_id NOT NULL 冲突
+    video = db.relationship('BiliVideo', backref='history_records', lazy='joined', passive_deletes=True)
 
 
 class BiliWatchedVideo(db.Model):
