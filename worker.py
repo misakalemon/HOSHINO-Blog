@@ -238,6 +238,10 @@ def _run_bili_incremental_check(app):
                     _incremental_running.discard(up.mid)
 
         import random
+        # 整体增量检查硬超时（秒）：防止个别 UP 卡死在网络重试导致整个实例永不结束，
+        # 进而 APScheduler 因 max_instances=1 跳过后续调度、线程/连接累积耗尽资源。
+        overall_timeout = int(os.environ.get('BILI_INCREMENTAL_TIMEOUT', '900'))  # 默认 15 分钟
+        start_t = time.time()
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {}
             for up in ups:
@@ -249,12 +253,21 @@ def _run_bili_incremental_check(app):
                 # 错峰启动：避免前 N 个线程同一秒发出第 1 页请求触发风控
                 time.sleep(random.uniform(2.0, 5.0))
 
-            for future in as_completed(futures):
-                up = futures[future]
-                try:
-                    future.result()
-                except Exception as e:
-                    logger.warning('增量检查 mid=%d 异常: %s', up.mid, e)
+            deadline = start_t + overall_timeout
+            try:
+                for future in as_completed(futures, timeout=overall_timeout):
+                    up = futures[future]
+                    try:
+                        future.result()
+                    except Exception as e:
+                        logger.warning('增量检查 mid=%d 异常: %s', up.mid, e)
+                    if time.time() > deadline:
+                        logger.warning('增量检查达到 %ds 硬超时，停止等待剩余 %d 个 UP',
+                                       overall_timeout, len(futures) - len([f for f in futures if f.done()]))
+                        break
+            except TimeoutError:
+                logger.warning('增量检查整体超时 %ds，未完成 %d 个 UP',
+                               overall_timeout, len(futures))
 
 
 def _init_worker_scheduler(app):

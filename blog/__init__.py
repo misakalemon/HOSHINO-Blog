@@ -747,8 +747,12 @@ def _migrate_wordcloud_data_fields(app):
     dialect = engine.dialect.name
     if dialect != 'mysql':
         return
-    inspector = db.inspect(engine)
-    cols = {c['name'] for c in inspector.get_columns('wordcloud_data')}
+    try:
+        inspector = db.inspect(engine)
+        cols = {c['name'] for c in inspector.get_columns('wordcloud_data')}
+    except Exception as e:
+        app.logger.warning('迁移: 读取 wordcloud_data 列结构失败（跳过）: %s', e)
+        return
     for col_name, col_type in [
         ('period', "VARCHAR(16) DEFAULT 'all'"),
         ('source', "VARCHAR(8) DEFAULT 'blog'"),
