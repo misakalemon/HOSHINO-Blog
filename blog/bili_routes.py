@@ -633,9 +633,10 @@ def _insert_or_update_video(up, video_info, aid, bvid, title_short):
         return None, False
     try:
         # 写入统计历史快照（预检避免重复数据点）
+        # 用 now_cst()（aware）参与 SQL 比较，PyMySQL 会统一转 UTC 存储，与 DB 时基一致
         _prev_h = BiliVideoHistory.query.filter(
             BiliVideoHistory.video_id == video.id,
-            BiliVideoHistory.recorded_at >= datetime.datetime.now() - datetime.timedelta(seconds=30)
+            BiliVideoHistory.recorded_at >= now_cst() - datetime.timedelta(seconds=30)
         ).first()
         if _prev_h:
             _prev_h.view_count = video_info.get('view_count', 0)
@@ -754,25 +755,31 @@ def _crawl_video_comments(video, hot_pages: int = _COMMENT_HOT_PAGES, newest_pag
         return count
 
     total = 0
+    completed = True
     # 1. 热门评论（按点赞）
     for page in range(1, hot_pages + 1):
         n = _crawl_page(page, OrderType.LIKE)
         if n < 0:
+            completed = False  # 风控/失败中断，评论不完整，不标记已爬取
             break
         total += n
 
     # 2. 最新评论（按时间）
-    for page in range(1, newest_pages + 1):
-        n = _crawl_page(page, OrderType.TIME)
-        if n < 0:
-            break
-        total += n
+    if completed:
+        for page in range(1, newest_pages + 1):
+            n = _crawl_page(page, OrderType.TIME)
+            if n < 0:
+                completed = False
+                break
+            total += n
 
-    # 标记评论已爬取
-    v = BiliVideo.query.get(_video_id)
-    if v:
-        v.comments_crawled_at = now_cst()
-        db.session.commit()
+    # 仅完整爬完才标记评论已爬取；否则保留 comments_crawled_at 为空，
+    # 让后续任务能重新投递该视频的评论爬取，避免评论永久缺页
+    if completed:
+        v = BiliVideo.query.get(_video_id)
+        if v:
+            v.comments_crawled_at = now_cst()
+            db.session.commit()
 
     return total
 
@@ -908,6 +915,8 @@ def _check_new_videos(mid: int, app):
             count = 0
             consecutive_known = 0  # 连续已知视频计数 — 超阈值说明已无新视频
             _batch_count = 0
+            # 本 run 新插入视频的 bvid 集合：快照阶段排除，避免重复拉取统计
+            _run_new_bvids: set[str] = set()
             # 连续 30 个视频全部已知 → 认为已经扫描到已入库的尾部，提前停止
             MAX_CONSECUTIVE_KNOWN = 30
             # arc/search 返回的统计缓存（bvid → view/comment/danmaku/favorite）
@@ -988,23 +997,20 @@ def _check_new_videos(mid: int, app):
                         count += 1
                         existing_bvids.add(bvid)
                         existing_aids.add(aid)
+                        _run_new_bvids.add(bvid)
                         title_short = (video_info.get('title') or '')[:30]
                         emit(f'发现新视频 [{count}] {title_short}', 'NEW')
             else:
                 emit(f'动态流无新视频，跳过 arc/search 翻页（节省 {_inc_max_pages} 个 API 请求）', 'SYS')
 
             # 处理动态发现的新视频（复用上面的 dyn_videos / _dyn_new）
-            _dyn_stat_batch = (
-                get_video_stats_batch([v['bvid'] for v in _dyn_new]) if _dyn_new else {}
-            )
+            # 动态流返回的 video_info 已含完整 7 项统计（get_info），无需再整批拉取，
+            # 避免同一视频在同一次增量内被重复请求（降低风控压力）。
             _batch_count = 0
             for video_info in _dyn_new:
                 bvid = video_info['bvid']
                 aid = video_info['aid']
                 title_short = (video_info.get('title') or '')[:30]
-                stat = _dyn_stat_batch.get(bvid)
-                if stat:
-                    video_info.update(stat)
                 video, ok = _insert_or_update_video(up, video_info, aid, bvid, title_short)
                 if not ok:
                     continue
@@ -1018,6 +1024,7 @@ def _check_new_videos(mid: int, app):
                 count += 1
                 existing_bvids.add(bvid)
                 existing_aids.add(aid)
+                _run_new_bvids.add(bvid)
                 emit(f'[动态发现] 新视频 [{count}] {title_short}', 'DYN')
             if dyn_videos:
                 emit(f'动态发现完成，共扫描 {len(dyn_videos)} 个视频', 'DYN')
@@ -1091,6 +1098,11 @@ def _check_new_videos(mid: int, app):
                     emit(f'追踪 {len(watched)} 个重点视频', 'SNAP')
                     count += len(watched)
                 snap_videos.extend(watched)
+
+                # 排除本 run 刚入库的新视频（其统计已在 arc/dyn 路径拉取过，
+                # 避免同一视频同一次增量内被重复 get_video_stat）
+                if _run_new_bvids:
+                    snap_videos = [v for v in snap_videos if v.bvid not in _run_new_bvids]
 
                 if snap_videos:
                     # 并发批量获取完整 7 项统计（播放/点赞/投币/收藏/转发/评论/弹幕）
@@ -1618,6 +1630,9 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
 
                 with ThreadPoolExecutor(max_workers=_UPDATE_THREADS) as _fill_pool:
                     _fill_futs = {}
+                    # 已提交处理的数量（含处理中）；need/max_videos 均作为硬上限
+                    _fill_submitted = 0
+                    _fill_quota = need if need > 0 else (max_videos or 0)
                     while True:
                         try:
                             _item = _fill_q.get(timeout=0.5)
@@ -1627,10 +1642,12 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                             continue
                         if _item is None:
                             break
-                        if need > 0 and fill_count >= need:
+                        # 达到配额上限（need 或 max_videos）时停止消费并通知生产者
+                        if _fill_quota and _fill_submitted >= _fill_quota:
                             _fill_stop_evt.set()
                             break
                         _fill_futs[_fill_pool.submit(_fill_fetch_stat, _item)] = _item
+                        _fill_submitted += 1
 
                     for _ff in as_completed(_fill_futs):
                         _vi = _fill_futs[_ff]
@@ -1730,7 +1747,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                         if (
                             not force
                             and v.updated_at
-                            and (now_cst().replace(tzinfo=None) - v.updated_at).total_seconds()
+                            and (now_cst().astimezone(datetime.timezone.utc).replace(tzinfo=None) - v.updated_at).total_seconds()
                             < min_age_hours * 3600
                         ):
                             emit(f'  跳过「{title_short}」— 最近 {min_age_hours} 小时内已更新', 'SKIP')
@@ -1761,7 +1778,8 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                         _hist_id = (hist_id_map or {}).get(v.id)
                         _prev_h = BiliVideoHistory.query.get(_hist_id) if _hist_id else None
                         if _prev_h is not None and (
-                            now_cst().replace(tzinfo=None) - _prev_h.recorded_at
+                            # DB 存的是 UTC naive，这里也用 UTC naive 比较，避免 8h 时区偏差
+                            now_cst().astimezone(datetime.timezone.utc).replace(tzinfo=None) - _prev_h.recorded_at
                         ).total_seconds() > 30:
                             _prev_h = None
                         if _prev_h:
