@@ -127,8 +127,18 @@
         <div class="admin-card">
             <div class="form-group">
                 <label>正文</label>
+                <!-- 编辑器辅助工具条：预览 / 快捷键帮助 / 自动保存提示 -->
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+                    <div style="font-size:12px;color:var(--text-muted)" id="rteAutosaveHint">自动保存已启用（每 3 秒）</div>
+                    <div style="display:flex;gap:6px">
+                        <button type="button" class="btn btn-ghost" style="padding:5px 12px;font-size:12px" onclick="toggleRtePreview()">👁 预览</button>
+                        <button type="button" class="btn btn-ghost" style="padding:5px 12px;font-size:12px" onclick="showRteShortcuts()">⌨ 快捷键</button>
+                    </div>
+                </div>
                 <!-- Tiptap 富文本编辑器容器 -->
                 <div id="rte-container"></div>
+                <!-- 预览模式 -->
+                <div id="rte-preview" style="display:none;min-height:400px;padding:16px;background:rgba(255,255,255,0.02);border:1px solid var(--border-subtle);border-radius:12px;color:var(--text-primary);font-size:15px;line-height:1.8;overflow-y:auto"></div>
                 <!-- 隐藏文本域：提交时同步编辑器内容 -->
                 <textarea name="content" id="content-hidden" style="display:none">{{ form.content.data or '' }}</textarea>
                 {% if form.content.errors %}<div class="field-error">{{ form.content.errors[0] }}</div>{% endif %}
@@ -241,6 +251,202 @@ function syncEditor() {
   }
 }
 
+// ── 编辑器增强：自动保存 / 图片上传 / Markdown 粘贴 / 预览 ──
+(function() {
+  if (!hoshinoEditor) return;
+  var ed = hoshinoEditor.editor;
+  var _editPostId = {{ (post.id if post is defined and post else 0)|tojson }};
+  var STORAGE_KEY = 'hoshino_post_draft_' + _editPostId;
+  var CSRF = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+  var uploadUrl = '{{ url_for("admin.upload_image") }}';
+
+  // 1. localStorage 自动保存（防刷新丢失）
+  var saveTimer = null;
+  function saveDraft() {
+    if (!hoshinoEditor) return;
+    try {
+      localStorage.setItem(STORAGE_KEY, hoshinoEditor.getHTML());
+    } catch (e) {}
+  }
+  function scheduleSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveDraft, 3000); // 3s 防抖
+  }
+  if (ed && ed.on) {
+    try { ed.on('update', scheduleSave); } catch (e) {}
+  }
+  // 恢复草稿（仅新建模式且有草稿时提示）
+  if (!({{ (editing if editing is defined else False)|tojson }})) {
+    var draft = null;
+    try { draft = localStorage.getItem(STORAGE_KEY); } catch (e) {}
+    if (draft && draft.trim() && draft !== editorContent) {
+      if (window.confirm('检测到未保存的草稿，是否恢复？')) {
+        if (hoshinoEditor.setHTML) hoshinoEditor.setHTML(draft);
+      }
+    }
+  }
+  // 表单提交成功后清除草稿
+  var formEl = document.getElementById('post-form');
+  if (formEl) {
+    formEl.addEventListener('submit', function() {
+      clearTimeout(saveTimer);
+      try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+    });
+  }
+
+  // 2. 前端图片压缩辅助
+  function compressImageFile(file, maxW, cb) {
+    if (!window.FileReader || !document.createElement('canvas').getContext) { cb(file); return; }
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var img = new Image();
+      img.onload = function() {
+        var w = img.width, h = img.height;
+        if (w <= maxW || !w || !h) { cb(file); return; }
+        var ratio = maxW / w;
+        var canvas = document.createElement('canvas');
+        canvas.width = maxW;
+        canvas.height = Math.round(h * ratio);
+        var ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(function(blob) {
+          if (!blob) { cb(file); return; }
+          var ext = (file.name || '').split('.').pop() || 'png';
+          cb(new File([blob], 'compressed-' + (file.name || 'img') + '.' + (canvas.toDataURL().indexOf('image/webp') >= 0 ? 'webp' : ext), { type: 'image/webp' }));
+        }, 'image/webp', 0.82);
+      };
+      img.onerror = function() { cb(file); };
+      img.src = e.target.result;
+    };
+    reader.onerror = function() { cb(file); };
+    reader.readAsDataURL(file);
+  }
+
+  // 3. 图片上传（压缩后走后端接口，替换为 URL）
+  function uploadImage(file, cb) {
+    compressImageFile(file, 1600, function(croppedFile) {
+      var fd = new FormData();
+      fd.append('file', croppedFile, file.name || 'image.png');
+      fetch(uploadUrl, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': CSRF },
+        body: fd
+      })
+      .then(function(r) { if (!r.ok) throw new Error('上传失败'); return r.json(); })
+      .then(function(data) { cb(data.url); })
+      .catch(function() { cb(null); });
+    });
+  }
+
+  // 4. 粘贴图片 → 自动上传（替换 base64，防止数据库膨胀）
+  if (ed && ed.on && ed.view && ed.view.dom) {
+    try {
+      ed.view.dom.addEventListener('paste', function(ev) {
+        var items = (ev.clipboardData || {}).items;
+        if (!items) return;
+        var imgItem = null;
+        for (var i = 0; i < items.length; i++) {
+          if (items[i].type && items[i].type.indexOf('image/') === 0) { imgItem = items[i]; break; }
+        }
+        if (!imgItem) return;
+        var file = imgItem.getAsFile();
+        if (!file) return;
+        ev.preventDefault(); // 阻止编辑器默认 base64 内联
+        uploadImage(file, function(url) {
+          if (!url) return;
+          try {
+            ed.chain().focus().setImage({ src: url }).run();
+          } catch (e) {
+            // 编辑器实例不支持 setImage 时降级插入 <img>
+            try { ed.chain().focus().insertContent('<img src="' + url.replace(/"/g, '&quot;') + '" alt="">').run(); } catch (e2) {}
+          }
+        });
+      });
+    } catch (e) {}
+  }
+
+  // 5. Markdown 粘贴：检测剪贴板纯文本是否含 Markdown 标记，是则转换为 HTML
+  function looksLikeMarkdown(text) {
+    if (!text || typeof text !== 'string') return false;
+    // 检测常见 Markdown 标记：标题/粗体/斜体/列表/引用/代码块/链接/表格/任务
+    var md = /(^|\n)\s{0,3}#{1,6}\s|\*\*[^*]+\*\*|__[^_]+__|^[-*+] [^\n]+$|^>\s|```|\[[^\]]+\]\([^)]*\)|\|\s*[-:|-]+\s*\|/m;
+    // 至少两行或包含多个标记才判定（避免普通文本误转换）
+    var lines = text.split('\n').filter(function(l){return l.trim();}).length;
+    return (lines >= 2 || text.indexOf('\n') >= 0) && md.test(text);
+  }
+  function mdToHtml(text) {
+    var escapeHtml = function(s) {
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    };
+    var lines = text.split('\n');
+    var html = '';
+    var inCode = false, codeBuf = [];
+    var listType = null;
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      var t = line.trim();
+      // 代码块
+      if (/^```/.test(t)) {
+        if (!inCode) { inCode = true; codeBuf = []; }
+        else { inCode = false; html += '<pre><code>' + escapeHtml(codeBuf.join('\n')) + '</code></pre>'; }
+        continue;
+      }
+      if (inCode) { codeBuf.push(line); continue; }
+      // 标题
+      var h = t.match(/^(#{1,6})\s+(.*)$/);
+      if (h) { html += '<h' + h[1].length + '>' + escapeHtml(h[2]) + '</h' + h[1].length + '>'; continue; }
+      // 引用
+      if (/^>\s?/.test(t)) { html += '<blockquote>' + escapeHtml(t.replace(/^>\s?/,'')) + '</blockquote>'; continue; }
+      // 无序列表
+      if (/^[-*+]\s+/.test(t) || /^[-*+]\s/.test(t)) {
+        if (listType !== 'ul') { if (listType) html += '</ul>'; html += '<ul>'; listType = 'ul'; }
+        html += '<li>' + escapeHtml(t.replace(/^[-*+]\s+?/,'')) + '</li>'; continue;
+      }
+      // 有序列表
+      var ol = t.match(/^\d+\.\s+(.*)$/);
+      if (ol) {
+        if (listType !== 'ol') { if (listType) html += '</' + listType + '>'; html += '<ol>'; listType = 'ol'; }
+        html += '<li>' + escapeHtml(ol[1]) + '</li>'; continue;
+      }
+      // 其他行
+      if (listType) { html += '</' + listType + '>'; listType = null; }
+      if (t) html += '<p>' + escapeHtml(t) + '</p>';
+    }
+    if (inCode && codeBuf.length) html += '<pre><code>' + escapeHtml(codeBuf.join('\n')) + '</code></pre>';
+    if (listType) html += '</' + listType + '>';
+    return html;
+  }
+  if (ed && ed.view && ed.view.dom) {
+    try {
+      ed.view.dom.addEventListener('paste', function(ev) {
+        var cd = ev.clipboardData;
+        if (!cd) return;
+        // 有图片则不处理（交给图片处理器）
+        var hasImg = false;
+        for (var i = 0; i < (cd.items || []).length; i++) {
+          if (cd.items[i].type && cd.items[i].type.indexOf('image/') === 0) { hasImg = true; break; }
+        }
+        if (hasImg) return;
+        var text = cd.getData('text/plain');
+        if (!looksLikeMarkdown(text)) return;
+        ev.preventDefault();
+        var html = mdToHtml(text);
+        try { ed.chain().focus().insertContent(html).run(); } catch (e) {}
+      });
+    } catch (e) {}
+  }
+
+  // 6. 工具函数暴露给模板内联按钮使用
+  window.hoshinoEditorHelpers = {
+    compressImageFile: compressImageFile,
+    saveDraft: saveDraft,
+    getHTML: function() { return hoshinoEditor ? hoshinoEditor.getHTML() : ''; }
+  };
+})();
+
+
 // === 步骤切换 ===
 var currentStep = 1;
 function goStep(n) {
@@ -347,6 +553,48 @@ function removeHtmlFile(e) {
   if (hc) hc.value = '';
   var existing = document.getElementById('htmlExisting');
   if (existing) existing.style.display = 'none';
+}
+
+// === 编辑器预览模式 ===
+var rtePreviewActive = false;
+function toggleRtePreview() {
+  var container = document.getElementById('rte-container');
+  var preview = document.getElementById('rte-preview');
+  if (!container || !preview) return;
+  if (!rtePreviewActive) {
+    var html = hoshinoEditor ? hoshinoEditor.getHTML() : '';
+    preview.innerHTML = html;
+    container.style.display = 'none';
+    preview.style.display = 'block';
+    rtePreviewActive = true;
+  } else {
+    preview.style.display = 'none';
+    container.style.display = 'block';
+    rtePreviewActive = false;
+  }
+}
+
+// === 快捷键帮助弹窗 ===
+function showRteShortcuts() {
+  var shortcuts = [
+    ['Ctrl+B', '加粗'], ['Ctrl+I', '斜体'], ['Ctrl+U', '下划线'],
+    ['Ctrl+Z / Ctrl+Y', '撤销 / 重做'],
+    ['Ctrl+Shift+7', '无序列表'], ['Ctrl+Shift+8', '有序列表'],
+    ['Ctrl+Alt+1~4', '标题 1-4 级'], ['Ctrl+E', '行内代码'],
+    ['Ctrl+Shift+B', '代码块'], ['Ctrl+Shift+C', '引用'],
+    ['Ctrl+Enter', '提交 / 完成'], ['Tab（代码块内）', '插入 4 空格'],
+    ['右键', '上下文菜单（复制/粘贴/格式）']
+  ];
+  var rows = shortcuts.map(function(s) {
+    return '<div style="display:flex;justify-content:space-between;gap:20px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05)">' +
+           '<span style="font-family:monospace;color:#c4b5fd">' + s[0] + '</span>' +
+           '<span style="color:var(--text-secondary)">' + s[1] + '</span></div>';
+  }).join('');
+  if (typeof showConfirm === 'function') {
+    showConfirm('⌨ 快捷键速查\n\n' + shortcuts.map(function(s){return s[0]+' — '+s[1];}).join('\n'), function(){});
+  } else {
+    window.alert('快捷键速查：\n\n' + shortcuts.map(function(s){return s[0]+' — '+s[1];}).join('\n'));
+  }
 }
 
 </script>
