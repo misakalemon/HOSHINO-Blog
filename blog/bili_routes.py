@@ -204,7 +204,8 @@ def refresh_up(up_id):
     if not is_queue_available():
         flash('任务队列不可用（Redis 未连接），无法执行刷新', 'error')
         return redirect(url_for('bili.up_detail', up_id=up_id))
-    task_id = submit_task('refresh_up', mid=up.mid, space_url=up.space_url, max_videos=30)
+    task_id = submit_task('refresh_up', mid=up.mid, space_url=up.space_url,
+                          max_videos=int(os.environ.get('BILI_REFRESH_MAX_VIDEOS', '30')))
     if task_id:
         mark_running(up.mid)
         flash(f'已开始刷新「{up.name or up.mid}」的数据', 'success')
@@ -495,7 +496,7 @@ _CIRCUIT_COOLDOWN = int(os.environ.get('BILI_COOLDOWN', '3600'))
 # 412 违规计数（近 1h 内次数），用于阶梯退避
 _circuit_attempts: list[float] = []
 _circuit_attempts_lock = threading.Lock()
-_CIRCUIT_MAX_COOLDOWN = 60 * 60  # 最大冷却 60 分钟
+_CIRCUIT_MAX_COOLDOWN = int(os.environ.get('BILI_MAX_COOLDOWN', '3600'))  # 最大冷却 60 分钟
 
 
 def _circuit_compute_cooldown() -> float:
@@ -671,10 +672,10 @@ def _insert_or_update_video(up, video_info, aid, bvid, title_short):
     return video, is_new
 
 
-_COMMENT_HOT_PAGES = 5
-_COMMENT_NEWEST_PAGES = 5
-_COMMENT_SLEEP_BASE = 4.0
-_COMMENT_SLEEP_JITTER = 3.0
+_COMMENT_HOT_PAGES = int(os.environ.get('BILI_COMMENT_HOT_PAGES', '5'))
+_COMMENT_NEWEST_PAGES = int(os.environ.get('BILI_COMMENT_NEWEST_PAGES', '5'))
+_COMMENT_SLEEP_BASE = float(os.environ.get('BILI_COMMENT_SLEEP', '4.0'))
+_COMMENT_SLEEP_JITTER = float(os.environ.get('BILI_COMMENT_JITTER', '3.0'))
 
 
 def _crawl_video_comments(video, hot_pages: int = _COMMENT_HOT_PAGES, newest_pages: int = _COMMENT_NEWEST_PAGES):
@@ -719,7 +720,7 @@ def _crawl_video_comments(video, hot_pages: int = _COMMENT_HOT_PAGES, newest_pag
         except Exception as e:
             if _is_risk_control(e):
                 logger.warning('视频 %s 评论触发风控，第 %d 页跳过', _bvid, page)
-                time.sleep(15.0)
+                time.sleep(float(os.environ.get('BILI_COMMENT_RISK_SLEEP', '15.0')))
                 return 0
             logger.warning('视频 %s 第 %d 页评论失败: %s', _bvid, page, e)
             return -1
@@ -922,7 +923,7 @@ def _check_new_videos(mid: int, app):
             # 本 run 新插入视频的 bvid 集合：快照阶段排除，避免重复拉取统计
             _run_new_bvids: set[str] = set()
             # 连续 30 个视频全部已知 → 认为已经扫描到已入库的尾部，提前停止
-            MAX_CONSECUTIVE_KNOWN = 30
+            MAX_CONSECUTIVE_KNOWN = int(os.environ.get('BILI_INCREMENTAL_CONSECUTIVE', '30'))
             # arc/search 返回的统计缓存（bvid → view/comment/danmaku/favorite）
             # 供统计快照复用，避免为最新视频再发独立统计请求（不增加风控压力）
             _page_stats: dict[str, dict] = {}
@@ -1158,7 +1159,7 @@ def _check_new_videos(mid: int, app):
             # 检查 B站 API 层是否已检测到 412（可能在 get_video_list 内部处理，未抛异常到此处）
             from blog.bilibili.bili_api import was_recently_blocked
             with _circuit_lock:
-                if was_recently_blocked(cooldown=300) and time.time() >= _circuit_open_until:
+                if was_recently_blocked(cooldown=float(os.environ.get('BILI_BLOCK_WINDOW', '300'))) and time.time() >= _circuit_open_until:
                     _cooldown = _circuit_compute_cooldown()
                     _circuit_open_until = time.time() + _cooldown
                     logger.error('API 层检测到 412 封禁，全局熔断 %d 分钟', _cooldown // 60)
@@ -1619,7 +1620,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                             return True
                         except Exception:
                             logger.warning('视频 %s 「%s」补全时统计获取失败', _fbvid, _fts)
-                            time.sleep(12.0)
+                            time.sleep(float(os.environ.get('BILI_FILL_FAIL_SLEEP', '12.0')))
                             return False
 
                 _fill_q = _queue_mod.Queue(maxsize=_UPDATE_THREADS * 2)
@@ -1751,8 +1752,8 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             warm_done = 0
             cold_done = 0
             now = now_cst()
-            cutoff_hot = now - datetime.timedelta(days=7)
-            cutoff_warm = now - datetime.timedelta(days=30)
+            cutoff_hot = now - datetime.timedelta(days=int(os.environ.get('BILI_HOT_DAYS', '7')))
+            cutoff_warm = now - datetime.timedelta(days=int(os.environ.get('BILI_WARM_DAYS', '30')))
 
             def _update_video(video_id, label='', min_age_hours=1, hist_id_map=None):
                 with app.app_context():
@@ -1773,7 +1774,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                             return {'status': 'skip', 'label': label, 'bvid': bvid, 'title_short': title_short}
 
 
-                        local_retry_delay = 30
+                        local_retry_delay = float(os.environ.get('BILI_RETRY_DELAY', '30.0'))
                         try:
                             stat = get_video_stat(bvid)
                             thread_sleep()
@@ -1785,7 +1786,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                                 return {'status': 'risk', 'label': label, 'bvid': bvid, 'title_short': title_short}
                             logger.warning('视频 %s 统计获取失败: %s', bvid, e)
                             emit(f'「{title_short}」统计获取失败: {e}', 'WARN')
-                            time.sleep(8.0)
+                            time.sleep(float(os.environ.get('BILI_FAIL_SLEEP', '8.0')))
                             return {'status': 'fail', 'label': label, 'bvid': bvid, 'title_short': title_short}
 
                         for key, val in stat.items():
@@ -1968,14 +1969,14 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             # 检查 B站 API 层是否已检测到 412（可能在 get_video_list 内部处理，未抛异常到此处）
             from blog.bilibili.bili_api import was_recently_blocked
             with _circuit_lock:
-                if was_recently_blocked(cooldown=300) and time.time() >= _circuit_open_until:
+                if was_recently_blocked(cooldown=float(os.environ.get('BILI_BLOCK_WINDOW', '300'))) and time.time() >= _circuit_open_until:
                     _cooldown = _circuit_compute_cooldown()
                     _circuit_open_until = time.time() + _cooldown
                     logger.error('API 层检测到 412 封禁，全局熔断 %d 分钟', _cooldown // 60)
 
             # 评论爬取：为本 UP 主尚未爬取评论的视频补充数据（限 5 个/次）
             # 投递到 Redis 任务队列，由 worker.py 异步处理。
-            if not was_recently_blocked(cooldown=600):
+            if not was_recently_blocked(cooldown=float(os.environ.get('BILI_BLOCK_WINDOW', '300'))):
                 from .models import BiliVideoComment
                 from sqlalchemy import func
 
@@ -2047,7 +2048,7 @@ def run_daily_scrape(app):
                     logger.warning('B站 每日刷新取消: 全局熔断中，剩余 %d 分钟', remaining)
                     return
 
-            THREAD_TIMEOUT = 15 * 60  # 每个线程最长等待时间（15 分钟）
+            THREAD_TIMEOUT = int(os.environ.get('BILI_SCRAPE_TIMEOUT', '900'))  # 每个线程最长等待时间（默认 15 分钟）
 
             # 筛选出当前不在运行中的 UP 主
             # 注意：不在 run_daily_scrape 中 add _scrape_running，

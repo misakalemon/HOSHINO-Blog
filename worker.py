@@ -154,7 +154,7 @@ def _run_task(task, app):
                 up_id = data['up_id']
                 video_ids = [r[0] for r in BiliVideo.query.filter_by(
                     up_id=up_id
-                ).order_by(BiliVideo.pubdate.desc()).with_entities(BiliVideo.id).limit(50).all()]
+                ).order_by(BiliVideo.pubdate.desc()).with_entities(BiliVideo.id).limit(int(os.environ.get('BILI_REFRESH_LIMIT', '50'))).all()]
                 total = len(video_ids)
                 logger.info('评论刷新: UP %s 共 %d 个视频, 并发 %d', up_id, total, MAX_COMMENT_WORKERS)
 
@@ -188,7 +188,7 @@ def _run_task(task, app):
                 up_id = data['up_id']
                 video_ids = [r[0] for r in BiliVideo.query.filter_by(
                     up_id=up_id
-                ).order_by(BiliVideo.pubdate.desc()).with_entities(BiliVideo.id).limit(50).all()]
+                ).order_by(BiliVideo.pubdate.desc()).with_entities(BiliVideo.id).limit(int(os.environ.get('BILI_REFRESH_LIMIT', '50'))).all()]
                 total = len(video_ids)
                 logger.info('字幕刷新: UP %s 共 %d 个视频, 并发 %d', up_id, total, MAX_COMMENT_WORKERS)
 

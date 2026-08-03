@@ -25,7 +25,7 @@ from bilibili_api import sync as _bili_sync
 from bilibili_api import user as _user_mod
 from bilibili_api import video as _video_mod
 
-from .config import PAGE_SIZE, REQUEST_INTERVAL, REQUEST_INTERVAL_JITTER, USER_AGENTS
+from .config import PAGE_SIZE, REQUEST_INTERVAL, REQUEST_INTERVAL_JITTER, USER_AGENTS, MAX_RETRIES
 
 logger = logging.getLogger(__name__)
 
@@ -167,6 +167,17 @@ _API_TIMEOUT = float(os.environ.get('BILI_API_TIMEOUT', '30.0'))
 # 视频间 sleep 参数（供 bili_routes.py 的 thread_sleep 使用）
 _VIDEO_SLEEP_BASE = float(os.environ.get('BILI_VIDEO_SLEEP', '10.0'))
 _VIDEO_SLEEP_JITTER = float(os.environ.get('BILI_VIDEO_JITTER', '5.0'))
+
+# 风控指数退避初始等待（秒）：触发风控后首次等待时长，之后翻倍
+_RISK_RETRY_DELAY = float(os.environ.get('BILI_RETRY_DELAY', '30.0'))
+# 风控退避上限（秒）
+_BACKOFF_CAP = float(os.environ.get('BILI_BACKOFF_CAP', '600'))
+# 单页/单视频风控最大重试次数
+_MAX_RETRIES = int(os.environ.get('BILI_MAX_RETRIES', str(MAX_RETRIES)))
+# 每次翻页/单视频请求前的基础随机短延迟范围（秒），错峰避免同一秒并发触发风控
+_FIRST_REQUEST_DELAY = tuple(
+    float(x) for x in os.environ.get('BILI_FIRST_DELAY', '1.0,3.0').split(',')
+)
 
 
 def _ensure_thread_binding():
@@ -444,13 +455,13 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
         yields:    视频信息 dict，包含 aid/bvid/title/description/duration/pubdate 等字段。
     """
     # 首次请求前随机短延迟，避免多线程同一秒发出第 1 页请求触发风控
-    time.sleep(random.uniform(1.0, 3.0))
+    time.sleep(random.uniform(*_FIRST_REQUEST_DELAY))
     u = _user_mod.User(mid, credential=_credential)
     pn = 1                     # 当前页码，从第 1 页开始
-    retry_delay = 30           # 风控指数退避初始等待时间（秒）
+    retry_delay = _RISK_RETRY_DELAY   # 风控指数退避初始等待时间（秒）
     auth_retried = False       # 标记是否已降级为匿名（仅重试一次）
     page_retries = 0           # 当前页风控重试计数
-    MAX_PAGE_RETRIES = 3       # 每页最大风控重试次数
+    MAX_PAGE_RETRIES = _MAX_RETRIES   # 每页最大风控重试次数
 
     while True:
         if max_pages is not None and pn > max_pages:
@@ -490,7 +501,7 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
                     MAX_PAGE_RETRIES,
                 )
                 time.sleep(retry_delay)
-                retry_delay = min(retry_delay * 2, 600)  # 每次翻倍，上限 600s（10 分钟）
+                retry_delay = min(retry_delay * 2, _BACKOFF_CAP)  # 每次翻倍，上限 600s（10 分钟）
                 continue
             # 路径 4: 其他异常 → 终止
             break
@@ -723,8 +734,8 @@ def get_video_stat(bvid: str) -> dict:
                   }
         raises:   RuntimeError — 重试耗尽后仍失败。
     """
-    retry_delay = 30
-    for attempt in range(4):
+    retry_delay = _RISK_RETRY_DELAY
+    for attempt in range(_MAX_RETRIES + 1):
         try:
             v = _video_mod.Video(bvid=bvid, credential=_credential)
             info = _sync(v.get_info())
@@ -733,8 +744,8 @@ def get_video_stat(bvid: str) -> dict:
                 logger.warning('视频统计获取凭证过期，使用匿名: %s', e)
                 v = _video_mod.Video(bvid=bvid)
                 continue
-            if _is_risk_control(e) and attempt < 3:
-                logger.warning('视频 %s 触发风控，等待 %ds 后重试 (第 %d/3 次)', bvid, retry_delay, attempt + 1)
+            if _is_risk_control(e) and attempt < _MAX_RETRIES:
+                logger.warning('视频 %s 触发风控，等待 %ds 后重试 (第 %d/%d 次)', bvid, retry_delay, attempt + 1, _MAX_RETRIES)
                 time.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, 600)
                 continue
@@ -787,8 +798,8 @@ def get_video_full_info(bvid: str) -> dict:
     Raises:
         RuntimeError: 重试耗尽后仍失败
     """
-    retry_delay = 30
-    for attempt in range(4):
+    retry_delay = _RISK_RETRY_DELAY
+    for attempt in range(_MAX_RETRIES + 1):
         try:
             v = _video_mod.Video(bvid=bvid, credential=_credential)
             info = _sync(v.get_info())
@@ -797,8 +808,8 @@ def get_video_full_info(bvid: str) -> dict:
                 logger.warning('视频信息获取凭证过期，使用匿名: %s', e)
                 v = _video_mod.Video(bvid=bvid)
                 continue
-            if _is_risk_control(e) and attempt < 3:
-                logger.warning('视频 %s 触发风控，等待 %ds 后重试 (第 %d/3 次)', bvid, retry_delay, attempt + 1)
+            if _is_risk_control(e) and attempt < _MAX_RETRIES:
+                logger.warning('视频 %s 触发风控，等待 %ds 后重试 (第 %d/%d 次)', bvid, retry_delay, attempt + 1, _MAX_RETRIES)
                 time.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, 600)
                 continue
