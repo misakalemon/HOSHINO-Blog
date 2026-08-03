@@ -8,11 +8,13 @@
 """
 
 import asyncio
+import atexit
 import logging
 import os
 import re
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import Generator
 
@@ -117,6 +119,43 @@ def ensure_semaphore(thread_count: int):
         return
     _api_semaphore = threading.Semaphore(thread_count + 1)
     logger.info('信号量自动初始化: Semaphore(%d)', thread_count + 1)
+
+
+# ── 全局共享线程池（批量统计）───────────────────────────────
+# 背景：bilibili_api 的 get_client() 会按「事件循环」缓存 HTTP session
+#       （模块级 session_pool[loop] 字典，程序退出前不清空）。若每次调用
+#       get_video_stats_batch 都新建 ThreadPoolExecutor，新线程会创建新的
+#       asyncio 事件循环 → 新 session 永久滞留内存，句柄/端口泄漏。
+# 修复：改为模块级共享线程池。线程被复用，事件循环只创建一次，session 数量
+#       固定为池大小，从根本上消除增量检查中「每 UP 新建 5 线程」导致的
+#       WinError 10048/10055 套接字耗尽。
+_BATCH_POOL: ThreadPoolExecutor | None = None
+_BATCH_POOL_LOCK = threading.Lock()
+
+
+def _get_batch_pool() -> ThreadPoolExecutor:
+    """返回模块级共享批量统计线程池（懒创建，进程退出时自动关闭）。"""
+    global _BATCH_POOL
+    if _BATCH_POOL is None:
+        with _BATCH_POOL_LOCK:
+            if _BATCH_POOL is None:
+                n = int(os.environ.get('BILI_STAT_WORKERS', '5'))
+                _BATCH_POOL = ThreadPoolExecutor(
+                    max_workers=n, thread_name_prefix='bili-batch'
+                )
+                logger.info('共享批量统计线程池已创建: max_workers=%d', n)
+                atexit.register(_shutdown_batch_pool)
+    return _BATCH_POOL
+
+
+def _shutdown_batch_pool():
+    global _BATCH_POOL
+    if _BATCH_POOL is not None:
+        try:
+            _BATCH_POOL.shutdown(wait=False)
+        except Exception:
+            pass
+        _BATCH_POOL = None
 
 # 单次 API 调用超时时间（秒）
 _API_TIMEOUT = float(os.environ.get('BILI_API_TIMEOUT', '30.0'))
@@ -634,30 +673,34 @@ def get_video_list_from_dynamics(mid: int) -> list[dict]:
 def get_video_stats_batch(bvids: list[str], max_workers: int | None = None) -> dict[str, dict]:
     """并发批量获取多个视频的统计数据。
 
-    使用 ThreadPoolExecutor 并发调用 get_video_stat，
+    使用模块级共享线程池并发调用 get_video_stat，
     每个线程绑定独立 UA + 随机 phase offset，请求节奏自然错开，
     相比串行逐个获取可大幅缩短统计快照耗时。
 
+    注意：不再每次新建 ThreadPoolExecutor。新建线程池会让每个新线程创建独立
+    事件循环与 HTTP session（bilibili_api 按 loop 缓存 session 且不清理），
+    增量检查每 UP 一次调用会持续泄漏套接字，最终触发 WinError 10048/10055。
+    共享池复用线程，session 数量固定为池大小。
+
         bvids:       视频 BV 号列表。
-        max_workers: 并发数，默认取 BILI_STAT_WORKERS（默认 5）。
+        max_workers: 保留兼容参数；实际并发由共享池决定（BILI_STAT_WORKERS）。
         returns:     { bvid: {view_count, like_count, ...} }
     """
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from concurrent.futures import as_completed
 
-    n = max_workers or int(os.environ.get('BILI_STAT_WORKERS', '5'))
     if not bvids:
         return {}
+    executor = _get_batch_pool()
     results: dict[str, dict] = {}
-    with ThreadPoolExecutor(max_workers=n) as executor:
-        futures = {executor.submit(get_video_stat, bvid): bvid for bvid in bvids}
-        for future in as_completed(futures):
-            bvid = futures[future]
-            try:
-                stat = future.result()
-                if stat:
-                    results[bvid] = stat
-            except Exception as e:
-                logger.warning('批量统计获取失败 bvid=%s: %s', bvid, e)
+    futures = {executor.submit(get_video_stat, bvid): bvid for bvid in bvids}
+    for future in as_completed(futures):
+        bvid = futures[future]
+        try:
+            stat = future.result()
+            if stat:
+                results[bvid] = stat
+        except Exception as e:
+            logger.warning('批量统计获取失败 bvid=%s: %s', bvid, e)
     return results
 
 

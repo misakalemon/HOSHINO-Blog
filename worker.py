@@ -24,6 +24,7 @@ import logging
 import os
 import signal
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -57,6 +58,41 @@ def _setup_signal_handlers(shutdown_flag):
         signal.signal(signal.SIGINT, _handler)
     except (ValueError, AttributeError):
         pass
+
+
+# ── 增量检查共享线程池 ──────────────────────────────────────────
+# 每 15 分钟一次的增量检查若每次新建 ThreadPoolExecutor，其线程各自创建
+# asyncio 事件循环 + HTTP session（bilibili_api 按 loop 缓存且不清空），
+# 长时间运行会泄漏套接字（WinError 10048/10055）。改为模块级共享池复用线程。
+_INCREMENTAL_POOL: ThreadPoolExecutor | None = None
+_INCREMENTAL_POOL_LOCK = threading.Lock()
+
+
+def _get_incremental_pool() -> ThreadPoolExecutor:
+    global _INCREMENTAL_POOL
+    if _INCREMENTAL_POOL is None:
+        with _INCREMENTAL_POOL_LOCK:
+            if _INCREMENTAL_POOL is None:
+                n = min(int(os.environ.get('BILI_INCREMENTAL_THREADS', '2')), 2)
+                _INCREMENTAL_POOL = ThreadPoolExecutor(
+                    max_workers=n, thread_name_prefix='bili-incremental'
+                )
+                logging.getLogger(__name__).info(
+                    '共享增量检查线程池已创建: max_workers=%d', n
+                )
+                import atexit
+
+                def _shutdown_pool():
+                    global _INCREMENTAL_POOL
+                    if _INCREMENTAL_POOL is not None:
+                        try:
+                            _INCREMENTAL_POOL.shutdown(wait=False)
+                        except Exception:
+                            pass
+                        _INCREMENTAL_POOL = None
+
+                atexit.register(_shutdown_pool)
+    return _INCREMENTAL_POOL
 
 
 def _run_task(task, app):
@@ -214,7 +250,7 @@ def _run_bili_incremental_check(app):
     使用线程池并行检查多个 UP 主（默认 3 并发），
     避免大量 UP 主时串行执行超过 30 分钟周期。
     """
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from concurrent.futures import as_completed
 
     max_workers = min(int(os.environ.get('BILI_INCREMENTAL_THREADS', '2')), 2)
     from blog.bilibili.bili_api import ensure_semaphore
@@ -242,32 +278,32 @@ def _run_bili_incremental_check(app):
         # 进而 APScheduler 因 max_instances=1 跳过后续调度、线程/连接累积耗尽资源。
         overall_timeout = int(os.environ.get('BILI_INCREMENTAL_TIMEOUT', '900'))  # 默认 15 分钟
         start_t = time.time()
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {}
-            for up in ups:
-                with _scrape_lock:
-                    if up.mid in _incremental_running:
-                        continue
-                    _incremental_running.add(up.mid)
-                futures[executor.submit(_check_one, up)] = up
-                # 错峰启动：避免前 N 个线程同一秒发出第 1 页请求触发风控
-                time.sleep(random.uniform(2.0, 5.0))
+        executor = _get_incremental_pool()
+        futures = {}
+        for up in ups:
+            with _scrape_lock:
+                if up.mid in _incremental_running:
+                    continue
+                _incremental_running.add(up.mid)
+            futures[executor.submit(_check_one, up)] = up
+            # 错峰启动：避免前 N 个线程同一秒发出第 1 页请求触发风控
+            time.sleep(random.uniform(2.0, 5.0))
 
-            deadline = start_t + overall_timeout
-            try:
-                for future in as_completed(futures, timeout=overall_timeout):
-                    up = futures[future]
-                    try:
-                        future.result()
-                    except Exception as e:
-                        logger.warning('增量检查 mid=%d 异常: %s', up.mid, e)
-                    if time.time() > deadline:
-                        logger.warning('增量检查达到 %ds 硬超时，停止等待剩余 %d 个 UP',
-                                       overall_timeout, len(futures) - len([f for f in futures if f.done()]))
-                        break
-            except TimeoutError:
-                logger.warning('增量检查整体超时 %ds，未完成 %d 个 UP',
-                               overall_timeout, len(futures))
+        deadline = start_t + overall_timeout
+        try:
+            for future in as_completed(futures, timeout=overall_timeout):
+                up = futures[future]
+                try:
+                    future.result()
+                except Exception as e:
+                    logger.warning('增量检查 mid=%d 异常: %s', up.mid, e)
+                if time.time() > deadline:
+                    logger.warning('增量检查达到 %ds 硬超时，停止等待剩余 %d 个 UP',
+                                   overall_timeout, len(futures) - len([f for f in futures if f.done()]))
+                    break
+        except TimeoutError:
+            logger.warning('增量检查整体超时 %ds，未完成 %d 个 UP',
+                           overall_timeout, len(futures))
 
 
 def _init_worker_scheduler(app):
