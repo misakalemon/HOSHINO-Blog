@@ -386,10 +386,12 @@ def create_app():
     def _jinja_paragraphify(text):
         if not text:
             return ''
+        import html as _html
         parts = re.split(r'(?<=[。！？])', text)
         parts = [p.strip() for p in parts if p.strip()]
         from markupsafe import Markup
-        return Markup(''.join(f'<p style="margin:0 0 6px">{p}</p>' for p in parts))
+        # 先 HTML 转义再拼 <p>，防止外部可控文本（如 B站字幕）注入脚本
+        return Markup(''.join(f'<p style="margin:0 0 6px">{_html.escape(p)}</p>' for p in parts))
 
     @app.template_filter('bleach_clean')
     def _jinja_bleach_clean(text):

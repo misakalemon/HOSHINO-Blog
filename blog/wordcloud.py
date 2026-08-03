@@ -67,7 +67,9 @@ _jieba_initialized = False
 # 由单线程消费者异步执行，避免 jieba 分词阻塞 HTTP 请求。
 # 定时任务（02:10 / 02:15）仍直接调用函数，不经过此队列。
 # ──────────────────────────────────────────────────────
-_task_queue: queue.Queue = queue.Queue()
+# 有界队列：maxsize=200，防止发布/删除频繁触发任务时无限增长直至 OOM。
+# 满时丢弃最旧任务（投递端见 submit_task 的容量控制）。
+_task_queue: queue.Queue = queue.Queue(maxsize=200)
 _worker_started = False
 _worker_lock = threading.Lock()
 _wc_app = None
@@ -171,7 +173,23 @@ def submit_task(task_type: str, **kwargs):
         )
         t.start()
     else:
-        _task_queue.put_nowait(dict(type=task_type, **kwargs))
+        task = dict(type=task_type, **kwargs)
+        # 同类轻量任务合并：已有同 type 任务时直接跳过（词云结果由最新任务覆盖）
+        existing = list(_task_queue.queue)
+        if any(t.get('type') == task_type for t in existing):
+            return
+        try:
+            _task_queue.put_nowait(task)
+        except queue.Full:
+            # 队列满：丢弃最旧任务（词云可重新计算，丢旧不影响正确性）
+            try:
+                _task_queue.get_nowait()
+            except queue.Empty:
+                pass
+            try:
+                _task_queue.put_nowait(task)
+            except queue.Full:
+                logger.warning('词云任务队列满，丢弃任务 %s', task_type)
 
 
 def _init_jieba():
@@ -755,21 +773,25 @@ def precompute_video_wordclouds():
     logger.info('📊 批量词云计算开始: 共 %d 个视频', total)
     _log_memory(logger, 'precompute_video_wordclouds start')
 
+    # 分批提交（每批 500），避免一次性 5 万+ Future 占用内存峰值
+    batch_size = 500
+    done = 0
     with ThreadPoolExecutor(max_workers=2) as pool:
-        futures = [pool.submit(_compute_video_wc_wrapper, vid, app) for vid in video_ids]
-        done = 0
-        for f in as_completed(futures):
-            try:
-                f.result()
-            except Exception as e:
-                logger.warning('📊 词云线程异常: %s', e)
-            done += 1
-            if done % 500 == 0:
-                _maybe_collect(force=True)
-            if done % 5000 == 0:
-                _log_memory(logger, f'video wordcloud {done}/{total}')
-            if done % 50 == 0:
-                logger.info('📊 词云进度: %d/%d', done, total)
+        for start in range(0, len(video_ids), batch_size):
+            batch = video_ids[start : start + batch_size]
+            futures = [pool.submit(_compute_video_wc_wrapper, vid, app) for vid in batch]
+            for f in as_completed(futures):
+                try:
+                    f.result()
+                except Exception as e:
+                    logger.warning('📊 词云线程异常: %s', e)
+                done += 1
+                if done % 500 == 0:
+                    _maybe_collect(force=True)
+                if done % 5000 == 0:
+                    _log_memory(logger, f'video wordcloud {done}/{total}')
+                if done % 50 == 0:
+                    logger.info('📊 词云进度: %d/%d', done, total)
 
     logger.info('📊 批量词云计算完成: %d 个视频', total)
 

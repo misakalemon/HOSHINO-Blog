@@ -464,6 +464,8 @@ def _migrate_is_admin_to_role(app):
                     db.session.execute(text(f'ALTER TABLE users ADD COLUMN {col} {col_type}'))
                     db.session.commit()
                     app.logger.info('迁移: 已添加 users.%s 列', col)
+                    # 同步更新列快照，确保后续 is_admin→role 数据迁移判断正确
+                    cols.add(col)
                 except Exception as e:
                     db.session.rollback()
                     app.logger.warning('迁移: 添加 users.%s 列失败: %s', col, e)
@@ -638,6 +640,18 @@ def _migrate_bili_video_fields(app):
             db.session.rollback()
             app.logger.warning('迁移: 添加 bili_videos.pub_datetime 列失败: %s', e)
 
+    # pic 封面列 — 07-28 新增，已存在的表需要迁移补列
+    if 'pic' not in cols:
+        try:
+            db.session.execute(
+                text("ALTER TABLE bili_videos ADD COLUMN pic VARCHAR(512) NULL")
+            )
+            db.session.commit()
+            app.logger.info('迁移: 已添加 bili_videos.pic 列')
+        except Exception as e:
+            db.session.rollback()
+            app.logger.warning('迁移: 添加 bili_videos.pic 列失败: %s', e)
+
 
 def _migrate_bili_indexes(app):
     """迁移：为 BiliVideo/BiliVideoHistory 表添加复合索引。
@@ -754,19 +768,44 @@ def _migrate_wordcloud_data_fields(app):
         app.logger.warning('迁移: 读取 wordcloud_data 列结构失败（跳过）: %s', e)
         return
     for col_name, col_type in [
-        ('period', "VARCHAR(16) DEFAULT 'all'"),
-        ('source', "VARCHAR(8) DEFAULT 'blog'"),
+        ('period', "VARCHAR(32) DEFAULT 'all'"),
+        ('source', "VARCHAR(16) DEFAULT 'blog'"),
     ]:
         if col_name not in cols:
             try:
                 db.session.execute(
-                    text(f'ALTER TABLE wordcloud_data ADD COLUMN {col_name} {col_type}')
+                    text(
+                        f'ALTER TABLE wordcloud_data ADD COLUMN {col_name} {col_type}, '
+                        f'ADD INDEX ix_wordcloud_data_{col_name} ({col_name})'
+                    )
                 )
                 db.session.commit()
-                app.logger.info('迁移: 已添加 wordcloud_data.%s 列', col_name)
+                app.logger.info('迁移: 已添加 wordcloud_data.%s 列（含索引）', col_name)
             except Exception as e:
                 db.session.rollback()
-                app.logger.warning('迁移: 添加 wordcloud_data.%s 列失败: %s', col_name, e)
+                # 部分 MySQL 可能不支持单条 ALTER 多操作，降级为分别执行
+                try:
+                    db.session.execute(
+                        text(f'ALTER TABLE wordcloud_data ADD COLUMN {col_name} {col_type}')
+                    )
+                    db.session.commit()
+                    app.logger.info('迁移: 已添加 wordcloud_data.%s 列', col_name)
+                except Exception as e2:
+                    db.session.rollback()
+                    app.logger.warning('迁移: 添加 wordcloud_data.%s 列失败: %s', col_name, e2)
+        else:
+            # 列已存在，确保索引存在（旧库迁移时未带索引）
+            try:
+                idx_name = f'ix_wordcloud_data_{col_name}'
+                indexes = {ix['name'] for ix in inspector.get_indexes('wordcloud_data')}
+                if idx_name not in indexes:
+                    db.session.execute(
+                        text(f'ALTER TABLE wordcloud_data ADD INDEX {idx_name} ({col_name})')
+                    )
+                    db.session.commit()
+                    app.logger.info('迁移: 已为 wordcloud_data.%s 补建索引', col_name)
+            except Exception:
+                db.session.rollback()
 
 
 def _migrate_wordcloud_config_fields(app):
@@ -1039,10 +1078,14 @@ def _migrate_wordcloud_data_compress(app):
     from sqlalchemy import text
 
     engine = db.get_engine()
-    inspector = db.inspect(engine)
-    cols = {c['name'] for c in inspector.get_columns('wordcloud_data')}
     dialect = engine.dialect.name
     if dialect != 'mysql':
+        return
+    try:
+        inspector = db.inspect(engine)
+        cols = {c['name'] for c in inspector.get_columns('wordcloud_data')}
+    except Exception as e:
+        app.logger.warning('迁移: 读取 wordcloud_data 结构失败（跳过压缩迁移）: %s', e)
         return
     # data_gz 已存在且 data 已不存在 → 迁移已完成
     if 'data_gz' in cols and 'data' not in cols:
