@@ -544,6 +544,24 @@ def single_post(slug):
     # 优先使用手动编写的 html_content（如报告），否则渲染 Markdown
     template = 'html-post.html' if post.html_content else 'single-post.html'
 
+    # ── 上一篇 / 下一篇（按发布时间排序的相邻已发布文章）──
+    prev_post = (
+        Post.query.filter(
+            Post.is_published == True,
+            Post.created_at < post.created_at,
+        )
+        .order_by(Post.created_at.desc())
+        .first()
+    )
+    next_post = (
+        Post.query.filter(
+            Post.is_published == True,
+            Post.created_at > post.created_at,
+        )
+        .order_by(Post.created_at.asc())
+        .first()
+    )
+
     return render_template(
         template,
         post=post,
@@ -555,6 +573,8 @@ def single_post(slug):
         comment_count=comment_count,
         wordcloud_data=wordcloud_data,
         wc_config=wc_config,
+        prev_post=prev_post,
+        next_post=next_post,
     )
 
 

@@ -54,6 +54,6 @@
         {% endfor %}
     </table>
     </div>
-    {{ pagination(users) }}
+    {{ pagination(users, extra_params='q=' + request.args.get('q', '')|urlencode if request.args.get('q') else '') }}
 </div>
 {% endblock %}

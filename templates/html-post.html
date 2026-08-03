@@ -45,6 +45,28 @@
                     </div>
                 </div>
 
+                <!-- 上一篇 / 下一篇导航 -->
+                {% if prev_post or next_post %}
+                <div class="post-nav" style="display:flex;gap:16px;justify-content:space-between;margin:28px 0;flex-wrap:wrap">
+                    <div style="flex:1;min-width:200px">
+                        {% if prev_post %}
+                        <a href="{{ url_for('blog.single_post', slug=prev_post.slug) }}" style="display:block;padding:14px 16px;border:1px solid rgba(255,255,255,0.08);border-radius:12px;text-decoration:none;color:var(--text-secondary);transition:all 0.3s">
+                            <div style="font-size:0.7rem;color:rgba(255,255,255,0.4);margin-bottom:4px">← 上一篇</div>
+                            <div style="font-size:0.85rem;color:rgba(255,255,255,0.85)">{{ prev_post.title[:30] }}{% if prev_post.title|length > 30 %}…{% endif %}</div>
+                        </a>
+                        {% endif %}
+                    </div>
+                    <div style="flex:1;min-width:200px;text-align:right">
+                        {% if next_post %}
+                        <a href="{{ url_for('blog.single_post', slug=next_post.slug) }}" style="display:block;padding:14px 16px;border:1px solid rgba(255,255,255,0.08);border-radius:12px;text-decoration:none;color:var(--text-secondary);transition:all 0.3s">
+                            <div style="font-size:0.7rem;color:rgba(255,255,255,0.4);margin-bottom:4px">下一篇 →</div>
+                            <div style="font-size:0.85rem;color:rgba(255,255,255,0.85)">{{ next_post.title[:30] }}{% if next_post.title|length > 30 %}…{% endif %}</div>
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+
                 <div class="comments-section" id="comments">
                     <h4>评论 · {{ comment_count }}</h4>
                     {% set approved_comments = post.comments.filter_by(is_approved=True).all() %}
