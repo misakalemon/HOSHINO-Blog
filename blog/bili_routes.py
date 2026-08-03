@@ -1243,6 +1243,15 @@ def scrape():
         flash(str(e), 'error')
         return redirect(url_for('bili.index'))
 
+    # 冷却检查：若最近检测到 B站 412 IP 封禁，拒绝立即添加新 UP。
+    # 新UP添加走 wbi/acc/info + arc/search 敏感接口，刚被封禁时立即重试必触发 -352/412。
+    from blog.bilibili.bili_api import was_recently_blocked, get_blocked_remaining
+    _cool_seconds = int(os.environ.get('BILI_ADD_COOLDOWN', '300'))
+    if was_recently_blocked(cooldown=_cool_seconds):
+        _remain = get_blocked_remaining(_cool_seconds)
+        return {'ok': False,
+                'error': f'B站 IP 风控冷却中（最近触发过 412 封禁），请等待约 {_remain} 秒后再添加'}
+
     with _scrape_lock:
         from blog.task_queue import is_running
         if is_running(mid) or mid in _scrape_running or mid in _incremental_running:
@@ -1629,7 +1638,12 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                 def _fill_producer():
                     with app.app_context():
                         try:
-                            for video_info in _get_video_list(mid):
+                            # 可选限页：设置 BILI_FILL_MAX_PAGES>0 时限制 arc/search 翻页页数，
+                            # 用于新UP添加时降低请求量减少风控；未设置则保持全量（默认行为不变）。
+                            _fill_max_pages = None
+                            if os.environ.get('BILI_FILL_MAX_PAGES'):
+                                _fill_max_pages = max(1, int(os.environ['BILI_FILL_MAX_PAGES']))
+                            for video_info in _get_video_list(mid, max_pages=_fill_max_pages):
                                 if _fill_stop_evt.is_set():
                                     break
                                 _pbvid = video_info['bvid']

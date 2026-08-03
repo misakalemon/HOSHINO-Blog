@@ -57,6 +57,21 @@ def was_recently_blocked(cooldown: float = 0) -> bool:
     return time.time() - t < cooldown
 
 
+def get_blocked_remaining(cooldown: float) -> int:
+    """返回距上次 412 封禁的剩余冷却秒数（向上取整）。
+
+        cooldown: 冷却窗口（秒）。
+        returns:  剩余秒数；未处于冷却期返回 0。
+    """
+    global _last_412_time
+    with _last_412_lock:
+        t = _last_412_time
+    if t <= 0:
+        return 0
+    remaining = cooldown - (time.time() - t)
+    return max(0, int(remaining) + (1 if remaining > int(remaining) else 0))
+
+
 # 按线程隔离的事件循环（每个线程独立，不互相干扰）
 _loop_local = threading.local()
 
@@ -399,6 +414,7 @@ def get_user_info(mid: int) -> dict:
 
     主 API: x/space/wbi/acc/info（名称/头像/视频数）
     Cookie 过期 → 自动降级匿名。
+    风控(-352) → 也尝试匿名降级重试一次（acc/info 匿名访问有时可绕过风控）。
     粉丝数 fallback: x/relation/stat（匿名 acc/info 不返回 follower 字段）。
 
         mid:      UP 主用户 ID。
@@ -409,14 +425,24 @@ def get_user_info(mid: int) -> dict:
                     'video_count': int,     # 视频总数
                   }
     """
+    info = None
+    # 第一次：带凭证访问；-401 凭证过期 或 -352 风控 时降级匿名重试一次
     try:
         u = _user_mod.User(mid, credential=_credential)
         info = _sync(u.get_user_info())
     except Exception as e:
-        if _credential and _is_auth_error(e):
-            logger.warning('UP主信息获取凭证过期，使用匿名: %s', e)
-            u = _user_mod.User(mid)
-            info = _sync(u.get_user_info())
+        if _credential and (_is_auth_error(e) or _is_risk_control(e)):
+            logger.warning('UP主信息获取失败(%s)，降级匿名重试: %s',
+                           '凭证过期' if _is_auth_error(e) else '风控', e)
+            try:
+                u = _user_mod.User(mid)
+                info = _sync(u.get_user_info())
+            except Exception as e2:
+                # 匿名也失败：优先抛 412（IP 封禁最严重，需触发熔断），
+                # 否则抛回原始异常（风控/凭证问题），上层已有相应处理。
+                if _is_ip_blocked(e2):
+                    raise
+                raise e
         else:
             raise
     # acc/info 在匿名模式或某些账号下不返回 follower 字段，需 fallback 查询 relation/stat
