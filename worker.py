@@ -233,6 +233,11 @@ def _run_task(task, app):
     except Exception as e:
         logger.error('任务失败 id=%s type=%s: %s', task_id, task_type, e, exc_info=True)
     finally:
+        # 无论成功还是异常，都归还 DB 连接，防止连接池被长任务泄漏
+        try:
+            db.session.remove()
+        except Exception:
+            pass
         # 无论成功还是异常，都清除 Redis 中的运行标记
         if task_type in ('refresh_up', 'refresh_all', 'refresh_up_comments',
                          'refresh_up_subtitles', 'bili_wordcloud_single',
@@ -256,63 +261,80 @@ def _run_bili_incremental_check(app):
     from blog.bilibili.bili_api import ensure_semaphore
     ensure_semaphore(max_workers)
 
-    with app.app_context():
-        from blog.models import BiliUp
-        from blog.bili_routes import _check_new_videos, _incremental_running, _scrape_lock, _scrape_running
-        # 批次级协调：若已有任意 UP 正在深扫（新UP爬取/手动刷新），整批增量检查直接跳过。
-        # 深扫与增量并发会叠加 B站 API 请求（不同 UA 多线程同时打同一 IP），
-        # 触发 -352 风控；增量每 30 分钟一次，让路一轮不影响时效。
-        with _scrape_lock:
-            if _scrape_running:
-                logger = logging.getLogger(__name__)
-                logger.warning('深扫进行中(%s)，跳过整批增量检查',
-                               list(_scrape_running)[:3])
-                return
-        ups = BiliUp.query.all()
-        if not ups:
-            return
+    import logging as _logging
+    _logger = _logging.getLogger(__name__)
 
-        logger = logging.getLogger(__name__)
-        logger.info('增量检查启动: %d 个 UP 主, %d 并发', len(ups), max_workers)
+    # 整体增量检查硬超时（秒）：防止个别 UP 卡死在网络重试导致整个实例永不结束，
+    # 进而 APScheduler 因 max_instances=1 跳过后续调度、线程/连接累积耗尽资源。
+    overall_timeout = int(os.environ.get('BILI_INCREMENTAL_TIMEOUT', '900'))  # 默认 15 分钟
 
-        def _check_one(up):
-            try:
-                _check_new_videos(up.mid, app)
-            finally:
-                with _scrape_lock:
-                    _incremental_running.discard(up.mid)
-
-        import random
-        # 整体增量检查硬超时（秒）：防止个别 UP 卡死在网络重试导致整个实例永不结束，
-        # 进而 APScheduler 因 max_instances=1 跳过后续调度、线程/连接累积耗尽资源。
-        overall_timeout = int(os.environ.get('BILI_INCREMENTAL_TIMEOUT', '900'))  # 默认 15 分钟
-        start_t = time.time()
-        executor = _get_incremental_pool()
-        futures = {}
-        for up in ups:
+    # 用线程守护包装整个函数：若主流程异常/超时，始终释放 DB 连接，
+    # 避免 BiliUp.query.all() 或提交循环卡死导致连接池被长期占用（08-06 事故根因）。
+    try:
+        with app.app_context():
+            from blog.models import BiliUp
+            from blog.bili_routes import _check_new_videos, _incremental_running, _scrape_lock, _scrape_running
+            # 批次级协调：若已有任意 UP 正在深扫（新UP爬取/手动刷新），整批增量检查直接跳过。
+            # 深扫与增量并发会叠加 B站 API 请求（不同 UA 多线程同时打同一 IP），
+            # 触发 -352 风控；增量每 30 分钟一次，让路一轮不影响时效。
             with _scrape_lock:
-                if up.mid in _incremental_running:
-                    continue
-                _incremental_running.add(up.mid)
-            futures[executor.submit(_check_one, up)] = up
-            # 错峰启动：避免前 N 个线程同一秒发出第 1 页请求触发风控
-            time.sleep(random.uniform(2.0, 5.0))
+                if _scrape_running:
+                    _logger.warning('深扫进行中(%s)，跳过整批增量检查',
+                                    list(_scrape_running)[:3])
+                    return
 
-        deadline = start_t + overall_timeout
-        try:
-            for future in as_completed(futures, timeout=overall_timeout):
-                up = futures[future]
+            ups = BiliUp.query.all()
+            if not ups:
+                return
+
+            _logger.info('增量检查启动: %d 个 UP 主, %d 并发', len(ups), max_workers)
+
+            def _check_one(up):
                 try:
-                    future.result()
-                except Exception as e:
-                    logger.warning('增量检查 mid=%d 异常: %s', up.mid, e)
-                if time.time() > deadline:
-                    logger.warning('增量检查达到 %ds 硬超时，停止等待剩余 %d 个 UP',
-                                   overall_timeout, len(futures) - len([f for f in futures if f.done()]))
+                    _check_new_videos(up.mid, app)
+                finally:
+                    with _scrape_lock:
+                        _incremental_running.discard(up.mid)
+
+            start_t = time.time()
+            executor = _get_incremental_pool()
+            futures = {}
+            # 一次性提交所有 UP（不再逐个 sleep）：全局令牌桶已串行化 B站 API 请求，
+            # 无需在提交循环里额外错峰，避免 93 个 UP × 2~5s 串行阻塞 APScheduler 线程数分钟。
+            for up in ups:
+                with _scrape_lock:
+                    if up.mid in _incremental_running:
+                        continue
+                    _incremental_running.add(up.mid)
+                futures[executor.submit(_check_one, up)] = up
+                if time.time() - start_t > overall_timeout:
+                    _logger.warning('增量检查提交阶段已超 %ds，跳过剩余 UP', overall_timeout)
                     break
-        except TimeoutError:
-            logger.warning('增量检查整体超时 %ds，未完成 %d 个 UP',
-                           overall_timeout, len(futures))
+
+            deadline = start_t + overall_timeout
+            try:
+                for future in as_completed(futures, timeout=overall_timeout):
+                    up = futures[future]
+                    try:
+                        future.result()
+                    except Exception as e:
+                        _logger.warning('增量检查 mid=%d 异常: %s', up.mid, e)
+                    if time.time() > deadline:
+                        _logger.warning('增量检查达到 %ds 硬超时，停止等待剩余 %d 个 UP',
+                                        overall_timeout, len(futures) - len([f for f in futures if f.done()]))
+                        break
+            except TimeoutError:
+                _logger.warning('增量检查整体超时 %ds，未完成 %d 个 UP',
+                                overall_timeout, len(futures))
+    except Exception:
+        _logger.exception('增量检查调度异常')
+    finally:
+        # 无论成功、异常还是超时，都要归还 DB 连接，防止连接池被长期占用
+        from blog import db
+        try:
+            db.session.remove()
+        except Exception:
+            pass
 
 
 def _init_worker_scheduler(app):
@@ -358,6 +380,10 @@ def _init_worker_scheduler(app):
             minutes=_inc_minutes,
             id='bili_incremental_check',
             replace_existing=True,
+            # coalesce=True：若上一轮未完成，跳过堆积的触发（避免排队连锁）
+            # max_instances=2：允许少量重叠，防止单个卡死任务永久阻塞后续调度
+            coalesce=True,
+            max_instances=2,
         )
 
         # 03:30 历史数据自动清理（与深扫/词云错开，避免资源竞争）

@@ -176,13 +176,20 @@ def create_app():
     app.config['MAX_FORM_PARTS'] = 2000
     # 静态文件缓存 — 7 天（文件内容变更时手动清浏览器缓存即可）
     app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 604800
-    # 数据库连接池配置（Web 进程，不需要过大连接池）
+    # 数据库连接池配置（Web + Worker 进程共用）
+    # pool_size/max_overflow 适当放大，避免增量检查/深扫/词云并发时连接池耗尽
+    # 导致网页请求全部 500（08-06 事故：池 20 连接被占满，/bilibili/video 全部超时）
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
         'pool_pre_ping': True,
-        'pool_recycle': 280,
-        'pool_timeout': 30,
-        'pool_size': 10,
-        'max_overflow': 10,
+        'pool_recycle': int(os.environ.get('DB_POOL_RECYCLE', '1800')),  # 30 分钟回收（配合 pre_ping，避免频繁重建连接）
+        'pool_timeout': int(os.environ.get('DB_POOL_TIMEOUT', '20')),
+        'pool_size': int(os.environ.get('DB_POOL_SIZE', '20')),
+        'max_overflow': int(os.environ.get('DB_MAX_OVERFLOW', '20')),
+        'connect_args': {
+            'connect_timeout': 10,
+            'read_timeout': 30,
+            'write_timeout': 30,
+        },
     }
 
     # ── CSRF 保护（全局，影响所有 POST/PUT/DELETE）──
