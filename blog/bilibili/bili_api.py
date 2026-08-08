@@ -232,11 +232,26 @@ def _sync(coro):
         raises:   TimeoutError — 请求超时（30s 未返回）。
     """
     _ensure_thread_binding()
-    # 真正将每线程 UA + 完整浏览器头注入 bilibili_api 的请求头。
-    # 说明：bilibili_api.utils.network.HEADERS 是模块级 dict，其 HEADERS.copy()
-    # 会被每次 API 请求使用。旧代码通过 `settings['user-agent']` 设置是无效的
-    # （bilibili_api 无此模块属性，异常被吞掉），导致所有请求一直用库硬编码的
-    # Mac UA，缺少 accept-language，成为风控诱因之一。此处直接 patch 生效。
+    # 全局令牌桶限速：所有请求（翻页/统计/动态流/字幕/评论/弹幕）统一受全局速率约束，
+    # 从根本上限制同一 IP 的请求密度，是降低 412 风控的核心手段。
+    _BILI_RATE_LIMITER.acquire()
+    if _api_semaphore is not None:
+        with _api_semaphore:
+            _patch_request_headers()
+            return _sync_inner(coro)
+    _patch_request_headers()
+    return _sync_inner(coro)
+
+
+def _patch_request_headers():
+    """在请求真正发出前，将每线程 UA + 完整浏览器头注入 bilibili_api 请求头。
+
+    必须放在令牌桶 + 信号量临界区内调用：HEADERS 是模块级全局 dict，
+    若在获取令牌前设置，并发线程会互相覆盖 UA，导致 UA 轮换错乱。
+    旧代码通过 `settings['user-agent']` 设置是无效的（bilibili_api 无此模块
+    属性，异常被吞掉），导致所有请求一直用库硬编码的 Mac UA，缺少
+    accept-language，成为风控诱因之一。此处直接 patch 生效。
+    """
     try:
         from bilibili_api.utils import network as _bili_net
         _bili_net.HEADERS['User-Agent'] = _thread_local.ua
@@ -245,13 +260,6 @@ def _sync(coro):
         _bili_net.HEADERS['accept-language'] = 'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7'
     except Exception:
         pass
-    # 全局令牌桶限速：所有请求（翻页/统计/动态流/字幕/评论/弹幕）统一受全局速率约束，
-    # 从根本上限制同一 IP 的请求密度，是降低 412 风控的核心手段。
-    _BILI_RATE_LIMITER.acquire()
-    if _api_semaphore is not None:
-        with _api_semaphore:
-            return _sync_inner(coro)
-    return _sync_inner(coro)
 
 
 def _sync_inner(coro):
@@ -990,8 +998,7 @@ def get_video_comments(aid: int, page: int = 1, order=None) -> list[dict]:
     return results
 
 
-# 弹幕分段长度：B站 每段 6 分钟（360 秒）
-_DANMAKU_SEG_SECONDS = 360
+# 弹幕分段长度：B站 每段 6 分钟（360 秒），见 _crawl_video_danmakus 的 ceil(dur/360)
 
 
 def get_video_pages(bvid: str) -> list[dict]:
@@ -1020,10 +1027,22 @@ def get_video_pages(bvid: str) -> list[dict]:
             raise
     results = []
     for p in pages or []:
+        # get_pages() 返回 List[dict]（x/player/pagelist 的 data 项），
+        # 需用 dict 访问而非 getattr
+        if not isinstance(p, dict):
+            p = getattr(p, '__dict__', {}) or {}
+        dur = p.get('duration') or 0
+        # pagelist 的 duration 是字符串（如 "12:34" / "1:02:33"），统一转秒
+        if isinstance(dur, str):
+            try:
+                parts = [int(x) for x in str(dur).split(':')]
+                dur = sum(x * 60 ** (len(parts) - 1 - i) for i, x in enumerate(parts))
+            except (ValueError, TypeError):
+                dur = 0
         results.append({
-            'cid': getattr(p, 'cid', 0),
-            'duration': getattr(p, 'duration', 0),
-            'page': getattr(p, 'page', len(results) + 1),
+            'cid': p.get('cid') or 0,
+            'duration': int(dur or 0),
+            'page': p.get('page') or len(results) + 1,
         })
     return results
 
@@ -1065,11 +1084,15 @@ def get_video_danmakus(bvid: str, cid: int, from_seg: int = 0,
         text = getattr(d, 'text', '') or ''
         if not text:
             continue
+        # mode 可能是 DmMode 枚举（非 int），需安全提取 .value
+        _mode = getattr(d, 'mode', 0)
+        if hasattr(_mode, 'value'):
+            _mode = _mode.value
         results.append({
             'content': text,
             'ctime': int(getattr(d, 'send_time', 0) or 0),
             'progress': float(getattr(d, 'dm_time', 0) or 0),
-            'mode': int(getattr(d, 'mode', 0) or 0),
+            'mode': int(_mode or 0),
             'color': getattr(d, 'color', 'ffffff') or 'ffffff',
             'author': getattr(d, 'crc32_id', '') or '',
         })

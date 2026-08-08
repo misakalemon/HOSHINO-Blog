@@ -187,7 +187,8 @@ def _run_task(task, app):
                 from blog.models import BiliVideo
                 video = BiliVideo.query.filter_by(bvid=data['bvid']).first()
                 if video:
-                    _crawl_video_danmakus(video)
+                    # 新视频弹幕：不强制，若已爬过（如重复入库）则跳过
+                    _crawl_video_danmakus(video, force=False)
                 else:
                     logger.warning('danmaku_refresh: 视频不存在 bvid=%s', data['bvid'])
             elif task_type == 'refresh_up_danmakus':
@@ -206,7 +207,8 @@ def _run_task(task, app):
                     if not v:
                         return 0
                     try:
-                        n = _crawl_video_danmakus(v)
+                        # 手动刷新整 UP 弹幕：强制重新爬取
+                        n = _crawl_video_danmakus(v, force=True)
                         if n:
                             logger.info('%s ✅ %d 条', v.bvid[:8], n)
                         return n

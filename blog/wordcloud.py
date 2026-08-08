@@ -603,7 +603,11 @@ def _bili_texts_from_videos(videos):
             if v.description:
                 parts.append(v.description)
             yield ' '.join(parts)
-        del batch, video_ids, comment_map, danmaku_map, batch_comments, batch_danmakus
+        del batch, video_ids, comment_map, danmaku_map
+        if 'batch_comments' in locals():
+            del batch_comments
+        if 'batch_danmakus' in locals():
+            del batch_danmakus
         _maybe_collect()
 
 

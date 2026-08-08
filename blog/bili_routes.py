@@ -826,7 +826,7 @@ _DANMAKU_SLEEP_BASE = float(os.environ.get('BILI_DANMAKU_SLEEP', '2.0'))
 _DANMAKU_SLEEP_JITTER = float(os.environ.get('BILI_DANMAKU_JITTER', '2.0'))
 
 
-def _crawl_video_danmakus(video):
+def _crawl_video_danmakus(video, force: bool = False):
     """全量爬取单个视频的弹幕（分 P + 每 6 分钟一段）。
 
     策略：
@@ -837,6 +837,7 @@ def _crawl_video_danmakus(video):
 
     Args:
         video (BiliVideo): 视频 ORM 对象（需有 id、bvid、duration）
+        force (bool):      是否强制重新爬取（默认 False：已爬取过则跳过）
     Returns:
         int: 爬取的弹幕总数
     """
@@ -844,6 +845,10 @@ def _crawl_video_danmakus(video):
         get_video_danmakus, get_video_pages, _is_risk_control, was_recently_blocked,
     )
     from .models import BiliDanmaku
+
+    # 已完整爬取过且非强制刷新则跳过（避免每次刷新重复全量拉取）
+    if not force and video.danmaku_crawled_at:
+        return 0
 
     # 在闭包外保存原始值，避免 db.session.remove() 后 ORM 对象 detached
     _bvid = video.bvid
@@ -960,8 +965,10 @@ def _crawl_video_danmakus(video):
 
     # 全局熔断联动：若本任务期间 B站 API 层检测到 412 IP 封禁，
     # 打开全局熔断器，让深扫/增量/评论等其他爬取一并暂停，避免连锁触发风控
+    # 注意：必须用 BILI_BLOCK_WINDOW 冷却窗口判断（cooldown=0 意味着"只要有
+    # 过 412 记录就 True"，会误触发熔断永不关闭）
     from blog.bilibili.bili_api import was_recently_blocked as _wrb
-    if _wrb():
+    if _wrb(cooldown=float(os.environ.get('BILI_BLOCK_WINDOW', '300'))):
         with _circuit_lock:
             if time.time() >= _circuit_open_until:
                 _cooldown = _circuit_compute_cooldown()
