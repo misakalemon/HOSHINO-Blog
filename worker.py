@@ -528,15 +528,7 @@ def main():
     scrape_futures: dict = {}
     wc_futures: dict = {}
 
-    heartbeat_interval = 0
-
     while not shutdown_flag[0]:
-        # 心跳信号：每 5 秒输出一次
-        now = time.time()
-        if now - heartbeat_interval >= 5:
-            logger.debug('[Worker ♥] %s 爬取=%d 词云=%d', time.strftime("%H:%M:%S"), len(scrape_futures), len(wc_futures))
-            heartbeat_interval = now
-
         try:
             # 清理已完成的任务
             def _cleanup(futures_map):
