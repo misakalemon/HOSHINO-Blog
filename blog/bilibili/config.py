@@ -53,8 +53,11 @@ USER_AGENTS = [
 # ── 通用请求头 ──────────────────────────────────
 # 模拟 Chrome 浏览器访问，避免 B站 API 返回 403
 # Referer 和 Origin 是 B站 API 防盗链校验的必要字段
+# accept-language 模拟真实浏览器语言偏好，降低被风控判定为机器人的概率
+#（参考 DownKyi WebClient 的完整浏览器头）
 HEADERS = {
     "User-Agent": USER_AGENTS[0],    # 默认 UA，bili_api.py 中会被随机轮换
     "Referer": "https://www.bilibili.com/",
     "Origin": "https://www.bilibili.com",
+    "accept-language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
 }

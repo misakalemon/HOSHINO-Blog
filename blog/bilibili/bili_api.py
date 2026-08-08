@@ -232,12 +232,20 @@ def _sync(coro):
         raises:   TimeoutError — 请求超时（30s 未返回）。
     """
     _ensure_thread_binding()
+    # 真正将每线程 UA + 完整浏览器头注入 bilibili_api 的请求头。
+    # 说明：bilibili_api.utils.network.HEADERS 是模块级 dict，其 HEADERS.copy()
+    # 会被每次 API 请求使用。旧代码通过 `settings['user-agent']` 设置是无效的
+    # （bilibili_api 无此模块属性，异常被吞掉），导致所有请求一直用库硬编码的
+    # Mac UA，缺少 accept-language，成为风控诱因之一。此处直接 patch 生效。
     try:
-        from bilibili_api import settings as _bili_settings
-        _bili_settings.settings['user-agent'] = _thread_local.ua
+        from bilibili_api.utils import network as _bili_net
+        _bili_net.HEADERS['User-Agent'] = _thread_local.ua
+        _bili_net.HEADERS['Referer'] = 'https://www.bilibili.com/'
+        _bili_net.HEADERS['Origin'] = 'https://www.bilibili.com'
+        _bili_net.HEADERS['accept-language'] = 'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7'
     except Exception:
         pass
-    # 全局令牌桶限速：所有请求（翻页/统计/动态流/字幕/评论）统一受全局速率约束，
+    # 全局令牌桶限速：所有请求（翻页/统计/动态流/字幕/评论/弹幕）统一受全局速率约束，
     # 从根本上限制同一 IP 的请求密度，是降低 412 风控的核心手段。
     _BILI_RATE_LIMITER.acquire()
     if _api_semaphore is not None:
