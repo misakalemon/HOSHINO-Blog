@@ -325,6 +325,12 @@ def init_db(app):
         # ── 迁移 bili_videos.comments_crawled_at 列 ──
         _migrate_bili_video_comments_crawled_at(app)
 
+        # ── 迁移 bili_videos.danmaku_crawled_at 列 ──
+        _migrate_bili_video_danmaku_crawled_at(app)
+
+        # ── 迁移 bili_danmakus 表 ──
+        _migrate_bili_danmakus_table(app)
+
         # ── 迁移 wordcloud_data.data JSON→ZLIB BLOB ──
         _migrate_wordcloud_data_compress(app)
 
@@ -1031,6 +1037,61 @@ def _migrate_bili_video_comments_crawled_at(app):
         except Exception as e:
             db.session.rollback()
             app.logger.warning('迁移: 添加 bili_videos.comments_crawled_at 列失败: %s', e)
+
+
+def _migrate_bili_video_danmaku_crawled_at(app):
+    """迁移：为 BiliVideo 表添加 danmaku_crawled_at 字段。"""
+    from sqlalchemy import text
+
+    engine = db.get_engine()
+    inspector = db.inspect(engine)
+    cols = {c['name'] for c in inspector.get_columns('bili_videos')}
+    dialect = engine.dialect.name
+    if dialect != 'mysql':
+        return
+    if 'danmaku_crawled_at' not in cols:
+        try:
+            db.session.execute(text('ALTER TABLE bili_videos ADD COLUMN danmaku_crawled_at DATETIME NULL COMMENT "弹幕最后爬取时间"'))
+            db.session.commit()
+            app.logger.info('迁移: 已添加 bili_videos.danmaku_crawled_at 列')
+        except Exception as e:
+            db.session.rollback()
+            app.logger.warning('迁移: 添加 bili_videos.danmaku_crawled_at 列失败: %s', e)
+
+
+def _migrate_bili_danmakus_table(app):
+    """迁移：创建 bili_danmakus 表（如不存在）。"""
+    from sqlalchemy import text
+
+    engine = db.get_engine()
+    dialect = engine.dialect.name
+    if dialect != 'mysql':
+        return
+    inspector = db.inspect(engine)
+    tables = inspector.get_table_names()
+    if 'bili_danmakus' not in tables:
+        try:
+            db.session.execute(text('''
+                CREATE TABLE bili_danmakus (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    video_id INT NOT NULL,
+                    cid INT DEFAULT 0,
+                    content TEXT NOT NULL,
+                    ctime INT DEFAULT 0,
+                    progress DOUBLE DEFAULT 0,
+                    mode INT DEFAULT 0,
+                    color VARCHAR(16) DEFAULT 'ffffff',
+                    author VARCHAR(64) DEFAULT '',
+                    INDEX idx_video_id (video_id),
+                    INDEX ix_bili_danmaku_video_progress (video_id, progress),
+                    FOREIGN KEY (video_id) REFERENCES bili_videos(id) ON DELETE CASCADE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            '''))
+            db.session.commit()
+            app.logger.info('迁移: 已创建 bili_danmakus 表')
+        except Exception as e:
+            db.session.rollback()
+            app.logger.warning('迁移: 创建 bili_danmakus 表失败: %s', e)
 
 
 def _migrate_bili_video_subtitle_mediumtext(app):

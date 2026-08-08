@@ -182,6 +182,49 @@ def _run_task(task, app):
                             logger.warning('评论爬取线程异常: %s', e)
                 from blog.task_queue import submit_task
                 submit_task('bili_wordcloud', up_id=up_id)
+            elif task_type == 'danmaku_refresh':
+                from blog.bili_routes import _crawl_video_danmakus
+                from blog.models import BiliVideo
+                video = BiliVideo.query.filter_by(bvid=data['bvid']).first()
+                if video:
+                    _crawl_video_danmakus(video)
+                else:
+                    logger.warning('danmaku_refresh: 视频不存在 bvid=%s', data['bvid'])
+            elif task_type == 'refresh_up_danmakus':
+                from blog.bili_routes import _crawl_video_danmakus
+                from blog.models import BiliVideo
+                from concurrent.futures import ThreadPoolExecutor, as_completed
+                up_id = data['up_id']
+                video_ids = [r[0] for r in BiliVideo.query.filter_by(
+                    up_id=up_id
+                ).order_by(BiliVideo.pubdate.desc()).with_entities(BiliVideo.id).limit(int(os.environ.get('BILI_REFRESH_LIMIT', '50'))).all()]
+                total = len(video_ids)
+                logger.info('弹幕刷新: UP %s 共 %d 个视频, 并发 %d', up_id, total, MAX_COMMENT_WORKERS)
+
+                def _crawl_danmaku(vid):
+                    v = BiliVideo.query.get(vid)
+                    if not v:
+                        return 0
+                    try:
+                        n = _crawl_video_danmakus(v)
+                        if n:
+                            logger.info('%s ✅ %d 条', v.bvid[:8], n)
+                        return n
+                    except Exception as e:
+                        logger.warning('%s 弹幕失败: %s', v.bvid, e)
+                        return 0
+                    finally:
+                        db.session.remove()
+
+                with ThreadPoolExecutor(max_workers=MAX_COMMENT_WORKERS) as executor:
+                    futures = {executor.submit(_crawl_danmaku, vid): vid for vid in video_ids}
+                    for future in as_completed(futures):
+                        try:
+                            future.result()
+                        except Exception as e:
+                            logger.warning('弹幕爬取线程异常: %s', e)
+                from blog.task_queue import submit_task
+                submit_task('bili_wordcloud', up_id=up_id)
             elif task_type == 'refresh_up_subtitles':
                 from blog.models import BiliVideo
                 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -240,8 +283,8 @@ def _run_task(task, app):
             pass
         # 无论成功还是异常，都清除 Redis 中的运行标记
         if task_type in ('refresh_up', 'refresh_all', 'refresh_up_comments',
-                         'refresh_up_subtitles', 'bili_wordcloud_single',
-                         'comment_refresh'):
+                         'refresh_up_danmakus', 'refresh_up_subtitles',
+                         'bili_wordcloud_single', 'comment_refresh', 'danmaku_refresh'):
             mid = data.get('mid') or data.get('up_id')
             if mid:
                 mark_done(mid)
@@ -515,7 +558,8 @@ def main():
 
             # 按任务类型分发到对应线程池
             if task_type in ('refresh_up', 'refresh_all', 'comment_refresh',
-                             'refresh_up_comments', 'refresh_up_subtitles'):
+                             'refresh_up_comments', 'refresh_up_danmakus',
+                             'danmaku_refresh', 'refresh_up_subtitles'):
                 future = scrape_executor.submit(_run_task, task, app)
                 scrape_futures[future] = task
             elif task_type in ('bili_wordcloud', 'bili_wordcloud_single'):

@@ -282,6 +282,40 @@ def refresh_up_comments(up_id):
     return redirect(url_for('bili.up_detail', up_id=up_id))
 
 
+@bili_bp.route('/up/<int:up_id>/refresh-danmakus', methods=['POST'])
+@editor_required
+def refresh_up_danmakus(up_id):
+    """刷新指定 UP 主的弹幕并重新生成词云。
+
+    通过 Redis 任务队列投递到 worker.py 执行。
+
+    Args:
+        up_id (int): UP 主数据库 ID
+
+    Returns:
+        HTTP 重定向到 up_detail 页
+    """
+    up = BiliUp.query.get_or_404(up_id)
+    from blog.task_queue import submit_task, mark_running, is_queue_available, is_running
+    if is_running(up.mid):
+        flash('该 UP 主正在爬取中（Worker 进程）', 'error')
+        return redirect(url_for('bili.up_detail', up_id=up_id))
+    with _scrape_lock:
+        if up.mid in _scrape_running or up.mid in _incremental_running:
+            flash('该 UP 主正在爬取中，请等待完成', 'error')
+            return redirect(url_for('bili.up_detail', up_id=up_id))
+    if not is_queue_available():
+        flash('任务队列不可用（Redis 未连接），无法执行刷新', 'error')
+        return redirect(url_for('bili.up_detail', up_id=up_id))
+    task_id = submit_task('refresh_up_danmakus', up_id=up_id, mid=up.mid)
+    if task_id:
+        mark_running(up.mid)
+        flash(f'已开始刷新「{up.name or up.mid}」的弹幕与词云', 'success')
+    else:
+        flash('任务提交失败，请稍后重试', 'error')
+    return redirect(url_for('bili.up_detail', up_id=up_id))
+
+
 @bili_bp.route('/refresh-subtitles/<int:up_id>', methods=['POST'])
 @editor_required
 def refresh_up_subtitles(up_id):
@@ -667,8 +701,10 @@ def _insert_or_update_video(up, video_info, aid, bvid, title_short):
         try:
             from blog.task_queue import submit_task
             submit_task('bili_wordcloud_single', video_id=video.id, bvid=bvid)
+            # 新视频入库后异步投递弹幕爬取（受全局令牌桶串行限速保护）
+            submit_task('danmaku_refresh', bvid=bvid)
         except Exception as e:
-            logger.warning('词云任务投递失败: %s', e)
+            logger.warning('词云/弹幕任务投递失败: %s', e)
     return video, is_new
 
 
@@ -781,6 +817,156 @@ def _crawl_video_comments(video, hot_pages: int = _COMMENT_HOT_PAGES, newest_pag
         if v:
             v.comments_crawled_at = now_cst()
             db.session.commit()
+
+    return total
+
+
+# 弹幕爬取间隔基础值（秒）+ 抖动，防风控
+_DANMAKU_SLEEP_BASE = float(os.environ.get('BILI_DANMAKU_SLEEP', '2.0'))
+_DANMAKU_SLEEP_JITTER = float(os.environ.get('BILI_DANMAKU_JITTER', '2.0'))
+
+
+def _crawl_video_danmakus(video):
+    """全量爬取单个视频的弹幕（分 P + 每 6 分钟一段）。
+
+    策略：
+      1. get_video_pages() 取全部分 P（含 cid 与时长）
+      2. 对每个分 P，按 ceil(duration / 360) 计算段数，逐段 get_video_danmakus()
+      3. 内存判重（cid, progress, content），分批提交，每段后 db.session.remove()
+      4. 仅完整爬完才标记 danmaku_crawled_at；风控/失败中断则保留为空以便重投
+
+    Args:
+        video (BiliVideo): 视频 ORM 对象（需有 id、bvid、duration）
+    Returns:
+        int: 爬取的弹幕总数
+    """
+    from blog.bilibili.bili_api import (
+        get_video_danmakus, get_video_pages, _is_risk_control, was_recently_blocked,
+    )
+    from .models import BiliDanmaku
+
+    # 在闭包外保存原始值，避免 db.session.remove() 后 ORM 对象 detached
+    _bvid = video.bvid
+    _video_id = video.id
+
+    # 一次性加载该视频已有弹幕的 (cid, progress, content) 集合到内存判重
+    _existing = set(
+        (r[0], r[1], r[2])
+        for r in BiliDanmaku.query.with_entities(
+            BiliDanmaku.cid, BiliDanmaku.progress, BiliDanmaku.content
+        ).filter_by(video_id=_video_id).all()
+    )
+
+    def _crawl_seg(cid, from_seg, to_seg):
+        # 全局熔断/冷却检查：最近触发过 412 IP 封禁则直接跳过（不再请求，避免雪上加霜）
+        if was_recently_blocked(cooldown=float(os.environ.get('BILI_BLOCK_WINDOW', '300'))):
+            return -1, 0
+        # 风控指数退避：触发风控后首次等待 _DANMAKU_RETRY_DELAY，之后翻倍
+        _retry_delay = float(os.environ.get('BILI_DANMAKU_RETRY_DELAY', '15.0'))
+        _max_retries = int(os.environ.get('BILI_DANMAKU_RETRIES', '2'))
+        danmakus = None
+        for _attempt in range(_max_retries + 1):
+            try:
+                danmakus = get_video_danmakus(_bvid, cid, from_seg=from_seg, to_seg=to_seg)
+                break
+            except Exception as e:
+                if _is_risk_control(e):
+                    if _attempt < _max_retries:
+                        logger.warning('视频 %s 弹幕触发风控，等待 %.0fs 后重试 (第 %d/%d 次)...',
+                                       _bvid, _retry_delay, _attempt + 1, _max_retries)
+                        time.sleep(_retry_delay)
+                        _retry_delay = min(_retry_delay * 2,
+                                           float(os.environ.get('BILI_DANMAKU_RETRY_CAP', '120.0')))
+                        continue
+                    logger.warning('视频 %s 弹幕段 %d~%d 风控重试耗尽，中断本次弹幕爬取',
+                                   _bvid, from_seg, to_seg)
+                    return -1, 0
+                logger.warning('视频 %s 弹幕段 %d~%d 获取失败: %s', _bvid, from_seg, to_seg, e)
+                return -1, 0
+        if danmakus is None:
+            return -1, 0
+
+        if not danmakus:
+            return 0, 0
+
+        count = 0
+        for d in danmakus:
+            content = (d.get('content') or '').strip()
+            if not content:
+                continue
+            content = content[:500]
+            prog = d.get('progress', 0)
+            key = (cid, prog, content)
+            if key in _existing:
+                continue
+            db.session.add(BiliDanmaku(
+                video_id=_video_id,
+                cid=cid,
+                content=content,
+                ctime=d.get('ctime', 0),
+                progress=prog,
+                mode=d.get('mode', 0),
+                color=d.get('color', 'ffffff')[:16],
+                author=(d.get('author') or '')[:64],
+            ))
+            _existing.add(key)
+            count += 1
+
+        db.session.commit()
+        db.session.remove()
+        time.sleep(_DANMAKU_SLEEP_BASE + random.random() * _DANMAKU_SLEEP_JITTER)
+        return 0, count
+
+    total = 0
+    completed = True
+    try:
+        pages = get_video_pages(_bvid)
+    except Exception as e:
+        logger.warning('视频 %s 获取分P失败: %s', _bvid, e)
+        return 0
+    if not pages:
+        # 无法获取分P（无有效 cid），弹幕无法定位，跳过
+        logger.warning('视频 %s 无分P数据，跳过弹幕爬取', _bvid)
+        return 0
+
+    import math
+    for page_info in pages:
+        cid = page_info.get('cid') or 0
+        if not cid:
+            continue
+        dur = page_info.get('duration') or 0
+        seg_count = math.ceil(dur / 360) if dur > 0 else 1
+        if seg_count <= 0:
+            seg_count = 1
+        # 分 P 超过 3 段时限制单 P 段数，避免一次任务过长（可配）
+        max_seg_per_page = int(os.environ.get('BILI_DANMAKU_MAX_SEG', '0'))
+        if max_seg_per_page > 0:
+            seg_count = min(seg_count, max_seg_per_page)
+        for from_seg in range(0, seg_count, 1):
+            n_code, n = _crawl_seg(cid, from_seg, from_seg)
+            if n_code < 0:
+                completed = False
+                break
+            total += n
+        if not completed:
+            break
+
+    # 仅完整爬完才标记弹幕已爬取；否则保留 danmaku_crawled_at 为空以便重投
+    if completed:
+        v = BiliVideo.query.get(_video_id)
+        if v:
+            v.danmaku_crawled_at = now_cst()
+            db.session.commit()
+
+    # 全局熔断联动：若本任务期间 B站 API 层检测到 412 IP 封禁，
+    # 打开全局熔断器，让深扫/增量/评论等其他爬取一并暂停，避免连锁触发风控
+    from blog.bilibili.bili_api import was_recently_blocked as _wrb
+    if _wrb():
+        with _circuit_lock:
+            if time.time() >= _circuit_open_until:
+                _cooldown = _circuit_compute_cooldown()
+                _circuit_open_until = time.time() + _cooldown
+                logger.error('弹幕爬取检测到 412 封禁，全局熔断 %d 分钟', _cooldown // 60)
 
     return total
 

@@ -260,7 +260,7 @@ def video_detail(video_id):
         # 历史不足 2 条时增量均为 0
         growth = {m: {'total': 0, 'last': 0} for m in metrics}
 
-    from .models import BiliVideoComment, WordCloudConfig, WordCloudData
+    from .models import BiliDanmaku, BiliVideoComment, WordCloudConfig, WordCloudData
 
     wc_record = WordCloudData.query.filter_by(
         post_id=None, source='bili_video', period=f'bvid_{video.bvid}'
@@ -275,6 +275,30 @@ def video_detail(video_id):
         .all()
     )
 
+    # 弹幕展示：按视频内进度升序，限制数量（数量大时按播放进度分段采样）
+    danmakus = []
+    _dm_rows = (
+        BiliDanmaku.query.with_entities(
+            BiliDanmaku.content, BiliDanmaku.progress, BiliDanmaku.ctime, BiliDanmaku.color
+        )
+        .filter_by(video_id=video.id)
+        .order_by(BiliDanmaku.progress.asc())
+        .all()
+    )
+    if _dm_rows:
+        max_show = int(os.environ.get('BILI_DANMAKU_SHOW', '100'))
+        if len(_dm_rows) <= max_show:
+            danmakus = _dm_rows
+        else:
+            # 均匀采样：全量弹幕较多时按进度均匀抽取 max_show 条
+            step = len(_dm_rows) / max_show
+            sampled = []
+            idx = 0
+            while idx < len(_dm_rows) and len(sampled) < max_show:
+                sampled.append(_dm_rows[int(idx)])
+                idx += step
+            danmakus = sampled
+
     return render_template(
         'bilibili_video.html',
         video=video,
@@ -286,6 +310,7 @@ def video_detail(video_id):
         wc_data=wc_data,
         wc_config=wc_config,
         comments=comments,
+        danmakus=danmakus,
     )
 
 

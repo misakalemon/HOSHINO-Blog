@@ -982,6 +982,92 @@ def get_video_comments(aid: int, page: int = 1, order=None) -> list[dict]:
     return results
 
 
+# 弹幕分段长度：B站 每段 6 分钟（360 秒）
+_DANMAKU_SEG_SECONDS = 360
+
+
+def get_video_pages(bvid: str) -> list[dict]:
+    """获取视频分 P 列表（含每 P 的 cid 与时长）。
+
+    使用 bilibili_api.Video.get_pages()。用于弹幕全量爬取时
+    计算每个分 P 的段数（ceil(duration / 360)）。
+
+        bvid:    视频 BV 号。
+        returns: [{'cid': int, 'duration': int(秒), 'page': int(页码)}]
+    """
+    try:
+        v = _video_mod.Video(bvid=bvid, credential=_credential)
+        pages = _sync(v.get_pages())
+    except Exception as e:
+        if _credential and _is_auth_error(e):
+            logger.warning('视频 %s 获取分P凭证过期，使用匿名: %s', bvid, e)
+            try:
+                v = _video_mod.Video(bvid=bvid)
+                pages = _sync(v.get_pages())
+            except Exception as e2:
+                if _is_ip_blocked(e2):
+                    raise
+                raise e
+        else:
+            raise
+    results = []
+    for p in pages or []:
+        results.append({
+            'cid': getattr(p, 'cid', 0),
+            'duration': getattr(p, 'duration', 0),
+            'page': getattr(p, 'page', len(results) + 1),
+        })
+    return results
+
+
+def get_video_danmakus(bvid: str, cid: int, from_seg: int = 0,
+                       to_seg: int | None = None) -> list[dict]:
+    """获取指定分 P 的弹幕（支持分段，每段 6 分钟）。
+
+    使用 bilibili_api.Video.get_danmakus()，内部已封装 seg.so protobuf 解析。
+
+        bvid:      视频 BV 号。
+        cid:       分 P 的 cid。
+        from_seg:  起始段号（0 开始编号，None/0 为第一段）。
+        to_seg:    结束段号（0 开始编号，None 为到最后一段，含该段）。
+        returns:   [{'content': str, 'ctime': int, 'progress': float,
+                     'mode': int, 'color': str, 'author': str}, ...]
+    """
+    try:
+        v = _video_mod.Video(bvid=bvid, credential=_credential)
+        danmakus = _sync(v.get_danmakus(
+            page_index=0, cid=cid, from_seg=from_seg, to_seg=to_seg,
+        ))
+    except Exception as e:
+        if _credential and _is_auth_error(e):
+            logger.warning('视频 %s 获取弹幕凭证过期，使用匿名: %s', bvid, e)
+            try:
+                v = _video_mod.Video(bvid=bvid)
+                danmakus = _sync(v.get_danmakus(
+                    page_index=0, cid=cid, from_seg=from_seg, to_seg=to_seg,
+                ))
+            except Exception as e2:
+                if _is_ip_blocked(e2):
+                    raise
+                raise e
+        else:
+            raise
+    results = []
+    for d in danmakus or []:
+        text = getattr(d, 'text', '') or ''
+        if not text:
+            continue
+        results.append({
+            'content': text,
+            'ctime': int(getattr(d, 'send_time', 0) or 0),
+            'progress': float(getattr(d, 'dm_time', 0) or 0),
+            'mode': int(getattr(d, 'mode', 0) or 0),
+            'color': getattr(d, 'color', 'ffffff') or 'ffffff',
+            'author': getattr(d, 'crc32_id', '') or '',
+        })
+    return results
+
+
 def _parse_duration(length_str: str) -> int:
     """将 B 站视频时长字符串解析为秒数
 

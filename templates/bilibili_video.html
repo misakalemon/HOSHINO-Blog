@@ -194,6 +194,21 @@
         {% endfor %}
     </div>
     {% endif %}
+
+    <!-- 弹幕区 -->
+    {% if danmakus %}
+    <div style="margin-top:24px;padding:20px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:16px">
+        <div style="font-size:0.85rem;color:rgba(255,255,255,0.5);margin-bottom:16px">📜 弹幕（{{ danmakus|length }} 条采样）</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+            {% for d in danmakus %}
+            <span style="font-size:0.8rem;color:rgba(255,255,255,0.7);background:rgba(255,255,255,0.04);padding:4px 10px;border-radius:6px"
+                  title="进度 {{ '%.1f'|format(d[1]) }}s">
+                {{ d[0] }}
+            </span>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
 </div>
 
 <style>

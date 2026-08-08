@@ -528,6 +528,7 @@ class BiliVideo(db.Model):
     tags = db.Column(db.JSON, nullable=True, comment='视频标签名数组')
     subtitle_text = db.Column(MEDIUMTEXT, nullable=True, comment='AI 字幕文本（自动语音识别生成）')
     comments_crawled_at = db.Column(db.DateTime, nullable=True, comment='评论最后爬取时间')
+    danmaku_crawled_at = db.Column(db.DateTime, nullable=True, comment='弹幕最后爬取时间')
 
     updated_at = db.Column(
         db.DateTime,
@@ -574,6 +575,32 @@ class BiliVideoComment(db.Model):
     like_count = db.Column(db.Integer, default=0, comment='点赞数')
 
     video = db.relationship('BiliVideo', backref=db.backref('comments', lazy='dynamic', cascade='all, delete-orphan'))
+
+
+class BiliDanmaku(db.Model):
+    """B站视频弹幕（全量，按视频内进度分段抓取）
+
+    从 B站 API 全量爬取的弹幕，用于词云文本源和页面展示。
+    """
+    __tablename__ = 'bili_danmakus'
+    __table_args__ = (
+        db.Index('ix_bili_danmaku_video_progress', 'video_id', 'progress'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    video_id = db.Column(
+        db.Integer, db.ForeignKey('bili_videos.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    cid = db.Column(db.Integer, default=0, comment='分P的cid（供多P视频区分弹幕）')
+    content = db.Column(db.Text, nullable=False, comment='弹幕文本')
+    ctime = db.Column(db.Integer, default=0, comment='弹幕发送时间戳')
+    progress = db.Column(db.Float, default=0, comment='弹幕在视频中的位置（秒）')
+    mode = db.Column(db.Integer, default=0, comment='弹幕模式')
+    color = db.Column(db.String(16), default='ffffff', comment='弹幕颜色')
+    author = db.Column(db.String(64), default='', comment='弹幕发送者UID的CRC32摘要')
+
+    video = db.relationship('BiliVideo', backref=db.backref('danmakus', lazy='dynamic', cascade='all, delete-orphan'))
 
 
 class BiliUpHistory(db.Model):

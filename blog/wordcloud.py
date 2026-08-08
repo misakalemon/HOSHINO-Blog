@@ -562,29 +562,38 @@ _BILI_BATCH = 500
 
 
 def _bili_texts_from_videos(videos):
-    """从 B站视频列表提取各文本源，权重：字幕×5 > 标题×3 > 评论×2 > 标签×2 > 简介×1。
+    """从 B站视频列表提取各文本源，权重：字幕×5 > 标题×3 > 弹幕×2 > 评论×2 > 标签×2 > 简介×1。
 
-    每次处理一批视频（_BILI_BATCH），加载其评论后立即丢弃，避免
-    全部评论驻留内存。返回 Generator 逐条产出拼接文本。
+    每次处理一批视频（_BILI_BATCH），加载其评论/弹幕后立即丢弃，避免
+    全部评论/弹幕驻留内存。返回 Generator 逐条产出拼接文本。
     """
-    from .models import BiliVideoComment
+    from .models import BiliDanmaku, BiliVideoComment
 
     for i in range(0, len(videos), _BILI_BATCH):
         batch = videos[i:i + _BILI_BATCH]
         video_ids = [v.id for v in batch]
         comment_map = {}
+        danmaku_map = {}
         if video_ids:
             batch_comments = BiliVideoComment.query.filter(
                 BiliVideoComment.video_id.in_(video_ids)
             ).all()
             for c in batch_comments:
                 comment_map.setdefault(c.video_id, []).append(c.content)
+            batch_danmakus = BiliDanmaku.query.filter(
+                BiliDanmaku.video_id.in_(video_ids)
+            ).all()
+            for d in batch_danmakus:
+                danmaku_map.setdefault(d.video_id, []).append(d.content)
         for v in batch:
             parts = []
             if v.subtitle_text:
                 parts.extend([v.subtitle_text] * 5)
             if v.title:
                 parts.extend([v.title] * 3)
+            for content in danmaku_map.get(v.id, []):
+                if content:
+                    parts.extend([content] * 2)
             for content in comment_map.get(v.id, []):
                 if content:
                     parts.extend([content] * 2)
@@ -594,7 +603,7 @@ def _bili_texts_from_videos(videos):
             if v.description:
                 parts.append(v.description)
             yield ' '.join(parts)
-        del batch, video_ids, comment_map, batch_comments
+        del batch, video_ids, comment_map, danmaku_map, batch_comments, batch_danmakus
         _maybe_collect()
 
 
@@ -799,10 +808,10 @@ def precompute_video_wordclouds():
 def _compute_single_video_wordcloud(video):
     """为单个视频生成词云并存入数据库。
 
-    文本来源权重：字幕×5 > 标题×3 > 评论×2 > 标签×2 > 简介×1
+    文本来源权重：字幕×5 > 标题×3 > 弹幕×2 > 评论×2 > 标签×2 > 简介×1
     """
     from . import db
-    from .models import WordCloudConfig, WordCloudData
+    from .models import BiliDanmaku, WordCloudConfig, WordCloudData
 
     top_n = WordCloudConfig.get_or_create().top_n_bili
     parts = []
@@ -810,6 +819,12 @@ def _compute_single_video_wordcloud(video):
         parts.extend([video.subtitle_text] * 5)
     if video.title:
         parts.extend([video.title] * 3)
+    danmaku_texts = [
+        d.content for d in video.danmakus.all()
+        if d.content
+    ]
+    if danmaku_texts:
+        parts.extend(danmaku_texts * 2)
     comment_texts = [
         c.content for c in video.comments.all()
         if c.content
