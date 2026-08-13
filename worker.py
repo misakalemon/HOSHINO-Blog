@@ -528,7 +528,39 @@ def main():
     scrape_futures: dict = {}
     wc_futures: dict = {}
 
+    # 周期性内存回收：Worker 长期运行 + 大量爬取/词云任务会产生对象碎片，
+    # 定期强制 GC 并把内存归还给解释器池，防止跨任务累积导致 OOM。
+    _mem_check_interval = 0
+    _mem_check_period = int(os.environ.get('WORKER_MEM_GC_SECONDS', '300'))  # 默认 5 分钟
+    try:
+        import gc as _gc
+        import psutil as _psutil_mem
+        _HAS_PSUTIL = True
+    except ImportError:
+        _gc = None
+        _psutil_mem = None
+        _HAS_PSUTIL = False
+
     while not shutdown_flag[0]:
+        # 周期内存回收：每 _mem_check_period 秒检查一次 RSS，
+        # 超阈值（默认 1.5GB）时强制 gc.collect()
+        _now = time.time()
+        if _now - _mem_check_interval >= _mem_check_period:
+            _mem_check_interval = _now
+            if _gc is not None:
+                try:
+                    _rss_mb = _psutil_mem.Process().memory_info().rss / 1024 / 1024
+                    _limit_mb = float(os.environ.get('WORKER_MEM_LIMIT', '1500'))
+                    if _rss_mb > _limit_mb:
+                        _freed = _gc.collect()
+                        logger.warning(
+                            '内存水位 %.0fMB 超过阈值 %.0fMB，强制 GC 回收 %d 个对象',
+                            _rss_mb, _limit_mb, _freed,
+                        )
+                    else:
+                        _gc.collect(0)
+                except Exception:
+                    pass
         try:
             # 清理已完成的任务
             def _cleanup(futures_map):

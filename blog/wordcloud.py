@@ -49,9 +49,27 @@ def _log_memory(logger, label: str = ''):
 
 
 def _maybe_collect(force: bool = False):
-    """按阈值触发 GC。每 5 次调用执行一次回收（或 force 强制）。"""
+    """按阈值触发 GC + 内存水位回收。
+
+    - 每 5 次调用执行一次常规 gc.collect()；
+    - 当进程 RSS 超过阈值（默认 1.5GB，可用 BILI_WC_MEM_LIMIT 覆盖）时，
+      强制触发 gc.collect() 并把已分代对象全部回收，缓解长期运行内存堆积。
+    - 注意：gc.collect() 只是把对象从引用图摘除、内存回到 Python 的
+      pymalloc arena，并非立即归还操作系统；但能阻止跨任务的内存累积。
+    """
     _maybe_collect.counter += 1
-    if force or _maybe_collect.counter % 5 == 0:
+    need = force or _maybe_collect.counter % 5 == 0
+    if _HAS_PSUTIL and not force:
+        try:
+            _rss_mb = _psutil.Process().memory_info().rss / 1024 / 1024
+            _limit_mb = float(os.environ.get('BILI_WC_MEM_LIMIT', '1500'))
+            if _rss_mb > _limit_mb:
+                need = True
+                logger.warning('内存水位 %.0fMB 超过阈值 %.0fMB，强制 GC 回收',
+                               _rss_mb, _limit_mb)
+        except Exception:
+            pass
+    if need:
         collected = gc.collect()
         if collected:
             logger.debug('GC 回收 %d 个对象', collected)

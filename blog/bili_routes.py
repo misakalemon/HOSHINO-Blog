@@ -975,6 +975,12 @@ def _crawl_video_danmakus(video, force: bool = False):
                 _circuit_open_until = time.time() + _cooldown
                 logger.error('弹幕爬取检测到 412 封禁，全局熔断 %d 分钟', _cooldown // 60)
 
+    # 释放判重集合（大视频弹幕可达数万条）
+    try:
+        _existing.clear()
+    except Exception:
+        pass
+
     return total
 
 
@@ -1370,6 +1376,15 @@ def _check_new_videos(mid: int, app):
             with _scrape_lock:
                 _incremental_running.discard(mid)
                 _scrape_progress.pop(mid, None)
+            # 显式释放本函数持有的大集合，避免跨周期内存累积（增量每 30 分钟一次）
+            for _nm in ('existing_bvids', 'existing_aids', '_run_new_bvids',
+                        'snap_videos', '_batch', '_hist_map', 'existing_rows',
+                        '_page_stats', 'tracked_ids'):
+                if _nm in locals() and locals()[_nm]:
+                    try:
+                        locals()[_nm].clear()
+                    except Exception:
+                        pass
             db.session.remove()
 
 
@@ -2217,6 +2232,16 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             with _scrape_lock:
                 _scrape_running.discard(mid)
                 _scrape_progress.pop(mid, None)
+            # 显式释放本函数持有的大集合（deep-scan 的大 UP 可达数千视频），
+            # 避免每日深扫 + 手动刷新多次运行后内存累积
+            for _nm in ('existing_ids', 'existing_aids', 'fill_new_bvids',
+                        'dyn_videos', 'existing_rows', 'hot_ids', 'warm_ids',
+                        'cold_ids', '_hot_hist', '_warm_hist'):
+                if _nm in locals() and locals()[_nm]:
+                    try:
+                        locals()[_nm].clear()
+                    except Exception:
+                        pass
             db.session.remove()
 
 
