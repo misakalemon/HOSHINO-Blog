@@ -1060,7 +1060,13 @@ def _migrate_bili_video_danmaku_crawled_at(app):
 
 
 def _migrate_bili_danmakus_table(app):
-    """迁移：创建 bili_danmakus 表（如不存在）。"""
+    """迁移：创建 bili_danmakus 表（如不存在），并把 cid 列扩展为 BIGINT。
+
+    B站 cid 是 64 位整数（如 40875197917），超过 MySQL INT 上限
+    （2147483647），若用 INT 会在插入时抛 1264 Out of range。因此：
+      1. 新建表直接使用 BIGINT；
+      2. 已存在的表把 cid 列 ALTER 为 BIGINT。
+    """
     from sqlalchemy import text
 
     engine = db.get_engine()
@@ -1075,7 +1081,7 @@ def _migrate_bili_danmakus_table(app):
                 CREATE TABLE bili_danmakus (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     video_id INT NOT NULL,
-                    cid INT DEFAULT 0,
+                    cid BIGINT DEFAULT 0,
                     content TEXT NOT NULL,
                     ctime INT DEFAULT 0,
                     progress DOUBLE DEFAULT 0,
@@ -1092,6 +1098,23 @@ def _migrate_bili_danmakus_table(app):
         except Exception as e:
             db.session.rollback()
             app.logger.warning('迁移: 创建 bili_danmakus 表失败: %s', e)
+        return
+
+    # 表已存在：检查 cid 列类型，若为 INT 则 ALTER 为 BIGINT（B站 cid 可超过 INT 上限）
+    try:
+        cols = {c['name']: c for c in inspector.get_columns('bili_danmakus')}
+        cid_col = cols.get('cid')
+        if cid_col is not None:
+            ctype = (cid_col.get('type') or '').upper()
+            if 'BIGINT' not in ctype:
+                db.session.execute(text(
+                    'ALTER TABLE bili_danmakus MODIFY COLUMN cid BIGINT DEFAULT 0'
+                ))
+                db.session.commit()
+                app.logger.info('迁移: bili_danmakus.cid 已扩展为 BIGINT (原 %s)', ctype)
+    except Exception as e:
+        db.session.rollback()
+        app.logger.warning('迁移: bili_danmakus.cid 扩展 BIGINT 失败: %s', e)
 
 
 def _migrate_bili_video_subtitle_mediumtext(app):

@@ -592,7 +592,7 @@ class BiliDanmaku(db.Model):
         db.Integer, db.ForeignKey('bili_videos.id', ondelete='CASCADE'),
         nullable=False, index=True,
     )
-    cid = db.Column(db.Integer, default=0, comment='分P的cid（供多P视频区分弹幕）')
+    cid = db.Column(db.BigInteger, default=0, comment='分P的cid（供多P视频区分弹幕）')
     content = db.Column(db.Text, nullable=False, comment='弹幕文本')
     ctime = db.Column(db.Integer, default=0, comment='弹幕发送时间戳')
     progress = db.Column(db.Float, default=0, comment='弹幕在视频中的位置（秒）')
