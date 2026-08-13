@@ -595,7 +595,7 @@ class BiliDanmaku(db.Model):
     cid = db.Column(db.BigInteger, default=0, comment='分P的cid（供多P视频区分弹幕）')
     content = db.Column(db.Text, nullable=False, comment='弹幕文本')
     ctime = db.Column(db.Integer, default=0, comment='弹幕发送时间戳')
-    progress = db.Column(db.Float, default=0, comment='弹幕在视频中的位置（秒）')
+    progress = db.Column(db.Double, default=0, comment='弹幕在视频中的位置（秒）')
     mode = db.Column(db.Integer, default=0, comment='弹幕模式')
     color = db.Column(db.String(16), default='ffffff', comment='弹幕颜色')
     author = db.Column(db.String(64), default='', comment='弹幕发送者UID的CRC32摘要')
