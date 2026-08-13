@@ -276,14 +276,18 @@ def video_detail(video_id):
         .all()
     )
 
-    # 弹幕展示：按视频内进度升序，限制数量（数量大时按播放进度分段采样）
+    # 弹幕展示：按视频内进度升序，限制数量（数量大时按播放进度分段采样）。
+    # 为避免加载全量弹幕（单视频可达数万条），先在 SQL 层限制最多取
+    # 一个较大窗口（BILI_DANMAKU_SCAN 默认 2000），再均匀采样出展示条数。
     danmakus = []
+    _scan = int(os.environ.get('BILI_DANMAKU_SCAN', '2000'))
     _dm_rows = (
         BiliDanmaku.query.with_entities(
             BiliDanmaku.content, BiliDanmaku.progress, BiliDanmaku.ctime, BiliDanmaku.color
         )
         .filter_by(video_id=video.id)
         .order_by(BiliDanmaku.progress.asc())
+        .limit(_scan)
         .all()
     )
     if _dm_rows:
@@ -291,7 +295,7 @@ def video_detail(video_id):
         if len(_dm_rows) <= max_show:
             danmakus = _dm_rows
         else:
-            # 均匀采样：全量弹幕较多时按进度均匀抽取 max_show 条
+            # 均匀采样：取到的窗口中按进度均匀抽取 max_show 条
             step = len(_dm_rows) / max_show
             sampled = []
             idx = 0

@@ -2056,8 +2056,8 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             )
             if filled_bvids:
                 hot_query = hot_query.filter(~BiliVideo.bvid.in_(filled_bvids))
-            hot_videos = hot_query.order_by(BiliVideo.pubdate.desc()).all()
-            hot_ids = [v.id for v in hot_videos]
+            # 只取 id 列，避免大 UP（如央视频上万视频）全量加载 ORM 对象导致内存峰值
+            hot_ids = [r for (r,) in hot_query.with_entities(BiliVideo.id).order_by(BiliVideo.pubdate.desc()).all()]
             emit(f'Hot 阶段: ≤7天视频共 {len(hot_ids)} 个', 'HOT')
             if max_videos is not None:
                 hot_ids = hot_ids[:max(0, max_videos - count)]
@@ -2092,8 +2092,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
 
                 if remaining is not None:
                     warm_query = warm_query.limit(remaining)
-                warm_videos = warm_query.all()
-                warm_ids = [v.id for v in warm_videos]
+                warm_ids = [r for (r,) in warm_query.with_entities(BiliVideo.id).all()]
                 quota_str = '无限制' if remaining is None else str(remaining)
                 emit(f'Warm 阶段: 8~30天视频配额 {quota_str}（DB中共 {len(warm_ids)} 个待更新）', 'WARM')
                 _warm_hist = (
@@ -2125,8 +2124,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                 ).order_by(BiliVideo.updated_at.asc())
                 if remaining is not None:
                     cold_query = cold_query.limit(remaining)
-                cold_videos = cold_query.all()
-                cold_ids = [v.id for v in cold_videos]
+                cold_ids = [r for (r,) in cold_query.with_entities(BiliVideo.id).all()]
                 if cold_ids:
                     quota_str = '无限制' if remaining is None else str(remaining)
                     emit(

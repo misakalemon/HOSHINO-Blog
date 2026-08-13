@@ -410,6 +410,59 @@ def compute_word_frequencies(text: str, top_n: int = 60) -> Optional[list]:
     return [{'word': w, 'weight': c} for w, c in most_common]
 
 
+def compute_word_frequencies_stream(texts, top_n: int = 60, chunk_size: int = 200) -> Optional[list]:
+    """流式计算词频，避免一次性把全部文本载入内存。
+
+    与 compute_word_frequencies 等价，但逐个（或分批）处理 texts 迭代器中的
+    文本块，用共享 Counter 累计词频。峰值内存只与单块文本大小相关，而非
+    全部文本总和——适用于 51K+ 视频/全站词云这种大文本聚合场景。
+
+    Args:
+        texts:      文本块迭代器（str 或 str 列表均可）。
+        top_n:      返回前 N 个高频词（默认 60）。
+        chunk_size: 每批合并多少文本块再分词（越大越省 CPU，但峰值内存越高）。
+    Returns:
+        [{word: str, weight: int}, ...] 按 weight 降序，无数据时返回 None。
+    """
+    freq: Counter = Counter()
+    buf: list[str] = []
+    processed = 0
+    for t in texts:
+        if not t or not t.strip():
+            continue
+        buf.append(t)
+        processed += 1
+        if len(buf) >= chunk_size:
+            freq.update(tokenize(' '.join(buf)))
+            buf.clear()
+            if processed % 5000 == 0:
+                _maybe_collect()
+    if buf:
+        freq.update(tokenize(' '.join(buf)))
+
+    if not freq:
+        return None
+
+    # 加载用户自定义屏蔽词（每行一个）
+    try:
+        from .models import WordCloudConfig
+        cfg = WordCloudConfig.get_or_create()
+        if cfg.stop_words and cfg.stop_words.strip():
+            extra_stops = {
+                w.strip().lower() for w in cfg.stop_words.split('\n')
+                if w.strip()
+            }
+            if extra_stops:
+                for w in list(freq.keys()):
+                    if w.lower() in extra_stops:
+                        del freq[w]
+    except Exception as e:
+        logger.warning('词云屏蔽词加载失败: %s', e)
+
+    most_common = freq.most_common(top_n)
+    return [{'word': w, 'weight': c} for w, c in most_common]
+
+
 def extract_text_for_post(post):
     """从 Post 对象提取可用于分词的纯文本。
 
@@ -557,8 +610,8 @@ def precompute_all_wordclouds():
             logger.warning('预计算词云失败 post_id=%d: %s', post.id, e)
 
 
-# 每批处理的 B站 视频数（控制内存峰值，避免 51K+ 视频 + 评论一次性加载）
-_BILI_BATCH = 500
+# 每批处理的 B站 视频数（控制内存峰值，避免 51K+ 视频 + 评论/弹幕一次性加载）
+_BILI_BATCH = int(os.environ.get('BILI_WC_BATCH', '200'))
 
 
 def _bili_texts_from_videos(videos):
@@ -566,8 +619,14 @@ def _bili_texts_from_videos(videos):
 
     每次处理一批视频（_BILI_BATCH），加载其评论/弹幕后立即丢弃，避免
     全部评论/弹幕驻留内存。返回 Generator 逐条产出拼接文本。
+    弹幕按视频取前 BILI_DANMAKU_WC_LIMIT 条（词云只需代表性样本，
+    避免单视频上万条弹幕拖垮内存）。
     """
     from .models import BiliDanmaku, BiliVideoComment
+
+    # 词云用：每视频最多取多少条弹幕/评论（超过则截取，词频已足够代表）
+    _dm_limit = int(os.environ.get('BILI_DANMAKU_WC_LIMIT', '300'))
+    _cm_limit = int(os.environ.get('BILI_COMMENT_WC_LIMIT', '300'))
 
     for i in range(0, len(videos), _BILI_BATCH):
         batch = videos[i:i + _BILI_BATCH]
@@ -579,12 +638,16 @@ def _bili_texts_from_videos(videos):
                 BiliVideoComment.video_id.in_(video_ids)
             ).all()
             for c in batch_comments:
-                comment_map.setdefault(c.video_id, []).append(c.content)
+                lst = comment_map.setdefault(c.video_id, [])
+                if len(lst) < _cm_limit:
+                    lst.append(c.content)
             batch_danmakus = BiliDanmaku.query.filter(
                 BiliDanmaku.video_id.in_(video_ids)
             ).all()
             for d in batch_danmakus:
-                danmaku_map.setdefault(d.video_id, []).append(d.content)
+                lst = danmaku_map.setdefault(d.video_id, [])
+                if len(lst) < _dm_limit:
+                    lst.append(d.content)
         for v in batch:
             parts = []
             if v.subtitle_text:
@@ -616,6 +679,8 @@ def precompute_bili_wordclouds():
 
     分批加载视频 + 评论，每批 _BILI_BATCH 个，避免 51K+ 视频
     全部加载导致 OOM。每批处理后释放引用 + 触发 GC。
+    文本采用流式分词（compute_word_frequencies_stream），
+    峰值内存只与单批文本相关，不随视频总量线性增长。
     """
     from . import db
     from .models import BiliUp, BiliVideo, WordCloudData, WordCloudConfig
@@ -624,26 +689,67 @@ def precompute_bili_wordclouds():
     top_n = WordCloudConfig.get_or_create().top_n_bili
     _log_memory(logger, 'precompute_bili_wordclouds start')
 
+    def _iter_all_texts():
+        """按 keyset 分页流式产出全部视频的文本（不驻留内存）。"""
+        _last_id = 0
+        while True:
+            batch = (
+                BiliVideo.query.filter(BiliVideo.id > _last_id)
+                .order_by(BiliVideo.id)
+                .limit(_BILI_BATCH)
+                .all()
+            )
+            if not batch:
+                break
+            _last_id = batch[-1].id
+            for text in _bili_texts_from_videos(batch):
+                yield text
+            del batch
+            _maybe_collect()
+
+    def _iter_month_texts(m_start, m_end):
+        _last_id = 0
+        while True:
+            batch = (
+                BiliVideo.query.filter(
+                    BiliVideo.pub_datetime >= m_start,
+                    BiliVideo.pub_datetime < m_end,
+                    BiliVideo.id > _last_id,
+                )
+                .order_by(BiliVideo.id)
+                .limit(_BILI_BATCH)
+                .all()
+            )
+            if not batch:
+                break
+            _last_id = batch[-1].id
+            for text in _bili_texts_from_videos(batch):
+                yield text
+            del batch
+            _maybe_collect()
+
+    def _iter_up_texts(up_id):
+        _last_id = 0
+        while True:
+            batch = (
+                BiliVideo.query.filter(
+                    BiliVideo.up_id == up_id,
+                    BiliVideo.id > _last_id,
+                )
+                .order_by(BiliVideo.id)
+                .limit(_BILI_BATCH)
+                .all()
+            )
+            if not batch:
+                break
+            _last_id = batch[-1].id
+            for text in _bili_texts_from_videos(batch):
+                yield text
+            del batch
+            _maybe_collect()
+
     # ── 全量 B站词云 ──
-    full_parts: list[str] = []
-    # keyset 分页（WHERE id > last_id），避免 OFFSET 深翻页全表扫描
-    _last_id = 0
-    while True:
-        batch = (
-            BiliVideo.query.filter(BiliVideo.id > _last_id)
-            .order_by(BiliVideo.id)
-            .limit(_BILI_BATCH)
-            .all()
-        )
-        if not batch:
-            break
-        _last_id = batch[-1].id
-        for text in _bili_texts_from_videos(batch):
-            full_parts.append(text)
-        del batch
-        _maybe_collect()
-    full_text = ' '.join(full_parts)
-    data = compute_word_frequencies(full_text, top_n=top_n) or []
+    data = compute_word_frequencies_stream(_iter_all_texts(), top_n=top_n) or []
     _save_bili_record('all', data)
     _log_memory(logger, 'full done')
 
@@ -659,64 +765,25 @@ def precompute_bili_wordclouds():
     )
     for (month_pubdate,) in months:
         try:
-            month_parts: list[str] = []
             _year, _mon = map(int, month_pubdate.split('-'))
             _m_start = _dt(_year, _mon, 1)
             _m_end = _dt(_year + 1, 1, 1) if _mon == 12 else _dt(_year, _mon + 1, 1)
-            _last_id = 0
-            while True:
-                batch = (
-                    BiliVideo.query.filter(
-                        BiliVideo.pub_datetime >= _m_start,
-                        BiliVideo.pub_datetime < _m_end,
-                        BiliVideo.id > _last_id,
-                    )
-                    .order_by(BiliVideo.id)
-                    .limit(_BILI_BATCH)
-                    .all()
-                )
-                if not batch:
-                    break
-                _last_id = batch[-1].id
-                for text in _bili_texts_from_videos(batch):
-                    month_parts.append(text)
-                del batch
-                _maybe_collect()
-            month_full = ' '.join(month_parts)
-            month_data = compute_word_frequencies(month_full, top_n=top_n) or []
+            month_data = compute_word_frequencies_stream(
+                _iter_month_texts(_m_start, _m_end), top_n=top_n
+            ) or []
             _save_bili_record(month_pubdate, month_data)
         except Exception as e:
             logger.warning('📊 %s 月词云失败: %s', month_pubdate, e)
-        del month_parts
         _maybe_collect()
 
     # ── 按 UP 主分段 ──
     for up in BiliUp.query.all():
-        up_parts: list[str] = []
         try:
-            # keyset 分页，避免单 UP 数千视频一次性加载（subtitle_text 大字段）
-            _last_id = 0
-            while True:
-                batch = (
-                    BiliVideo.query.filter(
-                        BiliVideo.up_id == up.id,
-                        BiliVideo.id > _last_id,
-                    )
-                    .order_by(BiliVideo.id)
-                    .limit(_BILI_BATCH)
-                    .all()
-                )
-                if not batch:
-                    break
-                _last_id = batch[-1].id
-                for text in _bili_texts_from_videos(batch):
-                    up_parts.append(text)
-                del batch
-                _maybe_collect()
-            up_full = ' '.join(up_parts)
-            if not up_full.strip():
+            up_data = compute_word_frequencies_stream(
+                _iter_up_texts(up.id), top_n=top_n
+            ) or []
+            if not up_data:
                 continue
-            up_data = compute_word_frequencies(up_full, top_n=top_n) or []
             period = f'up_{up.id}'
             record = WordCloudData.query.filter_by(
                 post_id=None, source='bili', period=period
@@ -731,7 +798,6 @@ def precompute_bili_wordclouds():
             db.session.flush()
         except Exception as e:
             logger.warning('📊 UP %s 词云失败: %s', up.id, e)
-        del up_parts
         _maybe_collect()
 
     db.session.commit()
@@ -813,6 +879,7 @@ def _compute_single_video_wordcloud(video):
     """为单个视频生成词云并存入数据库。
 
     文本来源权重：字幕×5 > 标题×3 > 弹幕×2 > 评论×2 > 标签×2 > 简介×1
+    弹幕/评论按前 N 条截取（词云只需代表性样本，避免单视频上万条驻留内存）。
     """
     from . import db
     from .models import BiliDanmaku, WordCloudConfig, WordCloudData
@@ -823,14 +890,16 @@ def _compute_single_video_wordcloud(video):
         parts.extend([video.subtitle_text] * 5)
     if video.title:
         parts.extend([video.title] * 3)
+    _dm_limit = int(os.environ.get('BILI_DANMAKU_WC_LIMIT', '300'))
+    _cm_limit = int(os.environ.get('BILI_COMMENT_WC_LIMIT', '300'))
     danmaku_texts = [
-        d.content for d in video.danmakus.all()
+        d.content for d in video.danmakus.limit(_dm_limit).all()
         if d.content
     ]
     if danmaku_texts:
         parts.extend(danmaku_texts * 2)
     comment_texts = [
-        c.content for c in video.comments.all()
+        c.content for c in video.comments.limit(_cm_limit).all()
         if c.content
     ]
     if comment_texts:
