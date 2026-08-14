@@ -69,7 +69,7 @@ import bleach
 
 from . import admin_bp
 from .routes import ALLOWED_TAGS, ALLOWED_ATTRS
-from .utils import LRUDict, now_cst, get_client_ip, validate_url_protocol, escape_like
+from .utils import LRUDict, now_cst, get_client_ip, validate_url_protocol, is_safe_image_url, escape_like
 
 
 # bleach HTML 白名单：定义允许保留的标签属性
@@ -1123,11 +1123,13 @@ def profile():
         # 优先级：avatar_url（外部URL）> avatar 文件上传
         avatar_url = request.form.get('avatar_url', '').strip()
         if avatar_url:
-            # 协议校验：仅允许 http/https 或站内 /static/ 路径，
-            # 防止 javascript:/data: 等恶意协议注入
-            from .utils import validate_url_protocol
-            if not (avatar_url.startswith('/static/') or validate_url_protocol(avatar_url)):
-                flash('头像 URL 协议不安全（仅支持 http/https）', 'error')
+            # 协议校验：接受站内路径（/static/、uploads/）或 http/https，
+            # 防止 javascript:/data: 等恶意协议注入。
+            # 注意：前端裁剪上传回填的是 data.url.replace('/static/','')
+            # 即 'uploads/xxx.webp' 相对路径，必须放行。
+            from .utils import is_safe_image_url
+            if not is_safe_image_url(avatar_url):
+                flash('头像 URL 协议不安全（仅支持站内路径或 http/https）', 'error')
                 return render_template('admin/profile.html', form=form)
             current_user.avatar = avatar_url
         elif 'avatar' in request.files:
@@ -1377,8 +1379,14 @@ def new_featured_card():
             return False
         return True
 
+    def _validate_image_url_local(val):
+        if val and not is_safe_image_url(val):
+            flash(f'不安全的图片 URL: {val}', 'error')
+            return False
+        return True
+
     if form.validate_on_submit():
-        if not _validate_url_protocol_local(form.link.data) or not _validate_url_protocol_local(form.image_url.data):
+        if not _validate_url_protocol_local(form.link.data) or not _validate_image_url_local(form.image_url.data):
             return render_template('admin/featured-card-form.html', form=form, editing=False)
         card = FeaturedCard(
             title=form.title.data,
@@ -1431,8 +1439,14 @@ def edit_featured_card(id):
             return False
         return True
 
+    def _validate_image_url_local(val):
+        if val and not is_safe_image_url(val):
+            flash(f'不安全的图片 URL: {val}', 'error')
+            return False
+        return True
+
     if form.validate_on_submit():
-        if not _validate_url_protocol_local(form.link.data) or not _validate_url_protocol_local(form.image_url.data):
+        if not _validate_url_protocol_local(form.link.data) or not _validate_image_url_local(form.image_url.data):
             return render_template('admin/featured-card-form.html', form=form, editing=True)
         card.title = form.title.data
         card.description = form.description.data or ''
@@ -1678,10 +1692,10 @@ def new_hero_image():
     if form.validate_on_submit():
         raw_url = (form.image_url.data or '').strip()
         if raw_url:
-            # 协议校验：仅允许站内 /static/ 或 http/https，防止恶意协议注入
-            from .utils import validate_url_protocol
-            if not (raw_url.startswith('/static/') or validate_url_protocol(raw_url)):
-                flash('图片 URL 协议不安全（仅支持 /static/ 或 http/https）', 'error')
+            # 协议校验：接受站内路径或 http/https，防止恶意协议注入
+            from .utils import is_safe_image_url
+            if not is_safe_image_url(raw_url):
+                flash('图片 URL 协议不安全（仅支持站内路径或 http/https）', 'error')
                 return render_template('admin/hero_image_form.html', form=form, editing=False)
         if raw_url and not raw_url.startswith('/static/'):
             image_url = url_for('static', filename=raw_url)
@@ -1731,9 +1745,9 @@ def edit_hero_image(id):
         image.is_active = form.is_active.data
         if form.image_url.data:
             raw_url = (form.image_url.data or '').strip()
-            from .utils import validate_url_protocol
-            if raw_url and not (raw_url.startswith('/static/') or validate_url_protocol(raw_url)):
-                flash('图片 URL 协议不安全（仅支持 /static/ 或 http/https）', 'error')
+            from .utils import is_safe_image_url
+            if raw_url and not is_safe_image_url(raw_url):
+                flash('图片 URL 协议不安全（仅支持站内路径或 http/https）', 'error')
                 return render_template('admin/hero_image_form.html', form=form, editing=True)
             if raw_url and not raw_url.startswith('/static/'):
                 image.image_url = url_for('static', filename=raw_url)

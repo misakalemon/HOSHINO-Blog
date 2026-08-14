@@ -82,6 +82,24 @@ def validate_url_protocol(url: str) -> bool:
     return lower.startswith(('http://', 'https://', 'mailto:', '/'))
 
 
+def is_safe_image_url(url: str) -> bool:
+    """校验图片 URL 是否安全。
+
+    接受：
+      - 外部完整 URL（http/https）
+      - 站内绝对路径（/static/、/uploads/、/images/）
+      - 站内相对路径（uploads/、images/）——前端裁剪上传回填的
+        data.url.replace('/static/', '') 正是这种格式（如 uploads/xxx.webp）
+
+    拒绝 javascript:/data: 等恶意协议。
+    """
+    if not url:
+        return True
+    s = url.strip().lower()
+    return s.startswith(('http://', 'https://', '/static/', '/uploads/', '/images/',
+                         'uploads/', 'images/'))
+
+
 def escape_like(value: str) -> str:
     """转义 SQL LIKE 通配符（% 和 _），防止 LIKE 注入。"""
     return value.replace('%', '\\%').replace('_', '\\_')

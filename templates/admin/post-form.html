@@ -166,7 +166,7 @@
                                 <div style="font-size:12px;margin-top:4px;color:var(--text-muted)">支持 JPG / PNG / WebP</div>
                             </div>
                             <div id="coverPreview" style="display:none"></div>
-                            <button type="button" class="cover-remove" id="coverRemove" data-action="removeCoverW"> 移除</button>
+                            <button type="button" class="cover-remove" id="coverRemove" data-stop data-action="removeCoverW"> 移除</button>
                         </div>
                     </div>
                 </div>
@@ -184,7 +184,7 @@
                                 <svg viewBox="0 0 24 24" fill="none" style="width:32px;height:32px;opacity:0.6;margin:0 auto 8px;display:block"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M14 2v6h6" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M9 15l-3 3 3 3" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 15l3 3-3 3" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
                                 <div id="htmlFileName" style="font-size:13px;color:var(--text-secondary);word-break:break-all"></div>
                             </div>
-                            <button type="button" class="cover-remove" id="htmlRemove" style="display:none" data-action="removeHtmlFileW"> 移除</button>
+                            <button type="button" class="cover-remove" id="htmlRemove" style="display:none" data-stop data-action="removeHtmlFileW"> 移除</button>
                             <input type="hidden" name="remove_html" id="removeHtmlHidden" value="">
                         </div>
                         <div style="font-size:12px;margin-top:4px;color:var(--text-muted)">仅支持 .html / .htm 文件，内容将直接存入数据库并以沙箱 iframe 渲染，脚本安全隔离</div>

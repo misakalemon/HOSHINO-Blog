@@ -38,7 +38,21 @@ from wtforms import (
     StringField,
     TextAreaField,
 )
-from wtforms.validators import DataRequired, Email, EqualTo, Length, Optional, Regexp, URL as URLValidator
+from wtforms.validators import DataRequired, Email, EqualTo, Length, Optional, Regexp, URL as URLValidator, ValidationError
+
+from .utils import is_safe_image_url
+
+
+def _validate_image_url(form, field):
+    """图片 URL 字段校验：接受站内相对/绝对路径与 http(s) 外部链接。
+
+    前端裁剪上传回填的是 'uploads/xxx.webp'（相对 static 路径），
+    标准 URLValidator 会误拒导致封面上传失败。
+    """
+    if not field.data:
+        return
+    if not is_safe_image_url(field.data):
+        raise ValidationError('图片 URL 协议不安全（仅支持站内路径或 http/https）')
 
 
 class LoginForm(FlaskForm):
@@ -94,7 +108,7 @@ class PostForm(FlaskForm):
     # 多选分类（最多 15 个，choices 在视图函数中动态填充）
     # coerce=int 将提交的字符串值自动转为整数类型
     categories = SelectMultipleField('分类（最多15个）', coerce=int, validators=[Optional()])
-    cover_image = StringField('封面图片 URL', validators=[Optional(), URLValidator(), Length(max=512)])  # 封面图链接，选填
+    cover_image = StringField('封面图片 URL', validators=[Optional(), _validate_image_url, Length(max=512)])  # 封面图链接，选填
     html_file = FileField('上传 HTML 文件', validators=[Optional()])                   # 自定义 HTML 页面文件，选填
     html_content = TextAreaField('HTML 源码', validators=[Optional()])                 # 自定义 HTML 源码（优先于 html_file）
     is_published = BooleanField('发布')                                                # 是否公开可见

@@ -58,6 +58,28 @@
     }
   });
 
+  // ── 捕获阶段拦截 [data-stop] 元素（如移除按钮）──────────────
+  // 移除按钮通常嵌套在上传容器内（容器有元素级 click 监听器打开文件选择框），
+  // 冒泡阶段的 stopPropagation 来不及阻止元素级监听器。
+  // 在捕获阶段提前 stopPropagation，并在此手动执行其 data-action。
+  document.addEventListener('click', function (e) {
+    var el = e.target && e.target.closest ? e.target.closest('[data-stop]') : null;
+    if (!el) return;
+    e.stopPropagation();
+    e.preventDefault();
+    var action = el.getAttribute('data-action');
+    if (!action) return;
+    var fn = null;
+    try {
+      fn = action.split('.').reduce(function (o, k) { return o ? o[k] : o; }, window);
+    } catch (err) { fn = null; }
+    if (typeof fn === 'function') {
+      var arg = el.getAttribute('data-arg');
+      if (arg !== null && arg !== undefined && /^-?\d+(\.\d+)?$/.test(arg)) arg = parseFloat(arg);
+      try { fn(el, e); } catch (err) {}
+    }
+  }, true);
+
   // ── 禁用分页链接拦截（替代 onclick="return false"）─────────
   document.addEventListener('click', function (e) {
     var el = e.target.closest ? e.target.closest('a.page-link.disabled') : null;
@@ -396,23 +418,31 @@
     if (e && e.target === el && typeof closeBiliQr === 'function') closeBiliQr();
   };
   window.triggerFileInput = function (inputId) {
-    var el = document.getElementById(inputId);
-    if (el) el.click();
+    // 防重入：程序化 input.click() 的冒泡可能再次命中容器 data-action，
+    // 导致重复打开文件选择框
+    if (triggerFileInput._busy) return;
+    triggerFileInput._busy = true;
+    try {
+      var el = document.getElementById(inputId);
+      if (el) el.click();
+    } finally {
+      setTimeout(function () { triggerFileInput._busy = false; }, 100);
+    }
   };
   window.removeIconW = function (el, e) {
-    if (typeof removeIcon === 'function') removeIcon({ stopPropagation: function () { if (e) e.stopPropagation(); } });
+    if (typeof removeIcon === 'function') removeIcon({ stopPropagation: function () {} });
   };
   window.removeCoverW = function (el, e) {
-    if (typeof removeCover === 'function') removeCover({ stopPropagation: function () { if (e) e.stopPropagation(); } });
+    if (typeof removeCover === 'function') removeCover({ stopPropagation: function () {} });
   };
   window.removeHtmlFileW = function (el, e) {
-    if (typeof removeHtmlFile === 'function') removeHtmlFile({ stopPropagation: function () { if (e) e.stopPropagation(); } });
+    if (typeof removeHtmlFile === 'function') removeHtmlFile({ stopPropagation: function () {} });
   };
   window.removeHeroImageW = function (el, e) {
-    if (typeof removeHeroImage === 'function') removeHeroImage({ stopPropagation: function () { if (e) e.stopPropagation(); } });
+    if (typeof removeHeroImage === 'function') removeHeroImage({ stopPropagation: function () {} });
   };
   window.deleteShapeImageW = function (el, e) {
-    if (typeof deleteShapeImage === 'function') deleteShapeImage({ stopPropagation: function () { if (e) e.stopPropagation(); } });
+    if (typeof deleteShapeImage === 'function') deleteShapeImage({ stopPropagation: function () {} });
   };
   // addSingleVideo 签名 (forceUpdate)，按钮点击应传 false（否则 el 会被当 truthy）
   window.addSingleVideoW = function () {
