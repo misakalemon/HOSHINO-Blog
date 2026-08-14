@@ -1809,6 +1809,10 @@ def wordcloud_config():
                     if magic[:8] != b'\x89PNG\r\n\x1a\n' and magic[:4] not in (b'\xff\xd8', b'RIFF'):
                         flash('不是有效的图片文件', 'danger')
                         return render_template('admin/wordcloud_config.html', form=form, config=config)
+                    # 解压炸弹防护：与其他上传入口一致，限制最大像素数
+                    if not hasattr(Image, 'MAX_IMAGE_PIXELS'):
+                        Image.MAX_IMAGE_PIXELS = 50_000_000
+                    Image.MAX_IMAGE_PIXELS = 50_000_000
                     img = Image.open(file)
                     img.verify()
                     file.seek(0)
