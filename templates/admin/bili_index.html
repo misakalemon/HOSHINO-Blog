@@ -21,7 +21,7 @@
         {% endif %}
     </div>
     <div style="display:flex;gap:8px;align-items:center">
-        <button class="btn btn-primary btn-sm" onclick="biliLogin()" id="biliLoginBtn" {% if bili_logged_in %}style="display:none"{% endif %}>📱 扫码登录</button>
+        <button class="btn btn-primary btn-sm" data-action="biliLogin" id="biliLoginBtn" {% if bili_logged_in %}style="display:none"{% endif %}>📱 扫码登录</button>
         <form method="POST" action="{{ url_for('bili.logout_bili') }}" style="display:{% if bili_logged_in %}inline{% else %}none{% endif %}" id="biliLogoutForm">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn-ghost-sm" style="color:#f25a5a">退出登录</button>
@@ -30,12 +30,12 @@
 </div>
 
 <!-- QR 扫码弹窗 -->
-<div id="biliQrOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.6);backdrop-filter:blur(8px);align-items:center;justify-content:center" onclick="if(event.target===this)closeBiliQr()">
+<div id="biliQrOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.6);backdrop-filter:blur(8px);align-items:center;justify-content:center" data-action="closeBiliQrIfSelf">
     <div style="background:rgba(18,16,34,0.96);border:1px solid rgba(255,255,255,0.06);border-radius:32px;padding:28px 32px;text-align:center;box-shadow:0 40px 100px rgba(0,0,0,0.9);max-width:340px;width:90%">
         <div style="font-size:16px;font-weight:600;color:#e0daff;margin-bottom:16px">📱 B站 扫码登录</div>
         <div id="biliQrImg" style="width:200px;height:200px;margin:0 auto 16px;background:rgba(255,255,255,0.05);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:13px;color:rgba(255,255,255,0.3)">生成中...</div>
         <div id="biliQrStatus" style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:16px">请使用 B站 App 扫码</div>
-        <button class="panel-close" onclick="closeBiliQr()">✕ 关闭</button>
+        <button class="panel-close" data-action="closeBiliQr">✕ 关闭</button>
     </div>
 </div>
 
@@ -51,9 +51,9 @@
         <div style="display:flex;gap:10px;flex-wrap:wrap">
             <input type="text" id="scrapeUrl" placeholder="https://space.bilibili.com/2" required
                    style="flex:1;min-width:240px;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;color:#e8edf5;font-size:0.85rem;outline:none"
-                   onkeydown="if(event.key==='Enter')startScrape()">
-            <button type="button" class="btn btn-primary" onclick="startScrape()">🚀 开始爬取</button>
-            <button type="button" id="checkMissingBtn" class="btn btn-ghost" onclick="checkMissing()">🔍 检查遗漏</button>
+                   data-enter="startScrape">
+            <button type="button" class="btn btn-primary" data-action="startScrape">🚀 开始爬取</button>
+            <button type="button" id="checkMissingBtn" class="btn btn-ghost" data-action="checkMissing">🔍 检查遗漏</button>
         </div>
         <div style="font-size:0.75rem;color:rgba(255,255,255,0.3);margin-top:8px">爬取将后台执行，实时显示进度</div>
     </div>
@@ -71,8 +71,8 @@
         <div style="display:flex;gap:10px;flex-wrap:wrap">
             <input type="text" id="videoInput" placeholder="BV1xx411c7mD 或 https://www.bilibili.com/video/BV1xx411c7mD" required
                    style="flex:1;min-width:240px;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;color:#e8edf5;font-size:0.85rem;outline:none"
-                   onkeydown="if(event.key==='Enter')addSingleVideo()">
-            <button type="button" class="btn btn-primary" onclick="addSingleVideo()">➕ 添加视频</button>
+                   data-enter="addSingleVideoW">
+            <button type="button" class="btn btn-primary" id="addVideoBtn" data-action="addSingleVideoW">➕ 添加视频</button>
         </div>
         <div style="font-size:0.75rem;color:rgba(255,255,255,0.3);margin-top:8px">支持 BV 号、AV 号或视频链接，自动获取视频信息和封面</div>
     </div>
@@ -83,7 +83,7 @@
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap">
         <h5 style="margin:0">📋 爬取日志</h5>
         <span id="scrapeStats" style="font-size:0.75rem;color:rgba(255,255,255,0.55);flex:1;min-width:0"></span>
-        <button class="btn-ghost-sm" onclick="document.getElementById('scrapeLog').style.display='none';document.getElementById('scrapeLogContent').innerHTML=''">✕ 关闭</button>
+        <button class="btn-ghost-sm" data-action="hideScrapeLog">✕ 关闭</button>
     </div>
     <div id="scrapeLogContent" style="max-height:400px;overflow-y:auto;background:rgba(0,0,0,0.3);border-radius:10px;padding:12px;font-size:0.75rem;line-height:1.5;font-family:'SF Mono','Fira Code',monospace;margin:0;white-space:pre-wrap;word-break:break-all"></div>
 </div>
@@ -94,7 +94,7 @@
         <h5 style="margin:0">🔍 遗漏检查结果</h5>
         <div style="display:flex;gap:8px;align-items:center">
             <span id="missingSummary" style="font-size:0.8rem;color:rgba(255,255,255,0.5)"></span>
-            <button class="btn-ghost-sm" onclick="document.getElementById('missingResult').style.display='none'">✕ 关闭</button>
+            <button class="btn-ghost-sm" data-action="hideMissingResult">✕ 关闭</button>
         </div>
     </div>
     <div id="missingContent"></div>
@@ -284,7 +284,7 @@ function addSingleVideo(forceUpdate) {
         alert('请输入 BV 号或视频链接');
         return;
     }
-    var btn = event.target;
+    var btn = document.getElementById('addVideoBtn');
     var originalText = btn.textContent;
     btn.disabled = true;
     btn.textContent = '⏳ 添加中...';

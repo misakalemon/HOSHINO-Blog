@@ -39,7 +39,7 @@
         </div>
         <div class="form-group">
             <label>角色立绘</label>
-            <div class="icon-upload" id="heroUpload" onclick="document.getElementById('heroImageInput').click()">
+            <div class="icon-upload" id="heroUpload" data-action="triggerFileInput" data-arg="heroImageInput">
                 <input type="file" id="heroImageInput" accept="image/*">
                 <input type="hidden" name="image_url" id="imageUrlHidden" value="{{ form.image_url.data or '' }}">
                 <div class="placeholder" id="heroPlaceholder">
@@ -47,7 +47,7 @@
                     点击上传图片<br><span style="font-size:11px;color:var(--text-muted)">支持 JPG / PNG / WebP</span>
                 </div>
                 <div id="heroPreview" style="display:none"></div>
-                <button type="button" class="icon-remove" id="heroRemove" onclick="removeHeroImage(event)">✕ 移除</button>
+                <button type="button" class="icon-remove" id="heroRemove" data-action="removeHeroImageW">✕ 移除</button>
             </div>
         </div>
         <div class="form-group">

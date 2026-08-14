@@ -71,7 +71,7 @@
                 <tr>
                     <td data-label="重点">
                         <button class="star-btn {% if v.id in watched_ids %}watched{% endif %}"
-                                data-video-id="{{ v.id }}" onclick="toggleWatch(this)"
+                                data-video-id="{{ v.id }}" data-action="toggleWatch"
                                 title="{% if v.id in watched_ids %}取消重点追踪{% else %}加入重点追踪{% endif %}">
                             ★
                         </button>

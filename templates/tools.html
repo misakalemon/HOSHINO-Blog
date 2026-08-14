@@ -13,7 +13,7 @@
 {% block content %}
 
 <section class="hero">
-    <div style="margin-bottom:12px"><button onclick="smartBack('{{ url_for('blog.tools') }}')" class="back-btn">← 返回</button></div>
+    <div style="margin-bottom:12px"><button data-action="smartBack" data-arg="{{ url_for('blog.tools') }}" class="back-btn">← 返回</button></div>
     <h1><span class="highlight">工具</span></h1>
     <p>在线小工具 · 纯浏览器端处理</p>
 </section>
@@ -21,35 +21,35 @@
 <div class="content">
     <!-- 工具导航栏 -->
     <div class="tools-nav" id="toolsNav">
-        <button class="tools-nav-btn active" data-tool="base64" onclick="switchTool('base64')">
+        <button class="tools-nav-btn active" data-tool="base64" data-action="switchTool" data-arg="base64">
             <span class="tools-nav-icon">B64</span>
             <span class="tools-nav-label">Base64</span>
         </button>
-        <button class="tools-nav-btn" data-tool="wordcount" onclick="switchTool('wordcount')">
+        <button class="tools-nav-btn" data-tool="wordcount" data-action="switchTool" data-arg="wordcount">
             <span class="tools-nav-icon">W</span>
             <span class="tools-nav-label">字数</span>
         </button>
-        <button class="tools-nav-btn" data-tool="color" onclick="switchTool('color')">
+        <button class="tools-nav-btn" data-tool="color" data-action="switchTool" data-arg="color">
             <span class="tools-nav-icon">🎨</span>
             <span class="tools-nav-label">颜色</span>
         </button>
-        <button class="tools-nav-btn" data-tool="json" onclick="switchTool('json')">
+        <button class="tools-nav-btn" data-tool="json" data-action="switchTool" data-arg="json">
             <span class="tools-nav-icon">{}</span>
             <span class="tools-nav-label">JSON</span>
         </button>
-        <button class="tools-nav-btn" data-tool="timestamp" onclick="switchTool('timestamp')">
+        <button class="tools-nav-btn" data-tool="timestamp" data-action="switchTool" data-arg="timestamp">
             <span class="tools-nav-icon">⏱</span>
             <span class="tools-nav-label">时间戳</span>
         </button>
-        <button class="tools-nav-btn" data-tool="hash" onclick="switchTool('hash')">
+        <button class="tools-nav-btn" data-tool="hash" data-action="switchTool" data-arg="hash">
             <span class="tools-nav-icon">#</span>
             <span class="tools-nav-label">哈希</span>
         </button>
-        <button class="tools-nav-btn" data-tool="passwd" onclick="switchTool('passwd')">
+        <button class="tools-nav-btn" data-tool="passwd" data-action="switchTool" data-arg="passwd">
             <span class="tools-nav-icon">🔑</span>
             <span class="tools-nav-label">密码</span>
         </button>
-        <button class="tools-nav-btn" data-tool="imagezip" onclick="switchTool('imagezip')">
+        <button class="tools-nav-btn" data-tool="imagezip" data-action="switchTool" data-arg="imagezip">
             <span class="tools-nav-icon">🖼</span>
             <span class="tools-nav-label">图片</span>
         </button>
@@ -61,9 +61,9 @@
             <div class="tool-heading">Base64 编解码</div>
             <textarea class="tool-input" id="b64-input" placeholder="输入文本或 Base64..." rows="5"></textarea>
             <div class="tool-actions">
-                <button class="btn btn-primary btn-sm" onclick="b64Encode()">编码 →</button>
-                <button class="btn btn-ghost btn-sm" onclick="b64Decode()">← 解码</button>
-                <button class="btn btn-ghost btn-sm" onclick="clearTool('b64')">清空</button>
+                <button class="btn btn-primary btn-sm" data-action="b64Encode">编码 →</button>
+                <button class="btn btn-ghost btn-sm" data-action="b64Decode">← 解码</button>
+                <button class="btn btn-ghost btn-sm" data-action="clearTool" data-arg="b64">清空</button>
             </div>
             <textarea class="tool-input" id="b64-output" placeholder="结果..." rows="5" readonly></textarea>
         </div>
@@ -71,7 +71,7 @@
         <!-- 字数统计 -->
         <div class="tool-pane" id="tool-wordcount">
             <div class="tool-heading">字数统计</div>
-            <textarea class="tool-input" id="wc-input" placeholder="输入文本..." rows="8" oninput="wordCount()"></textarea>
+            <textarea class="tool-input" id="wc-input" placeholder="输入文本..." rows="8" data-input="wordCount"></textarea>
             <div class="wc-stats" id="wc-stats">
                 <div class="wc-stat"><span class="wc-stat-num" id="wc-chars">0</span><span class="wc-stat-lbl">字数</span></div>
                 <div class="wc-stat"><span class="wc-stat-num" id="wc-chars-sp">0</span><span class="wc-stat-lbl">含空格</span></div>
@@ -93,16 +93,16 @@
                         <span id="previewHsl">hsl(258, 62%, 54%)</span>
                     </div>
                     <div class="preview-actions">
-                        <button class="btn-preview" onclick="copyColor('hex',event)">📋 HEX</button>
-                        <button class="btn-preview" onclick="copyColor('rgb',event)">📋 RGB</button>
-                        <button class="btn-preview" onclick="copyColor('hsl',event)">📋 HSL</button>
+                        <button class="btn-preview" data-action="copyColorEl" data-arg="hex">📋 HEX</button>
+                        <button class="btn-preview" data-action="copyColorEl" data-arg="rgb">📋 RGB</button>
+                        <button class="btn-preview" data-action="copyColorEl" data-arg="hsl">📋 HSL</button>
                     </div>
                 </div>
             </div>
 
             <!-- 2. 取色器 — 点击直接弹出取色面板 -->
             <div class="picker-trigger-section">
-                <div class="color-picker-trigger" id="colorTrigger" onclick="openColorPanel()">
+                <div class="color-picker-trigger" id="colorTrigger" data-action="openColorPanel">
                     <span class="mini-swatch" id="triggerSwatch" style="background:#6C42D1"></span>
                     <span class="label">取色器</span>
                 </div>
@@ -174,9 +174,9 @@
             <div class="tool-heading">JSON 格式化</div>
             <textarea class="tool-input tool-input-code" id="json-input" placeholder="粘贴 JSON..." rows="6"></textarea>
             <div class="tool-actions">
-                <button class="btn btn-primary btn-sm" onclick="jsonFormat()">格式化</button>
-                <button class="btn btn-ghost btn-sm" onclick="jsonCompact()">压缩</button>
-                <button class="btn btn-ghost btn-sm" onclick="clearTool('json')">清空</button>
+                <button class="btn btn-primary btn-sm" data-action="jsonFormat">格式化</button>
+                <button class="btn btn-ghost btn-sm" data-action="jsonCompact">压缩</button>
+                <button class="btn btn-ghost btn-sm" data-action="clearTool" data-arg="json">清空</button>
             </div>
             <textarea class="tool-input tool-input-code" id="json-output" placeholder="结果..." rows="6" readonly></textarea>
         </div>
@@ -184,16 +184,16 @@
         <!-- 时间戳转换 -->
         <div class="tool-pane" id="tool-timestamp">
             <div class="tool-heading">时间戳转换</div>
-            <div class="tool-field"><label>Unix 时间戳（秒）</label><input id="ts-unix" value="" oninput="tsFromUnix(this.value)"></div>
-            <div class="tool-actions"><button class="btn btn-ghost btn-sm" onclick="tsNow()">插入当前时间戳</button></div>
-            <div class="tool-field"><label>日期时间</label><input id="ts-datetime" value="" oninput="tsFromDatetime(this.value)"></div>
+            <div class="tool-field"><label>Unix 时间戳（秒）</label><input id="ts-unix" value="" data-input="tsFromUnixEl"></div>
+            <div class="tool-actions"><button class="btn btn-ghost btn-sm" data-action="tsNow">插入当前时间戳</button></div>
+            <div class="tool-field"><label>日期时间</label><input id="ts-datetime" value="" data-input="tsFromDatetimeEl"></div>
             <div class="ts-result" id="ts-result"></div>
         </div>
 
         <!-- 哈希计算 -->
         <div class="tool-pane" id="tool-hash">
             <div class="tool-heading">哈希计算</div>
-            <textarea class="tool-input" id="hash-input" placeholder="输入文本..." rows="5" oninput="calcHash()"></textarea>
+            <textarea class="tool-input" id="hash-input" placeholder="输入文本..." rows="5" data-input="calcHash"></textarea>
             <div class="tool-field"><label>MD5</label><input class="tool-input-hash" id="hash-md5" readonly></div>
             <div class="tool-field"><label>SHA-1</label><input class="tool-input-hash" id="hash-sha1" readonly></div>
             <div class="tool-field"><label>SHA-256</label><input class="tool-input-hash" id="hash-sha256" readonly></div>
@@ -207,7 +207,7 @@
             <div class="pw-layout">
                 <div class="pw-section">
                     <div class="pw-section-title">🔐 随机密码</div>
-                    <div class="pw-row"><span class="pw-label">长度</span><input type="range" id="pwLen" min="4" max="128" value="16" class="glow-range" oninput="pwLenVal.textContent=this.value"><span class="pw-val" id="pwLenVal">16</span></div>
+                    <div class="pw-row"><span class="pw-label">长度</span><input type="range" id="pwLen" min="4" max="128" value="16" class="glow-range" data-input="pwLenSync"><span class="pw-val" id="pwLenVal">16</span></div>
                     <div class="pw-charset">
                         <label class="glow-checkbox"><input type="checkbox" id="pwUpper" checked><span class="cb-box"></span><span>大写 A-Z</span></label>
                         <label class="glow-checkbox"><input type="checkbox" id="pwLower" checked><span class="cb-box"></span><span>小写 a-z</span></label>
@@ -222,8 +222,8 @@
                         <input type="number" id="pwCount" min="1" max="50" value="5" class="pw-number-input">
                     </div>
                     <div class="pw-row" style="gap:8px">
-                        <button class="btn btn-primary btn-sm" onclick="pwGenerate()">⚡ 生成</button>
-                        <button class="btn btn-ghost btn-sm" onclick="pwCopy()">📋 复制全部</button>
+                        <button class="btn btn-primary btn-sm" data-action="pwGenerate">⚡ 生成</button>
+                        <button class="btn btn-ghost btn-sm" data-action="pwCopy">📋 复制全部</button>
                     </div>
                     <div class="pw-strength" id="pwStrength">强度: <span id="pwStrengthText">强</span></div>
                     <textarea class="tool-input pw-output" id="pwOutput" rows="6" readonly></textarea>
@@ -233,7 +233,7 @@
                     <div class="pw-section-title">🗝️ 随机密钥</div>
                     <div class="pw-row"><span class="pw-label">强度</span>
                         <div class="glow-select-wrap" style="display:inline-flex;background:transparent;border:none;vertical-align:middle">
-                            <div class="glow-select-trigger" onclick="toggleGlowSelect(this)" style="padding:6px 10px;font-size:0.85rem;color:#e8edf5;gap:4px">
+                            <div class="glow-select-trigger" data-action="toggleGlowSelect" style="padding:6px 10px;font-size:0.85rem;color:#e8edf5;gap:4px">
                                 <span class="glow-select-value">256 位</span>
                                 <span class="glow-select-arrow" style="font-size:0.5rem">▼</span>
                             </div>
@@ -262,8 +262,8 @@
                         <input type="number" id="keyCount" min="1" max="20" value="3" class="pw-number-input">
                     </div>
                     <div class="pw-row" style="gap:8px">
-                        <button class="btn btn-primary btn-sm" onclick="keyGenerate()">⚡ 生成密钥</button>
-                        <button class="btn btn-ghost btn-sm" onclick="keyCopy()">📋 复制全部</button>
+                        <button class="btn btn-primary btn-sm" data-action="keyGenerate">⚡ 生成密钥</button>
+                        <button class="btn btn-ghost btn-sm" data-action="keyCopy">📋 复制全部</button>
                     </div>
                     <textarea class="tool-input pw-output" id="keyOutput" rows="6" readonly></textarea>
                 </div>
@@ -275,15 +275,15 @@
             <div class="tool-heading">图片压缩</div>
             <div class="iz-controls">
                 <div class="tool-field"><label>质量 <span id="iz-q-val">80%</span></label>
-                    <input type="range" id="iz-quality" min="1" max="100" value="80" class="glow-range" oninput="izUpdate()">
+                    <input type="range" id="iz-quality" min="1" max="100" value="80" class="glow-range" data-input="izUpdate">
                 </div>
                 <div class="tool-field"><label>最大宽度</label>
                     <div class="glow-select-wrap" style="display:inline-flex;background:transparent;border:none;vertical-align:middle;width:100%">
-                        <div class="glow-select-trigger" onclick="toggleGlowSelect(this)" style="padding:10px 14px;font-size:0.8rem;color:#e8edf5;gap:4px;width:100%;box-sizing:border-box">
+                        <div class="glow-select-trigger" data-action="toggleGlowSelect" style="padding:10px 14px;font-size:0.8rem;color:#e8edf5;gap:4px;width:100%;box-sizing:border-box">
                             <span class="glow-select-value">1920 (全高清)</span>
                             <span class="glow-select-arrow" style="font-size:0.5rem">▼</span>
                         </div>
-                        <select id="iz-maxw" onchange="izUpdate()" style="display:none">
+                        <select id="iz-maxw" data-change="izUpdateSel" style="display:none">
                             <option value="0">原图尺寸</option>
                             <option value="3840">3840 (4K)</option>
                             <option value="2560">2560 (2K)</option>
@@ -305,11 +305,11 @@
                 </div>
                 <div class="tool-field"><label>输出格式</label>
                     <div class="glow-select-wrap" style="display:inline-flex;background:transparent;border:none;vertical-align:middle;width:100%">
-                        <div class="glow-select-trigger" onclick="toggleGlowSelect(this)" style="padding:10px 14px;font-size:0.8rem;color:#e8edf5;gap:4px;width:100%;box-sizing:border-box">
+                        <div class="glow-select-trigger" data-action="toggleGlowSelect" style="padding:10px 14px;font-size:0.8rem;color:#e8edf5;gap:4px;width:100%;box-sizing:border-box">
                             <span class="glow-select-value">JPEG</span>
                             <span class="glow-select-arrow" style="font-size:0.5rem">▼</span>
                         </div>
-                        <select id="iz-fmt" onchange="izUpdate()" style="display:none">
+                        <select id="iz-fmt" data-change="izUpdateSel" style="display:none">
                             <option value="image/jpeg">JPEG</option>
                             <option value="image/webp">WebP</option>
                             <option value="image/png">PNG</option>
@@ -323,10 +323,10 @@
                 </div>
             </div>
             <div class="tool-actions">
-                <button class="btn btn-primary btn-sm" onclick="izSelect()">📁 选择图片</button>
-                <button class="btn btn-ghost btn-sm" onclick="izDownload()" id="iz-dlbtn" disabled>⬇ 下载</button>
+                <button class="btn btn-primary btn-sm" data-action="izSelect">📁 选择图片</button>
+                <button class="btn btn-ghost btn-sm" data-action="izDownload" id="iz-dlbtn" disabled>⬇ 下载</button>
             </div>
-            <input type="file" id="iz-input" accept="image/*" style="display:none" onchange="izLoad()">
+            <input type="file" id="iz-input" accept="image/*" style="display:none" data-change="izLoadSel">
             <div class="iz-previews">
                 <div class="iz-preview-box">
                     <div class="iz-preview-label">原图</div>

@@ -71,7 +71,6 @@ function toggleDrawer(){
 // 抽屉遮罩层点击关闭
 // 使用 addEventListener 而非 onclick，兼容 CSP 策略
 document.getElementById('drawerOverlay')?.addEventListener('click', toggleDrawer);
-document.getElementById('drawerOverlay')?.addEventListener('click', toggleDrawer);
 
 // ── 图片灯箱 ───────────────────────────────
 /**

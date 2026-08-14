@@ -52,7 +52,7 @@
                    style="width:80px;padding:8px 12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;color:#e8edf5;font-size:0.85rem;outline:none;text-align:center">
             <label style="color:rgba(255,255,255,0.6);font-size:0.85rem;white-space:nowrap">天的记录</label>
             <button type="submit" class="btn btn-primary" style="padding:8px 20px;font-size:0.8rem;margin-left:auto"
-                    onclick="var _f=this.form;event.preventDefault();showConfirm('确定删除超过 ' + _f.days.value + ' 天的历史快照？\n此操作不可恢复！',function(r){if(r){_f.onsubmit=null;_f.submit()}})">
+                    data-action="confirmFormSubmit">
                 立即清理
             </button>
         </div>

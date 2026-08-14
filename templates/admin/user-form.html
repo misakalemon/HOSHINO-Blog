@@ -24,7 +24,7 @@
         <div class="form-group"><label>个人网站</label><input type="url" name="website" value="{{ form.website.data or '' }}" placeholder="https://" {{ 'readonly' if editing else '' }}></div>
         <div class="form-group"><label>角色</label>
             <div class="glow-select-wrap">
-                <div class="glow-select-trigger" onclick="toggleGlowSelect(this)">
+                <div class="glow-select-trigger" data-action="toggleGlowSelect">
                     <span class="glow-select-value">{{ form.role.label.text if form.role.data else '用户' }}</span>
                     <span class="glow-select-arrow">▼</span>
                 </div>

@@ -53,9 +53,9 @@
             <div class="post-detail">
                 <div style="text-align:center;margin-bottom:24px">
                     <div style="display:flex;align-items:center;justify-content:center;gap:24px;margin-bottom:16px">
-                        <button onclick="smartBack('{{ url_for('blog.index') }}')" class="back-btn">← 返回</button>
+                        <button data-action="smartBack" data-arg="{{ url_for('blog.index') }}" class="back-btn">← 返回</button>
                         <h1 style="font-size:2.2rem;font-weight:250;letter-spacing:-0.02em;line-height:1.2;color:rgba(255,255,255,0.9);margin:0;flex-shrink:0">{{ post.title }}</h1>
-                        <button onclick="window.print()" class="back-btn" style="font-size:0.8rem">🖨️ 打印</button>
+                        <button data-action="window.print" class="back-btn" style="font-size:0.8rem">🖨️ 打印</button>
                     </div>
                     <!-- 文章分类标签 → 标题下方 -->
                     <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px">
@@ -67,6 +67,7 @@
                         <span>{{ format_date(post.created_at, '%Y/%m/%d') }}</span>
                         <!-- published_comments() 返回审核通过的评论数 -->
                         <span style="margin-left:12px">{{ comment_count }} 评论</span>
+                        <span id="readingTime" style="margin-left:12px"></span>
                     </div>
                 </div>
 
@@ -200,10 +201,20 @@
         <div class="col-4">
             <aside class="sidebar">
                 {% include '_sidebar.html' %}
+                <!-- 文章目录（JS 自动生成，正文标题不足时隐藏） -->
+                <div class="article-toc" id="articleToc" style="display:none">
+                    <div class="article-toc-title">📑 目录</div>
+                    <div class="toc-list"></div>
+                </div>
             </aside>
         </div>
     </div>
 </div>
+
+<!-- 文章阅读进度条 -->
+<div class="article-progress" id="articleProgress"></div>
+
+<script src="{{ url_for('static', filename='js/reading-enhance.js') }}?v=1" defer></script>
 
 <script src="{{ url_for('static', filename='vendor/prism-bundle.min.js') }}" defer></script>
 <script>document.addEventListener('DOMContentLoaded',function(){Prism.highlightAll();});</script>

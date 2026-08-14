@@ -85,6 +85,8 @@
 
     <script src="{{ url_for('static', filename='js/admin.js') }}?v=2" defer></script>
     <script src="{{ url_for('static', filename='js/scroll-restore.js') }}?v=1" defer></script>
+    <!-- 全站统一交互层（与前台一致：返回顶部/事件委托等） -->
+    <script src="{{ url_for('static', filename='js/interactions.js') }}?v=1" defer></script>
 
     <!-- admin_content 块：子模板填充 -->
     {% block admin_content %}{% endblock %}

@@ -39,7 +39,7 @@
         <div class="admin-row">
             <div class="form-group">
                 <label>卡片图片</label>
-                <div class="icon-upload" id="iconUpload" onclick="document.getElementById('iconInput').click()">
+                <div class="icon-upload" id="iconUpload" data-action="triggerFileInput" data-arg="iconInput">
                     <input type="file" id="iconInput" accept="image/*">
                     <input type="hidden" name="icon" id="iconHidden" value="{{ form.icon.data or '' }}">
                     <div class="placeholder" id="iconPlaceholder">
@@ -47,12 +47,12 @@
                         点击上传图片<br><span style="font-size:11px;color:var(--text-muted)">支持 JPG / PNG / WebP</span>
                     </div>
                     <div id="iconPreview" style="display:none"></div>
-                    <button type="button" class="icon-remove" id="iconRemove" onclick="removeIcon(event)">✕ 移除</button>
+                    <button type="button" class="icon-remove" id="iconRemove" data-action="removeIconW">✕ 移除</button>
                 </div>
             </div>
             <div class="form-group"><label>标签</label>
                 <div class="glow-select-wrap">
-                    <div class="glow-select-trigger" onclick="toggleGlowSelect(this)">
+                    <div class="glow-select-trigger" data-action="toggleGlowSelect">
                         <span class="glow-select-value">{{ form.tag.data or '选择分类' }}</span>
                         <span class="glow-select-arrow">▼</span>
                     </div>

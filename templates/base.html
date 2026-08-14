@@ -52,7 +52,7 @@
 <nav class="navbar{% if request.endpoint != 'blog.index' %} visible{% endif %}"{% if request.endpoint == 'blog.index' %} data-nav-auto{% endif %} role="navigation" aria-label="主导航">
     <div style="display:flex;align-items:center;gap:16px">
         <!-- 汉堡按钮：仅移动端显示，用于展开抽屉导航 -->
-        <button type="button" class="nav-hamburger" onclick="toggleDrawer()" aria-label="打开菜单" aria-expanded="false">
+        <button type="button" class="nav-hamburger" data-action="toggleDrawer" aria-label="打开菜单" aria-expanded="false">
             <span class="nav-hamburger-icon"></span>
         </button>
         <a href="{{ url_for('blog.index') }}" class="nav-logo" id="navLogo">✦ Hoshino <span style="font-size:0.65rem;font-weight:400;background:linear-gradient(135deg,#ff8aae,#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:0.08em">—— 星野、参上！——</span></a>
@@ -76,7 +76,7 @@
 <div class="mobile-drawer" id="mobileDrawer" role="dialog" aria-modal="true" aria-label="导航菜单">
     <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.06)">
         <span style="font-weight:600;color:rgba(255,255,255,0.9)">✦ 菜单</span>
-        <button type="button" class="nav-drawer-close" onclick="toggleDrawer()" aria-label="关闭菜单">&times;</button>
+        <button type="button" class="nav-drawer-close" data-action="toggleDrawer" aria-label="关闭菜单">&times;</button>
     </div>
     <a href="{{ url_for('blog.index') }}" {% if request.endpoint == 'blog.index' or request.endpoint == 'blog.category' %}class="nav-link-active"{% endif %}><i class="hm-public-home"></i>博客</a>
     <a href="{{ url_for('blog.about') }}" {% if request.endpoint == 'blog.about' %}class="nav-link-active"{% endif %}><i class="hm-public-highlights"></i>关于</a>
@@ -121,6 +121,8 @@
 <!-- 提取的全局 JS（抽屉 / 灯箱 / 下拉框 / 弹窗 / showConfirm） -->
     <script src="{{ url_for('static', filename='js/base.js') }}?v=2" defer></script>
     <script src="{{ url_for('static', filename='js/scroll-restore.js') }}?v=1" defer></script>
+    <!-- 全站统一交互层（事件委托/返回顶部/灯箱升级/Ctrl+K 搜索/导航手势/skip-link） -->
+    <script src="{{ url_for('static', filename='js/interactions.js') }}?v=1" defer></script>
 
 {% block scripts %}{% endblock %}
 

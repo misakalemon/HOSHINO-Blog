@@ -32,7 +32,7 @@
         {% endif %}
         <h1 style="font-size:1.3rem;font-weight:500;color:rgba(255,255,255,0.9);margin:0 0 12px;line-height:1.4">{{ video.title }}</h1>
         <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:0.8rem;color:rgba(255,255,255,0.35)">
-            <span>BV: <a href="https://www.bilibili.com/video/{{ video.bvid }}" target="_blank" rel="noopener" style="color:#a78bfa;text-decoration:none" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">{{ video.bvid }}</a></span>
+            <span>BV: <a href="https://www.bilibili.com/video/{{ video.bvid }}" target="_blank" rel="noopener" style="color:#a78bfa;text-decoration:none" class="bv-link">{{ video.bvid }}</a></span>
             <span>时长: {{ '%d:%02d'|format(video.duration//60, video.duration%60) if video.duration else '-' }}</span>
             <span>发布: {{ video.pub_date.strftime('%Y/%m/%d %H:%M') if video.pub_date else '-' }}</span>
         </div>
@@ -70,37 +70,37 @@
     {% endmacro %}
 
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px;margin-bottom:24px">
-        <div class="stat-card active" data-metric="view" onclick="toggleMetric('view')" style="--ac:#c4b5fd">
+        <div class="stat-card active" data-metric="view" data-action="toggleMetric" data-arg="view" style="--ac:#c4b5fd">
             <div class="label">播放</div>
             <div class="value" style="color:#e0daff">{{ '{:,}'.format(video.view_count) if video.view_count else '0' }}</div>
             {{ growth_display('view') }}
         </div>
-        <div class="stat-card" data-metric="like" onclick="toggleMetric('like')" style="--ac:#f87171">
+        <div class="stat-card" data-metric="like" data-action="toggleMetric" data-arg="like" style="--ac:#f87171">
             <div class="label">点赞</div>
             <div class="value" style="color:#f87171">{{ '{:,}'.format(video.like_count) if video.like_count else '0' }}</div>
             {{ growth_display('like') }}
         </div>
-        <div class="stat-card" data-metric="coin" onclick="toggleMetric('coin')" style="--ac:#fbbf24">
+        <div class="stat-card" data-metric="coin" data-action="toggleMetric" data-arg="coin" style="--ac:#fbbf24">
             <div class="label">投币</div>
             <div class="value" style="color:#fbbf24">{{ '{:,}'.format(video.coin_count) if video.coin_count else '0' }}</div>
             {{ growth_display('coin') }}
         </div>
-        <div class="stat-card" data-metric="favorite" onclick="toggleMetric('favorite')" style="--ac:#34d399">
+        <div class="stat-card" data-metric="favorite" data-action="toggleMetric" data-arg="favorite" style="--ac:#34d399">
             <div class="label">收藏</div>
             <div class="value" style="color:#34d399">{{ '{:,}'.format(video.favorite_count) if video.favorite_count else '0' }}</div>
             {{ growth_display('favorite') }}
         </div>
-        <div class="stat-card" data-metric="share" onclick="toggleMetric('share')" style="--ac:#60a5fa">
+        <div class="stat-card" data-metric="share" data-action="toggleMetric" data-arg="share" style="--ac:#60a5fa">
             <div class="label">转发</div>
             <div class="value" style="color:#60a5fa">{{ '{:,}'.format(video.share_count) if video.share_count else '0' }}</div>
             {{ growth_display('share') }}
         </div>
-        <div class="stat-card" data-metric="comment" onclick="toggleMetric('comment')" style="--ac:#a78bfa">
+        <div class="stat-card" data-metric="comment" data-action="toggleMetric" data-arg="comment" style="--ac:#a78bfa">
             <div class="label">评论</div>
             <div class="value" style="color:#a78bfa">{{ '{:,}'.format(video.comment_count) if video.comment_count else '0' }}</div>
             {{ growth_display('comment') }}
         </div>
-        <div class="stat-card" data-metric="danmaku" onclick="toggleMetric('danmaku')" style="--ac:#f472b6">
+        <div class="stat-card" data-metric="danmaku" data-action="toggleMetric" data-arg="danmaku" style="--ac:#f472b6">
             <div class="label">弹幕</div>
             <div class="value" style="color:#f472b6">{{ '{:,}'.format(video.danmaku_count) if video.danmaku_count else '0' }}</div>
             {{ growth_display('danmaku') }}
@@ -120,21 +120,21 @@
                     <span style="font-size:0.75rem;color:rgba(255,255,255,0.4)">时间:</span>
                     <input type="text" id="dateRangePicker" placeholder="选择日期范围" 
                            style="width:220px;padding:4px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.6);font-size:0.75rem;cursor:pointer"
-                           readonly onclick="toggleCalendar()">
-                    <button onclick="clearDateSelection()" style="padding:4px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.5);font-size:0.75rem;cursor:pointer;transition:all 0.2s" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'">清除</button>
+                           readonly data-action="toggleCalendar">
+                    <button data-action="clearDateSelection" style="padding:4px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.5);font-size:0.75rem;cursor:pointer;transition:all 0.2s" class="cal-btn-hover">清除</button>
                     <!-- 自定义日历容器 -->
                     <div id="customCalendar" style="display:none;position:absolute;top:100%;left:0;margin-top:8px;z-index:99999;background:rgba(18,16,34,0.98);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:16px;box-shadow:0 8px 32px rgba(0,0,0,0.5);width:320px">
                         <!-- 年份选择 -->
                         <div style="display:grid;grid-template-columns:1fr 5fr 1fr;gap:2px;margin-bottom:8px">
-                            <button onclick="changeYear(-1)" class="cal-nav-btn" style="padding:8px 0;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.5);cursor:pointer;font-size:14px;transition:all 0.2s">‹</button>
+                            <button data-action="changeYear" data-arg="-1" class="cal-nav-btn" style="padding:8px 0;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.5);cursor:pointer;font-size:14px;transition:all 0.2s">‹</button>
                             <span id="calendarYear" style="display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;color:rgba(255,255,255,0.9)">2026</span>
-                            <button onclick="changeYear(1)" class="cal-nav-btn" style="padding:8px 0;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.5);cursor:pointer;font-size:14px;transition:all 0.2s">›</button>
+                            <button data-action="changeYear" data-arg="1" class="cal-nav-btn" style="padding:8px 0;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.5);cursor:pointer;font-size:14px;transition:all 0.2s">›</button>
                         </div>
                         <!-- 月份选择 -->
                         <div style="display:grid;grid-template-columns:1fr 5fr 1fr;gap:2px;margin-bottom:12px">
-                            <button onclick="changeMonth(-1)" class="cal-nav-btn" style="padding:8px 0;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.5);cursor:pointer;font-size:14px;transition:all 0.2s">‹</button>
+                            <button data-action="changeMonth" data-arg="-1" class="cal-nav-btn" style="padding:8px 0;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.5);cursor:pointer;font-size:14px;transition:all 0.2s">‹</button>
                             <span id="calendarMonth" style="display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;color:rgba(255,255,255,0.9)">7月</span>
-                            <button onclick="changeMonth(1)" class="cal-nav-btn" style="padding:8px 0;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.5);cursor:pointer;font-size:14px;transition:all 0.2s">›</button>
+                            <button data-action="changeMonth" data-arg="1" class="cal-nav-btn" style="padding:8px 0;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.5);cursor:pointer;font-size:14px;transition:all 0.2s">›</button>
                         </div>
                         <!-- 星期表头 -->
                         <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px">

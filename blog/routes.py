@@ -510,6 +510,10 @@ def single_post(slug):
         )
         db.session.add(comment)
         db.session.commit()
+        # AJAX 提交（XHR 请求）返回 JSON，前端无刷新提示
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            from flask import jsonify
+            return jsonify({'ok': True, 'message': '评论已提交，审核通过后显示'})
         # 提交后重定向到文章页的 #comments 锚点
         return redirect(url_for('blog.single_post', slug=slug) + '#comments')
 
@@ -830,6 +834,57 @@ def search():
         current_per_page=per_page,
         per_page_options=current_app.config['PER_PAGE_OPTIONS'],
     )
+
+
+# ═══════════════════════════════════════════════
+# 站内即时搜索 API（Ctrl+K 全局搜索弹层）
+# ═══════════════════════════════════════════════
+@blog_bp.route('/api/search')
+def api_search():
+    """站内即时搜索 JSON 接口。
+
+    供前端 Ctrl+K 搜索弹层使用（防抖后请求）。
+    返回标题/摘要匹配的前 N 篇文章（默认 8 条），
+    只做 ILIKE 模糊匹配（即时搜索需要亚秒级响应，全文索引收益有限）。
+
+    URL 参数：
+      q — 搜索关键词（为空返回空列表）
+
+    Returns:
+        JSON: {"items": [{"title": str, "url": str, "date": str}]}
+    """
+    from flask import jsonify
+
+    q = (request.args.get('q', '') or '').strip()
+    if not q:
+        return jsonify({'items': []})
+    safe_q = escape_like(q)[:50]
+    limit = min(request.args.get('limit', 8, type=int) or 8, 20)
+    try:
+        rows = (
+            Post.query.with_entities(Post.title, Post.slug, Post.created_at)
+            .filter(
+                Post.is_published == True,
+                db.or_(
+                    Post.title.ilike(f'%{safe_q}%'),
+                    Post.summary.ilike(f'%{safe_q}%'),
+                ),
+            )
+            .order_by(Post.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+    except Exception:
+        return jsonify({'items': []})
+    items = [
+        {
+            'title': title,
+            'url': url_for('blog.single_post', slug=slug),
+            'date': created_at.strftime('%Y.%m.%d') if created_at else '',
+        }
+        for title, slug, created_at in rows
+    ]
+    return jsonify({'items': items})
 
 
 # ═══════════════════════════════════════════════

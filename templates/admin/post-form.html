@@ -117,7 +117,7 @@
                 <textarea name="summary" rows="3" placeholder="文章摘要，显示在文章列表">{{ form.summary.data or '' }}</textarea>
             </div>
             <div class="admin-step-nav-right">
-                <button type="button" class="btn btn-primary" onclick="goStep(2)">下一步 </button>
+                <button type="button" class="btn btn-primary" data-action="goStep" data-arg="2">下一步 </button>
             </div>
         </div>
     </div>
@@ -131,8 +131,8 @@
                 <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap">
                     <div style="font-size:12px;color:var(--text-muted)" id="rteAutosaveHint">自动保存已启用（每 3 秒）</div>
                     <div style="display:flex;gap:6px">
-                        <button type="button" class="btn btn-ghost" style="padding:5px 12px;font-size:12px" onclick="toggleRtePreview()">👁 预览</button>
-                        <button type="button" class="btn btn-ghost" style="padding:5px 12px;font-size:12px" onclick="showRteShortcuts()">⌨ 快捷键</button>
+                        <button type="button" class="btn btn-ghost" style="padding:5px 12px;font-size:12px" data-action="toggleRtePreview">👁 预览</button>
+                        <button type="button" class="btn btn-ghost" style="padding:5px 12px;font-size:12px" data-action="showRteShortcuts">⌨ 快捷键</button>
                     </div>
                 </div>
                 <!-- Tiptap 富文本编辑器容器 -->
@@ -144,8 +144,8 @@
                 {% if form.content.errors %}<div class="field-error">{{ form.content.errors[0] }}</div>{% endif %}
             </div>
             <div class="admin-step-nav">
-                <button type="button" class="btn btn-ghost" onclick="goStep(1)"> 上一步</button>
-                <button type="button" class="btn btn-primary" onclick="goStep(3)">下一步 </button>
+                <button type="button" class="btn btn-ghost" data-action="goStep" data-arg="1"> 上一步</button>
+                <button type="button" class="btn btn-primary" data-action="goStep" data-arg="3">下一步 </button>
             </div>
         </div>
     </div>
@@ -157,7 +157,7 @@
                 <div style="flex:1.2;min-width:280px">
                     <div class="form-group">
                         <label>封面图片</label>
-                        <div class="cover-upload" id="coverUpload" onclick="document.getElementById('coverInput').click()">
+                        <div class="cover-upload" id="coverUpload" data-action="triggerFileInput" data-arg="coverInput">
                             <input type="file" id="coverInput" accept="image/*">
                             <input type="hidden" name="cover_image" id="coverHidden" value="{{ form.cover_image.data or '' }}">
                             <div class="placeholder" id="coverPlaceholder">
@@ -166,14 +166,14 @@
                                 <div style="font-size:12px;margin-top:4px;color:var(--text-muted)">支持 JPG / PNG / WebP</div>
                             </div>
                             <div id="coverPreview" style="display:none"></div>
-                            <button type="button" class="cover-remove" id="coverRemove" onclick="removeCover(event)"> 移除</button>
+                            <button type="button" class="cover-remove" id="coverRemove" data-action="removeCoverW"> 移除</button>
                         </div>
                     </div>
                 </div>
                 <div style="flex:1;min-width:280px">
                     <div class="form-group">
                         <label>自定义 HTML 页面</label>
-                        <div class="cover-upload" id="htmlUpload" onclick="document.getElementById('htmlInput').click()" style="min-height:100px;padding:20px">
+                        <div class="cover-upload" id="htmlUpload" data-action="triggerFileInput" data-arg="htmlInput" style="min-height:100px;padding:20px">
                             <input type="file" id="htmlInput" name="html_file" accept=".html,.htm">
                             <div class="placeholder" id="htmlPlaceholder">
                                 <svg viewBox="0 0 24 24" fill="none" style="width:32px;height:32px;opacity:0.4;margin:0 auto 8px;display:block"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M14 2v6h6" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M9 15l-3 3 3 3" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 15l3 3-3 3" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -184,7 +184,7 @@
                                 <svg viewBox="0 0 24 24" fill="none" style="width:32px;height:32px;opacity:0.6;margin:0 auto 8px;display:block"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M14 2v6h6" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M9 15l-3 3 3 3" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 15l3 3-3 3" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
                                 <div id="htmlFileName" style="font-size:13px;color:var(--text-secondary);word-break:break-all"></div>
                             </div>
-                            <button type="button" class="cover-remove" id="htmlRemove" style="display:none" onclick="removeHtmlFile(event)"> 移除</button>
+                            <button type="button" class="cover-remove" id="htmlRemove" style="display:none" data-action="removeHtmlFileW"> 移除</button>
                             <input type="hidden" name="remove_html" id="removeHtmlHidden" value="">
                         </div>
                         <div style="font-size:12px;margin-top:4px;color:var(--text-muted)">仅支持 .html / .htm 文件，内容将直接存入数据库并以沙箱 iframe 渲染，脚本安全隔离</div>
@@ -197,7 +197,7 @@
                     <div class="form-group">
                         <label>分类（可多选）</label>
                         <div class="glow-select-wrap" data-multiple>
-                            <div class="glow-select-trigger" onclick="toggleGlowSelect(this)">
+                            <div class="glow-select-trigger" data-action="toggleGlowSelect">
                                 <span class="glow-select-value">
                                     {% set ns = namespace(selected=0) %}
                                     {% for val, label in form.categories.choices %}
@@ -226,7 +226,7 @@
                 </div>
             </div>
             <div class="admin-step-nav">
-                <button type="button" class="btn btn-ghost" onclick="goStep(2)"> 上一步</button>
+                <button type="button" class="btn btn-ghost" data-action="goStep" data-arg="2"> 上一步</button>
                 <!-- 提交按钮文字随编辑/新建模式变化 -->
                 <button type="submit" class="btn btn-primary">{{ '更新' if editing else '创建文章' }}</button>
             </div>

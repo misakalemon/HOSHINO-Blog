@@ -26,7 +26,7 @@
         <div class="form-group">
             <label>{{ form.shape.label }}</label>
             <div class="glow-select-wrap">
-                <div class="glow-select-trigger" onclick="toggleGlowSelect(this)">
+                <div class="glow-select-trigger" data-action="toggleGlowSelect">
                     <span class="glow-select-value">{{ dict(form.shape.choices).get(form.shape.data, '圆形 ○') }}</span>
                     <span class="glow-select-arrow">▼</span>
                 </div>
@@ -47,7 +47,7 @@
                 <div class="icon-upload" id="shapeImageUpload" style="min-height:80px">
                     <img id="shapeImagePreview" src="" style="display:none;max-height:160px;border-radius:12px" alt="形状预览">
                     <span id="shapeImagePlaceholder">点击上传形状图片<br><small>PNG / WebP / JPEG，≤1MB，透明区域=词云外</small></span>
-                    <span id="shapeImageRemove" class="icon-remove" style="display:none" onclick="deleteShapeImage(event)">× 删除</span>
+                    <span id="shapeImageRemove" class="icon-remove" style="display:none" data-action="deleteShapeImageW">× 删除</span>
                     <input type="file" id="shapeImageInput" accept="image/png,image/webp,image/jpeg" style="display:none">
                 </div>
                 <input type="hidden" name="delete_shape_image" id="deleteShapeImage" value="0">
@@ -98,7 +98,7 @@
         <div class="form-group">
             <label>{{ form.color_scheme.label }}</label>
             <div class="glow-select-wrap">
-                <div class="glow-select-trigger" onclick="toggleGlowSelect(this)">
+                <div class="glow-select-trigger" data-action="toggleGlowSelect">
                     <span class="glow-select-value">{{ dict(form.color_scheme.choices).get(form.color_scheme.data, '粉紫 Glow') }}</span>
                     <span class="glow-select-arrow">▼</span>
                 </div>
@@ -142,7 +142,7 @@
     </form>
     <hr style="border-color:rgba(255,255,255,0.06);margin:24px 0">
     <p class="admin-desc">词云数据预计算存储于数据库，修改配置后需重新计算才能生效。</p>
-    <button type="button" class="btn btn-ghost" onclick="showConfirm('确定重新计算所有词云？此操作可能需要几秒钟。',function(r){if(r){window.location='{{ url_for('admin.refresh_wordcloud') }}';}})">⟳ 重新计算词云</button>
+    <button type="button" class="btn btn-ghost" data-action="resetWordcloud" data-wc-url="{{ url_for('admin.refresh_wordcloud') }}">⟳ 重新计算词云</button>
 </div>
 
 <style>
