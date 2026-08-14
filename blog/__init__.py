@@ -1100,34 +1100,22 @@ def _migrate_bili_danmakus_table(app):
             app.logger.warning('迁移: 创建 bili_danmakus 表失败: %s', e)
         return
 
-    # 表已存在：检查 cid 列类型，若为 INT 则 ALTER 为 BIGINT（B站 cid 可超过 INT 上限）
+    # 表已存在：确保 cid 列为 BIGINT、progress 列为 DOUBLE。
+    # 无条件执行 ALTER（MySQL 对相同类型的 ALTER 是幂等的），
+    # 避免依赖 inspector 返回的类型字符串（不同 MySQL 版本可能返回
+    # INT / INTEGER / INT(11) 等不一致写法）导致漏迁移。
     try:
-        cols = {c['name']: c for c in inspector.get_columns('bili_danmakus')}
-        cid_col = cols.get('cid')
-        if cid_col is not None:
-            # inspector.get_columns() 的 'type' 是 SQLAlchemy 类型对象，用 str() 转成
-            # 大写字符串判断（如 'BIGINT' / 'INTEGER' / 'INT'）
-            ctype = str(cid_col.get('type') or '').upper()
-            if 'BIGINT' not in ctype:
-                db.session.execute(text(
-                    'ALTER TABLE bili_danmakus MODIFY COLUMN cid BIGINT DEFAULT 0'
-                ))
-                db.session.commit()
-                app.logger.info('迁移: bili_danmakus.cid 已扩展为 BIGINT (原 %s)', ctype)
-        # progress 列：模型用 Double（DOUBLE 精度），早期建表可能是 FLOAT（单精度 7 位），
-        # 长视频进度值（如 1234.5678 秒）会被舍入导致判重失效，需统一为 DOUBLE。
-        prog_col = cols.get('progress')
-        if prog_col is not None:
-            ptype = str(prog_col.get('type') or '').upper()
-            if 'DOUBLE' not in ptype:
-                db.session.execute(text(
-                    'ALTER TABLE bili_danmakus MODIFY COLUMN progress DOUBLE DEFAULT 0'
-                ))
-                db.session.commit()
-                app.logger.info('迁移: bili_danmakus.progress 已扩展为 DOUBLE (原 %s)', ptype)
+        db.session.execute(text(
+            'ALTER TABLE bili_danmakus MODIFY COLUMN cid BIGINT DEFAULT 0'
+        ))
+        db.session.execute(text(
+            'ALTER TABLE bili_danmakus MODIFY COLUMN progress DOUBLE DEFAULT 0'
+        ))
+        db.session.commit()
+        app.logger.info('迁移: bili_danmakus.cid/progress 已确保为 BIGINT/DOUBLE')
     except Exception as e:
         db.session.rollback()
-        app.logger.warning('迁移: bili_danmakus 列类型扩展失败: %s', e)
+        app.logger.warning('迁移: bili_danmakus 列类型 ALTER 失败: %s', e)
 
 
 def _migrate_bili_video_subtitle_mediumtext(app):

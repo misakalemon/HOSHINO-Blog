@@ -514,6 +514,17 @@ def main():
     from blog.task_queue import init_task_queue, get_task
     from blog import db
 
+    # Worker 进程同样执行弹幕表列类型修复迁移（幂等）。
+    # 原因：danmaku_refresh 任务在 Worker 进程写 bili_danmakus 表，
+    # 若仅重启 Worker 而未重启 Flask 主进程，cid 列仍为 INT 会导致 1264 溢出。
+    # 该迁移只做幂等的 MODIFY COLUMN，与主进程的 DDL 不会冲突（都改到相同类型）。
+    try:
+        with app.app_context():
+            from blog import _migrate_bili_danmakus_table
+            _migrate_bili_danmakus_table(app)
+    except Exception as e:
+        logger.warning('Worker 弹幕表迁移失败（忽略）: %s', e)
+
     init_task_queue(app)
 
     elapsed = time.time() - _startup_time
