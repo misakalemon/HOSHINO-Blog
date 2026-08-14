@@ -1101,21 +1101,31 @@ def _migrate_bili_danmakus_table(app):
         return
 
     # 表已存在：确保 cid 列为 BIGINT、progress 列为 DOUBLE。
-    # 无条件执行 ALTER（MySQL 对相同类型的 ALTER 是幂等的），
-    # 避免依赖 inspector 返回的类型字符串（不同 MySQL 版本可能返回
-    # INT / INTEGER / INT(11) 等不一致写法）导致漏迁移。
+    # 用 inspector.get_columns() 返回的 SQLAlchemy 类型对象做 isinstance 判断
+    # （比字符串匹配更可靠，不受 MySQL 版本/大小写/宽度显示差异影响），
+    # 仅在类型不符时才 ALTER，避免每次启动都对大表做昂贵的重建。
     try:
-        db.session.execute(text(
-            'ALTER TABLE bili_danmakus MODIFY COLUMN cid BIGINT DEFAULT 0'
-        ))
-        db.session.execute(text(
-            'ALTER TABLE bili_danmakus MODIFY COLUMN progress DOUBLE DEFAULT 0'
-        ))
-        db.session.commit()
-        app.logger.info('迁移: bili_danmakus.cid/progress 已确保为 BIGINT/DOUBLE')
+        from sqlalchemy import BigInteger, Double
+        _cols = {c['name']: c for c in inspector.get_columns('bili_danmakus')}
+        _cid_col = _cols.get('cid')
+        if _cid_col is not None and not isinstance(_cid_col['type'], BigInteger):
+            db.session.execute(text(
+                'ALTER TABLE bili_danmakus MODIFY COLUMN cid BIGINT DEFAULT 0'
+            ))
+            db.session.commit()
+            app.logger.info('迁移: bili_danmakus.cid 已扩展为 BIGINT')
+        _prog_col = _cols.get('progress')
+        # progress 必须是 DOUBLE（双精度）；早期建表可能是 FLOAT（单精度 7 位，
+        # 长视频进度值 1234.5678 秒会被舍入导致判重失效），Float 也需升级。
+        if _prog_col is not None and not isinstance(_prog_col['type'], Double):
+            db.session.execute(text(
+                'ALTER TABLE bili_danmakus MODIFY COLUMN progress DOUBLE DEFAULT 0'
+            ))
+            db.session.commit()
+            app.logger.info('迁移: bili_danmakus.progress 已扩展为 DOUBLE')
     except Exception as e:
         db.session.rollback()
-        app.logger.warning('迁移: bili_danmakus 列类型 ALTER 失败: %s', e)
+        app.logger.warning('迁移: bili_danmakus 列类型检查/ALTER 失败: %s', e)
 
 
 def _migrate_bili_video_subtitle_mediumtext(app):
