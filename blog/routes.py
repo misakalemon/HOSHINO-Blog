@@ -894,9 +894,11 @@ def thumbnail():
     from flask import current_app
 
     # 路径安全检查：禁止目录遍历（规范化后验证前缀是否为 static_dir）
+    # 注意：必须用 static_dir + os.sep 前缀比较，防止 "static2" 这类
+    # 以 "static" 开头的兄弟目录被字符串前缀匹配绕过（路径穿越漏洞）。
     safe_path = os.path.realpath(os.path.normpath(os.path.join(current_app.root_path, 'static', path)))
     static_dir = os.path.realpath(os.path.normpath(os.path.join(current_app.root_path, 'static')))
-    if not safe_path.startswith(static_dir):
+    if not (safe_path == static_dir or safe_path.startswith(static_dir + os.sep)):
         logger.warning('缩略图路径非法: %s', path)
         abort(404)
     img_path = safe_path

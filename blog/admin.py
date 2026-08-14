@@ -1121,8 +1121,14 @@ def profile():
 
         # ── 头像上传 ──────────────────────────
         # 优先级：avatar_url（外部URL）> avatar 文件上传
-        avatar_url = request.form.get('avatar_url', '')
+        avatar_url = request.form.get('avatar_url', '').strip()
         if avatar_url:
+            # 协议校验：仅允许 http/https 或站内 /static/ 路径，
+            # 防止 javascript:/data: 等恶意协议注入
+            from .utils import validate_url_protocol
+            if not (avatar_url.startswith('/static/') or validate_url_protocol(avatar_url)):
+                flash('头像 URL 协议不安全（仅支持 http/https）', 'error')
+                return render_template('admin/profile.html', form=form)
             current_user.avatar = avatar_url
         elif 'avatar' in request.files:
             file = request.files['avatar']
@@ -1134,6 +1140,26 @@ def profile():
 
                     from PIL import Image
 
+                    # Magic Bytes 校验：防止改名绕过扩展名上传非图片文件
+                    _magic = file.read(12)
+                    file.seek(0)
+                    _valid_magic = (
+                        _magic.startswith(b'\x89PNG')
+                        or _magic.startswith(b'\xff\xd8')
+                        or _magic.startswith(b'GIF87a')
+                        or _magic.startswith(b'GIF89a')
+                        or (len(_magic) >= 12 and _magic.startswith(b'RIFF') and _magic[8:12] == b'WEBP')
+                    )
+                    if not _valid_magic:
+                        flash('头像文件不是有效的图片', 'error')
+                        return render_template('admin/profile.html', form=form)
+                    # 解压炸弹防护：限制最大像素数
+                    if not hasattr(Image, 'MAX_IMAGE_PIXELS'):
+                        Image.MAX_IMAGE_PIXELS = 50_000_000
+                    Image.MAX_IMAGE_PIXELS = 50_000_000
+                    img = Image.open(file)
+                    img.verify()
+                    file.seek(0)
                     img = Image.open(file)
                     # 缩放到 200px 宽（保持宽高比），仅缩小不放大
                     ratio = min(200 / img.width, 1.0)
@@ -1141,20 +1167,38 @@ def profile():
                         h = int(img.height * ratio)
                         img = img.resize((200, h), Image.LANCZOS)
                     buf = _io.BytesIO()
-                    # JPEG 格式使用较高压缩率（quality=85 + optimize）
-                    fmt = 'JPEG' if ext in ('jpg', 'jpeg') else 'PNG'
-                    img.save(buf, fmt, quality=85, optimize=True)
+                    # GIF 保持 GIF（保留动画）；JPEG 用 JPEG；其他统一转 WebP
+                    if ext == 'gif':
+                        img.save(buf, 'GIF')
+                        save_ext = 'gif'
+                    elif ext in ('jpg', 'jpeg'):
+                        img.save(buf, 'JPEG', quality=85, optimize=True)
+                        save_ext = 'jpg'
+                    else:
+                        img.save(buf, 'WEBP', quality=85, method=6)
+                        save_ext = 'webp'
                     buf.seek(0)
                     # 生成 UUID 文件名，避免用户间头像覆盖
-                    filename = 'avatar_' + str(uuid.uuid4()) + '.' + ext
+                    filename = 'avatar_' + str(uuid.uuid4()) + '.' + save_ext
                     from flask import current_app
 
                     upload_dir = os.path.join(current_app.root_path, 'static', 'uploads')
                     os.makedirs(upload_dir, exist_ok=True)
+                    # 删除旧头像文件（本地上传的头像），避免磁盘文件累积
+                    if current_user.avatar and current_user.avatar.startswith('uploads/avatar_'):
+                        old_path = os.path.join(current_app.root_path, 'static', current_user.avatar)
+                        if os.path.isfile(old_path):
+                            try:
+                                os.remove(old_path)
+                            except OSError:
+                                pass
                     with open(os.path.join(upload_dir, filename), 'wb') as f:
                         f.write(buf.getvalue())
                     current_user.avatar = 'uploads/' + filename
                     logger.info('更新头像: user=%s new=%s', current_user.username, filename)
+                else:
+                    flash('不支持的头像格式（支持 png/jpg/jpeg/gif/webp）', 'error')
+                    return render_template('admin/profile.html', form=form)
 
         # ── 邮箱：检查唯一性 ──────────────────
         if form.email.data and form.email.data != current_user.email:
@@ -1241,12 +1285,27 @@ def upload_image():
     try:
         from PIL import Image
 
+        # 解压炸弹防护：与 /thumb 路由一致，拒绝超大像素图片
+        # （防止恶意构造的 PNG/JPEG 声明海量像素耗尽内存）
+        if not hasattr(Image, 'MAX_IMAGE_PIXELS'):
+            Image.MAX_IMAGE_PIXELS = 50_000_000
+        Image.MAX_IMAGE_PIXELS = 50_000_000
+
         img = Image.open(file)
         img.verify()
         file.seek(0)
         img = Image.open(file)
     except Exception:
         return jsonify({'error': '无法解析图片文件'}), 400
+    # 限制上传图片的最大边长（富文本内嵌图片，超大原图会导致页面加载缓慢）
+    # 超出则等比缩小（仅缩小不放大）
+    try:
+        max_side = int(os.environ.get('UPLOAD_MAX_SIDE', '4096'))
+    except (ValueError, TypeError):
+        max_side = 4096
+    if max_side > 0 and max(img.width, img.height) > max_side:
+        ratio = max_side / max(img.width, img.height)
+        img = img.resize((int(img.width * ratio), int(img.height * ratio)), Image.LANCZOS)
     try:
         buf = _io.BytesIO()
         if ext == 'gif':
@@ -1617,7 +1676,13 @@ def new_hero_image():
     """
     form = HeroImageForm()
     if form.validate_on_submit():
-        raw_url = form.image_url.data or ''
+        raw_url = (form.image_url.data or '').strip()
+        if raw_url:
+            # 协议校验：仅允许站内 /static/ 或 http/https，防止恶意协议注入
+            from .utils import validate_url_protocol
+            if not (raw_url.startswith('/static/') or validate_url_protocol(raw_url)):
+                flash('图片 URL 协议不安全（仅支持 /static/ 或 http/https）', 'error')
+                return render_template('admin/hero_image_form.html', form=form, editing=False)
         if raw_url and not raw_url.startswith('/static/'):
             image_url = url_for('static', filename=raw_url)
         else:
@@ -1665,7 +1730,11 @@ def edit_hero_image(id):
         image.sort_order = form.sort_order.data or 0
         image.is_active = form.is_active.data
         if form.image_url.data:
-            raw_url = form.image_url.data
+            raw_url = (form.image_url.data or '').strip()
+            from .utils import validate_url_protocol
+            if raw_url and not (raw_url.startswith('/static/') or validate_url_protocol(raw_url)):
+                flash('图片 URL 协议不安全（仅支持 /static/ 或 http/https）', 'error')
+                return render_template('admin/hero_image_form.html', form=form, editing=True)
             if raw_url and not raw_url.startswith('/static/'):
                 image.image_url = url_for('static', filename=raw_url)
             else:
