@@ -1252,6 +1252,7 @@ def _check_new_videos(mid: int, app):
                         {
                             'title': v.title or '',
                             'bvid': v.bvid,
+                            'url': f'https://www.bilibili.com/video/{v.bvid}',
                             'pub_date': v.pub_date.strftime('%Y-%m-%d') if v.pub_date else '',
                             'duration': f'{v.duration // 60}:{v.duration % 60:02d}'
                             if v.duration

@@ -2,13 +2,14 @@
      邮件模板 — 新视频通知页
      =======================
      当订阅的 UP 主发布新视频时，系统向订阅者发送此邮件。
-     邮件列出最新视频的封面、标题与链接。
+     邮件列出最新视频的标题、信息与跳转按钮（B站视频页）。
 
      Template: mail/new_video_notify.html
      Context:
        up_name  — UP 主昵称
        to_name  — 收件人昵称（可选）
-       videos   — 新视频列表（title / url / cover / duration / pub_ts）
+       videos   — 新视频列表（title / url / duration / pub_date / view_count / like_count）
+       unsubscribe_url — 退订链接
      ============================================================ -->
 <!DOCTYPE html>
 <html>
@@ -22,7 +23,7 @@
 {% for v in videos %}
 <tr><td style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:16px;padding:20px;margin-bottom:12px;display:block">
 <h2 style="color:#e8edf5;font-size:15px;font-weight:500;margin:0 0 8px">{{ v.title }}</h2>
-<table style="width:100%">
+<table style="width:100%;margin-bottom:14px">
 <tr>
 <td style="color:rgba(255,255,255,0.4);font-size:12px;padding:2px 0">📅 {{ v.pub_date }}</td>
 <td style="color:rgba(255,255,255,0.4);font-size:12px;padding:2px 0">⏱ {{ v.duration }}</td>
@@ -32,6 +33,10 @@
 <td style="color:rgba(255,255,255,0.4);font-size:12px;padding:2px 0">👍 {{ '{:,}'.format(v.like_count) if v.like_count else 0 }}</td>
 </tr>
 </table>
+<!-- 跳转按钮：直达 B站视频页 -->
+<table role="presentation" style="width:100%"><tr><td>
+<a href="{{ v.url }}" target="_blank" style="display:inline-block;padding:10px 28px;background:linear-gradient(135deg,#ff6b9d,#c084fc);border-radius:22px;color:#ffffff;font-size:13px;font-weight:600;text-decoration:none">▶ 观看视频</a>
+</td></tr></table>
 </td></tr>
 {% endfor %}
 <tr><td style="text-align:center;padding:24px 0 0">
