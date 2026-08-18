@@ -49,7 +49,7 @@
         border:2px solid rgba(255,255,255,0.04); user-select:none; }
     .stat-card:hover { background:rgba(255,255,255,0.04); }
     .stat-card .label { font-size:0.6rem; color:rgba(255,255,255,0.3); margin-bottom:4px; }
-    .stat-card .value { font-size:1.1rem; font-weight:600; }
+    .stat-card .value { font-size:1.1rem; font-weight:600; white-space:nowrap; }
     .stat-card.active { border-color:var(--ac); background:rgba(255,255,255,0.05); }
     </style>
     {% macro growth_display(metric) %}
@@ -57,13 +57,13 @@
     {% set total = g['total']|int %}
     {% set last = g['last']|int %}
     {% if total != 0 or last != 0 %}
-    <div class="growth" style="font-size:0.6rem;margin-top:3px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
+    <div class="growth" style="font-size:0.6rem;margin-top:3px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap;white-space:nowrap">
         <span{% if total >= 0 %} style="color:#3dd68c"{% else %} style="color:#f25a5a"{% endif %}>
-        {% if total >= 0 %}▲{% else %}▼{% endif %}{{ '{:,}'.format(total|abs) }}
+        {% if total >= 0 %}▲{% else %}▼{% endif %}{{ total|abs|format_count }}
         </span>
         <span style="color:rgba(255,255,255,0.12)">·</span>
         <span{% if last >= 0 %} style="color:#3dd68c"{% else %} style="color:#f25a5a"{% endif %}>
-        {% if last >= 0 %}▲{% else %}▼{% endif %}{{ '{:,}'.format(last|abs) }}
+        {% if last >= 0 %}▲{% else %}▼{% endif %}{{ last|abs|format_count }}
         </span>
     </div>
     {% endif %}
@@ -72,37 +72,37 @@
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px;margin-bottom:24px">
         <div class="stat-card active" data-metric="view" data-action="toggleMetric" data-arg="view" style="--ac:#c4b5fd">
             <div class="label">播放</div>
-            <div class="value" style="color:#e0daff">{{ '{:,}'.format(video.view_count) if video.view_count else '0' }}</div>
+            <div class="value" style="color:#e0daff" title="{{ '{:,}'.format(video.view_count) if video.view_count else '0' }}">{{ video.view_count|format_count }}</div>
             {{ growth_display('view') }}
         </div>
         <div class="stat-card" data-metric="like" data-action="toggleMetric" data-arg="like" style="--ac:#f87171">
             <div class="label">点赞</div>
-            <div class="value" style="color:#f87171">{{ '{:,}'.format(video.like_count) if video.like_count else '0' }}</div>
+            <div class="value" style="color:#f87171" title="{{ '{:,}'.format(video.like_count) if video.like_count else '0' }}">{{ video.like_count|format_count }}</div>
             {{ growth_display('like') }}
         </div>
         <div class="stat-card" data-metric="coin" data-action="toggleMetric" data-arg="coin" style="--ac:#fbbf24">
             <div class="label">投币</div>
-            <div class="value" style="color:#fbbf24">{{ '{:,}'.format(video.coin_count) if video.coin_count else '0' }}</div>
+            <div class="value" style="color:#fbbf24" title="{{ '{:,}'.format(video.coin_count) if video.coin_count else '0' }}">{{ video.coin_count|format_count }}</div>
             {{ growth_display('coin') }}
         </div>
         <div class="stat-card" data-metric="favorite" data-action="toggleMetric" data-arg="favorite" style="--ac:#34d399">
             <div class="label">收藏</div>
-            <div class="value" style="color:#34d399">{{ '{:,}'.format(video.favorite_count) if video.favorite_count else '0' }}</div>
+            <div class="value" style="color:#34d399" title="{{ '{:,}'.format(video.favorite_count) if video.favorite_count else '0' }}">{{ video.favorite_count|format_count }}</div>
             {{ growth_display('favorite') }}
         </div>
         <div class="stat-card" data-metric="share" data-action="toggleMetric" data-arg="share" style="--ac:#60a5fa">
             <div class="label">转发</div>
-            <div class="value" style="color:#60a5fa">{{ '{:,}'.format(video.share_count) if video.share_count else '0' }}</div>
+            <div class="value" style="color:#60a5fa" title="{{ '{:,}'.format(video.share_count) if video.share_count else '0' }}">{{ video.share_count|format_count }}</div>
             {{ growth_display('share') }}
         </div>
         <div class="stat-card" data-metric="comment" data-action="toggleMetric" data-arg="comment" style="--ac:#a78bfa">
             <div class="label">评论</div>
-            <div class="value" style="color:#a78bfa">{{ '{:,}'.format(video.comment_count) if video.comment_count else '0' }}</div>
+            <div class="value" style="color:#a78bfa" title="{{ '{:,}'.format(video.comment_count) if video.comment_count else '0' }}">{{ video.comment_count|format_count }}</div>
             {{ growth_display('comment') }}
         </div>
         <div class="stat-card" data-metric="danmaku" data-action="toggleMetric" data-arg="danmaku" style="--ac:#f472b6">
             <div class="label">弹幕</div>
-            <div class="value" style="color:#f472b6">{{ '{:,}'.format(video.danmaku_count) if video.danmaku_count else '0' }}</div>
+            <div class="value" style="color:#f472b6" title="{{ '{:,}'.format(video.danmaku_count) if video.danmaku_count else '0' }}">{{ video.danmaku_count|format_count }}</div>
             {{ growth_display('danmaku') }}
         </div>
     </div>
@@ -187,7 +187,7 @@
         <div style="padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
                 <span style="font-size:0.75rem;color:rgba(255,255,255,0.3)">{{ c.author }}</span>
-                <span style="font-size:0.7rem;color:rgba(255,255,255,0.2)">👍 {{ c.like_count or 0 }}</span>
+                <span style="font-size:0.7rem;color:rgba(255,255,255,0.2)">👍 {{ c.like_count|format_count }}</span>
             </div>
             <div style="font-size:0.85rem;color:rgba(255,255,255,0.6);line-height:1.5">{{ c.content }}</div>
         </div>

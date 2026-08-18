@@ -32,7 +32,7 @@
             <div style="display:flex;flex-wrap:wrap;gap:16px;font-size:0.85rem;color:rgba(255,255,255,0.35)">
                 <span>mid: <a href="https://space.bilibili.com/{{ up.mid }}" target="_blank" style="color:inherit;text-decoration:none;border-bottom:1px dotted rgba(255,255,255,0.2)">{{ up.mid }}</a></span>
                 <span>📹 {{ up.video_count }} 视频</span>
-                <span>👥 {{ '{:,}'.format(up.follower_count) if up.follower_count else '?' }} 粉丝</span>
+                <span>👥 <span style="white-space:nowrap" title="{{ '{:,}'.format(up.follower_count) if up.follower_count else '?' }}">{{ up.follower_count|format_count if up.follower_count else '?' }}</span> 粉丝</span>
             </div>
         </div>
     </div>
@@ -96,12 +96,12 @@
                     </td>
                     <td data-label="时长">{{ '%d:%02d'|format(v.duration//60, v.duration%60) if v.duration else '-' }}</td>
                     <td data-label="日期">{{ v.pub_datetime.strftime('%Y/%m/%d %H:%M') if v.pub_datetime else v.pub_datetime.strftime('%Y/%m/%d %H:%M') if v.pub_datetime else v.pub_date.strftime('%Y/%m/%d') if v.pub_date else '-' }}</td>
-                    <td data-label="播放">{{ '{:,}'.format(v.view_count) if v.view_count else '0' }}</td>
-                    <td data-label="点赞">{{ '{:,}'.format(v.like_count) if v.like_count else '0' }}</td>
-                    <td data-label="投币">{{ '{:,}'.format(v.coin_count) if v.coin_count else '0' }}</td>
-                    <td data-label="收藏">{{ '{:,}'.format(v.favorite_count) if v.favorite_count else '0' }}</td>
-                    <td data-label="转发">{{ '{:,}'.format(v.share_count) if v.share_count else '0' }}</td>
-                    <td data-label="评论">{{ '{:,}'.format(v.comment_count) if v.comment_count else '0' }}</td>
+                    <td data-label="播放" style="white-space:nowrap" title="{{ '{:,}'.format(v.view_count) if v.view_count else '0' }}">{{ v.view_count|format_count }}</td>
+                    <td data-label="点赞" style="white-space:nowrap" title="{{ '{:,}'.format(v.like_count) if v.like_count else '0' }}">{{ v.like_count|format_count }}</td>
+                    <td data-label="投币" style="white-space:nowrap" title="{{ '{:,}'.format(v.coin_count) if v.coin_count else '0' }}">{{ v.coin_count|format_count }}</td>
+                    <td data-label="收藏" style="white-space:nowrap" title="{{ '{:,}'.format(v.favorite_count) if v.favorite_count else '0' }}">{{ v.favorite_count|format_count }}</td>
+                    <td data-label="转发" style="white-space:nowrap" title="{{ '{:,}'.format(v.share_count) if v.share_count else '0' }}">{{ v.share_count|format_count }}</td>
+                    <td data-label="评论" style="white-space:nowrap" title="{{ '{:,}'.format(v.comment_count) if v.comment_count else '0' }}">{{ v.comment_count|format_count }}</td>
                 </tr>
                 {% endfor %}
             </tbody>

@@ -391,6 +391,27 @@ def create_app():
         # 先 HTML 转义再拼 <p>，防止外部可控文本（如 B站字幕）注入脚本
         return Markup(''.join(f'<p style="margin:0 0 6px">{_html.escape(p)}</p>' for p in parts))
 
+    @app.template_filter('format_count')
+    def _jinja_format_count(n):
+        """数字格式化为万/亿单位，避免长数字撑破布局换行。
+
+        规则：
+          ≥1 亿    → 1.23亿（保留 2 位小数，去尾零）
+          ≥1 万    → 1234.6万（保留 1 位小数，去尾零）
+          其他     → 千分位（如 12,345）
+        """
+        try:
+            n = float(n or 0)
+        except (TypeError, ValueError):
+            return '0'
+        if n >= 100000000:
+            s = f'{n / 100000000:.2f}'.rstrip('0').rstrip('.')
+            return f'{s}亿'
+        if n >= 10000:
+            s = f'{n / 10000:.1f}'.rstrip('0').rstrip('.')
+            return f'{s}万'
+        return f'{int(n):,}'
+
     @app.template_filter('bleach_clean')
     def _jinja_bleach_clean(text):
         """Jinja 过滤器：对 HTML 内容进行 bleach 消毒，防止 XSS。

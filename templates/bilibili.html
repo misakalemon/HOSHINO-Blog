@@ -113,7 +113,7 @@
                 <div style="color:#d0c8f0;font-weight:500;font-size:0.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ v.title }}</div>
                 <div style="display:flex;flex-wrap:wrap;gap:10px;font-size:0.7rem;color:rgba(255,255,255,0.3);margin-top:3px">
                     <span>{{ up.name if up else 'UP主 #' + v.up_id|string }}</span>
-                    <span>播放 {{ '{:,}'.format(v.view_count) if v.view_count else '0' }}</span>
+                    <span>播放 {{ v.view_count|format_count }}</span>
                     <span>{{ v.pub_datetime.strftime('%Y/%m/%d %H:%M') if v.pub_datetime else v.pub_date.strftime('%Y/%m/%d') if v.pub_date else '-' }}</span>
                 </div>
             </div>
