@@ -13,7 +13,7 @@ HOSHINO Blog — Flask 应用入口
 
 启动流程：
    1. 配置 / 日志 / 数据库 / Redis        — 同步（~200ms）
-   2. API 客户端初始化（BestBuy/Keepa/Apify）— 同步（~10ms）
+   2. B站 登录凭证加载                    — 同步（~10ms）
    3. Docker 浏览器池初始化               — 后台线程（~4s，不阻塞启动）
    4. 定时器 / 蓝图 / Gzip / 登录管理     — 同步（~10ms）
    → 应用在 1 秒内开始接受请求，后台初始化完成后自动就绪
@@ -250,15 +250,6 @@ def create_app():
     # ── 任务队列初始化（复用 Redis 连接）──────────
     from blog.task_queue import init_task_queue
     init_task_queue(app)
-
-    # ── Amazon 直爬（curl_cffi 模拟浏览器） ────
-    from blog.apify_client import scraper
-
-    # 配置爬虫代理（服务器在国内时必须使用海外代理才能访问 Amazon）
-    scraper._proxy = app.config.get('SCRAPING_PROXY') or None
-    logger.info(
-        'Amazon 爬虫已就绪%s', '，代理: ' + scraper._proxy if scraper._proxy else '（无代理）'
-    )
 
     # ── 加载 B站 持久化登录凭证 ──
     # 从本地文件读取 B站 cookie，确保爬虫使用已登录的账号身份

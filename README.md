@@ -241,7 +241,6 @@ hoshino_blog/
 │   ├── cache.py               # Redis 缓存封装（降级友好）
 │   ├── wordcloud.py           # 词云系统（jieba 分词 + 异步队列 + 预计算）
 │   ├── logger.py              # 日志系统（文件 + 终端，每日轮转）
-│   ├── apify_client.py        # Amazon 直爬（curl_cffi）
 │   └── bilibili/              # Bilibili 模块
 │       ├── __init__.py        # 包标记 + 模块文档
 │       ├── config.py          # 请求间隔/Cookie 路径/UA/HEADERS

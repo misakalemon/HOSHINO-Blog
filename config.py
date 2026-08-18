@@ -315,12 +315,6 @@ class Config:
     # 直连公网时必须保持 false，否则攻击者可伪造 XFF 绕过 IP 限流。
     TRUST_PROXY = os.environ.get('TRUST_PROXY', 'false').lower() in ('true', '1')
 
-    # ── Amazon 直爬代理（可选）─────────────────────
-    # curl_cffi 直爬 Amazon 时使用的 HTTP 代理。
-    # 服务器在国内时必须设置海外代理才能访问 Amazon。
-    # 格式: http://user:pass@host:port
-    SCRAPING_PROXY = os.environ.get('SCRAPING_PROXY') or ''
-
     # ── 邮件（SMTP 邮件订阅）─────────────────────────
     MAIL_SERVER = os.environ.get('MAIL_SERVER', '')
     MAIL_PORT = _safe_int_env('MAIL_PORT', 587)
