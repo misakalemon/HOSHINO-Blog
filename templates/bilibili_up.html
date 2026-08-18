@@ -146,7 +146,7 @@
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
 <script>
 (function() {
-    var data = {{ follower_chart_data|safe }};
+    var data = {{ follower_chart_data|tojson }};
     if (!data || data.length < 2) return;
     var chart = echarts.init(document.getElementById('followerChart'));
     chart.setOption({

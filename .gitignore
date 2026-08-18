@@ -29,6 +29,9 @@ HarmonyOS_Icons.zip
 # Secret keys (自动轮换)
 .secret_keys
 
+# 首次启动生成的默认管理员密码（读取后立即删除）
+initial_admin_password.txt
+
 # Logs
 blog/logs/
 logs/
@@ -39,6 +42,10 @@ static/uploads/*
 
 # Thumbnail cache (缩略图磁盘缓存)
 static/.thumb_cache/
+
+# 编辑器 sourcemap/压缩产物（源码在 src/editor/，无需入库）
+static/js/*.js.map
+static/js/*.js.gz
 
 # Bilibili login cookie (B站登录凭证，不提交)
 blog/bilibili/cookies.txt
@@ -58,6 +65,7 @@ blog/bilibili/.bili_cookies.txt
 __pycache__/
 .ruff_cache/
 .pytest_cache/
+pytest-cache-files-*/
 # Playwright
 .playwright-mcp/
 # Logs

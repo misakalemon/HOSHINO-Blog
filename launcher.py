@@ -87,6 +87,34 @@ def _detect_envs() -> list[str]:
         return ['base']
 
 
+def _kill_process_group(proc):
+    """终止进程及其进程组。
+
+    POSIX：killpg 杀整个进程组（shell=True 会创建 shell 子进程）；
+    Windows：os.killpg/os.getpgid 不可用，直接 terminate。
+    """
+    if os.name == 'nt':
+        proc.terminate()
+        return
+    try:
+        pgid = os.getpgid(proc.pid)
+        os.killpg(pgid, signal.SIGTERM)
+    except (ProcessLookupError, PermissionError, AttributeError):
+        proc.terminate()
+
+
+def _kill_process_group_force(proc):
+    """强制终止进程及其进程组（SIGKILL，Windows 用 kill）。"""
+    if os.name == 'nt':
+        proc.kill()
+        return
+    try:
+        pgid = os.getpgid(proc.pid)
+        os.killpg(pgid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, AttributeError):
+        proc.kill()
+
+
 class API:
     """暴露给前端的 JS API"""
 
@@ -174,19 +202,11 @@ class API:
             if not proc or proc.poll() is not None:
                 return 'error: 未在运行'
         # 先杀进程组（shell=True 会创建 shell 子进程）
-        try:
-            pgid = os.getpgid(proc.pid)
-            os.killpg(pgid, signal.SIGTERM)
-        except (ProcessLookupError, PermissionError):
-            proc.terminate()
+        _kill_process_group(proc)
         try:
             proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
-            try:
-                pgid = os.getpgid(proc.pid)
-                os.killpg(pgid, signal.SIGKILL)
-            except (ProcessLookupError, PermissionError):
-                proc.kill()
+            _kill_process_group_force(proc)
         with _proc_lock:
             _processes.pop(name, None)
         _log(f'[{name}] 已停止')
@@ -198,19 +218,11 @@ class API:
             items = list(_processes.items())
         for name, proc in items:
             if proc.poll() is None:
-                try:
-                    pgid = os.getpgid(proc.pid)
-                    os.killpg(pgid, signal.SIGTERM)
-                except (ProcessLookupError, PermissionError):
-                    proc.terminate()
+                _kill_process_group(proc)
                 try:
                     proc.wait(timeout=3)
                 except subprocess.TimeoutExpired:
-                    try:
-                        pgid = os.getpgid(proc.pid)
-                        os.killpg(pgid, signal.SIGKILL)
-                    except (ProcessLookupError, PermissionError):
-                        proc.kill()
+                    _kill_process_group_force(proc)
                 _log(f'[{name}] 已停止')
         with _proc_lock:
             _processes.clear()

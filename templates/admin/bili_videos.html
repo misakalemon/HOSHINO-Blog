@@ -77,7 +77,7 @@
                         </button>
                     </td>
                     <td data-label="BV"><code>{{ v.bvid }}</code></td>
-                    <td data-label="标题" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ v.title }}">{{ v.title }}</td>
+                    <td data-label="标题" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ v.title }}">{{ v.title }}{% if v.is_deleted %} <span class="badge badge-draft" title="API 连续返回稿件不可见，已自动标记，前台已隐藏">已删除</span>{% endif %}</td>
                     <td data-label="时长">{{ '%d:%02d'|format(v.duration//60, v.duration%60) if v.duration else '-' }}</td>
                     <td data-label="日期">{{ v.pub_datetime.strftime('%Y/%m/%d %H:%M') if v.pub_datetime else v.pub_date.strftime('%Y/%m/%d') if v.pub_date else '-' }}</td>
                     <td data-label="播放">{{ '{:,}'.format(v.view_count) if v.view_count else '0' }}</td>

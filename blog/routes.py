@@ -179,7 +179,11 @@ def _get_sidebar_data():
     # 尝试从缓存获取完整侧边栏数据
     cached_sidebar = cache_get('sidebar:full_data')
     if cached_sidebar is not None:
-        return cached_sidebar['categories'], cached_sidebar['recent_posts'], cached_sidebar['cat_post_counts']
+        counts = cached_sidebar['cat_post_counts']
+        # Redis JSON 往返后字典键变为字符串，转回 int 保持与直查路径类型一致
+        # （模板用 cat_post_counts.get(cat.id, 0) 以 int 查询，否则缓存命中时恒为 0）
+        counts = {int(k): v for k, v in counts.items()}
+        return cached_sidebar['categories'], cached_sidebar['recent_posts'], counts
 
     # 缓存未命中，查询数据库
     categories = Category.query.order_by(Category.name).all()
@@ -339,6 +343,18 @@ def _get_site_wordcloud():
     return {r.period: r.data for r in records if r.data}
 
 
+def _clamp_per_page(per_page):
+    """钳制每页条数到 [1, 100]，防止超大值导致全表查询或缓存键膨胀。"""
+    if not per_page or per_page < 1:
+        return current_app.config['POSTS_PER_PAGE']
+    return min(per_page, 100)
+
+
+def _clamp_page(page):
+    """钳制页码下限为 1。"""
+    return max(page or 1, 1)
+
+
 @blog_bp.route('/')
 def index():
     """首页：分页显示已发布的文章列表，支持按分类筛选。
@@ -350,9 +366,11 @@ def index():
 
     Template: index.html
     """
-    page = request.args.get('page', 1, type=int)
+    page = _clamp_page(request.args.get('page', 1, type=int))
     category_slug = request.args.get('category', None)
-    per_page = request.args.get('per_page', current_app.config['POSTS_PER_PAGE'], type=int)
+    per_page = _clamp_per_page(
+        request.args.get('per_page', current_app.config['POSTS_PER_PAGE'], type=int)
+    )
 
     # ── 整页缓存（仅匿名 GET）──
     page_ttl = current_app.config.get('CACHE_TTL_PAGE', 300)
@@ -465,7 +483,7 @@ new ResizeObserver(h).observe(document.body);})();
         headers={
             'Content-Security-Policy': (
                 "default-src 'self'; "
-                "script-src 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; "
+                "script-src 'unsafe-inline' https://cdn.jsdelivr.net; "
                 "style-src 'unsafe-inline' 'self' https://fonts.googleapis.com https://cdnjs.cloudflare.com; "
                 "img-src 'self' data: https:; "
                 "font-src 'self' data: https://fonts.gstatic.com; "
@@ -597,9 +615,11 @@ def category(slug):
     Template: category-grid.html
     """
     cat = Category.query.filter_by(slug=slug).first_or_404()
-    page = request.args.get('page', 1, type=int)
-    # per_page 取自 URL 参数或配置默认值，与首页一致
-    per_page = request.args.get('per_page', current_app.config['POSTS_PER_PAGE'], type=int)
+    page = _clamp_page(request.args.get('page', 1, type=int))
+    # per_page 取自 URL 参数或配置默认值，与首页一致（钳制防全表查询）
+    per_page = _clamp_per_page(
+        request.args.get('per_page', current_app.config['POSTS_PER_PAGE'], type=int)
+    )
 
     page_ttl = current_app.config.get('CACHE_TTL_PAGE', 300)
     cache_key = (
@@ -757,12 +777,14 @@ def search():
     Template: index.html（与首页共用）
     """
     q = request.args.get('q', '').strip()
-    page = request.args.get('page', 1, type=int)
+    page = _clamp_page(request.args.get('page', 1, type=int))
     if not q:
         return redirect(url_for('blog.index'))
     # 转义 SQL 通配符（% 和 _），防止恶意构造的搜索词导致 DoS
     safe_q = escape_like(q)
-    per_page = request.args.get('per_page', current_app.config['POSTS_PER_PAGE'], type=int)
+    per_page = _clamp_per_page(
+        request.args.get('per_page', current_app.config['POSTS_PER_PAGE'], type=int)
+    )
     categories, recent_posts, cat_post_counts = _get_sidebar_data()
     # 根据数据库方言选择不同的全文搜索语法
     engine = db.get_engine()
@@ -815,9 +837,9 @@ def search():
             .filter(
                 Post.is_published == True,
                 db.or_(
-                    Post.title.ilike(f'%{safe_q}%'),
-                    Post.summary.ilike(f'%{safe_q}%'),
-                    Post.content.ilike(f'%{safe_q}%'),
+                    Post.title.ilike(f'%{safe_q}%', escape='\\'),
+                    Post.summary.ilike(f'%{safe_q}%', escape='\\'),
+                    Post.content.ilike(f'%{safe_q}%', escape='\\'),
                 ),
             )
             .order_by(Post.created_at.desc())
@@ -866,8 +888,8 @@ def api_search():
             .filter(
                 Post.is_published == True,
                 db.or_(
-                    Post.title.ilike(f'%{safe_q}%'),
-                    Post.summary.ilike(f'%{safe_q}%'),
+                    Post.title.ilike(f'%{safe_q}%', escape='\\'),
+                    Post.summary.ilike(f'%{safe_q}%', escape='\\'),
                 ),
             )
             .order_by(Post.created_at.desc())

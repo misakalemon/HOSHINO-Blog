@@ -4,7 +4,9 @@
  * 职责：
  *   1. 检查 localStorage 中是否已有 Cookie 同意记录
  *   2. 未同意时显示横幅，用户点击"接受"或"拒绝"后持久化选择
- *   3. 8 秒无操作自动接受（避免横幅长期遮挡内容）
+ *
+ * 合规说明：不自动代用户做出"接受"决定（GDPR/PIPL 要求明确、主动同意），
+ * 横幅保持显示直到用户明确选择。
  *
  * 存储键：cookie_consent
  * 存储值：'accepted' | 'rejected'
@@ -31,10 +33,4 @@
   }
   if (acceptBtn) acceptBtn.addEventListener('click', function(){ dismiss('accepted'); });
   if (rejectBtn) rejectBtn.addEventListener('click', function(){ dismiss('rejected'); });
-  // 8 秒后自动接受（横幅仍在 DOM 中说明用户未操作）
-  setTimeout(function(){
-    if (document.getElementById('cookieBanner')) {
-      dismiss('accepted');
-    }
-  }, 8000);
 })();

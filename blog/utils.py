@@ -64,10 +64,17 @@ class RateLimiter:
 def get_client_ip() -> str:
     """获取客户端真实 IP（兼容反向代理）。
 
-    优先使用 request.access_route[0]（X-Forwarded-For 第一跳），
-    回退到 request.remote_addr。
+    安全策略：默认只信任 request.remote_addr（TCP 对端，不可伪造）。
+    仅在显式配置 TRUST_PROXY=true（且部署在受信反向代理之后，代理会
+    覆盖/规范化 X-Forwarded-For）时，才读取 access_route 首跳。
+    否则攻击者可伪造 X-Forwarded-For 绕过基于 IP 的限流。
     """
-    return request.access_route[0] if request.access_route else (request.remote_addr or 'unknown')
+    from flask import current_app
+
+    trust_proxy = bool(current_app and current_app.config.get('TRUST_PROXY'))
+    if trust_proxy:
+        return request.access_route[0] if request.access_route else (request.remote_addr or 'unknown')
+    return request.remote_addr or 'unknown'
 
 
 def validate_url_protocol(url: str) -> bool:
@@ -91,15 +98,24 @@ def is_safe_image_url(url: str) -> bool:
       - 站内相对路径（uploads/、images/）——前端裁剪上传回填的
         data.url.replace('/static/', '') 正是这种格式（如 uploads/xxx.webp）
 
-    拒绝 javascript:/data: 等恶意协议。
+    拒绝 javascript:/data: 等恶意协议，并拒绝含 '..' 路径穿越段的
+    值（防止拼接进文件删除/读取路径时越界）。
     """
     if not url:
         return True
     s = url.strip().lower()
+    # 拒绝路径穿越段（.. 作为路径组件）
+    if '..' in s.split('/'):
+        return False
     return s.startswith(('http://', 'https://', '/static/', '/uploads/', '/images/',
                          'uploads/', 'images/'))
 
 
 def escape_like(value: str) -> str:
-    """转义 SQL LIKE 通配符（% 和 _），防止 LIKE 注入。"""
-    return value.replace('%', '\\%').replace('_', '\\_')
+    """转义 SQL LIKE 通配符（% 和 _）以及转义符本身，防止 LIKE 注入。
+
+    必须先转义反斜杠，否则输入中的 \\% 会先被解释为"字面反斜杠+通配符"，
+    使 % 重新变为通配符（转义绕过）。
+    调用处需配合 .ilike(..., escape='\\\\') 指定转义字符。
+    """
+    return value.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')

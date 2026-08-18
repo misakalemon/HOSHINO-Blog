@@ -268,8 +268,8 @@
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
 <script>
 (function() {
-    var allLabels = {{ time_labels|safe }};
-    var allData = {{ chart_data|safe }};
+    var allLabels = {{ time_labels|tojson }};
+    var allData = {{ chart_data|tojson }};
     
     if (!allLabels || allLabels.length < 2) {
         console.log('图表数据不足：', allLabels ? allLabels.length : 0);

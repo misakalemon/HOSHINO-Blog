@@ -93,6 +93,48 @@ _worker_lock = threading.Lock()
 _wc_app = None
 # 重型任务（bili_up / all）并发上限，避免过多线程挤占资源
 _heavy_task_semaphore = threading.Semaphore(2)
+# 重型任务去重：记录已提交（含排队/运行中）的重型任务键，防止连点重复提交
+# 键: 'all' 或 f'up_{up_id}'
+_heavy_queued: set[str] = set()
+_heavy_queued_lock = threading.Lock()
+# 词云数据写入锁：串行化 post_id=NULL 记录（全站/B站词云）的本进程写入，
+# 因为 MySQL 唯一索引对 NULL 行不生效，无法靠 DB 约束防重复
+_wc_write_lock = threading.Lock()
+
+
+def _upsert_wordcloud(post_id, source, period, data):
+    """原子写入/更新词云记录。
+
+    - post_id 非 NULL（文章词云）：MySQL ON DUPLICATE KEY UPDATE，并发安全；
+    - post_id 为 NULL（全站/B站/UP/视频词云）：MySQL 唯一索引不覆盖 NULL 行，
+      由 _wc_write_lock 串行化本进程写入（跨进程残留窗口极小，由启动迁移清理兜底）。
+    """
+    from . import db
+    from .models import WordCloudData, now_cst
+
+    if post_id is None:
+        with _wc_write_lock:
+            record = WordCloudData.query.filter_by(
+                post_id=None, source=source, period=period
+            ).first()
+            if record is None:
+                record = WordCloudData(post_id=None, source=source, period=period, data=data)
+                db.session.add(record)
+            else:
+                record.data = data
+            db.session.flush()
+        return
+
+    from sqlalchemy.dialects.mysql import insert as _mysql_insert
+
+    stmt = _mysql_insert(WordCloudData).values(
+        post_id=post_id, source=source, period=period, data=data,
+    )
+    stmt = stmt.on_duplicate_key_update(
+        data=stmt.inserted.data,
+        updated_at=now_cst(),
+    )
+    db.session.execute(stmt)
 
 
 def _ensure_worker():
@@ -116,11 +158,9 @@ def _ensure_worker():
 def _run_heavy_task(task_type: str, kwargs: dict):
     """在独立线程中执行重型词云任务，不阻塞 _worker_loop。
 
-    阻塞式获取信号量（并发上限为 2），获取失败则等待，保证任务不丢弃；
-    执行完毕或异常时均释放 _heavy_task_semaphore，让后续重型任务可进入。
+    信号量由 submit_task 在提交时非阻塞获取并在此线程结束后释放
+    （见 _run_and_release），此处只负责执行。
     """
-    # 阻塞等待并发槽位（线程内等待，不影响提交方 / HTTP 请求线程）
-    _heavy_task_semaphore.acquire()
     try:
         with _wc_app.app_context():
             try:
@@ -134,8 +174,6 @@ def _run_heavy_task(task_type: str, kwargs: dict):
                 db.session.remove()
     except Exception as e:
         logger.error('词云重型任务失败 type=%s: %s', task_type, e)
-    finally:
-        _heavy_task_semaphore.release()
 
 
 def _worker_loop():
@@ -183,31 +221,53 @@ def submit_task(task_type: str, **kwargs):
     """
     _ensure_worker()
     if task_type in ('bili_up', 'all'):
-        # 重型任务独立线程，不阻塞 _worker_loop。
-        # 阻塞式获取信号量（在独立线程中等待，不影响 HTTP 请求线程），
-        # 保证任务不会因并发上限被静默丢弃。
-        t = threading.Thread(
-            target=_run_heavy_task, args=(task_type, kwargs), daemon=True
-        )
+        # 重型任务：按业务键去重（all / up_{id}），已在排队或运行中则跳过。
+        # 不再为每次提交创建线程（原先会无限堆积阻塞在信号量上的线程）。
+        heavy_key = 'all' if task_type == 'all' else f'up_{kwargs.get("up_id")}'
+        with _heavy_queued_lock:
+            if heavy_key in _heavy_queued:
+                logger.info('重型词云任务已在排队/运行，跳过: %s', heavy_key)
+                return
+            _heavy_queued.add(heavy_key)
+        # 非阻塞获取并发槽位：槽位已满说明同类任务在跑，直接跳过
+        if not _heavy_task_semaphore.acquire(blocking=False):
+            with _heavy_queued_lock:
+                _heavy_queued.discard(heavy_key)
+            logger.info('重型词云任务并发槽位已满，跳过: %s', heavy_key)
+            return
+        _heavy_queued.discard(heavy_key)  # 进入执行即释放去重标记（由信号量控并发）
+
+        def _run_and_release():
+            try:
+                _run_heavy_task(task_type, kwargs)
+            finally:
+                _heavy_task_semaphore.release()
+
+        t = threading.Thread(target=_run_and_release, daemon=True)
         t.start()
     else:
         task = dict(type=task_type, **kwargs)
-        # 同类轻量任务合并：已有同 type 任务时直接跳过（词云结果由最新任务覆盖）
-        existing = list(_task_queue.queue)
-        if any(t.get('type') == task_type for t in existing):
-            return
-        try:
-            _task_queue.put_nowait(task)
-        except queue.Full:
-            # 队列满：丢弃最旧任务（词云可重新计算，丢旧不影响正确性）
-            try:
-                _task_queue.get_nowait()
-            except queue.Empty:
-                pass
+        # 轻量任务去重：按 (type, 业务标识) 合并——仅同参数任务合并，
+        # 避免"连续发布两篇文章时第二篇词云被误跳过"（原先按 type 去重）
+        dedup_key = (task_type, task.get('post_id'))
+        with _worker_lock:
+            existing = list(_task_queue.queue)
+            if any(
+                (t.get('type'), t.get('post_id')) == dedup_key for t in existing
+            ):
+                return
             try:
                 _task_queue.put_nowait(task)
             except queue.Full:
-                logger.warning('词云任务队列满，丢弃任务 %s', task_type)
+                # 队列满：丢弃最旧任务（词云可重新计算，丢旧不影响正确性）
+                try:
+                    _task_queue.get_nowait()
+                except queue.Empty:
+                    pass
+                try:
+                    _task_queue.put_nowait(task)
+                except queue.Full:
+                    logger.warning('词云任务队列满，丢弃任务 %s', task_type)
 
 
 def _init_jieba():
@@ -528,7 +588,7 @@ def precompute_post_wordcloud(post_id):
     from . import db
     from .models import Post, WordCloudData, WordCloudConfig
 
-    post = Post.query.get(post_id)
+    post = db.session.get(Post, post_id)
     if not post:
         return
 
@@ -536,12 +596,8 @@ def precompute_post_wordcloud(post_id):
     top_n = WordCloudConfig.get_or_create().top_n_article
     data = compute_word_frequencies(text, top_n=top_n) or []
 
-    record = WordCloudData.query.filter_by(post_id=post_id).first()
-    if record is None:
-        record = WordCloudData(post_id=post_id, data=data)
-        db.session.add(record)
-    else:
-        record.data = data
+    # 原子 upsert（唯一约束 (post_id, source, period) 防并发重复行）
+    _upsert_wordcloud(post_id, 'blog', 'all', data)
     db.session.commit()
 
 
@@ -571,12 +627,7 @@ def precompute_site_wordcloud():
     full_text = ' '.join(texts)
     data = compute_word_frequencies(full_text, top_n=top_n) or []
 
-    record = WordCloudData.query.filter_by(post_id=None, period='all').first()
-    if record is None:
-        record = WordCloudData(post_id=None, period='all', data=data)
-        db.session.add(record)
-    else:
-        record.data = data
+    _upsert_wordcloud(None, 'blog', 'all', data)
 
     # ── 按月分段词云 ──
     # 查询所有已发布文章的不同月份
@@ -601,12 +652,7 @@ def precompute_site_wordcloud():
             month_full = ' '.join(month_texts)
             month_data = compute_word_frequencies(month_full, top_n=top_n) or []
 
-            m_record = WordCloudData.query.filter_by(post_id=None, period=month).first()
-            if m_record is None:
-                m_record = WordCloudData(post_id=None, period=month, data=month_data)
-                db.session.add(m_record)
-            else:
-                m_record.data = month_data
+            _upsert_wordcloud(None, 'blog', month, month_data)
         except Exception as e:
             logger.warning('预计算 %s 月词云失败: %s', month, e)
 
@@ -712,7 +758,10 @@ def precompute_bili_wordclouds():
         _last_id = 0
         while True:
             batch = (
-                BiliVideo.query.filter(BiliVideo.id > _last_id)
+                BiliVideo.query.filter(
+                    BiliVideo.id > _last_id,
+                    BiliVideo.is_deleted == False,
+                )
                 .order_by(BiliVideo.id)
                 .limit(_BILI_BATCH)
                 .all()
@@ -733,6 +782,7 @@ def precompute_bili_wordclouds():
                     BiliVideo.pub_datetime >= m_start,
                     BiliVideo.pub_datetime < m_end,
                     BiliVideo.id > _last_id,
+                    BiliVideo.is_deleted == False,
                 )
                 .order_by(BiliVideo.id)
                 .limit(_BILI_BATCH)
@@ -753,6 +803,7 @@ def precompute_bili_wordclouds():
                 BiliVideo.query.filter(
                     BiliVideo.up_id == up_id,
                     BiliVideo.id > _last_id,
+                    BiliVideo.is_deleted == False,
                 )
                 .order_by(BiliVideo.id)
                 .limit(_BILI_BATCH)
@@ -803,16 +854,7 @@ def precompute_bili_wordclouds():
             if not up_data:
                 continue
             period = f'up_{up.id}'
-            record = WordCloudData.query.filter_by(
-                post_id=None, source='bili', period=period
-            ).first()
-            if record is None:
-                record = WordCloudData(
-                    post_id=None, source='bili', period=period, data=up_data
-                )
-                db.session.add(record)
-            else:
-                record.data = up_data
+            _save_bili_record(period, up_data)
             db.session.flush()
         except Exception as e:
             logger.warning('📊 UP %s 词云失败: %s', up.id, e)
@@ -827,16 +869,8 @@ def precompute_bili_wordclouds():
 
 
 def _save_bili_record(period, data):
-    """保存或更新 B站词云记录。"""
-    from . import db
-    from .models import WordCloudData
-
-    record = WordCloudData.query.filter_by(post_id=None, source='bili', period=period).first()
-    if record is None:
-        record = WordCloudData(post_id=None, source='bili', period=period, data=data)
-        db.session.add(record)
-    else:
-        record.data = data
+    """保存或更新 B站词云记录（原子 upsert）。"""
+    _upsert_wordcloud(None, 'bili', period, data)
 
 
 def _compute_video_wc_wrapper(video_id, app):
@@ -864,8 +898,11 @@ def precompute_video_wordclouds():
     from flask import current_app
     from .models import BiliVideo
 
-    total = BiliVideo.query.count()
-    video_ids = [r[0] for r in BiliVideo.query.with_entities(BiliVideo.id).all()]
+    total = BiliVideo.query.filter_by(is_deleted=False).count()
+    video_ids = [
+        r[0] for r in BiliVideo.query.with_entities(BiliVideo.id)
+        .filter_by(is_deleted=False).all()
+    ]
     app = current_app._get_current_object()
     logger.info('📊 批量词云计算开始: 共 %d 个视频', total)
     _log_memory(logger, 'precompute_video_wordclouds start')
@@ -902,6 +939,10 @@ def _compute_single_video_wordcloud(video):
     from . import db
     from .models import BiliDanmaku, WordCloudConfig, WordCloudData
 
+    # 已删除/不可见的稿件不再生成词云
+    if getattr(video, 'is_deleted', False):
+        return
+
     top_n = WordCloudConfig.get_or_create().top_n_bili
     parts = []
     if video.subtitle_text:
@@ -937,16 +978,7 @@ def _compute_single_video_wordcloud(video):
         return
 
     period = f'bvid_{video.bvid}'
-    record = WordCloudData.query.filter_by(
-        post_id=None, source='bili_video', period=period
-    ).first()
-    if record is None:
-        record = WordCloudData(
-            post_id=None, source='bili_video', period=period, data=data
-        )
-        db.session.add(record)
-    else:
-        record.data = data
+    _upsert_wordcloud(None, 'bili_video', period, data)
     db.session.commit()
 
 
@@ -964,7 +996,7 @@ def precompute_up_wordclouds(up_id: int):
     from . import db
     from .models import BiliVideo, WordCloudConfig, WordCloudData
 
-    videos = BiliVideo.query.filter_by(up_id=up_id).with_entities(BiliVideo.id).all()
+    videos = BiliVideo.query.filter_by(up_id=up_id, is_deleted=False).with_entities(BiliVideo.id).all()
     video_ids = [v.id for v in videos]
     app = current_app._get_current_object()
     total = len(video_ids)
@@ -986,19 +1018,14 @@ def precompute_up_wordclouds(up_id: int):
                 _maybe_collect(force=True)
 
     # ── 聚合 UP 主词云 ──
-    all_videos = BiliVideo.query.filter_by(up_id=up_id).all()
+    all_videos = BiliVideo.query.filter_by(up_id=up_id, is_deleted=False).all()
     up_texts = _bili_texts_from_videos(all_videos)
     up_full = ' '.join(up_texts)
     if up_full.strip():
         top_n = WordCloudConfig.get_or_create().top_n_bili
         up_data = compute_word_frequencies(up_full, top_n=top_n) or []
         period = f'up_{up_id}'
-        record = WordCloudData.query.filter_by(post_id=None, source='bili', period=period).first()
-        if record is None:
-            record = WordCloudData(post_id=None, source='bili', period=period, data=up_data)
-            db.session.add(record)
-        else:
-            record.data = up_data
+        _upsert_wordcloud(None, 'bili', period, up_data)
         db.session.commit()
         logger.info('📊 UP %s 聚合词云已更新', up_id)
 

@@ -164,6 +164,10 @@ def cache_set(key, value, ttl=300):
     try:
         # ensure_ascii=False 确保中文等非 ASCII 字符不被转义为 \uXXXX
         _redis_client.setex(_make_key(key), ttl, json.dumps(value, ensure_ascii=False))
+    except (TypeError, ValueError) as e:
+        # 序列化失败（对象含 datetime/set 等不可 JSON 化字段）：
+        # 静默吞掉会导致"缓存永远写不上"且无人察觉，需告警
+        logger.warning('缓存序列化失败 key=%s: %s', key, e)
     except Exception as e:
         logger.debug('缓存写入失败 key=%s: %s', key, e)
 

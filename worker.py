@@ -20,8 +20,10 @@ HOSHINO Blog — 后台工作进程 (Worker)
   WORKER_THREADS — 并行任务数（默认 3）
 """
 
+import json
 import logging
 import os
+import random
 import signal
 import sys
 import threading
@@ -153,13 +155,13 @@ def _run_task(task, app):
                 from concurrent.futures import ThreadPoolExecutor, as_completed
                 up_id = data['up_id']
                 video_ids = [r[0] for r in BiliVideo.query.filter_by(
-                    up_id=up_id
+                    up_id=up_id, is_deleted=False
                 ).order_by(BiliVideo.pubdate.desc()).with_entities(BiliVideo.id).limit(int(os.environ.get('BILI_REFRESH_LIMIT', '50'))).all()]
                 total = len(video_ids)
                 logger.info('评论刷新: UP %s 共 %d 个视频, 并发 %d', up_id, total, MAX_COMMENT_WORKERS)
 
                 def _crawl_one(vid):
-                    v = BiliVideo.query.get(vid)
+                    v = db.session.get(BiliVideo, vid)
                     if not v:
                         return 0
                     try:
@@ -197,13 +199,13 @@ def _run_task(task, app):
                 from concurrent.futures import ThreadPoolExecutor, as_completed
                 up_id = data['up_id']
                 video_ids = [r[0] for r in BiliVideo.query.filter_by(
-                    up_id=up_id
+                    up_id=up_id, is_deleted=False
                 ).order_by(BiliVideo.pubdate.desc()).with_entities(BiliVideo.id).limit(int(os.environ.get('BILI_REFRESH_LIMIT', '50'))).all()]
                 total = len(video_ids)
                 logger.info('弹幕刷新: UP %s 共 %d 个视频, 并发 %d', up_id, total, MAX_COMMENT_WORKERS)
 
                 def _crawl_danmaku(vid):
-                    v = BiliVideo.query.get(vid)
+                    v = db.session.get(BiliVideo, vid)
                     if not v:
                         return 0
                     try:
@@ -232,13 +234,13 @@ def _run_task(task, app):
                 from concurrent.futures import ThreadPoolExecutor, as_completed
                 up_id = data['up_id']
                 video_ids = [r[0] for r in BiliVideo.query.filter_by(
-                    up_id=up_id
+                    up_id=up_id, is_deleted=False
                 ).order_by(BiliVideo.pubdate.desc()).with_entities(BiliVideo.id).limit(int(os.environ.get('BILI_REFRESH_LIMIT', '50'))).all()]
                 total = len(video_ids)
                 logger.info('字幕刷新: UP %s 共 %d 个视频, 并发 %d', up_id, total, MAX_COMMENT_WORKERS)
 
                 def _fetch_subtitle(vid):
-                    v = BiliVideo.query.get(vid)
+                    v = db.session.get(BiliVideo, vid)
                     if not v:
                         return 0
                     try:
@@ -277,6 +279,25 @@ def _run_task(task, app):
 
     except Exception as e:
         logger.error('任务失败 id=%s type=%s: %s', task_id, task_type, e, exc_info=True)
+        # 可重试任务重新入队（最多重试 2 次），避免失败任务静默丢失
+        _RETRYABLE_TYPES = (
+            'refresh_up', 'refresh_all', 'refresh_up_comments',
+            'refresh_up_danmakus', 'refresh_up_subtitles',
+            'bili_wordcloud_single', 'comment_refresh', 'danmaku_refresh',
+        )
+        retries = int(task.get('data', {}).get('_retries', 0) or 0)
+        if task_type in _RETRYABLE_TYPES and retries < 2:
+            from blog.task_queue import requeue_task
+            original_raw = json.dumps(task)
+            task.setdefault('data', {})['_retries'] = retries + 1
+            if requeue_task(task, original_raw):
+                logger.warning('任务将重试 id=%s type=%s (第 %d 次)', task_id, task_type, retries + 1)
+            else:
+                from blog.task_queue import ack_task as _ack
+                _ack(task)
+        else:
+            from blog.task_queue import ack_task as _ack
+            _ack(task)
     finally:
         # 无论成功还是异常，都归还 DB 连接，防止连接池被长任务泄漏
         try:
@@ -406,13 +427,15 @@ def _init_worker_scheduler(app):
             replace_existing=True,
         )
 
-        # 02:00 每日深扫
+        # 02:00 每日深扫 — 分钟数随机（每次进程启动重新随机），
+        # 避免固定时刻执行被 B站 行为画像识别为定时任务
         from blog.bili_routes import run_daily_scrape
+        _daily_minute = random.randint(0, 29)
         scheduler.add_job(
             func=lambda: run_daily_scrape(app),
             trigger='cron',
             hour=2,
-            minute=0,
+            minute=_daily_minute,
             id='daily_scrape',
             replace_existing=True,
         )
@@ -527,6 +550,11 @@ def main():
 
     init_task_queue(app)
 
+    # 恢复上次崩溃遗留的备份任务（Worker 在 brpoplpush 之后、ack 之前
+    # 崩溃的任务会滞留在 backup 列表，此处重新入队避免永久丢失）
+    from blog.task_queue import recover_backup_tasks
+    recover_backup_tasks()
+
     elapsed = time.time() - _startup_time
     logger.info('Worker 启动完成 (%.2fs) 并行任务数=%d', elapsed, MAX_WORKER_THREADS)
 
@@ -593,6 +621,13 @@ def main():
 
             task_type = task.get('type', '?')
 
+            # 任务签名校验：防止 Redis 被投毒时执行伪造任务（如任意 space_url 爬取）
+            from blog.task_queue import verify_task_signature, ack_task as _ack_task
+            if not verify_task_signature(task):
+                logger.warning('任务签名校验失败，丢弃 id=%s type=%s', task.get('id'), task_type)
+                _ack_task(task)
+                continue
+
             # 按任务类型分发到对应线程池
             if task_type in ('refresh_up', 'refresh_all', 'comment_refresh',
                              'refresh_up_comments', 'refresh_up_danmakus',
@@ -603,7 +638,10 @@ def main():
                 future = wc_executor.submit(_run_task, task, app)
                 wc_futures[future] = task
             else:
-                logger.warning('未知任务类型: %s，跳过', task_type)
+                # 未知任务类型：任务已从队列移到备份列表，必须 ack，
+                # 否则永久滞留 backup（且无人回收）
+                logger.warning('未知任务类型: %s，丢弃 id=%s', task_type, task.get('id'))
+                _ack_task(task)
                 continue
 
             logger.info('派发任务 id=%s type=%s (爬取队列=%d 词云队列=%d)',

@@ -1,8 +1,34 @@
+const UNSAFE_URL_PROTOCOLS = /^(javascript|data|vbscript|file):/i
+
+export function isSafeUrl(url) {
+  if (!url) return true
+  const v = String(url).trim()
+  if (!v) return true
+  if (UNSAFE_URL_PROTOCOLS.test(v)) return false
+  return true
+}
+
 export function sanitizeHTML(html) {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '')
-    .replace(/\s+on\w+\s*=\s*[^\s>]*/gi, '')
+  if (!html) return html
+  const doc = new DOMParser().parseFromString(String(html), 'text/html')
+  // 移除可执行/表单/外部加载元素（后端 bleach 白名单的纵深防御镜像）
+  doc
+    .querySelectorAll('script, iframe, object, embed, form, input, button, select, textarea, meta, link, noscript')
+    .forEach(el => el.remove())
+  // 清理事件属性与危险协议 URL
+  doc.querySelectorAll('*').forEach(el => {
+    ;[...el.attributes].forEach(attr => {
+      const name = attr.name.toLowerCase()
+      if (name.startsWith('on')) {
+        el.removeAttribute(attr.name)
+        return
+      }
+      if (['href', 'src', 'xlink:href', 'action', 'poster', 'formaction', 'cite'].includes(name)) {
+        if (!isSafeUrl(attr.value)) el.removeAttribute(attr.name)
+      }
+    })
+  })
+  return doc.body.innerHTML
 }
 
 export function showModal(options) {
@@ -145,8 +171,8 @@ export function simpleMDtoHTML(md) {
       .replace(/_(.+?)_/g, '<em>$1</em>')
       .replace(/~~(.+?)~~/g, '<del>$1</del>')
       .replace(/\$\$(.+?)\$\$/g, '<code>$1</code>')
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
-      .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">')
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (m, text, url) => '<a href="' + (isSafeUrl(url) ? url : '#') + '">' + text + '</a>')
+      .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (m, alt, url) => '<img src="' + (isSafeUrl(url) ? url : '') + '" alt="' + alt + '">')
   }
   const lines = md.split('\n')
   let html = ''
@@ -457,7 +483,8 @@ export function importFile() {
         importDOCX(file).then(resolve).catch(reject)
       } else if (ext === 'html' || ext === 'htm') {
         const reader = new FileReader()
-        reader.onload = e => resolve(e.target.result)
+        // HTML 文件导入必须过净化（原实现直接 resolve 原文，脚本原样进入编辑器）
+        reader.onload = e => resolve(sanitizeHTML(e.target.result))
         reader.readAsText(file, 'UTF-8')
       }
     }

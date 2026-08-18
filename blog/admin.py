@@ -72,40 +72,101 @@ from .routes import ALLOWED_TAGS, ALLOWED_ATTRS
 from .utils import LRUDict, now_cst, get_client_ip, validate_url_protocol, is_safe_image_url, escape_like
 
 
-# bleach HTML 白名单：定义允许保留的标签属性
-# '*' 表示所有标签通用的属性，其他键为具体标签名 → 允许的属性列表
-_HTML_STRIP_ATTRS = {
-    '*': ['id', 'class', 'style', 'title', 'lang', 'dir'],
-    'a': ['href', 'title', 'rel', 'target'],
-    'img': ['src', 'alt', 'title', 'width', 'height', 'style', 'loading'],
-    'video': ['src', 'controls', 'width', 'height', 'autoplay', 'loop', 'muted', 'poster'],
-    'audio': ['src', 'controls', 'autoplay', 'loop'],
-    'source': ['src', 'type'],
-    'iframe': ['src', 'width', 'height', 'allowfullscreen', 'frameborder', 'allow'],
-    'form': ['action', 'method', 'enctype'],
-    'input': ['type', 'name', 'value', 'placeholder', 'required', 'checked', 'maxlength'],
-    'button': ['type', 'name', 'value'],
-    'select': ['name'],
-    'option': ['value', 'selected'],
-    'textarea': ['name', 'rows', 'cols', 'maxlength'],
-    'td': ['colspan', 'rowspan'],
-    'th': ['colspan', 'rowspan'],
-    'col': ['span'],
-    'colgroup': ['span'],
-    'meta': ['charset', 'name', 'content'],
-    'link': ['href', 'rel', 'type'],
-    'script': ['src', 'type', 'async', 'defer'],
-    'style': ['type', 'media'],
-}
-# bleach HTML 白名单：允许保留的 HTML 标签（含常用的富文本标签和 SVG 标签）
+# iframe 允许嵌入的视频平台域名白名单（防止嵌入钓鱼/恶意页面）
+_ALLOWED_IFRAME_HOSTS = (
+    'player.bilibili.com', 'www.bilibili.com',
+    'www.youtube.com', 'www.youtube-nocookie.com',
+    'player.youku.com', 'v.qq.com',
+    'open.163.com', 'music.163.com',
+)
+
+
+def _allow_attr(tag: str, name: str, value: str) -> bool:
+    """bleach 属性白名单回调：按标签+属性名+值三重校验。
+
+    安全规则：
+      - 仅允许已知安全属性名
+      - URL 类属性（href/src/poster/action）：拒绝 javascript:/data:/vbscript:/file: 协议、
+        拒绝协议相对 URL（//evil.com）、拒绝含 '..' 穿越段的值
+      - iframe[src] 额外限制为视频平台域名白名单
+    """
+    if value is None:
+        return True
+    name = (name or '').lower()
+    url_attrs = ('href', 'src', 'poster', 'action', 'cite', 'formaction', 'longdesc')
+    if name in url_attrs:
+        v = (value or '').strip()
+        if not v:
+            return True
+        low = v.lower()
+        if low.startswith(('javascript:', 'data:', 'vbscript:', 'file:')):
+            return False
+        if low.startswith('//'):  # 协议相对 URL 会跳到外部站点
+            return False
+        if low.startswith(('http://', 'https://')):
+            if tag == 'iframe' and name == 'src':
+                from urllib.parse import urlparse
+                host = (urlparse(v).hostname or '').lower()
+                return any(host == h or host.endswith('.' + h) for h in _ALLOWED_IFRAME_HOSTS)
+            return True
+        # 站内相对路径：拒绝路径穿越段
+        if '..' in v.split('/'):
+            return False
+        return True
+
+    # 非 URL 属性：按 (标签, 属性名) 白名单
+    allowed = {
+        '*': {'id', 'class', 'style', 'title', 'lang', 'dir', 'width', 'height', 'align'},
+        'a': {'title', 'rel', 'target'},
+        'img': {'alt', 'title', 'style', 'loading'},
+        'video': {'controls', 'autoplay', 'loop', 'muted', 'poster'},
+        'audio': {'controls', 'autoplay', 'loop'},
+        'source': {'type'},
+        'iframe': {'width', 'height', 'allowfullscreen', 'frameborder', 'allow', 'title'},
+        'td': {'colspan', 'rowspan'},
+        'th': {'colspan', 'rowspan'},
+        'col': {'span'},
+        'ol': {'start', 'type'},
+        'li': {'value'},
+        'svg': {'viewbox', 'fill', 'stroke', 'stroke-width', 'stroke-linecap',
+                'stroke-linejoin', 'fill-opacity', 'stroke-opacity', 'opacity',
+                'transform', 'preserveaspectratio'},
+        'path': {'d', 'fill', 'stroke', 'stroke-width', 'stroke-linecap',
+                 'stroke-linejoin', 'fill-opacity', 'stroke-opacity', 'opacity',
+                 'transform'},
+        'circle': {'cx', 'cy', 'r', 'fill', 'stroke', 'stroke-width', 'opacity'},
+        'rect': {'x', 'y', 'width', 'height', 'rx', 'ry', 'fill', 'stroke',
+                 'stroke-width', 'opacity'},
+        'line': {'x1', 'y1', 'x2', 'y2', 'stroke', 'stroke-width'},
+        'polyline': {'points', 'fill', 'stroke', 'stroke-width'},
+        'polygon': {'points', 'fill', 'stroke', 'stroke-width'},
+        'text': {'x', 'y', 'dx', 'dy', 'fill', 'font-size', 'font-family',
+                 'text-anchor', 'transform', 'opacity'},
+        'g': {'fill', 'stroke', 'stroke-width', 'opacity', 'transform'},
+        'defs': set(),
+        'use': {'href', 'xlink:href', 'x', 'y', 'width', 'height'},
+        'clippath': {'clippathunits'},
+        'mask': {'maskunits', 'x', 'y', 'width', 'height'},
+        'lineargradient': {'gradientunits', 'x1', 'y1', 'x2', 'y2', 'spreadmethod'},
+        'radialgradient': {'gradientunits', 'cx', 'cy', 'r', 'spreadmethod'},
+        'stop': {'offset', 'stop-color', 'stop-opacity'},
+    }
+    per_tag = allowed.get(tag, set())
+    return name in per_tag or name in allowed['*']
+
+
+# bleach HTML 白名单：允许保留的 HTML 标签。
+# 安全说明：script/form/input/button/select/option/textarea/meta/link/noscript
+# 等可执行/表单/外部加载标签一律不允许（防止存储型 XSS 与钓鱼表单）。
+# iframe 仅允许白名单视频平台；style 允许（仅作用于文档自身样式）。
 _HTML_CLEAN_TAGS = [
     'div', 'span', 'section', 'header', 'footer', 'nav', 'main', 'article',
     'aside', 'figure', 'figcaption', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
     'p', 'br', 'hr', 'ul', 'ol', 'li', 'dl', 'dt', 'dd', 'blockquote',
     'pre', 'code', 'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td',
     'caption', 'colgroup', 'col', 'img', 'a', 'video', 'audio', 'source',
-    'iframe', 'form', 'input', 'button', 'select', 'option', 'textarea',
-    'label', 'script', 'style', 'link', 'meta', 'noscript',
+    'iframe', 'style', 'u', 's', 'em', 'strong', 'i', 'b', 'small', 'sub',
+    'sup', 'mark',
     'svg', 'path', 'circle', 'rect', 'line', 'polyline', 'polygon',
     'text', 'g', 'defs', 'use', 'clipPath', 'mask', 'linearGradient',
     'radialGradient', 'stop',
@@ -116,8 +177,8 @@ def _sanitize_html(html: str) -> str:
     """净化用户提交的 HTML 内容，移除不安全的标签、属性和协议。
 
     使用 bleach 库对 HTML 进行白名单过滤：
-      - _HTML_CLEAN_TAGS: 允许保留的标签列表
-      - _HTML_STRIP_ATTRS: 每个标签允许保留的属性
+      - _HTML_CLEAN_TAGS: 允许保留的标签列表（不含 script/form 等危险标签）
+      - _allow_attr 回调: 属性名 + URL 协议 + iframe 域名三重校验
       - strip=True: 移除不在白名单中的标签及其内容
 
     Args:
@@ -128,7 +189,7 @@ def _sanitize_html(html: str) -> str:
     """
     if not html:
         return html
-    return bleach.clean(html, tags=_HTML_CLEAN_TAGS, attributes=_HTML_STRIP_ATTRS, strip=True)
+    return bleach.clean(html, tags=_HTML_CLEAN_TAGS, attributes=_allow_attr, strip=True)
 
 
 from .forms import (CategoryForm,
@@ -483,12 +544,13 @@ def register():
     return render_template('admin/register.html', form=form)
 
 
-@admin_bp.route('/logout')
+@admin_bp.route('/logout', methods=['POST'])
 @login_required
 def logout():
     """退出登录。
 
     清除当前用户的 session，重定向到前台首页。
+    仅接受 POST（含 CSRF token），防止 GET 型 CSRF 强制登出。
     """
     logout_user()
     return redirect(url_for('blog.index'))
@@ -585,7 +647,7 @@ def post_list():
     if q:
         # 转义 LIKE 通配符，防止用户通过 % 或 _ 触发非预期的模糊匹配
         safe_q = escape_like(q)
-        query = query.filter(Post.title.ilike(f'%{safe_q}%'))
+        query = query.filter(Post.title.ilike(f'%{safe_q}%', escape='\\'))
     if not current_user.is_editor:
         query = query.filter(Post.author_id == current_user.id)
     posts = query.order_by(Post.created_at.desc()).paginate(page=page, per_page=20, error_out=False)
@@ -859,6 +921,17 @@ def edit_category(id):
     cat = Category.query.get_or_404(id)
     form = CategoryForm(obj=cat)
     if form.validate_on_submit():
+        # 唯一性预检（排除自身）：slug/name 重复直接提交会 IntegrityError → 500
+        dup = Category.query.filter(
+            Category.id != cat.id,
+            db.or_(
+                Category.slug == form.slug.data,
+                Category.name == form.name.data,
+            ),
+        ).first()
+        if dup:
+            flash('分类名称或链接标识已存在', 'error')
+            return render_template('admin/category-form.html', form=form, editing=True, cat=cat)
         cat.name = form.name.data
         cat.slug = form.slug.data
         cat.description = form.description.data
@@ -998,6 +1071,17 @@ def new_user():
     """
     form = UserForm()
     if form.validate_on_submit():
+        # 唯一性预检：用户名/邮箱重复直接提交会触发 DB IntegrityError → 500
+        if User.query.filter_by(username=form.username.data).first():
+            flash('用户名已存在', 'error')
+            return render_template('admin/user-form.html', form=form, user=None)
+        if User.query.filter_by(email=form.email.data).first():
+            flash('邮箱已被注册', 'error')
+            return render_template('admin/user-form.html', form=form, user=None)
+        # 新建用户必须设置初始密码（UserForm.password 为 Optional，编辑时可留空）
+        if not form.password.data:
+            flash('必须为新用户设置初始密码', 'error')
+            return render_template('admin/user-form.html', form=form, user=None)
         user = User(
             username=form.username.data,
             email=form.email.data,
@@ -1155,49 +1239,61 @@ def profile():
                     if not _valid_magic:
                         flash('头像文件不是有效的图片', 'error')
                         return render_template('admin/profile.html', form=form)
-                    # 解压炸弹防护：限制最大像素数
-                    if not hasattr(Image, 'MAX_IMAGE_PIXELS'):
+                    try:
+                        # 解压炸弹防护：限制最大像素数
+                        if not hasattr(Image, 'MAX_IMAGE_PIXELS'):
+                            Image.MAX_IMAGE_PIXELS = 50_000_000
                         Image.MAX_IMAGE_PIXELS = 50_000_000
-                    Image.MAX_IMAGE_PIXELS = 50_000_000
-                    img = Image.open(file)
-                    img.verify()
-                    file.seek(0)
-                    img = Image.open(file)
-                    # 缩放到 200px 宽（保持宽高比），仅缩小不放大
-                    ratio = min(200 / img.width, 1.0)
-                    if ratio < 1:
-                        h = int(img.height * ratio)
-                        img = img.resize((200, h), Image.LANCZOS)
-                    buf = _io.BytesIO()
-                    # GIF 保持 GIF（保留动画）；JPEG 用 JPEG；其他统一转 WebP
-                    if ext == 'gif':
-                        img.save(buf, 'GIF')
-                        save_ext = 'gif'
-                    elif ext in ('jpg', 'jpeg'):
-                        img.save(buf, 'JPEG', quality=85, optimize=True)
-                        save_ext = 'jpg'
-                    else:
-                        img.save(buf, 'WEBP', quality=85, method=6)
-                        save_ext = 'webp'
-                    buf.seek(0)
-                    # 生成 UUID 文件名，避免用户间头像覆盖
-                    filename = 'avatar_' + str(uuid.uuid4()) + '.' + save_ext
-                    from flask import current_app
+                        img = Image.open(file)
+                        img.verify()
+                        file.seek(0)
+                        img = Image.open(file)
+                        # 缩放到 200px 宽（保持宽高比），仅缩小不放大
+                        ratio = min(200 / img.width, 1.0)
+                        if ratio < 1:
+                            h = int(img.height * ratio)
+                            img = img.resize((200, h), Image.LANCZOS)
+                        buf = _io.BytesIO()
+                        # GIF 保持 GIF（保留动画）；JPEG 用 JPEG；其他统一转 WebP
+                        if ext == 'gif':
+                            img.save(buf, 'GIF')
+                            save_ext = 'gif'
+                        elif ext in ('jpg', 'jpeg'):
+                            img.save(buf, 'JPEG', quality=85, optimize=True)
+                            save_ext = 'jpg'
+                        else:
+                            img.save(buf, 'WEBP', quality=85, method=6)
+                            save_ext = 'webp'
+                        buf.seek(0)
+                        # 生成 UUID 文件名，避免用户间头像覆盖
+                        filename = 'avatar_' + str(uuid.uuid4()) + '.' + save_ext
+                        from flask import current_app
 
-                    upload_dir = os.path.join(current_app.root_path, 'static', 'uploads')
-                    os.makedirs(upload_dir, exist_ok=True)
-                    # 删除旧头像文件（本地上传的头像），避免磁盘文件累积
-                    if current_user.avatar and current_user.avatar.startswith('uploads/avatar_'):
-                        old_path = os.path.join(current_app.root_path, 'static', current_user.avatar)
-                        if os.path.isfile(old_path):
-                            try:
-                                os.remove(old_path)
-                            except OSError:
-                                pass
-                    with open(os.path.join(upload_dir, filename), 'wb') as f:
-                        f.write(buf.getvalue())
-                    current_user.avatar = 'uploads/' + filename
-                    logger.info('更新头像: user=%s new=%s', current_user.username, filename)
+                        upload_dir = os.path.join(current_app.root_path, 'static', 'uploads')
+                        os.makedirs(upload_dir, exist_ok=True)
+                        # 删除旧头像文件（本地上传的头像），避免磁盘文件累积
+                        # 安全：realpath 规范化后校验必须位于 static/uploads/ 内，
+                        # 防止历史遗留/构造的 avatar 值含 '..' 穿越删除任意文件
+                        if current_user.avatar and current_user.avatar.startswith('uploads/avatar_'):
+                            old_path = os.path.realpath(
+                                os.path.join(current_app.root_path, 'static', current_user.avatar)
+                            )
+                            uploads_real = os.path.realpath(upload_dir)
+                            if old_path.startswith(uploads_real + os.sep) and os.path.isfile(old_path):
+                                try:
+                                    os.remove(old_path)
+                                except OSError:
+                                    pass
+                        with open(os.path.join(upload_dir, filename), 'wb') as f:
+                            f.write(buf.getvalue())
+                        current_user.avatar = 'uploads/' + filename
+                        logger.info('更新头像: user=%s new=%s', current_user.username, filename)
+                    except Exception:
+                        # 解码/处理失败（如 magic bytes 通过但 PIL 无法解码的损坏图片）
+                        logger.warning('头像处理失败: user=%s file=%s',
+                                       current_user.username, file.filename, exc_info=True)
+                        flash('头像处理失败，请更换图片文件', 'error')
+                        return render_template('admin/profile.html', form=form)
                 else:
                     flash('不支持的头像格式（支持 png/jpg/jpeg/gif/webp）', 'error')
                     return render_template('admin/profile.html', form=form)
@@ -1517,8 +1613,8 @@ def bili_subscriptions():
         safe_q = escape_like(q)
         query = query.filter(
             db.or_(
-                BiliSubscription.email.ilike(f'%{safe_q}%'),
-                BiliUp.name.ilike(f'%{safe_q}%'),
+                BiliSubscription.email.ilike(f'%{safe_q}%', escape='\\'),
+                BiliUp.name.ilike(f'%{safe_q}%', escape='\\'),
             )
         )
     pagination = query.order_by(BiliSubscription.created_at.desc()).paginate(

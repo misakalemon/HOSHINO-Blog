@@ -45,8 +45,8 @@ DETAILED_FORMAT = (
     '[%(threadName)s] %(message)s'
 )
 CONSOLE_FORMAT = '%(asctime)s  %(levelname)-6s  [%(name)s] %(message)s'
-DATE_FORMAT = '%m/%d %H:%M:%S'
-CONSOLE_DATE_FORMAT = '%m/%d %H:%M:%S'
+DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
+CONSOLE_DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 
 
 class _ColorFormatter(logging.Formatter):
@@ -193,6 +193,8 @@ def setup_logging(app):
     # ===== 7. SQLAlchemy 日志（仅记录 WARNING 以上） =====
     sql_logger = logging.getLogger('sqlalchemy.engine')
     sql_logger.setLevel(logging.WARNING)
+    # 防止经根 logger 二次输出（自身 handler 已覆盖文件日志）
+    sql_logger.propagate = False
     sql_logger.addHandler(file_handler)
 
     # 将根日志器挂载到 app.logger
@@ -247,12 +249,14 @@ def log_request(response):
         return response
 
     # 收集请求信息，为两种日志格式准备数据
+    # User-Agent 消毒：移除 CR/LF，防止伪造 UA 向日志注入伪造行
+    _ua_raw = request.user_agent.string if request.user_agent else '-'
     extra = {
         'ip': request.remote_addr or '-',
         'method': request.method,
         'path': request.path,
         'status': response.status_code,
-        'user_agent': request.user_agent.string[:80] if request.user_agent else '-',
+        'user_agent': _ua_raw.replace('\r', '').replace('\n', '')[:80] if _ua_raw != '-' else '-',
     }
 
     # 请求耗时（毫秒）
@@ -267,14 +271,22 @@ def log_request(response):
     console_msg = f'{extra["status"]} {extra["method"]:<6} {short_path}  ({_elapsed})'
 
     # ---- 文件日志：详细版 ----
-    # 清理敏感信息：移除 URL 中的 token/secret/key 等参数，防止泄露到日志文件
+    # 清理敏感信息：移除 URL 中的凭据类参数，防止泄露到日志文件
+    _SENSITIVE_PARAM_NAMES = (
+        'token', 'secret', 'key', 'password', 'passwd', 'api_key', 'apikey',
+        'access_token', 'auth', 'sign', 'signature', 'credential', 'code',
+        'session', 'sid', 'csrf_token', 'csrfmiddlewaretoken',
+    )
     safe_path = extra['path']
     if '?' in safe_path:
         base, qs = safe_path.split('?', 1)
-        safe_qs = '&'.join(
-            p for p in qs.split('&')
-            if not any(p.lower().startswith(k) for k in ('token=', 'secret=', 'key=', 'password=', 'api_key='))
-        )
+        kept = []
+        for p in qs.split('&'):
+            name = p.split('=', 1)[0].lower().strip()
+            if name in _SENSITIVE_PARAM_NAMES:
+                continue
+            kept.append(p)
+        safe_qs = '&'.join(kept)
         safe_path = base + ('?' + safe_qs if safe_qs else '')
     file_msg = (
         f'{extra["ip"]:>15} {extra["method"]:<7} '
@@ -286,9 +298,9 @@ def log_request(response):
     # 终端：精简版（仅状态+方法+短路径）→ 适合实时查看
     # 文件：详细版（含 IP、UA 等）→ 用于事后分析排查
     if response.status_code >= 500:
-        # 服务端错误：终端输 ERROR 级别（红色提示），文件输 DEBUG（保留详情供排查）
+        # 服务端错误：终端 ERROR，文件也按 ERROR 输出（error.log 需含 IP/UA 供排查）
         logger.error(console_msg)
-        logger.debug(file_msg)
+        logger.error(file_msg)
     elif response.status_code >= 400:
         # 客户端错误：终端输 WARNING（黄色提示），文件输 DEBUG
         logger.warning(console_msg)

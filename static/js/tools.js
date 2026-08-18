@@ -43,16 +43,30 @@ function clearTool(id) {
 }
 
 // ── 1. Base64 编码/解码 ───────────────────────
+/** UTF-8 安全的 Base64 编码（原生 btoa 对中文等非 Latin-1 字符抛错） */
+function utf8ToBase64(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+/** UTF-8 安全的 Base64 解码 */
+function base64ToUtf8(b64) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder('utf-8').decode(bytes);
+}
 /** 将输入文本编码为 Base64 */
 function b64Encode() {
   const input = document.getElementById('b64-input').value;
-  try { document.getElementById('b64-output').value = btoa(input); }
+  try { document.getElementById('b64-output').value = utf8ToBase64(input); }
   catch(e) { alert('编码失败: ' + e.message); }
 }
 /** 将 Base64 字符串解码为原始文本 */
 function b64Decode() {
   const input = document.getElementById('b64-input').value;
-  try { document.getElementById('b64-output').value = atob(input); }
+  try { document.getElementById('b64-output').value = base64ToUtf8(input); }
   catch(e) { alert('解码失败: 无效的 Base64'); }
 }
 

@@ -41,6 +41,23 @@ logger = logging.getLogger(__name__)
 _mail_lock = threading.Lock()
 
 
+def _sanitize_header_value(value: str) -> str:
+    """消毒邮件头值：移除 CR/LF，防止邮件头注入（伪造 Bcc/Cc 等）。"""
+    if not value:
+        return value or ''
+    return str(value).replace('\r', ' ').replace('\n', ' ').strip()
+
+
+def _plain_text_from_html(html: str) -> str:
+    """从 HTML 正文生成纯文本版本（供 multipart/alternative 降级显示）。"""
+    import re as _re
+
+    text = _re.sub(r'<br\s*/?>', '\n', html or '')
+    text = _re.sub(r'</(p|div|li|h[1-6]|tr)>', '\n', text)
+    text = _re.sub(r'<[^>]+>', '', text)
+    return _re.sub(r'\n{3,}', '\n\n', text).strip()
+
+
 def _parse_sender(sender: str) -> str:
     """解析发信人配置，返回 RFC 5322 格式的 From 地址。
 
@@ -81,6 +98,7 @@ def _send_email_async(app, msg: MIMEMultipart):
     """
     # 后台线程中 Flask 上下文不可用，需要手动推送
     with app.app_context():
+        server = None
         try:
             config = app.config
             use_ssl = config.get('MAIL_USE_SSL', False)
@@ -97,7 +115,6 @@ def _send_email_async(app, msg: MIMEMultipart):
 
             server.login(config['MAIL_USERNAME'], config['MAIL_PASSWORD'])
             server.send_message(msg)
-            server.quit()
             logger.info('邮件发送成功 → %s', msg['To'])
         except smtplib.SMTPAuthenticationError:
             logger.error('邮件发送失败 → %s: 认证失败，请检查用户名/密码', msg['To'])
@@ -105,6 +122,16 @@ def _send_email_async(app, msg: MIMEMultipart):
             logger.error('邮件发送失败 → %s: SMTP错误 %s', msg['To'], e)
         except Exception as e:
             logger.error('邮件发送失败 → %s: %s', msg['To'], e)
+        finally:
+            # 无论成败都关闭连接，防止 socket 泄漏
+            if server is not None:
+                try:
+                    server.quit()
+                except Exception:
+                    try:
+                        server.close()
+                    except Exception:
+                        pass
 
 
 # 活动邮件线程列表及最大并发数控制
@@ -135,17 +162,20 @@ def send_email(to: str, subject: str, html_body: str, to_name: str = ''):
         logger.warning('SMTP 未完整配置，跳过邮件发送 → %s', to)
         return
 
-    # 构建 MIME multipart/alternative 邮件：支持 HTML 正文，
-    # 客户端优先显示 HTML 版本，不支持时回退纯文本（此处未提供纯文本版本）
+    # 构建 MIME multipart/alternative 邮件：HTML + 纯文本双版本
     msg = MIMEMultipart('alternative')
     msg['From'] = _parse_sender(config['MAIL_DEFAULT_SENDER']) or config['MAIL_USERNAME']
     if to_name:
         # 收件人显示名同样需要 Header 编码以支持中文
         from email.header import Header
-        msg['To'] = f'{Header(to_name, "utf-8").encode()} <{to}>'
+        msg['To'] = f'{Header(to_name, "utf-8").encode()} <{_sanitize_header_value(to)}>'
     else:
-        msg['To'] = to
-    msg['Subject'] = subject
+        # 收件人必须消毒，防止注入 Bcc/Cc 头
+        msg['To'] = _sanitize_header_value(to)
+    # 主题经 Header 编码（兼容中文）并消毒换行，防止头注入
+    from email.header import Header
+    msg['Subject'] = Header(_sanitize_header_value(subject), 'utf-8')
+    msg.attach(MIMEText(_plain_text_from_html(html_body), 'plain', 'utf-8'))
     msg.attach(MIMEText(html_body, 'html', 'utf-8'))
 
     site_name = config.get('SITE_NAME', 'Hoshino')

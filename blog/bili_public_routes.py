@@ -58,14 +58,20 @@ def index():
         q_escaped = escape_like(q)
         ups = (
             BiliUp.query.filter(
-                db.or_(BiliUp.name.contains(q_escaped), BiliUp.mid.cast(db.String).contains(q_escaped))
+                db.or_(
+                    BiliUp.name.contains(q_escaped, escape='\\'),
+                    BiliUp.mid.cast(db.String).contains(q_escaped, escape='\\'),
+                )
             )
             .limit(50)
             .all()
         )
         videos = (
             BiliVideo.query.options(db.joinedload(BiliVideo.up))
-            .filter(BiliVideo.title.contains(q_escaped))
+            .filter(
+                BiliVideo.title.contains(q_escaped, escape='\\'),
+                BiliVideo.is_deleted == False,
+            )
             .order_by(BiliVideo.pubdate.desc())
             .limit(50)
             .all()
@@ -123,16 +129,14 @@ def up_videos(up_id):
     per_page = 30
     q = request.args.get('q', '').strip()
 
-    query = BiliVideo.query.filter_by(up_id=up_id)
+    query = BiliVideo.query.filter_by(up_id=up_id, is_deleted=False)
     if q:
         q_escaped = escape_like(q)
-        query = query.filter(BiliVideo.title.contains(q_escaped))
+        query = query.filter(BiliVideo.title.contains(q_escaped, escape='\\'))
     pagination = query.order_by(BiliVideo.pubdate.desc()).paginate(
         page=page, per_page=per_page, error_out=False
     )
     # 粉丝数变化历史（取最近 300 条，逆序后转为 JSON 供前端 Chart.js 图表）
-    import json
-
     follower_history = (
         BiliUpHistory.query.filter_by(up_id=up_id)
         .order_by(BiliUpHistory.recorded_at.desc())
@@ -140,12 +144,12 @@ def up_videos(up_id):
         .all()
     )
     follower_history.reverse()  # 逆序：时间从早到晚
-    follower_chart_data = json.dumps(
-        [
-            {'t': h.recorded_at.strftime('%m/%d %H:%M'), 'v': h.follower_count}
-            for h in follower_history
-        ]
-    )
+    # 传原始对象（模板用 |tojson 序列化），避免 |safe 输出 json.dumps 字符串
+    # 的 XSS 脆弱模式（一旦字段接入用户可控字符串即可 script 注入）
+    follower_chart_data = [
+        {'t': h.recorded_at.strftime('%m/%d %H:%M'), 'v': h.follower_count}
+        for h in follower_history
+    ]
     # 读取该 UP 主的专属词云
     bili_wordcloud = None
     from .models import WordCloudConfig
@@ -188,9 +192,12 @@ def video_detail(video_id):
     Returns:
         HTML 页面，渲染 bilibili_video.html
     """
-    video = BiliVideo.query.options(db.joinedload(BiliVideo.up)).get_or_404(video_id)
+    video = (
+        BiliVideo.query.options(db.joinedload(BiliVideo.up))
+        .filter(BiliVideo.id == video_id, BiliVideo.is_deleted == False)
+        .first_or_404()
+    )
     up = video.up
-    import json
 
     # 获取所有历史数据
     all_history = (
@@ -231,19 +238,17 @@ def video_detail(video_id):
         sampled_indices = sorted(sampled_indices)
         history = [all_history[i] for i in sampled_indices]
     
-    # 时间标签 & 各指标数值数组，供 Chart.js 渲染
-    time_labels = json.dumps([h.recorded_at.strftime('%m/%d %H:%M') for h in history])
-    chart_data = json.dumps(
-        {
-            'view': [h.view_count for h in history],
-            'like': [h.like_count for h in history],
-            'coin': [h.coin_count for h in history],
-            'favorite': [h.favorite_count for h in history],
-            'share': [h.share_count for h in history],
-            'comment': [h.comment_count for h in history],
-            'danmaku': [h.danmaku_count for h in history],
-        }
-    )
+    # 时间标签 & 各指标数值数组，供 Chart.js 渲染（原始对象，模板 |tojson）
+    time_labels = [h.recorded_at.strftime('%m/%d %H:%M') for h in history]
+    chart_data = {
+        'view': [h.view_count for h in history],
+        'like': [h.like_count for h in history],
+        'coin': [h.coin_count for h in history],
+        'favorite': [h.favorite_count for h in history],
+        'share': [h.share_count for h in history],
+        'comment': [h.comment_count for h in history],
+        'danmaku': [h.danmaku_count for h in history],
+    }
 
     metrics = ['view', 'like', 'coin', 'favorite', 'share', 'comment', 'danmaku']
     growth = {}
@@ -340,9 +345,11 @@ def compare():
         )
     if len(video_ids) > 10:
         video_ids = video_ids[:10]  # 超过 10 个时截断
-    import json
 
-    videos = BiliVideo.query.filter(BiliVideo.id.in_(video_ids)).all()
+    videos = (
+        BiliVideo.query.filter(BiliVideo.id.in_(video_ids), BiliVideo.is_deleted == False)
+        .all()
+    )
     # 构建视频所属 UP 主的映射表
     up_ids = {v.up_id for v in videos}
     up_map = {u.id: u for u in BiliUp.query.filter(BiliUp.id.in_(up_ids)).all()}
@@ -357,7 +364,7 @@ def compare():
         'comment': '评论',
         'danmaku': '弹幕',
     }
-    # 构建各视频的指标数据（以 video.id 为 key，指标数组为 value）
+    # 构建各视频的指标数据（以 video.id 为 key，指标数组为 value，模板 |tojson）
     chart_data = {}
     for v in videos:
         chart_data[str(v.id)] = [getattr(v, m + '_count') or 0 for m in metrics]
@@ -367,7 +374,7 @@ def compare():
         up_map=up_map,
         metrics=metrics,
         metric_labels=metric_labels,
-        chart_data=json.dumps(chart_data),
+        chart_data=chart_data,
     )
 
 

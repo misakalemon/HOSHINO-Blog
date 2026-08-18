@@ -529,6 +529,11 @@ class BiliVideo(db.Model):
     subtitle_text = db.Column(MEDIUMTEXT, nullable=True, comment='AI 字幕文本（自动语音识别生成）')
     comments_crawled_at = db.Column(db.DateTime, nullable=True, comment='评论最后爬取时间')
     danmaku_crawled_at = db.Column(db.DateTime, nullable=True, comment='弹幕最后爬取时间')
+    is_deleted = db.Column(
+        db.Boolean, default=False, nullable=False, index=True,
+        comment='稿件已删除/不可见（API 连续返回 62002/62012 后由爬虫标记，前台隐藏）',
+    )
+    deleted_at = db.Column(db.DateTime, nullable=True, comment='标记删除的时间')
 
     updated_at = db.Column(
         db.DateTime,
@@ -574,7 +579,10 @@ class BiliVideoComment(db.Model):
     ctime = db.Column(db.Integer, default=0, comment='评论时间戳')
     like_count = db.Column(db.Integer, default=0, comment='点赞数')
 
-    video = db.relationship('BiliVideo', backref=db.backref('comments', lazy='dynamic', cascade='all, delete-orphan'))
+    # 注意：不设 ORM cascade（删除视频由 DB 外键 ON DELETE CASCADE 处理）。
+    # 原先 cascade='all, delete-orphan' 会让 SQLAlchemy 在删除视频时把
+    # 全部评论加载进内存逐条删除（弹幕数万条时极慢且占内存）。
+    video = db.relationship('BiliVideo', backref=db.backref('comments', lazy='dynamic', passive_deletes=True))
 
 
 class BiliDanmaku(db.Model):
@@ -600,7 +608,8 @@ class BiliDanmaku(db.Model):
     color = db.Column(db.String(16), default='ffffff', comment='弹幕颜色')
     author = db.Column(db.String(64), default='', comment='弹幕发送者UID的CRC32摘要')
 
-    video = db.relationship('BiliVideo', backref=db.backref('danmakus', lazy='dynamic', cascade='all, delete-orphan'))
+    # 同 BiliVideoComment：依赖 DB 外键级联，避免删除视频时全量加载弹幕
+    video = db.relationship('BiliVideo', backref=db.backref('danmakus', lazy='dynamic', passive_deletes=True))
 
 
 class BiliUpHistory(db.Model):
@@ -877,8 +886,15 @@ class WordCloudData(db.Model):
 
     每篇文章一行（post_id 有值），全站词云一行（post_id 为 NULL）。
     数据在发布/更新文章时触发重新计算，或由定时任务每日刷新。
+
+    唯一约束 (post_id, source, period)：防止并发预计算插入重复行。
+    注意：MySQL 唯一索引对 post_id=NULL 的行不生效（多个 NULL 允许），
+    全站/B站词云（post_id 为空）的并发写入由应用层写锁兜底。
     """
     __tablename__ = 'wordcloud_data'
+    __table_args__ = (
+        db.UniqueConstraint('post_id', 'source', 'period', name='uq_wordcloud_post_source_period'),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     post_id = db.Column(

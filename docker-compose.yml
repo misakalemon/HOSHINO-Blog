@@ -1,3 +1,5 @@
+# Selenium 独立 Chrome 容器（仅供 B站 爬虫/浏览器任务使用）。
+# 应用本体（Flask/MySQL/Redis）不在本编排中，请按 README 本地部署。
 services:
   chrome:
     image: selenium/standalone-chrome:4.28.1
@@ -7,7 +9,8 @@ services:
       - "127.0.0.1:4444:4444"
     shm_size: 2g
     environment:
-      - SE_VNC_PASSWORD=changeme
+      # 请通过 .env 或环境变量注入强随机密码（勿使用默认值）
+      - SE_VNC_PASSWORD=${SE_VNC_PASSWORD:-changeme}
       - SE_NODE_MAX_SESSIONS=8
       - SE_SESSION_REQUEST_TIMEOUT=300
       - SE_NODE_SESSION_TIMEOUT=600

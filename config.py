@@ -309,6 +309,12 @@ class Config:
     CACHE_TTL_DASHBOARD = _safe_int_env('CACHE_TTL_DASHBOARD', 60)
     CACHE_TTL_RSS = _safe_int_env('CACHE_TTL_RSS', 600)
 
+    # ── 反向代理 ────────────────────────────────
+    # 仅当部署在受信反向代理（nginx/caddy 等会覆盖 X-Forwarded-For）之后
+    # 才设为 true：此时 get_client_ip() 才会读取 XFF 首跳。
+    # 直连公网时必须保持 false，否则攻击者可伪造 XFF 绕过 IP 限流。
+    TRUST_PROXY = os.environ.get('TRUST_PROXY', 'false').lower() in ('true', '1')
+
     # ── Amazon 直爬代理（可选）─────────────────────
     # curl_cffi 直爬 Amazon 时使用的 HTTP 代理。
     # 服务器在国内时必须设置海外代理才能访问 Amazon。

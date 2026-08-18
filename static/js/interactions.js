@@ -257,8 +257,9 @@
     var html = '';
     for (var i = 0; i < items.length; i++) {
       var it = items[i];
+      // url 同样经 escHtml（含引号转义），防止属性注入
       html += '<a class="search-modal-item' + (i === 0 ? ' active' : '') + '"' +
-        ' href="' + it.url + '" data-idx="' + i + '">' +
+        ' href="' + escHtml(it.url) + '" data-idx="' + i + '">' +
         '<span class="search-modal-item-title">' + escHtml(it.title) + '</span>' +
         (it.date ? '<span class="search-modal-item-date">' + escHtml(it.date) + '</span>' : '') +
         '</a>';

@@ -38,7 +38,7 @@ from wtforms import (
     StringField,
     TextAreaField,
 )
-from wtforms.validators import DataRequired, Email, EqualTo, Length, Optional, Regexp, URL as URLValidator, ValidationError
+from wtforms.validators import DataRequired, Email, EqualTo, Length, NumberRange, Optional, Regexp, URL as URLValidator, ValidationError
 
 from .utils import is_safe_image_url
 
@@ -53,6 +53,20 @@ def _validate_image_url(form, field):
         return
     if not is_safe_image_url(field.data):
         raise ValidationError('图片 URL 协议不安全（仅支持站内路径或 http/https）')
+
+
+def _validate_categories_exist(form, field):
+    """校验提交的分类 ID 均存在于数据库。
+
+    防止伪造表单提交不存在的分类 ID 触发外键 IntegrityError → 500。
+    """
+    if not field.data:
+        return
+    from .models import Category
+    existing = {c.id for c in Category.query.filter(Category.id.in_(field.data)).all()}
+    missing = [i for i in field.data if i not in existing]
+    if missing:
+        raise ValidationError(f'分类不存在: {missing}')
 
 
 class LoginForm(FlaskForm):
@@ -107,7 +121,7 @@ class PostForm(FlaskForm):
     content = TextAreaField('正文 (Markdown)', validators=[Optional(), Length(max=500000)])  # Markdown 格式正文（HTML 页面模式可不填）
     # 多选分类（最多 15 个，choices 在视图函数中动态填充）
     # coerce=int 将提交的字符串值自动转为整数类型
-    categories = SelectMultipleField('分类（最多15个）', coerce=int, validators=[Optional()])
+    categories = SelectMultipleField('分类（最多15个）', coerce=int, validators=[Optional(), _validate_categories_exist])
     cover_image = StringField('封面图片 URL', validators=[Optional(), _validate_image_url, Length(max=512)])  # 封面图链接，选填
     html_file = FileField('上传 HTML 文件', validators=[Optional()])                   # 自定义 HTML 页面文件，选填
     html_content = TextAreaField('HTML 源码', validators=[Optional()])                 # 自定义 HTML 源码（优先于 html_file）
@@ -123,7 +137,8 @@ class CategoryForm(FlaskForm):
       description — 分类描述，选填（列表页提示文字）
     """
     name = StringField('分类名称', validators=[DataRequired(), Length(max=64)])        # 分类名，必填，唯一
-    slug = StringField('链接标识 (URL)', validators=[DataRequired(), Length(max=64)])  # URL 标识，必填
+    # slug 正则限制：与 PostForm.slug 一致，保证 /category/<slug> 路由安全
+    slug = StringField('链接标识 (URL)', validators=[DataRequired(), Length(max=64), Regexp(r'^[a-z0-9\-]+$', message='只允许小写字母、数字和连字符')])  # URL 标识，必填
     description = TextAreaField('描述', validators=[Optional()])                       # 分类描述，选填
 
 
@@ -232,7 +247,8 @@ class HeroImageForm(FlaskForm):
     表单本身不处理文件上传。image_url 字段由前端在裁剪完成后自动填充。
     """
     title = StringField('角色名 (可选)', validators=[Optional(), Length(max=128)])
-    image_url = StringField('图片 URL', validators=[Optional(), Length(max=512)])
+    # 与封面图一致：校验协议安全（拒绝 javascript:/data: 与路径穿越）
+    image_url = StringField('图片 URL', validators=[Optional(), Length(max=512), _validate_image_url])
     sort_order = IntegerField('排序', default=0, validators=[Optional()])
     is_active = BooleanField('启用')
 
@@ -274,12 +290,12 @@ class WordCloudConfigForm(FlaskForm):
         ('rectangle', '矩形 ▭'),
         ('custom', '自定义图片'),
     ], default='circle')
-    max_font = IntegerField('最大字号（px）', default=48, validators=[Optional()])
-    min_font = IntegerField('最小字号（px）', default=14, validators=[Optional()])
-    canvas_height = IntegerField('画布高度（px）', default=350, validators=[Optional()])
-    top_n_article = IntegerField('文章详情词数', default=60, validators=[Optional()])
-    top_n_site = IntegerField('首页全站词数', default=50, validators=[Optional()])
-    top_n_bili = IntegerField('B站视频词数', default=50, validators=[Optional()])
+    max_font = IntegerField('最大字号（px）', default=48, validators=[Optional(), NumberRange(min=1, max=500)])
+    min_font = IntegerField('最小字号（px）', default=14, validators=[Optional(), NumberRange(min=1, max=500)])
+    canvas_height = IntegerField('画布高度（px）', default=350, validators=[Optional(), NumberRange(min=50, max=4000)])
+    top_n_article = IntegerField('文章详情词数', default=60, validators=[Optional(), NumberRange(min=1, max=1000)])
+    top_n_site = IntegerField('首页全站词数', default=50, validators=[Optional(), NumberRange(min=1, max=1000)])
+    top_n_bili = IntegerField('B站视频词数', default=50, validators=[Optional(), NumberRange(min=1, max=1000)])
     color_scheme = SelectField('配色方案', choices=[
         ('glow', '粉紫 Glow'),
         ('ocean', '蓝青 Ocean'),

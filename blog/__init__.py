@@ -21,6 +21,8 @@ Blueprint 路由前缀：
 from flask import Blueprint
 from flask_migrate import Migrate
 
+import os  # noqa: E402  （迁移/密钥文件等路径操作）
+
 # ── 蓝图 ──────────────────────────────────────────
 # 前台 blueprint（URL 前缀为空，所有前台路由直接挂在 / 下）
 blog_bp = Blueprint('blog', __name__)
@@ -55,155 +57,6 @@ blueprints = {
 }
 
 import re
-
-
-@blog_bp.app_template_filter('inline_html')
-def inline_html(html):
-    """剥离外壳 + CSS 作用域化 + 包裹 #html-scope，实现内联渲染无样式冲突。
-
-    处理流程（三步）：
-      1. 剥离：移除 DOCTYPE / html / head / body 外壳标签，保留内部全部内容
-      2. 作用域化：将 <style> 内的每条 CSS 选择器前加上 #html-scope 前缀
-      3. 包裹：在最外层套上 <div id="html-scope">，使作用域选择器生效
-
-    作用域化处理了以下场景：
-      - 普通 CSS 规则：添加前缀（.foo → #html-scope .foo）
-      - body/html 选择器：替换为 #html-scope
-      - * 选择器：替换为 #html-scope *
-      - @media / @supports 规则：内部子规则递归作用域化
-      - @keyframes/font-face：完整保留，不做作用域化
-      - 已包含 #html-scope 的选择器：保持原样
-
-    Args:
-        html: 原始 HTML 字符串（可选含 DOCTYPE 的完整文档）
-
-    Returns:
-        作用域化的内联 HTML，或原始输入（输入为空时）
-    """
-    if not html:
-        return html
-    # 1. 剥离 DOCTYPE/html/head/body 外壳标签（保留内部全部内容）
-    # 使用 re.IGNORECASE 兼容大小写混用的情况
-    html = re.sub(r'<!DOCTYPE[^>]*>', '', html, flags=re.IGNORECASE)
-    html = re.sub(r'</?html[^>]*>', '', html, flags=re.IGNORECASE)
-    html = re.sub(r'</?head[^>]*>', '', html, flags=re.IGNORECASE)
-    html = re.sub(r'</?body[^>]*>', '', html, flags=re.IGNORECASE)
-
-    # 2. 作用域化 <style> 内的 CSS
-    def _scope_css(match):
-        """对单个 <style> 标签内的 CSS 文本做作用域化处理。
-
-        内部实现说明：
-          - 按顶级花括号深度将 CSS 拆解为块（chunks）
-          - 每个块独立判断 → 作用域化 or 跳过
-          - 支持嵌套的 @ 规则（如 @media 中的 @keyframes）
-
-        Args:
-            match: re.sub 传入的匹配对象，match.group(1) 为 CSS 文本
-
-        Returns:
-            作用域化后的 CSS 文本
-        """
-        css = match.group(1)  # <style>...</style> 之间的原始 CSS
-        SEL = '#html-scope'
-
-        def _scope_one(sel):
-            """为单个选择器添加作用域前缀。
-
-            规则：
-              - 空字符串或已含 #html-scope → 不变
-              - body/html → #html-scope（视为根元素）
-              - * → #html-scope *（全局选择器限定在作用域内）
-              - 其他选择器 → #html-scope <原始选择器>
-
-            Args:
-                sel: 单个 CSS 选择器字符串
-
-            Returns:
-                作用域化后的选择器字符串
-            """
-            s = sel.strip()
-            if not s or SEL in s:
-                return s
-            if s in ('body', 'html'):
-                return SEL
-            if s == '*':
-                return f'{SEL} *'
-            return f'{SEL} {s}'
-
-        # 按顶级花括号深度拆块
-        # 一个"块"是一条完整的 CSS 规则（选择器 + { 声明 }）
-        # 或一个完整的 @ 规则
-        chunks = []
-        depth = 0
-        buf = []
-        for ch in css:
-            buf.append(ch)
-            if ch == '{':
-                depth += 1
-            elif ch == '}':
-                depth -= 1
-                if depth == 0:
-                    # depth 回到 0 表示一个完整的顶级块结束
-                    chunks.append(''.join(buf).strip())
-                    buf = []
-        # 处理末尾未闭合的文本（如尾部注释或多余空格）
-        if buf and ''.join(buf).strip():
-            chunks.append(''.join(buf).strip())
-
-        out = []
-        for chunk in chunks:
-            if not chunk:
-                continue
-            if chunk.startswith('@'):
-                # 处理 @ 规则（@media, @keyframes, @font-face, @supports 等）
-                if chunk.startswith(('@keyframes', '@font-face')):
-                    # @keyframes 和 @font-face 中的选择器是非标准的，
-                    # 作用域化会导致动画/字体失效，完整保留
-                    out.append(chunk)
-                    continue
-                # 其他 @ 规则（如 @media, @supports）：对外层不处理，
-                # 对内层子规则递归作用域化
-                m = re.match(r'(@[^{]+)\{(.*)\}$', chunk, re.DOTALL)
-                if m:
-                    head = m.group(1)  # @media (max-width: 768px)
-                    inner = m.group(2)  # 内部规则集
-                    scoped = re.sub(
-                        r'([^{}]+)(\s*\{)',
-                        lambda m: ', '.join(
-                            _scope_one(s) for s in m.group(1).split(',')
-                        )
-                        + m.group(2),
-                        inner,
-                    )
-                    out.append(f'{head}{{{scoped}}}')
-                else:
-                    out.append(chunk)
-            elif '{' in chunk:
-                # 普通 CSS 规则：选择器 { 声明 }
-                idx = chunk.index('{')
-                sel_part = chunk[:idx]  # 选择器部分（逗号分隔）
-                rest = chunk[idx:]       # { 声明 }
-                scoped_sel = ', '.join(
-                    _scope_one(s) for s in sel_part.split(',')
-                )
-                out.append(f'{scoped_sel} {rest}')
-            else:
-                # 无花括号的片段（如注释、空白），原样保留
-                out.append(chunk)
-        return '\n'.join(out)
-
-    html = re.sub(
-        r'<style[^>]*>(.*?)</style>',
-        lambda m: '<style>' + _scope_css(m) + '</style>',
-        html,
-        flags=re.DOTALL,
-    )
-
-    # 3. 包裹作用域容器
-    # 使用 <div id="html-scope"> 作为作用域根元素，
-    # 配合第二步中添加的 #html-scope 前缀选择器实现样式隔离
-    return f'<div id="html-scope">{html}</div>'
 
 
 def init_db(app):
@@ -252,10 +105,28 @@ def init_db(app):
             admin_password = app.config.get('ADMIN_PASSWORD', 'CHANGE_ME')
             if admin_password == 'CHANGE_ME':
                 admin_password = secrets.token_urlsafe(24)
-                app.logger.warning('=' * 60)
-                app.logger.warning('默认管理员密码未设置，已自动生成: %s', admin_password)
-                app.logger.warning('请在 .env 中设置 ADMIN_PASSWORD，或登录后立即修改！')
-                app.logger.warning('=' * 60)
+                # 安全：不把密码明文写入日志（日志保留 30 天，可能被无关人员读取），
+                # 改为写入项目根目录的临时文件（已被 .gitignore 忽略），
+                # 提示管理员读取后立即删除。
+                _pwd_file = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                    'initial_admin_password.txt',
+                )
+                try:
+                    with open(_pwd_file, 'w', encoding='utf-8') as _f:
+                        _f.write(admin_password + '\n')
+                    app.logger.warning('=' * 60)
+                    app.logger.warning(
+                        '默认管理员密码未设置，已自动生成并写入文件: %s', _pwd_file
+                    )
+                    app.logger.warning('请读取该文件中的密码并立即删除它！')
+                    app.logger.warning('请在 .env 中设置 ADMIN_PASSWORD，或登录后立即修改！')
+                    app.logger.warning('=' * 60)
+                except OSError:
+                    app.logger.warning(
+                        '默认管理员密码未设置且无法写入密码文件，'
+                        '请立即在 .env 中设置 ADMIN_PASSWORD 后重启！'
+                    )
             admin = User(
                 username=app.config.get('ADMIN_USERNAME', 'admin'),
                 email=app.config.get('ADMIN_EMAIL', 'admin@localhost'),
@@ -333,6 +204,12 @@ def init_db(app):
 
         # ── 迁移 wordcloud_data.data JSON→ZLIB BLOB ──
         _migrate_wordcloud_data_compress(app)
+
+        # ── 迁移 wordcloud_data 唯一索引 (post_id, source, period) ──
+        _migrate_wordcloud_unique_index(app)
+
+        # ── 迁移 bili_videos.is_deleted 列（墓碑标记）──
+        _migrate_bili_video_is_deleted(app)
 
 
 def _migrate_post_html_file_url(app):
@@ -1182,9 +1059,25 @@ def _migrate_wordcloud_data_compress(app):
     except Exception as e:
         app.logger.warning('迁移: 读取 wordcloud_data 结构失败（跳过压缩迁移）: %s', e)
         return
-    # data_gz 已存在且 data 已不存在 → 迁移已完成
+    # data_gz 已存在且 data 已不存在：
+    # 可能是上次迁移在 DROP data 之后、CHANGE data_gz→data 之前中断
+    # （此时表只有 data_gz 列，模型查询 data 列会报 Unknown column）。
+    # 补完最后一步；补完失败才视为不可恢复。
     if 'data_gz' in cols and 'data' not in cols:
-        return
+        try:
+            db.session.execute(
+                text('ALTER TABLE wordcloud_data CHANGE data_gz data LONGBLOB NOT NULL')
+            )
+            db.session.commit()
+            app.logger.info('迁移修复: 已补完上次中断的压缩迁移（CHANGE data_gz→data）')
+            return
+        except Exception as e:
+            db.session.rollback()
+            app.logger.warning(
+                '迁移修复: wordcloud_data 处于中断状态且无法补完 '
+                '（data_gz 存在但 data 缺失）: %s', e
+            )
+            return
     # data_gz 和 data 同时存在 → 上次迁移部分失败（ADD 成功但后续步骤失败）
     if 'data_gz' in cols and 'data' in cols:
         try:
@@ -1228,6 +1121,89 @@ def _migrate_wordcloud_data_compress(app):
     except Exception as e:
         db.session.rollback()
         app.logger.warning('迁移: 压缩 wordcloud_data.data 失败: %s', e)
+        # 失败恢复：若已执行到 DROP data 之后，尝试补完 CHANGE 步骤
+        try:
+            inspector2 = db.inspect(engine)
+            cols2 = {c['name'] for c in inspector2.get_columns('wordcloud_data')}
+            if 'data_gz' in cols2 and 'data' not in cols2:
+                db.session.execute(
+                    text('ALTER TABLE wordcloud_data CHANGE data_gz data LONGBLOB NOT NULL')
+                )
+                db.session.commit()
+                app.logger.info('迁移修复: 失败后已补完 CHANGE data_gz→data')
+        except Exception as e2:
+            db.session.rollback()
+            app.logger.warning('迁移修复: 压缩迁移中断恢复失败: %s', e2)
+
+
+def _migrate_wordcloud_unique_index(app):
+    """迁移：为 wordcloud_data 添加唯一索引 (post_id, source, period)。
+
+    步骤：
+      1. 索引已存在 → 跳过（幂等）
+      2. 清理历史重复行：每组 (post_id, source, period) 只保留 id 最大的一行
+         （MySQL 唯一索引对 post_id 为 NULL 的行不生效，但清理仍执行，
+         避免历史并发插入的重复数据污染页面）
+      3. ADD UNIQUE INDEX
+    """
+    from sqlalchemy import text
+
+    engine = db.get_engine()
+    dialect = engine.dialect.name
+    if dialect != 'mysql':
+        return
+    try:
+        inspector = db.inspect(engine)
+        indexes = {ix['name'] for ix in inspector.get_indexes('wordcloud_data')}
+    except Exception as e:
+        app.logger.warning('迁移: 读取 wordcloud_data 索引失败（跳过唯一索引迁移）: %s', e)
+        return
+    if 'uq_wordcloud_post_source_period' in indexes:
+        return
+    try:
+        # 清理重复行（<=> 为 NULL 安全比较，保留每组 id 最大的一行）
+        db.session.execute(text(
+            "DELETE wc FROM wordcloud_data wc "
+            "JOIN wordcloud_data wc2 ON wc.post_id <=> wc2.post_id "
+            "AND wc.source <=> wc2.source AND wc.period <=> wc2.period "
+            "AND wc.id < wc2.id"
+        ))
+        db.session.commit()
+        db.session.execute(text(
+            "ALTER TABLE wordcloud_data "
+            "ADD UNIQUE INDEX uq_wordcloud_post_source_period (post_id, source, period)"
+        ))
+        db.session.commit()
+        app.logger.info('迁移: wordcloud_data 唯一索引已创建并清理重复行')
+    except Exception as e:
+        db.session.rollback()
+        app.logger.warning('迁移: wordcloud_data 唯一索引创建失败: %s', e)
+
+
+def _migrate_bili_video_is_deleted(app):
+    """迁移：为 bili_videos 表添加 is_deleted / deleted_at 列（墓碑标记）。"""
+    engine = db.get_engine()
+    dialect = engine.dialect.name
+    if dialect != 'mysql':
+        return
+    inspector = db.inspect(engine)
+    cols = {c['name'] for c in inspector.get_columns('bili_videos')}
+    try:
+        if 'is_deleted' not in cols:
+            db.session.execute(db.text(
+                "ALTER TABLE bili_videos ADD COLUMN is_deleted TINYINT(1) NOT NULL DEFAULT 0"
+            ))
+            db.session.commit()
+            app.logger.info('迁移: 已添加 bili_videos.is_deleted 列')
+        if 'deleted_at' not in cols:
+            db.session.execute(db.text(
+                "ALTER TABLE bili_videos ADD COLUMN deleted_at DATETIME NULL"
+            ))
+            db.session.commit()
+            app.logger.info('迁移: 已添加 bili_videos.deleted_at 列')
+    except Exception as e:
+        db.session.rollback()
+        app.logger.warning('迁移: 添加 bili_videos 墓碑列失败: %s', e)
 
 
 # ── 后导入路由（延迟导入） ─────────────────────

@@ -67,7 +67,10 @@
     {% endif %}
     <a href="{{ url_for('admin.profile') }}" {% if request.endpoint == 'admin.profile' %}class="active"{% endif %}><i class="hm-set"></i>个人资料</a>
     <a href="{{ url_for('blog.index') }}" target="_blank" rel="noopener" style="color:rgba(255,255,255,0.6);margin-top:20px;font-size:0.75rem">← 查看网站（新标签）</a>
-    <a href="{{ url_for('admin.logout') }}" class="logout-link"><i class="hm-quit"></i>退出登录</a>
+    <form method="POST" action="{{ url_for('admin.logout') }}" style="display:inline;margin:0" onsubmit="return confirm('确定退出登录吗？')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="logout-link" style="background:none;border:none;color:inherit;font:inherit;cursor:pointer;width:100%;text-align:left"><i class="hm-quit"></i>退出登录</button>
+    </form>
 </div>
 
 {% include 'admin/_cookie_banner.html' %}

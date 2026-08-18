@@ -193,23 +193,26 @@ def refresh_up(up_id):
         HTTP 重定向到 up_detail 页
     """
     up = BiliUp.query.get_or_404(up_id)
-    from blog.task_queue import submit_task, mark_running, is_queue_available, is_running
-    if is_running(up.mid):
+    from blog.task_queue import submit_task, try_acquire, mark_done, is_queue_available
+    # 原子占位：并发请求只有一个能抢到运行锁，杜绝重复提交
+    if not try_acquire(up.mid):
         flash('该 UP 主正在爬取中（Worker 进程）', 'error')
         return redirect(url_for('bili.up_detail', up_id=up_id))
     with _scrape_lock:
         if up.mid in _scrape_running or up.mid in _incremental_running:
+            mark_done(up.mid)
             flash('该 UP 主正在爬取中', 'error')
             return redirect(url_for('bili.up_detail', up_id=up_id))
     if not is_queue_available():
+        mark_done(up.mid)
         flash('任务队列不可用（Redis 未连接），无法执行刷新', 'error')
         return redirect(url_for('bili.up_detail', up_id=up_id))
     task_id = submit_task('refresh_up', mid=up.mid, space_url=up.space_url,
                           max_videos=int(os.environ.get('BILI_REFRESH_MAX_VIDEOS', '30')))
     if task_id:
-        mark_running(up.mid)
         flash(f'已开始刷新「{up.name or up.mid}」的数据', 'success')
     else:
+        mark_done(up.mid)  # 提交失败释放占位，允许稍后重试
         flash('任务提交失败，请稍后重试', 'error')
     return redirect(url_for('bili.up_detail', up_id=up_id))
 
@@ -228,22 +231,24 @@ def refresh_up_all(up_id):
         HTTP 重定向到 up_detail 页
     """
     up = BiliUp.query.get_or_404(up_id)
-    from blog.task_queue import submit_task, mark_running, is_queue_available, is_running
-    if is_running(up.mid):
+    from blog.task_queue import submit_task, try_acquire, mark_done, is_queue_available
+    if not try_acquire(up.mid):
         flash('该 UP 主正在爬取中（Worker 进程）', 'error')
         return redirect(url_for('bili.up_detail', up_id=up_id))
     with _scrape_lock:
         if up.mid in _scrape_running or up.mid in _incremental_running:
+            mark_done(up.mid)
             flash('该 UP 主正在爬取中', 'error')
             return redirect(url_for('bili.up_detail', up_id=up_id))
     if not is_queue_available():
+        mark_done(up.mid)
         flash('任务队列不可用（Redis 未连接），无法执行刷新', 'error')
         return redirect(url_for('bili.up_detail', up_id=up_id))
     task_id = submit_task('refresh_all', mid=up.mid, space_url=up.space_url)
     if task_id:
-        mark_running(up.mid)
         flash(f'已开始强制刷新「{up.name or up.mid}」的所有视频', 'success')
     else:
+        mark_done(up.mid)
         flash('任务提交失败，请稍后重试', 'error')
     return redirect(url_for('bili.up_detail', up_id=up_id))
 
@@ -262,22 +267,24 @@ def refresh_up_comments(up_id):
         HTTP 重定向到 up_detail 页
     """
     up = BiliUp.query.get_or_404(up_id)
-    from blog.task_queue import submit_task, mark_running, is_queue_available, is_running
-    if is_running(up.mid):
+    from blog.task_queue import submit_task, try_acquire, mark_done, is_queue_available
+    if not try_acquire(up.mid):
         flash('该 UP 主正在爬取中（Worker 进程）', 'error')
         return redirect(url_for('bili.up_detail', up_id=up_id))
     with _scrape_lock:
         if up.mid in _scrape_running or up.mid in _incremental_running:
+            mark_done(up.mid)
             flash('该 UP 主正在爬取中，请等待完成', 'error')
             return redirect(url_for('bili.up_detail', up_id=up_id))
     if not is_queue_available():
+        mark_done(up.mid)
         flash('任务队列不可用（Redis 未连接），无法执行刷新', 'error')
         return redirect(url_for('bili.up_detail', up_id=up_id))
     task_id = submit_task('refresh_up_comments', up_id=up_id, mid=up.mid)
     if task_id:
-        mark_running(up.mid)
         flash(f'已开始刷新「{up.name or up.mid}」的评论与词云', 'success')
     else:
+        mark_done(up.mid)
         flash('任务提交失败，请稍后重试', 'error')
     return redirect(url_for('bili.up_detail', up_id=up_id))
 
@@ -296,22 +303,24 @@ def refresh_up_danmakus(up_id):
         HTTP 重定向到 up_detail 页
     """
     up = BiliUp.query.get_or_404(up_id)
-    from blog.task_queue import submit_task, mark_running, is_queue_available, is_running
-    if is_running(up.mid):
+    from blog.task_queue import submit_task, try_acquire, mark_done, is_queue_available
+    if not try_acquire(up.mid):
         flash('该 UP 主正在爬取中（Worker 进程）', 'error')
         return redirect(url_for('bili.up_detail', up_id=up_id))
     with _scrape_lock:
         if up.mid in _scrape_running or up.mid in _incremental_running:
+            mark_done(up.mid)
             flash('该 UP 主正在爬取中，请等待完成', 'error')
             return redirect(url_for('bili.up_detail', up_id=up_id))
     if not is_queue_available():
+        mark_done(up.mid)
         flash('任务队列不可用（Redis 未连接），无法执行刷新', 'error')
         return redirect(url_for('bili.up_detail', up_id=up_id))
     task_id = submit_task('refresh_up_danmakus', up_id=up_id, mid=up.mid)
     if task_id:
-        mark_running(up.mid)
         flash(f'已开始刷新「{up.name or up.mid}」的弹幕与词云', 'success')
     else:
+        mark_done(up.mid)
         flash('任务提交失败，请稍后重试', 'error')
     return redirect(url_for('bili.up_detail', up_id=up_id))
 
@@ -324,22 +333,24 @@ def refresh_up_subtitles(up_id):
     通过 Redis 任务队列投递到 worker.py 执行。
     """
     up = BiliUp.query.get_or_404(up_id)
-    from blog.task_queue import submit_task, mark_running, is_queue_available, is_running
-    if is_running(up.mid):
+    from blog.task_queue import submit_task, try_acquire, mark_done, is_queue_available
+    if not try_acquire(up.mid):
         flash('该 UP 主正在爬取中（Worker 进程）', 'error')
         return redirect(url_for('bili.up_detail', up_id=up_id))
     with _scrape_lock:
         if up.mid in _scrape_running or up.mid in _incremental_running:
+            mark_done(up.mid)
             flash('该 UP 主正在爬取中，请等待完成', 'error')
             return redirect(url_for('bili.up_detail', up_id=up_id))
     if not is_queue_available():
+        mark_done(up.mid)
         flash('任务队列不可用（Redis 未连接），无法执行刷新', 'error')
         return redirect(url_for('bili.up_detail', up_id=up_id))
     task_id = submit_task('refresh_up_subtitles', up_id=up_id, mid=up.mid)
     if task_id:
-        mark_running(up.mid)
         flash(f'已开始刷新「{up.name or up.mid}」的 AI 字幕', 'success')
     else:
+        mark_done(up.mid)
         flash('任务提交失败，请稍后重试', 'error')
     return redirect(url_for('bili.up_detail', up_id=up_id))
 
@@ -444,6 +455,9 @@ def check_missing():
     逐个 UP 主调用 B 站 API 获取 video_count（该 UP 主视频总数），
     与数据库中实际视频数对比，以百分比形式展示数据库完整性。
 
+    性能说明：受全局令牌桶限速（默认 0.33 req/s），全量检查约需数分钟，
+    结果缓存 5 分钟（?refresh=1 强制重算），避免重复点击重复等待。
+
     Returns:
         JSON: {
             ok: True,
@@ -451,6 +465,16 @@ def check_missing():
             total: int
         }
     """
+    from flask import request as _req
+
+    force_refresh = _req.args.get('refresh') == '1'
+    from blog.cache import cache_get, cache_set
+
+    if not force_refresh:
+        cached = cache_get('admin:check_missing')
+        if cached is not None:
+            return cached
+
     from blog.bilibili.login import apply_cookies
     from blog.bilibili.bili_api import get_user_info
 
@@ -458,11 +482,12 @@ def check_missing():
 
     results = []
     ups = BiliUp.query.order_by(BiliUp.updated_at.desc()).all()
-    
-    # 批量统计所有 UP 主的视频数（避免 N+1 查询）
+
+    # 批量统计所有 UP 主的视频数（排除已删除墓碑，与实际可见数一致）
     from sqlalchemy import func
     video_counts = dict(
         db.session.query(BiliVideo.up_id, func.count(BiliVideo.id))
+        .filter(BiliVideo.is_deleted == False)
         .group_by(BiliVideo.up_id)
         .all()
     )
@@ -508,7 +533,13 @@ def check_missing():
             )
         )
 
-    return {'ok': True, 'results': results, 'total': len(results)}
+    payload = {'ok': True, 'results': results, 'total': len(results)}
+    # 缓存 5 分钟（令牌桶限速下全量检查需数分钟，缓存避免重复等待）
+    try:
+        cache_set('admin:check_missing', payload, 300)
+    except Exception:
+        pass
+    return payload
 
 
 # ── 爬取任务共享状态 ────────────────────────────
@@ -548,13 +579,75 @@ def _circuit_compute_cooldown() -> float:
     return min(_CIRCUIT_MAX_COOLDOWN, _CIRCUIT_COOLDOWN, (2 ** (count - 1)) * 300)
 
 
+# ── 稿件墓碑机制 ──────────────────────────────
+# API 连续返回"稿件不可见"(62002/62012) 达到阈值后，将视频标记 is_deleted：
+# 前台隐藏、增量/深扫跳过、避免每次周期重复请求已删除稿件。
+_INVISIBLE_FAIL_COUNTS: dict[str, int] = {}
+_invisible_fail_lock = threading.Lock()
+# 不可见失败计数上限：连续 _INVISIBLE_FAIL_THRESHOLD 次（跨增量周期）判定为删除
+_INVISIBLE_FAIL_THRESHOLD = int(os.environ.get('BILI_DELETE_THRESHOLD', '3'))
+# 计数表最大容量，防止恶意 bvid 刷爆内存
+_INVISIBLE_FAIL_MAX = 5000
+
+
+def _record_invisible_videos(deleted_bvids):
+    """累计"稿件不可见"失败计数，达到阈值标记 is_deleted 并清计数。
+
+    当视频后续成功获取统计时（_insert_or_update_video / _update_video），
+    会自动重置 is_deleted 并清除计数（稿件可能恢复可见）。
+    """
+    if not deleted_bvids:
+        return
+    with _invisible_fail_lock:
+        # 容量保护：超限时清空（墓碑判定会重新累积，可接受）
+        if len(_INVISIBLE_FAIL_COUNTS) > _INVISIBLE_FAIL_MAX:
+            _INVISIBLE_FAIL_COUNTS.clear()
+        to_mark = set()
+        for bvid in deleted_bvids:
+            n = _INVISIBLE_FAIL_COUNTS.get(bvid, 0) + 1
+            if n >= _INVISIBLE_FAIL_THRESHOLD:
+                to_mark.add(bvid)
+                _INVISIBLE_FAIL_COUNTS.pop(bvid, None)
+            else:
+                _INVISIBLE_FAIL_COUNTS[bvid] = n
+    if not to_mark:
+        return
+    try:
+        videos = BiliVideo.query.filter(BiliVideo.bvid.in_(to_mark)).all()
+        for v in videos:
+            if not v.is_deleted:
+                v.is_deleted = True
+                v.deleted_at = now_cst()
+                logger.warning(
+                    '视频标记为已删除（稿件不可见×%d）: %s 「%s」',
+                    _INVISIBLE_FAIL_THRESHOLD, v.bvid, (v.title or '')[:30],
+                )
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        logger.warning('墓碑标记失败: %s', e)
+
+
+def _clear_invisible_count(bvid):
+    """视频成功获取统计后清除其不可见计数。"""
+    with _invisible_fail_lock:
+        _INVISIBLE_FAIL_COUNTS.pop(bvid, None)
+
+
 def _insert_or_update_video(up, video_info, aid, bvid, title_short):
     """插入新视频或更新已有视频的统计数据。
+
+    事务策略（08-06 连接池事故教训）：
+      - 新视频先 add + commit 落主记录，立即归还 DB 连接；
+      - 标签/字幕等网络抓取在**独立小事务**中执行，不再于一个长事务内
+        持有连接（原先 flush 后同步抓 tags/字幕，最长 60s 占用连接）；
+      - 统计历史快照单独提交。
 
     先尝试插入新记录；若 aid 唯一性冲突（IntegrityError），
     则查询已有记录并仅更新统计数字段（view/like/coin 等），
     不覆盖标题、发布时间等元信息。
     每次成功插入或更新后，同时写入一条 BiliVideoHistory 快照。
+    成功获取到统计数据的视频会重置 is_deleted 墓碑（稿件可能恢复可见）。
 
     Args:
         up (BiliUp): 所属 UP 主 ORM 对象
@@ -579,6 +672,12 @@ def _insert_or_update_video(up, video_info, aid, bvid, title_short):
             if key in video_info:
                 setattr(existing, key, video_info[key])
         existing.updated_at = now_cst()
+        if existing.is_deleted:
+            # API 又能取到该稿件 → 恢复可见，清除墓碑
+            existing.is_deleted = False
+            existing.deleted_at = None
+            _clear_invisible_count(bvid)
+            logger.info('视频恢复可见，清除墓碑: %s', bvid)
         db.session.commit()
         # 写入统计历史快照
         try:
@@ -609,29 +708,10 @@ def _insert_or_update_video(up, video_info, aid, bvid, title_short):
 
     is_new = True
     try:
-        # 尝试插入新视频记录
+        # 插入新视频记录并立即提交（先落主记录、归还连接）
         video = BiliVideo(up_id=up.id, **video_info)
         db.session.add(video)
-        db.session.flush()
-        # 新视频：异步抓取标签（不阻塞流程）
-        try:
-            from blog.bilibili.bili_api import get_video_tags
-            tags = get_video_tags(bvid)
-            if tags:
-                video.tags = tags
-                db.session.flush()
-        except Exception as e:
-            logger.warning('视频 %s 标签获取失败: %s', bvid, e)
-
-        # 新视频：抓取 AI 字幕
-        try:
-            from blog.bilibili.bili_api import get_video_subtitle
-            subtitle = get_video_subtitle(bvid)
-            if subtitle:
-                video.subtitle_text = subtitle
-                db.session.flush()
-        except Exception as e:
-            logger.warning('视频 %s 字幕获取失败: %s', bvid, e)
+        db.session.commit()
     except IntegrityError:
         # aid 冲突 → 已有记录，回退并更新统计字段
         db.session.rollback()
@@ -650,8 +730,16 @@ def _insert_or_update_video(up, video_info, aid, bvid, title_short):
                 if key in video_info:
                     setattr(existing, key, video_info[key])
             existing.updated_at = now_cst()
+            if existing.is_deleted:
+                existing.is_deleted = False
+                existing.deleted_at = None
+                _clear_invisible_count(bvid)
             video = existing
             is_new = False
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
         else:
             return None, False
     except Exception as e:
@@ -659,16 +747,32 @@ def _insert_or_update_video(up, video_info, aid, bvid, title_short):
         db.session.rollback()
         logger.warning('视频 %s 「%s」入库失败: %s', bvid, title_short, e)
         return None, False
-    # 先提交视频（确保新视频持久化到数据库）
+
+    # 主记录已提交：标签/字幕在独立小事务中抓取（不再持有长事务）
     try:
-        db.session.commit()
+        from blog.bilibili.bili_api import get_video_tags
+        tags = get_video_tags(bvid)
+        if tags:
+            video.tags = tags
+            db.session.commit()
     except Exception as e:
         db.session.rollback()
-        logger.warning('视频 %s 提交失败: %s', bvid, e)
-        return None, False
+        logger.warning('视频 %s 标签获取失败: %s', bvid, e)
+
     try:
-        # 写入统计历史快照（预检避免重复数据点）
-        # 用 now_cst()（aware）参与 SQL 比较，PyMySQL 会统一转 UTC 存储，与 DB 时基一致
+        from blog.bilibili.bili_api import get_video_subtitle
+        subtitle = get_video_subtitle(bvid)
+        if subtitle:
+            video.subtitle_text = subtitle
+            db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        logger.warning('视频 %s 字幕获取失败: %s', bvid, e)
+
+    # 写入统计历史快照（独立提交）
+    try:
+        # 预检避免重复数据点；now_cst()（aware）参与 SQL 比较，
+        # PyMySQL 会统一转 UTC 存储，与 DB 时基一致
         _prev_h = BiliVideoHistory.query.filter(
             BiliVideoHistory.video_id == video.id,
             BiliVideoHistory.recorded_at >= now_cst() - datetime.timedelta(seconds=30)
@@ -813,7 +917,7 @@ def _crawl_video_comments(video, hot_pages: int = _COMMENT_HOT_PAGES, newest_pag
     # 仅完整爬完才标记评论已爬取；否则保留 comments_crawled_at 为空，
     # 让后续任务能重新投递该视频的评论爬取，避免评论永久缺页
     if completed:
-        v = BiliVideo.query.get(_video_id)
+        v = db.session.get(BiliVideo, _video_id)
         if v:
             v.comments_crawled_at = now_cst()
             db.session.commit()
@@ -958,7 +1062,7 @@ def _crawl_video_danmakus(video, force: bool = False):
 
     # 仅完整爬完才标记弹幕已爬取；否则保留 danmaku_crawled_at 为空以便重投
     if completed:
-        v = BiliVideo.query.get(_video_id)
+        v = db.session.get(BiliVideo, _video_id)
         if v:
             v.danmaku_crawled_at = now_cst()
             db.session.commit()
@@ -1180,7 +1284,11 @@ def _check_new_videos(mid: int, app):
 
                 # 并发批量获取新视频统计（替代逐视频串行 API + sleep）
                 if _new_videos:
-                    _stat_batch = get_video_stats_batch([v['bvid'] for v in _new_videos])
+                    _stat_batch, _stat_deleted = get_video_stats_batch([v['bvid'] for v in _new_videos])
+                    # 新视频统计失败且明确"稿件不可见"的，不参与墓碑（尚未入库），仅记日志
+                    if _stat_deleted:
+                        logger.info('增量检查: %d 个新视频稿件不可见，跳过入库', len(_stat_deleted))
+                        _new_videos = [v for v in _new_videos if v['bvid'] not in set(_stat_deleted)]
                     for video_info in _new_videos:
                         bvid = video_info['bvid']
                         aid = video_info['aid']
@@ -1234,8 +1342,8 @@ def _check_new_videos(mid: int, app):
                 emit(f'动态发现完成，共扫描 {len(dyn_videos)} 个视频', 'DYN')
             db.session.commit()
 
-            # 更新 UP 主的视频总数
-            up.video_count = BiliVideo.query.filter_by(up_id=up.id).count()
+            # 更新 UP 主的视频总数（排除已删除墓碑，与实际可见数一致）
+            up.video_count = BiliVideo.query.filter_by(up_id=up.id, is_deleted=False).count()
             db.session.commit()
             if count:
                 emit(f'增量完成，新增 {count} 个视频，耗时 {time.time() - _t_start:.0f}s', 'OK')
@@ -1284,7 +1392,7 @@ def _check_new_videos(mid: int, app):
             try:
                 from blog.bilibili.config import TRACK_LATEST_VIDEOS
                 latest = (
-                    BiliVideo.query.filter_by(up_id=up.id)
+                    BiliVideo.query.filter_by(up_id=up.id, is_deleted=False)
                     .order_by(BiliVideo.pubdate.desc())
                     .limit(TRACK_LATEST_VIDEOS)
                     .all()
@@ -1295,7 +1403,10 @@ def _check_new_videos(mid: int, app):
                 if latest:
                     emit(f'追踪最新 {len(latest)} 个视频统计', 'SNAP')
 
-                watched_q = BiliVideo.query.join(BiliWatchedVideo).filter(BiliVideo.up_id == up.id)
+                watched_q = (
+                    BiliVideo.query.join(BiliWatchedVideo)
+                    .filter(BiliVideo.up_id == up.id, BiliVideo.is_deleted == False)
+                )
                 if tracked_ids:
                     watched_q = watched_q.filter(BiliVideo.id.notin_(tracked_ids))
                 watched = watched_q.all()
@@ -1312,7 +1423,10 @@ def _check_new_videos(mid: int, app):
                 if snap_videos:
                     # 并发批量获取完整 7 项统计（播放/点赞/投币/收藏/转发/评论/弹幕）
                     from blog.bilibili.bili_api import get_video_stats_batch
-                    _batch = get_video_stats_batch([v.bvid for v in snap_videos])
+                    _batch, _deleted_bvids = get_video_stats_batch([v.bvid for v in snap_videos])
+                    # 墓碑：连续多轮"稿件不可见"的视频标记 is_deleted（下次起不再请求）
+                    if _deleted_bvids:
+                        _record_invisible_videos(_deleted_bvids)
                     # 一次性批量加载近 30s 窗口内的历史快照（按 video_id 取最新一条），
                     # 避免循环内为每个视频单独执行一次窗口查询（N+1）
                     _snap_cutoff = now_cst() - datetime.timedelta(seconds=30)
@@ -1323,6 +1437,12 @@ def _check_new_videos(mid: int, app):
                         stat = _batch.get(v.bvid)
                         if not stat:
                             continue
+                        # 成功取到统计 → 清除不可见计数；若曾被标记删除则恢复
+                        _clear_invisible_count(v.bvid)
+                        if v.is_deleted:
+                            v.is_deleted = False
+                            v.deleted_at = None
+                            logger.info('视频恢复可见，清除墓碑: %s', v.bvid)
                         for key, val in stat.items():
                             setattr(v, key, val)
                         # 记录历史快照（预检避免重复数据点）
@@ -1461,19 +1581,22 @@ def scrape():
         return {'ok': False,
                 'error': f'B站 IP 风控冷却中（最近触发过 412 封禁），请等待约 {_remain} 秒后再添加'}
 
+    from blog.task_queue import try_acquire, mark_done, submit_task, is_queue_available
+    # 原子占位：并发添加同一 UP 只允许一个请求通过
+    if not try_acquire(mid):
+        return {'ok': False, 'error': '该 UP 主正在爬取中'}
     with _scrape_lock:
-        from blog.task_queue import is_running
-        if is_running(mid) or mid in _scrape_running or mid in _incremental_running:
+        if mid in _scrape_running or mid in _incremental_running:
+            mark_done(mid)
             return {'ok': False, 'error': '该 UP 主正在爬取中'}
         _scrape_progress[mid] = []
-
-    from blog.task_queue import submit_task, mark_running, is_queue_available
     if not is_queue_available():
+        mark_done(mid)
         return {'ok': False, 'error': '任务队列不可用（Redis 未连接）'}
     task_id = submit_task('refresh_up', mid=mid, space_url=space_url)
     if task_id:
-        mark_running(mid)
         return {'ok': True, 'mid': mid, 'task_id': task_id}
+    mark_done(mid)
     return {'ok': False, 'error': '任务提交失败，请稍后重试'}
 
 
@@ -1530,7 +1653,7 @@ def add_single_video():
     existing_video = BiliVideo.query.filter_by(bvid=bvid).first()
     if existing_video and not force_update:
         # 返回已存在提示，让前端确认是否更新
-        up = BiliUp.query.get(existing_video.up_id)
+        up = db.session.get(BiliUp, existing_video.up_id)
         return {
             'exists': True,
             'video': {
@@ -1579,6 +1702,13 @@ def add_single_video():
     # 查找或创建视频记录
     video = BiliVideo.query.filter_by(bvid=bvid).first()
     is_new = not video
+
+    if video and video.is_deleted:
+        # 手动添加能成功获取完整信息 → 稿件已恢复可见，清除墓碑
+        video.is_deleted = False
+        video.deleted_at = None
+        _clear_invisible_count(bvid)
+        logger.info('视频恢复可见，清除墓碑（手动添加）: %s', bvid)
 
     if not video:
         video = BiliVideo(
@@ -1699,8 +1829,9 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                 return
 
     # 重入保护 — 本地检查（防止同一mid被多线程同时爬取）
-    # 注意：不在此处检查 is_running(mid)，因为路由层提交任务后已 mark_running(mid)，
-    # Worker 内再查会看到路由设的标记导致任务空跑。跨进程互斥由路由层的 is_running() 检查保证。
+    # 注意：不在此处检查 is_running(mid)：路由层提交任务时已通过
+    # try_acquire() 原子占位运行锁，Worker 内再查会看到自己设的锁导致任务空跑。
+    # 跨进程互斥由路由层的 try_acquire 运行锁 + 本地 _scrape_running 检查保证。
     if not force:
         with _scrape_lock:
             if mid in _scrape_running or mid in _incremental_running:
@@ -1797,7 +1928,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             emit('初始化数据库...', 'SYS')
 
             # B. 补全缺失视频 — 判断是否需要从 API 拉取
-            total_in_db = BiliVideo.query.filter_by(up_id=up.id).count()
+            total_in_db = BiliVideo.query.filter_by(up_id=up.id, is_deleted=False).count()
             should_fill = (
                 total_in_db == 0
                 or total_in_api is None
@@ -1981,7 +2112,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             def _update_video(video_id, label='', min_age_hours=1, hist_id_map=None):
                 with app.app_context():
                     try:
-                        v = BiliVideo.query.get(video_id)
+                        v = db.session.get(BiliVideo, video_id)
                         if not v:
                             return {'status': 'skip', 'label': label, 'bvid': '', 'title_short': ''}
                         bvid = v.bvid
@@ -2002,16 +2133,28 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                             stat = get_video_stat(bvid)
                             thread_sleep()
                         except Exception as e:
+                            from blog.bilibili.bili_api import _is_video_invisible as _is_gone
                             if _is_risk_control(e):
                                 logger.warning('触发风控，等待 %ds 后跳过...', local_retry_delay)
                                 emit(f'⚠ 触发风控，等待 {local_retry_delay}s 后跳过「{title_short}」', 'RISK')
                                 time.sleep(local_retry_delay)
                                 return {'status': 'risk', 'label': label, 'bvid': bvid, 'title_short': title_short}
+                            if _is_gone(e):
+                                # 稿件不可见：累计失败，达到阈值标记 is_deleted 墓碑
+                                _record_invisible_videos([bvid])
+                                emit(f'「{title_short}」稿件不可见，累计标记删除', 'WARN')
+                                return {'status': 'deleted', 'label': label, 'bvid': bvid, 'title_short': title_short}
                             logger.warning('视频 %s 统计获取失败: %s', bvid, e)
                             emit(f'「{title_short}」统计获取失败: {e}', 'WARN')
                             time.sleep(float(os.environ.get('BILI_FAIL_SLEEP', '8.0')))
                             return {'status': 'fail', 'label': label, 'bvid': bvid, 'title_short': title_short}
 
+                        # 成功获取统计 → 清除不可见计数/墓碑
+                        _clear_invisible_count(bvid)
+                        if v.is_deleted:
+                            v.is_deleted = False
+                            v.deleted_at = None
+                            logger.info('视频恢复可见，清除墓碑: %s', bvid)
                         for key, val in stat.items():
                             setattr(v, key, val)
                         v.updated_at = now_cst()
@@ -2019,7 +2162,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                         # 历史快照：主线程已批量预加载 video_id → 最近历史记录 ID，
                         # 子线程按主键查询（避免逐视频 30s 窗口二级索引查询）
                         _hist_id = (hist_id_map or {}).get(v.id)
-                        _prev_h = BiliVideoHistory.query.get(_hist_id) if _hist_id else None
+                        _prev_h = db.session.get(BiliVideoHistory, _hist_id) if _hist_id else None
                         if _prev_h is not None and (
                             # DB 存的是 UTC naive，这里也用 UTC naive 比较，避免 8h 时区偏差
                             now_cst().astimezone(datetime.timezone.utc).replace(tzinfo=None) - _prev_h.recorded_at
@@ -2069,6 +2212,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             hot_query = BiliVideo.query.filter(
                 BiliVideo.up_id == up.id,
                 BiliVideo.pub_datetime >= cutoff_hot,
+                BiliVideo.is_deleted == False,
             )
             if filled_bvids:
                 hot_query = hot_query.filter(~BiliVideo.bvid.in_(filled_bvids))
@@ -2104,6 +2248,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                     BiliVideo.up_id == up.id,
                     BiliVideo.pub_datetime >= cutoff_warm,
                     BiliVideo.pub_datetime < cutoff_hot,
+                    BiliVideo.is_deleted == False,
                 ).order_by(BiliVideo.updated_at.asc())
 
                 if remaining is not None:
@@ -2137,6 +2282,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                 cold_query = BiliVideo.query.filter(
                     BiliVideo.up_id == up.id,
                     BiliVideo.pub_datetime < cutoff_warm,
+                    BiliVideo.is_deleted == False,
                 ).order_by(BiliVideo.updated_at.asc())
                 if remaining is not None:
                     cold_query = cold_query.limit(remaining)
@@ -2168,7 +2314,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                                 pass
             # 更新 UP 主的视频总数字段
             db.session.expire_all()
-            up.video_count = BiliVideo.query.filter_by(up_id=up.id).count()
+            up.video_count = BiliVideo.query.filter_by(up_id=up.id, is_deleted=False).count()
             db.session.commit()
             emit(
                 f'刷新完成  Hot={hot_done}  Warm={warm_done}  Cold={cold_done}  共 {count} 个  |  DB 总视频数: {up.video_count}  |  耗时 {time.time() - _t_start:.0f}s',

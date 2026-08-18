@@ -14,7 +14,25 @@ os.environ['DB_NAME'] = 'hoshino_blog_test'
 
 @pytest.fixture(scope='session')
 def app():
-    """创建测试用 Flask 应用实例"""
+    """创建测试用 Flask 应用实例
+
+    MySQL 不可用时跳过整个测试套件（而不是收集阶段直接报错），
+    使测试可在未配置 MySQL 的机器/CI 上安全运行。
+    """
+    try:
+        # 预检 MySQL 连接
+        from sqlalchemy import create_engine
+        from config import _build_database_uri
+        probe = create_engine(
+            _build_database_uri(),
+            connect_args={'connect_timeout': 3},
+        )
+        with probe.connect():
+            pass
+        probe.dispose()
+    except Exception as e:
+        pytest.skip(f'MySQL 不可用，跳过测试套件: {e}')
+
     from app import create_app
     app = create_app()
     app.config['TESTING'] = True

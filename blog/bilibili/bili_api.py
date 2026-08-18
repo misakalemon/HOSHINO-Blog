@@ -92,29 +92,60 @@ _api_semaphore = threading.Semaphore(_BILI_SEMAPHORE) if _BILI_SEMAPHORE > 0 els
 # 无论多少个线程/任务并行，全局每秒最多放行 BILI_GLOBAL_RATE 个请求。
 # 默认 0.33 请求/秒 ≈ 20 请求/分钟（家庭宽带安全阈值内），
 # 可通过环境变量 BILI_GLOBAL_RATE 调整（如 0.2 = 12 请求/分钟）。
-class _TokenBucket:
-    """线程安全令牌桶：以恒定速率补充令牌，控制全局请求速率。"""
+class _AdaptiveTokenBucket:
+    """自适应令牌桶（全局风控核心）。
 
-    def __init__(self, rate: float, capacity: float):
-        self.rate = max(rate, 0.01)  # 每秒补充令牌数
-        self.capacity = max(capacity, 1.0)  # 桶容量（突发上限）
-        self.tokens = capacity
+    相比固定速率令牌桶的增强：
+      1. 风控反馈：on_risk() 后立即把速率降至 base×0.3（下限 min_rate），
+         持续 BILI_RATE_RECOVER_SECONDS（默认 10 分钟）后自动恢复；
+      2. 慢启动：进程启动后前 BILI_SLOW_START（默认 120s）速率减半，
+         避免重启后立即高频请求被风控画像；
+      3. 间隔抖动：等待时长乘以随机因子 [0.8, 1.4]，让请求间隔不规律
+         （完全规律的请求间隔是机器人的强特征）。
+    """
+
+    def __init__(self, rate: float, capacity: float, min_rate: float,
+                 recover_seconds: float, slow_start_seconds: float = 0.0):
+        self.rate = max(rate, 0.01)
+        self.capacity = max(capacity, 1.0)
+        self.min_rate = max(min_rate, 0.01)
+        self.recover_seconds = max(recover_seconds, 1.0)
+        self.tokens = self.capacity
         self.lock = threading.Lock()
         self.last = time.time()
+        self._last_risk = 0.0
+        self._start_time = time.time()
+        self._slow_start_seconds = max(slow_start_seconds, 0.0)
+
+    def _current_rate(self) -> float:
+        """根据风控/慢启动状态计算当前实际速率。"""
+        now = time.time()
+        if now - self._start_time < self._slow_start_seconds:
+            return max(self.rate * 0.5, self.min_rate)
+        if now - self._last_risk < self.recover_seconds:
+            return max(self.rate * 0.3, self.min_rate)
+        return self.rate
+
+    def on_risk(self):
+        """风控事件：立即降速（下一次 acquire 生效）。"""
+        with self.lock:
+            self._last_risk = time.time()
 
     def acquire(self):
         """获取一个令牌；不足则等待补充。返回消耗的等待时间。"""
         with self.lock:
             now = time.time()
-            self.tokens = min(self.capacity, self.tokens + (now - self.last) * self.rate)
+            rate = self._current_rate()
+            self.tokens = min(self.capacity, self.tokens + (now - self.last) * rate)
             self.last = now
             if self.tokens >= 1.0:
                 self.tokens -= 1.0
                 return 0.0
-            wait = (1.0 - self.tokens) / self.rate
+            wait = (1.0 - self.tokens) / rate
             self.tokens = 0.0
         if wait > 0:
-            time.sleep(wait)
+            # 间隔抖动：×[0.8, 1.4]，避免固定节奏被风控识别
+            time.sleep(wait * random.uniform(0.8, 1.4))
         return wait
 
 
@@ -124,7 +155,19 @@ _BILI_RATE = float(os.environ.get('BILI_GLOBAL_RATE', '0.33'))  # 20 请求/分�
 # 在同一瞬间打向同一 IP，触发 B站 -352 风控（v_voucher 校验）。
 # 串行后同一时刻只有一个 UA 活跃，最接近"单浏览器浏览"指纹。
 _BILI_RATE_CAP = float(os.environ.get('BILI_GLOBAL_RATE_CAP', '1'))
-_BILI_RATE_LIMITER = _TokenBucket(rate=_BILI_RATE, capacity=_BILI_RATE_CAP)
+# 风控降速下限（请求/秒）：即使连续风控也保留极低速率探测，而非完全停止
+_BILI_RATE_MIN = float(os.environ.get('BILI_RATE_MIN', '0.05'))
+# 风控后降速持续时间（秒），到期自动恢复原速率
+_BILI_RATE_RECOVER = float(os.environ.get('BILI_RATE_RECOVER_SECONDS', '600'))
+# 进程启动慢启动时长（秒）：期间速率减半，避免重启后立即高频
+_BILI_SLOW_START = float(os.environ.get('BILI_SLOW_START', '120'))
+_BILI_RATE_LIMITER = _AdaptiveTokenBucket(
+    rate=_BILI_RATE,
+    capacity=_BILI_RATE_CAP,
+    min_rate=_BILI_RATE_MIN,
+    recover_seconds=_BILI_RATE_RECOVER,
+    slow_start_seconds=_BILI_SLOW_START,
+)
 
 
 def ensure_semaphore(thread_count: int):
@@ -227,20 +270,46 @@ def _sync(coro):
     首次调用时绑定固定 UA（不再每次随机轮换），模拟"一个浏览器持续浏览"。
     超时或异常后关闭循环并重建，防止 fd/异步生成器资源泄漏。
 
+    统一风控反馈（所有 API 共享）：
+      - 软风控冷却期（-352 连续触发）→ 挂起等待，不发请求
+      - 触发风控（-352/-509/429）→ 全局降速 + 软风控计数
+      - 412 硬封禁 → 重建 session 池 + 换绑 UA + 记录封禁时间
+
         coro:     要执行的 asyncio 协程对象。
         returns:  协程执行结果。
         raises:   TimeoutError — 请求超时（30s 未返回）。
     """
     _ensure_thread_binding()
+    # 软风控冷却：处于冷却期则等待（不发请求）
+    _wait_soft_cooldown()
     # 全局令牌桶限速：所有请求（翻页/统计/动态流/字幕/评论/弹幕）统一受全局速率约束，
     # 从根本上限制同一 IP 的请求密度，是降低 412 风控的核心手段。
     _BILI_RATE_LIMITER.acquire()
     if _api_semaphore is not None:
         with _api_semaphore:
             _patch_request_headers()
-            return _sync_inner(coro)
+            return _sync_inner_with_risk_feedback(coro)
     _patch_request_headers()
-    return _sync_inner(coro)
+    return _sync_inner_with_risk_feedback(coro)
+
+
+def _sync_inner_with_risk_feedback(coro):
+    """执行协程并统一做风控反馈（供 _sync 调用）。"""
+    try:
+        return _sync_inner(coro)
+    except Exception as e:
+        if _is_ip_blocked(e):
+            # 412 IP 级封禁：记录时间（供熔断器判断）+ 重建会话/换 UA + 降速
+            global _last_412_time
+            with _last_412_lock:
+                _last_412_time = time.time()
+            _reset_network_session()
+            _BILI_RATE_LIMITER.on_risk()
+        elif _is_risk_control(e):
+            # 软风控（-352/-509/429）：降速 + 分级冷却计数
+            _BILI_RATE_LIMITER.on_risk()
+            _on_soft_risk()
+        raise
 
 
 def _patch_request_headers():
@@ -344,6 +413,73 @@ def _is_auth_error(e: Exception) -> bool:
     err_str = str(e).lower()
     codes = ['-401', '未登录', '请先登录', 'credential', 'session expired']
     return any(c in err_str for c in codes)
+
+
+# ── 软风控（-352/-509/429）分级冷却 ──────────────────
+# 与 412 硬封禁不同，-352 是"软"风控（v_voucher 校验/限流），单个请求触发
+# 只退避重试即可；但**短时间窗口内连续触发**说明 UA/IP 已被标记，
+# 此时进入中等冷却（默认 5 分钟），期间所有请求挂起等待，避免继续触发。
+_soft_risk_times: list[float] = []
+_soft_risk_lock = threading.Lock()
+_SOFT_RISK_WINDOW = float(os.environ.get('BILI_SOFT_RISK_WINDOW', '60'))     # 计数窗口（秒）
+_SOFT_RISK_TRIGGER = int(os.environ.get('BILI_SOFT_RISK_TRIGGER', '2'))      # 窗口内触发冷却的阈值
+_SOFT_COOLDOWN = float(os.environ.get('BILI_SOFT_COOLDOWN', '300'))          # 中等冷却时长（秒）
+_soft_cooldown_until: float = 0.0
+
+
+def _on_soft_risk():
+    """记录一次软风控（-352/-509/429），窗口内达到阈值则进入中等冷却。"""
+    global _soft_cooldown_until
+    now = time.time()
+    with _soft_risk_lock:
+        _soft_risk_times[:] = [t for t in _soft_risk_times if now - t < _SOFT_RISK_WINDOW]
+        _soft_risk_times.append(now)
+        if len(_soft_risk_times) >= _SOFT_RISK_TRIGGER:
+            _soft_cooldown_until = now + _SOFT_COOLDOWN
+            _soft_risk_times.clear()
+            logger.warning(
+                '⚠️ 软风控 %ds 内触发 %d 次，进入中等冷却 %ds',
+                _SOFT_RISK_WINDOW, _SOFT_RISK_TRIGGER, _SOFT_COOLDOWN,
+            )
+
+
+def _wait_soft_cooldown():
+    """若处于中等冷却期，阻塞等待冷却结束（期间不发任何请求）。"""
+    while True:
+        now = time.time()
+        with _soft_risk_lock:
+            remaining = _soft_cooldown_until - now
+        if remaining <= 0:
+            return
+        logger.info('软风控冷却中，暂停请求 %.0fs', remaining)
+        time.sleep(min(remaining, 15))
+
+
+def _reset_network_session():
+    """412 封禁后强制重建网络层：
+      1. 清空 bilibili_api 的 HTTP session 池（TLS/HTTP2 指纹随重建变化）
+      2. 当前线程换绑下一个 UA（避免同一 UA 持续被标记）
+      3. 关闭当前线程事件循环（_sync_inner 下次调用时自动重建）
+    """
+    try:
+        from bilibili_api.utils import network as _bili_net
+        pool = getattr(_bili_net, 'session_pool', None)
+        if isinstance(pool, dict):
+            pool.clear()
+            logger.warning('已清空 bilibili_api session 池（强制重建连接）')
+    except Exception:
+        pass
+    if hasattr(_thread_local, 'ua'):
+        tid = threading.current_thread().ident or 0
+        _thread_local.ua = USER_AGENTS[(tid + 1) % len(USER_AGENTS)]
+        logger.warning('412 后线程 %d 换绑 UA: %s...', tid, _thread_local.ua[:40])
+    loop = getattr(_loop_local, 'loop', None)
+    if loop is not None and not loop.is_closed():
+        try:
+            loop.close()
+        except Exception:
+            pass
+        _loop_local.loop = None
 
 
 def set_cookies(cookie_str: str):
@@ -727,7 +863,16 @@ def get_video_list_from_dynamics(mid: int) -> list[dict]:
     return results
 
 
-def get_video_stats_batch(bvids: list[str], max_workers: int | None = None) -> dict[str, dict]:
+def _is_video_invisible(e: Exception) -> bool:
+    """判断异常是否为"稿件不可见/已删除"（62002=稿件不可见，62012=视频不可见）。
+
+    此类错误非风控、重试无意义，调用方应累计失败并最终标记 is_deleted 墓碑。
+    """
+    err_str = str(e)
+    return ('62002' in err_str) or ('62012' in err_str)
+
+
+def get_video_stats_batch(bvids: list[str], max_workers: int | None = None) -> tuple[dict[str, dict], list[str]]:
     """并发批量获取多个视频的统计数据。
 
     使用模块级共享线程池并发调用 get_video_stat，
@@ -741,14 +886,18 @@ def get_video_stats_batch(bvids: list[str], max_workers: int | None = None) -> d
 
         bvids:       视频 BV 号列表。
         max_workers: 保留兼容参数；实际并发由共享池决定（BILI_STAT_WORKERS）。
-        returns:     { bvid: {view_count, like_count, ...} }
+        returns:     (results, deleted_bvids)
+                     results      — { bvid: {view_count, like_count, ...} }（成功项）
+                     deleted_bvids — API 明确返回"稿件不可见/已删除"(62002/62012) 的 bvid 列表，
+                                     供调用方累计失败次数并标记 is_deleted 墓碑
     """
     from concurrent.futures import as_completed
 
     if not bvids:
-        return {}
+        return {}, []
     executor = _get_batch_pool()
     results: dict[str, dict] = {}
+    deleted: list[str] = []
     futures = {executor.submit(get_video_stat, bvid): bvid for bvid in bvids}
     for future in as_completed(futures):
         bvid = futures[future]
@@ -757,8 +906,12 @@ def get_video_stats_batch(bvids: list[str], max_workers: int | None = None) -> d
             if stat:
                 results[bvid] = stat
         except Exception as e:
-            logger.warning('批量统计获取失败 bvid=%s: %s', bvid, e)
-    return results
+            if _is_video_invisible(e):
+                deleted.append(bvid)
+                logger.warning('批量统计：稿件不可见 bvid=%s: %s', bvid, e)
+            else:
+                logger.warning('批量统计获取失败 bvid=%s: %s', bvid, e)
+    return results, deleted
 
 
 def get_video_stat(bvid: str) -> dict:

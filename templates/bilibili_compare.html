@@ -73,7 +73,7 @@
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
 <script>
 (function() {
-    var rawData = {{ chart_data|safe }};
+    var rawData = {{ chart_data|tojson }};
     var videoIds = {{ videos|map(attribute='id')|list|tojson }};
     var videoTitles = {{ videos|map(attribute='title')|list|tojson }};
 

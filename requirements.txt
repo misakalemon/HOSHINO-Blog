@@ -52,7 +52,8 @@ bleach==6.2.0
 requests==2.32.3
 curl_cffi==0.15.0
 beautifulsoup4==4.12.2
-lxml==4.9.3
+# lxml>=5.2.1：4.9.3 存在多个已知 CVE（CVE-2024-35178/35179/52595/56167、CVE-2025-24928）
+lxml>=5.2.1
 
 # --- Docker 浏览器爬虫 ---
 selenium==4.29.0

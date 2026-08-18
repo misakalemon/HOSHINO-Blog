@@ -706,8 +706,11 @@ document.addEventListener('click',function(e){
     overlay.style.display = 'flex';
   };
 
+  // 无回调时回退到原生 confirm（同步弹窗），避免"确认弹窗永远不弹、静默返回 true"
+  var nativeConfirm = window.confirm;
+  var nativePrompt = window.prompt;
   window.confirm = function(msg, cb) {
-    if (typeof cb !== 'function') return true;
+    if (typeof cb !== 'function') return nativeConfirm(msg);
     titleEl.textContent = '确认操作';
     msgEl.textContent = msg;
     actionsEl.innerHTML =
@@ -719,19 +722,9 @@ document.addEventListener('click',function(e){
     overlay.style.display = 'flex';
   };
 
+  // prompt 无异步回调机制，直接恢复原生行为（同步返回用户输入）
   window.prompt = function(msg, def) {
-    titleEl.textContent = '输入';
-    msgEl.textContent = msg;
-    inputEl.style.display = 'block';
-    inputEl.value = def || '';
-    actionsEl.innerHTML =
-      '<button class="btn btn-ghost" style="flex:1;justify-content:center">取消</button>' +
-      '<button class="btn btn-primary" style="flex:1;justify-content:center">确定</button>';
-    var btns = actionsEl.querySelectorAll('button');
-    btns[0].onclick = function() { hideOverlay(); inputEl.style.display = 'none'; };
-    btns[1].onclick = function() { hideOverlay(); inputEl.style.display = 'none'; };
-    overlay.style.display = 'flex';
-    return def || '';
+    return nativePrompt(msg, def);
   };
 })();
 
