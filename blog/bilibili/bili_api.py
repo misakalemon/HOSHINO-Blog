@@ -331,6 +331,41 @@ def _patch_request_headers():
         pass
 
 
+def _close_loop_clean(loop):
+    """安全关闭事件循环：先取消并等待所有 pending task，再关闭。
+
+    直接 loop.close() 会让未完成的异步任务（如 curl_cffi 的 AsyncCurl
+    _force_timeout）残留，触发 "Task was destroyed but it is pending!"
+    警告并泄漏连接对象。先 cancel + gather 等待收尾，再关闭。
+    """
+    try:
+        pending = [t for t in asyncio.all_tasks(loop) if not t.done()]
+        if pending:
+            for t in pending:
+                t.cancel()
+            try:
+                loop.run_until_complete(
+                    asyncio.wait_for(
+                        asyncio.gather(*pending, return_exceptions=True), timeout=5
+                    )
+                )
+            except Exception:
+                pass
+    except Exception:
+        pass
+    try:
+        if not loop.is_closed():
+            try:
+                loop.run_until_complete(
+                    asyncio.wait_for(loop.shutdown_asyncgens(), timeout=5)
+                )
+            except Exception:
+                pass
+            loop.close()
+    except Exception:
+        pass
+
+
 def _sync_inner(coro):
     loop = getattr(_loop_local, 'loop', None)
     if loop is None or loop.is_closed():
@@ -345,31 +380,11 @@ def _sync_inner(coro):
         return loop.run_until_complete(asyncio.wait_for(coro, timeout=_API_TIMEOUT))
     except asyncio.TimeoutError:
         logger.error('B站 API 请求超时 (%ds)', _API_TIMEOUT)
-        try:
-            if not loop.is_closed():
-                try:
-                    loop.run_until_complete(
-                        asyncio.wait_for(loop.shutdown_asyncgens(), timeout=5)
-                    )
-                except Exception:
-                    pass
-                loop.close()
-        except Exception:
-            pass
+        _close_loop_clean(loop)
         _loop_local.loop = None
         raise TimeoutError(f'B站 API 请求超时 ({_API_TIMEOUT}s)')
     except Exception:
-        try:
-            if not loop.is_closed():
-                try:
-                    loop.run_until_complete(
-                        asyncio.wait_for(loop.shutdown_asyncgens(), timeout=5)
-                    )
-                except Exception:
-                    pass
-                loop.close()
-        except Exception:
-            pass
+        _close_loop_clean(loop)
         _loop_local.loop = None
         raise
 

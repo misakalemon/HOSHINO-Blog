@@ -980,12 +980,18 @@ def _migrate_bili_danmakus_table(app):
     # 表已存在：确保 cid 列为 BIGINT、progress 列为 DOUBLE。
     # 用 inspector.get_columns() 返回的 SQLAlchemy 类型对象做 isinstance 判断
     # （比字符串匹配更可靠，不受 MySQL 版本/大小写/宽度显示差异影响），
+    # 并叠加类型名包含检查（双保险：个别驱动/方言版本返回的类型实例
+    # 可能不是 sqlalchemy.BigInteger 子类）。
     # 仅在类型不符时才 ALTER，避免每次启动都对大表做昂贵的重建。
     try:
         from sqlalchemy import BigInteger, Double
         _cols = {c['name']: c for c in inspector.get_columns('bili_danmakus')}
         _cid_col = _cols.get('cid')
-        if _cid_col is not None and not isinstance(_cid_col['type'], BigInteger):
+        _cid_is_big = _cid_col is not None and (
+            isinstance(_cid_col['type'], BigInteger)
+            or 'BIGINT' in str(_cid_col['type']).upper()
+        )
+        if _cid_col is not None and not _cid_is_big:
             db.session.execute(text(
                 'ALTER TABLE bili_danmakus MODIFY COLUMN cid BIGINT DEFAULT 0'
             ))
@@ -994,7 +1000,11 @@ def _migrate_bili_danmakus_table(app):
         _prog_col = _cols.get('progress')
         # progress 必须是 DOUBLE（双精度）；早期建表可能是 FLOAT（单精度 7 位，
         # 长视频进度值 1234.5678 秒会被舍入导致判重失效），Float 也需升级。
-        if _prog_col is not None and not isinstance(_prog_col['type'], Double):
+        _prog_is_double = _prog_col is not None and (
+            isinstance(_prog_col['type'], Double)
+            or 'DOUBLE' in str(_prog_col['type']).upper()
+        )
+        if _prog_col is not None and not _prog_is_double:
             db.session.execute(text(
                 'ALTER TABLE bili_danmakus MODIFY COLUMN progress DOUBLE DEFAULT 0'
             ))

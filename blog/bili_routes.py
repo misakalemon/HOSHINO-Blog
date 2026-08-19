@@ -1958,6 +1958,23 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
 
                 _batch_count = 0
 
+                # 补全页数上限（412 风控核心缓解）：
+                # - 显式设置 BILI_FILL_MAX_PAGES → 按其值
+                # - 存量 UP（已有视频记录）且非 force → 默认限 _FILL_DEFAULT_PAGES 页
+                #   （默认 3 页 ≈ 最近 45 个视频，覆盖日常新增；历史缺失由手动全量刷新补齐）
+                # - 全新 UP（total_in_db==0）或手动强制刷新（force）→ 不限页（全量）
+                # 背景：arc/search 全量翻页是 412 高发点，每日深扫对所有 UP 全量翻页
+                # 是每天 02:00 触发风控的根因（日志 08/15~08/19 连续 412）。
+                _fill_max_pages = None
+                if os.environ.get('BILI_FILL_MAX_PAGES'):
+                    _fill_max_pages = max(1, int(os.environ['BILI_FILL_MAX_PAGES']))
+                elif not force and total_in_db > 0:
+                    _fill_max_pages = max(
+                        1, int(os.environ.get('BILI_FILL_MAX_PAGES_DEFAULT', '3'))
+                    )
+                if _fill_max_pages:
+                    emit(f'[补全] arc/search 限翻 {_fill_max_pages} 页（风控保护）', 'FILL')
+
                 def _fill_fetch_stat(vi):
                     with app.app_context():
                         _fbvid = vi['bvid']
@@ -1978,11 +1995,6 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                 def _fill_producer():
                     with app.app_context():
                         try:
-                            # 可选限页：设置 BILI_FILL_MAX_PAGES>0 时限制 arc/search 翻页页数，
-                            # 用于新UP添加时降低请求量减少风控；未设置则保持全量（默认行为不变）。
-                            _fill_max_pages = None
-                            if os.environ.get('BILI_FILL_MAX_PAGES'):
-                                _fill_max_pages = max(1, int(os.environ['BILI_FILL_MAX_PAGES']))
                             for video_info in _get_video_list(mid, max_pages=_fill_max_pages):
                                 if _fill_stop_evt.is_set():
                                     break
