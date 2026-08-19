@@ -465,7 +465,7 @@ if __name__ == '__main__':
     logger.info('=' * 50)
 
     # ── 启动后台 Worker 子进程 ──────────────────
-    # Worker 进程共享同一日志文件（blog/logs/hoshino.log），
+    # Worker 进程共享同一日志目录（blog/logs/，按日期拆分 hoshino-YYYY-MM-DD.log），
     # 终端输出通过 stderr 合并到同一控制台。
     # 使用 creationflags 确保子进程随父进程退出。
     import subprocess

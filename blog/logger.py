@@ -6,8 +6,8 @@ HOSHINO Blog 日志模块
    2. 提供请求日志中间件 log_request()，记录每次 HTTP 请求
 
 日志输出渠道：
-   1. 文件日志     — blog/logs/hoshino.log，每日轮转，保留 30 天
-   2. 错误日志     — blog/logs/error.log，仅 ERROR 级别，大小轮转（10MB×5）
+   1. 文件日志     — blog/logs/hoshino-YYYY-MM-DD.log，按日期拆分，保留 30 天
+   2. 错误日志     — blog/logs/error-YYYY-MM-DD.log，仅 ERROR 级别，按日期拆分
    3. 终端日志     — 标准输出，INFO 级别以上，简化格式
 
 集成方式：
@@ -15,13 +15,20 @@ HOSHINO Blog 日志模块
    其他模块直接用 logging.getLogger(__name__) 获取 logger 即可。
 """
 
+import datetime as _datetime
 import logging
 import logging.handlers
 import os
+import threading
 import time
 
 from flask import request
-from concurrent_log_handler import ConcurrentRotatingFileHandler
+
+try:
+    import portalocker  # concurrent-log-handler 的依赖，用于跨进程文件锁
+    _HAS_PORTALOCKER = True
+except ImportError:
+    _HAS_PORTALOCKER = False
 
 # 日志目录（位于 blog/logs/）
 LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
@@ -33,9 +40,128 @@ except OSError as e:
     print(f'无法创建日志目录 {LOG_DIR}: {e}', file=sys.stderr)
     raise
 
-# 日志文件路径
-LOG_FILE = os.path.join(LOG_DIR, 'hoshino.log')
-ERROR_LOG_FILE = os.path.join(LOG_DIR, 'error.log')
+# 日志保留天数（超过自动清理）
+LOG_KEEP_DAYS = int(os.environ.get('LOG_KEEP_DAYS', '30'))
+
+
+def _today_log_path(prefix: str) -> str:
+    """返回今天的日志文件路径（<prefix>-YYYY-MM-DD.log）。"""
+    day = _datetime.datetime.now().strftime('%Y-%m-%d')
+    return os.path.join(LOG_DIR, f'{prefix}-{day}.log')
+
+
+class DailyFileHandler(logging.Handler):
+    """按日期拆分的多进程安全日志文件处理器。
+
+    文件名格式：<prefix>-YYYY-MM-DD.log（如 hoshino-2026-08-19.log），
+    每天自动切换到新文件；Web/Worker 双进程通过 portalocker 文件锁
+    保证写入与轮转的原子性；自动清理 keep_days 天前的旧文件。
+
+    与 ConcurrentRotatingFileHandler（按大小轮转）的区别：
+      - 按自然日拆分，单日日志可读性好、便于按日归档/排查；
+      - 每天使用新文件名，跨日只切换 stream，无 rename 竞态。
+    """
+
+    def __init__(self, log_dir: str, prefix: str = 'hoshino',
+                 level: int = logging.NOTSET, encoding: str = 'utf-8',
+                 keep_days: int = LOG_KEEP_DAYS):
+        super().__init__(level)
+        self.log_dir = log_dir
+        self.prefix = prefix
+        self.encoding = encoding
+        self.keep_days = keep_days
+        os.makedirs(log_dir, exist_ok=True)
+        self._thread_lock = threading.RLock()      # 进程内线程锁
+        # 跨进程锁文件（常开句柄，每次写入时加锁）
+        self._lock_fh = open(
+            os.path.join(log_dir, f'.{prefix}.lock'), 'a+', encoding='utf-8'
+        )
+        self._stream = None
+        self._current_path = None
+        # 初始打开今天的文件
+        self._ensure_stream_locked()
+
+    # ── 内部工具（须在持有跨进程锁时调用） ──
+    def _build_path(self) -> str:
+        day = _datetime.datetime.now().strftime('%Y-%m-%d')
+        return os.path.join(self.log_dir, f'{self.prefix}-{day}.log')
+
+    def _ensure_stream_locked(self):
+        """确保 stream 指向今天的文件（跨日时自动切换）。"""
+        path = self._build_path()
+        if self._stream is not None and path == self._current_path:
+            return
+        if self._stream is not None:
+            try:
+                self._stream.close()
+            except Exception:
+                pass
+            self._stream = None
+        self._stream = open(path, 'a', encoding=self.encoding)
+        self._current_path = path
+        self._cleanup_old_locked()
+
+    def _cleanup_old_locked(self):
+        """删除 keep_days 天前的本前缀日志文件（锁内执行）。"""
+        if self.keep_days <= 0:
+            return
+        try:
+            cutoff = (_datetime.datetime.now()
+                      - _datetime.timedelta(days=self.keep_days)).date()
+            prefix = self.prefix + '-'
+            for fname in os.listdir(self.log_dir):
+                if not (fname.startswith(prefix) and fname.endswith('.log')):
+                    continue
+                day_str = fname[len(prefix):-4]
+                try:
+                    day = _datetime.datetime.strptime(day_str, '%Y-%m-%d').date()
+                except ValueError:
+                    continue
+                if day < cutoff:
+                    try:
+                        os.remove(os.path.join(self.log_dir, fname))
+                    except OSError:
+                        pass
+        except OSError:
+            pass
+
+    # ── logging.Handler 接口 ──
+    def emit(self, record):
+        try:
+            with self._thread_lock:
+                if _HAS_PORTALOCKER:
+                    portalocker.lock(self._lock_fh, portalocker.LOCK_EX)
+                    try:
+                        self._ensure_stream_locked()
+                        self._stream.write(self.format(record) + '\n')
+                        self._stream.flush()
+                    finally:
+                        portalocker.unlock(self._lock_fh)
+                else:
+                    # 降级：仅进程内线程安全（多进程场景需安装 concurrent-log-handler）
+                    self._ensure_stream_locked()
+                    self._stream.write(self.format(record) + '\n')
+                    self._stream.flush()
+        except Exception:
+            self.handleError(record)
+
+    def close(self):
+        with self._thread_lock:
+            # getattr 防御：__init__ 中途失败时（如锁文件打不开）对象不完整，
+            # logging.shutdown 的 atexit 仍会调用 close()
+            if getattr(self, '_stream', None) is not None:
+                try:
+                    self._stream.close()
+                except Exception:
+                    pass
+                self._stream = None
+            if getattr(self, '_lock_fh', None) is not None:
+                try:
+                    self._lock_fh.close()
+                except Exception:
+                    pass
+        super().close()
+
 
 # 日志格式
 #   DETAILED_FORMAT — 文件日志：包含时间、级别、模块名、函数名、行号、线程名，便于追踪问题
@@ -119,19 +245,14 @@ def setup_logging(app):
     for h in root_logger.handlers[:]:
         root_logger.removeHandler(h)
 
-    # ===== 2. 文件 Handler（全部日志，每日轮转，保留30天） =====
-    # 使用 ConcurrentRotatingFileHandler 避免多进程/多线程文件锁定问题
-    file_handler = ConcurrentRotatingFileHandler(
-        LOG_FILE, maxBytes=50 * 1024 * 1024, backupCount=30, encoding='utf-8'
-    )
-    file_handler.setLevel(logging.DEBUG)
+    # ===== 2. 文件 Handler（全部日志，按日期拆分，保留30天） =====
+    # DailyFileHandler 多进程安全（portalocker 跨进程锁），
+    # 文件名 hoshino-YYYY-MM-DD.log，每天自动切换并清理过期文件
+    file_handler = DailyFileHandler(LOG_DIR, prefix='hoshino', level=logging.DEBUG)
     file_handler.setFormatter(logging.Formatter(DETAILED_FORMAT, DATE_FORMAT))
 
-    # ===== 3. 错误文件 Handler（仅 ERROR 以上，单独文件） =====
-    error_handler = ConcurrentRotatingFileHandler(
-        ERROR_LOG_FILE, maxBytes=10 * 1024 * 1024, backupCount=5, encoding='utf-8'
-    )
-    error_handler.setLevel(logging.ERROR)
+    # ===== 3. 错误文件 Handler（仅 ERROR 以上，按日期拆分） =====
+    error_handler = DailyFileHandler(LOG_DIR, prefix='error', level=logging.ERROR)
     error_handler.setFormatter(logging.Formatter(DETAILED_FORMAT, DATE_FORMAT))
 
     # ===== 4. 终端 Handler（INFO 级别，不显示 DEBUG 噪音） =====
@@ -211,11 +332,12 @@ def setup_logging(app):
     if not _is_worker:
         root_logger.info('━' * 60)
         root_logger.info('日志系统初始化完成')
-        root_logger.info('日志文件: %s', LOG_FILE)
-        root_logger.info('错误日志: %s', ERROR_LOG_FILE)
+        root_logger.info('日志目录: %s（按日期拆分，保留 %d 天）', LOG_DIR, LOG_KEEP_DAYS)
+        root_logger.info('今日文件: %s', _today_log_path('hoshino'))
+        root_logger.info('错误文件: %s', _today_log_path('error'))
         root_logger.info('━' * 60)
     else:
-        root_logger.info('Worker 日志系统已就绪（日志文件: %s）', LOG_FILE)
+        root_logger.info('Worker 日志系统已就绪（今日文件: %s）', _today_log_path('hoshino'))
 
     return root_logger
 
@@ -298,7 +420,7 @@ def log_request(response):
     # 终端：精简版（仅状态+方法+短路径）→ 适合实时查看
     # 文件：详细版（含 IP、UA 等）→ 用于事后分析排查
     if response.status_code >= 500:
-        # 服务端错误：终端 ERROR，文件也按 ERROR 输出（error.log 需含 IP/UA 供排查）
+        # 服务端错误：终端 ERROR，文件也按 ERROR 输出（error-YYYY-MM-DD.log 需含 IP/UA 供排查）
         logger.error(console_msg)
         logger.error(file_msg)
     elif response.status_code >= 400:

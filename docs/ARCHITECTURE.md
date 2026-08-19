@@ -138,8 +138,8 @@
         ├─ 3.4 app.config['COMPRESS_*']         ← Gzip 级别/阈值配置
         │
         ├─ 3.5 setup_logging(app)               ← 日志系统
-        │         ├── 文件处理器 → blog/logs/hoshino.log（每日轮转）
-        │         ├── 错误处理器 → blog/logs/error.log
+        │         ├── 文件处理器 → blog/logs/hoshino-YYYY-MM-DD.log（按日期拆分）
+        │         ├── 错误处理器 → blog/logs/error-YYYY-MM-DD.log
         │         └── 终端处理器（开发模式）
         │
         ├─ 3.6 os.makedirs(UPLOAD_FOLDER)       ← 确保上传目录存在
@@ -489,8 +489,8 @@ Product ──1:N──→ ProductSource ──1:N──→ PriceRecord
 
 | 文件 | 路径 | 轮转策略 | 级别 |
 |------|------|----------|------|
-| 主日志 | `blog/logs/hoshino.log` | 每天轮转，保留 30 天 | INFO+ |
-| 错误日志 | `blog/logs/error.log` | 每天轮转，保留 30 天 | WARNING+ |
+| 主日志 | `blog/logs/hoshino-YYYY-MM-DD.log` | 按日期拆分，保留 30 天 | INFO+ |
+| 错误日志 | `blog/logs/error-YYYY-MM-DD.log` | 按日期拆分，保留 30 天 | WARNING+ |
 
 **`log_request(response)`：** 在 `app.after_request` 注册，记录：
 - 请求方法、路径、状态码
@@ -1282,8 +1282,8 @@ CREATE DATABASE hoshino_blog CHARACTER SET utf8mb4;
 ### 12.5 日志查看
 
 ```bash
-tail -f blog/logs/hoshino.log      # 实时查看
-tail -f blog/logs/error.log        # 仅错误
+tail -f blog/logs/hoshino-$(date +%F).log   # 实时查看（今天的文件）
+tail -f blog/logs/error-$(date +%F).log     # 仅错误
 ```
 
 ### 12.6 常见维护

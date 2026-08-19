@@ -87,7 +87,7 @@ if "%EXIT_CODE%"=="0" (
     echo  服务已正常退出
 ) else (
     echo  服务异常退出（退出码 %EXIT_CODE%）
-    echo  请查看上方日志或 blog/logs/error.log 排查
+    echo  请查看上方日志或 blog/logs\ 下当日 error-YYYY-MM-DD.log 排查
 )
 echo ============================================
 pause

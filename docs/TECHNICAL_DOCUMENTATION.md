@@ -1461,8 +1461,8 @@ except (ConnectionError, TimeoutError, json.JSONDecodeError):
 
 | Handler | 输出目标 | 级别 | 格式 | 轮转策略 |
 |---------|----------|------|------|----------|
-| file_handler | `blog/logs/hoshino.log` | DEBUG | 详细（含模块/行号） | 每日轮转，保留 30 天 |
-| error_handler | `blog/logs/error.log` | ERROR | 详细 | 大小轮转，10MB×5 |
+| file_handler | `blog/logs/hoshino-YYYY-MM-DD.log` | DEBUG | 详细（含模块/行号） | 按日期拆分，保留 30 天 |
+| error_handler | `blog/logs/error-YYYY-MM-DD.log` | ERROR | 详细 | 按日期拆分，保留 30 天 |
 | console_handler | 终端 stderr | INFO | 简洁 | 无 |
 
 ### 18.2 请求日志中间件
