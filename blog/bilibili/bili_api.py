@@ -472,16 +472,28 @@ def _wait_soft_cooldown():
 
 def _reset_network_session():
     """412 封禁后强制重建网络层：
-      1. 清空 bilibili_api 的 HTTP session 池（TLS/HTTP2 指纹随重建变化）
+      1. 仅移除当前线程事件循环绑定的请求客户端条目（绝不 clear 全局池！）
+         —— bilibili_api 的客户端按事件循环缓存，全池清空会让所有线程
+         后续请求报「未找到用户指定的请求客户端」，直到进程重启（08-19 事故）
       2. 当前线程换绑下一个 UA（避免同一 UA 持续被标记）
       3. 关闭当前线程事件循环（_sync_inner 下次调用时自动重建）
     """
     try:
         from bilibili_api.utils import network as _bili_net
-        pool = getattr(_bili_net, 'session_pool', None)
-        if isinstance(pool, dict):
-            pool.clear()
-            logger.warning('已清空 bilibili_api session 池（强制重建连接）')
+        loop = getattr(_loop_local, 'loop', None)
+        # 防御性尝试多个可能的池名/结构；只做 pop 当前 loop 的条目，
+        # 结构不符或 key 不匹配时静默跳过，绝不影响其他线程的客户端
+        for pool_name in ('session_pool', 'request_client_pool', 'request_client'):
+            try:
+                pool = getattr(_bili_net, pool_name, None)
+                if isinstance(pool, dict) and loop is not None:
+                    pool.pop(loop, None)
+                elif pool_name == 'request_client' and pool is not None:
+                    # 某些版本是全局单例，无法按 loop 移除——保持不动
+                    pass
+            except Exception:
+                continue
+        logger.warning('已移除当前线程的事件循环客户端（其余线程不受影响）')
     except Exception:
         pass
     if hasattr(_thread_local, 'ua'):
