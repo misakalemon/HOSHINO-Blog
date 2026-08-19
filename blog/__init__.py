@@ -211,6 +211,11 @@ def init_db(app):
         # ── 迁移 bili_videos.is_deleted 列（墓碑标记）──
         _migrate_bili_video_is_deleted(app)
 
+        # ── 通用兜底：模型列与数据库列自动对齐（最后执行）──
+        # 防止"模型新增列但 ALTER 迁移遗漏/未执行"导致的
+        # Unknown column 错误（如 07-28 bili_videos.pic 事故）
+        _migrate_ensure_model_columns(app)
+
 
 def _migrate_post_html_file_url(app):
     """迁移：为 Post 表添加 html_file_url 字段。
@@ -1214,6 +1219,74 @@ def _migrate_bili_video_is_deleted(app):
     except Exception as e:
         db.session.rollback()
         app.logger.warning('迁移: 添加 bili_videos 墓碑列失败: %s', e)
+
+
+def _migrate_ensure_model_columns(app):
+    """通用兜底迁移：对比 SQLAlchemy 模型列与数据库实际列，自动补齐缺失列。
+
+    背景：2026-07-28 事故——BiliVideo 模型新增 pic 列但旧库未同步，
+    所有涉及 bili_videos 的查询报 1054 Unknown column，增量检查与
+    B站页面全部 500。此迁移在每次启动时兜底对齐，防止同类问题再发。
+
+    策略：
+      - 仅处理可安全自动生成 DDL 的简单列类型（String/Text/JSON/
+        Integer/BigInteger/Float/Boolean/DateTime 及其方言子类如 MEDIUMTEXT）
+      - 跳过外键列与复杂类型（由显式迁移负责）
+      - 每列独立 try/except，失败仅告警不阻断启动
+      - 显式迁移（含数据回填）在 init_db 中先于本函数执行
+    """
+    engine = db.get_engine()
+    dialect = engine.dialect.name
+    if dialect != 'mysql':
+        return
+    from sqlalchemy import text as _text
+    from sqlalchemy.schema import CreateColumn
+    from sqlalchemy import (
+        BigInteger, Boolean, DateTime, Float, Integer, JSON, String, Text,
+    )
+
+    _SIMPLE_TYPES = (BigInteger, Boolean, DateTime, Float, Integer, JSON, String, Text)
+    _TABLES = [
+        'users', 'categories', 'posts', 'comments', 'contact_messages',
+        'featured_cards', 'bili_ups', 'bili_videos', 'bili_video_comments',
+        'bili_danmakus', 'bili_up_history', 'bili_video_history',
+        'bili_watched_videos', 'bili_subscriptions', 'bili_cleanup_config',
+        'hero_images', 'wordcloud_config', 'wordcloud_data',
+    ]
+
+    inspector = db.inspect(engine)
+    tables_by_name = {t.name: t for t in db.metadata.tables.values()}
+
+    for table_name in _TABLES:
+        model_table = tables_by_name.get(table_name)
+        if model_table is None:
+            continue
+        try:
+            if not inspector.has_table(table_name):
+                continue
+            db_cols = {c['name'] for c in inspector.get_columns(table_name)}
+        except Exception:
+            continue
+        for col in model_table.columns:
+            if col.name in db_cols:
+                continue
+            # 跳过外键列与复杂类型（由显式迁移处理）
+            if col.foreign_keys or not isinstance(col.type, _SIMPLE_TYPES):
+                continue
+            try:
+                col_ddl = str(CreateColumn(col).compile(dialect=engine.dialect))
+                db.session.execute(_text(
+                    f'ALTER TABLE {table_name} ADD COLUMN {col_ddl}'
+                ))
+                db.session.commit()
+                app.logger.info(
+                    '迁移(兜底): %s.%s 缺失列已自动补齐', table_name, col.name
+                )
+            except Exception as e:
+                db.session.rollback()
+                app.logger.warning(
+                    '迁移(兜底): %s.%s 补列失败: %s', table_name, col.name, e
+                )
 
 
 # ── 后导入路由（延迟导入） ─────────────────────
