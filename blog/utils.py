@@ -9,7 +9,7 @@ import threading
 from collections import OrderedDict
 from typing import Optional
 
-from flask import request
+from flask import current_app, request
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +109,52 @@ def is_safe_image_url(url: str) -> bool:
         return False
     return s.startswith(('http://', 'https://', '/static/', '/uploads/', '/images/',
                          'uploads/', 'images/'))
+
+
+def build_site_url(endpoint: str, **values) -> str:
+    """生成站点绝对 URL（供邮件链接等需要外链的场景）。
+
+    优先使用配置的 SITE_BASE_URL（如 https://hoshino-blog.iepose.cn）：
+      - worker 后台线程构建链接时不依赖请求上下文/SERVER_NAME，
+        直接从 url_map 解析路径拼接到基础 URL 上，避免生成 localhost/内网 IP
+      - 未配置 SITE_BASE_URL 时回退到 url_for(_external=True)（需请求上下文或 SERVER_NAME）
+
+    Args:
+        endpoint: Flask 端点名，如 'bili_public.verify_subscription'
+        **values: 路径参数（token 等）
+
+    Returns:
+        str: 绝对 URL
+    """
+    from flask import url_for
+
+    try:
+        base = (current_app.config.get('SITE_BASE_URL') or '').rstrip('/')
+    except Exception:
+        base = ''
+    if base:
+        # 不依赖 Flask url_for（worker 线程无请求上下文时 url_for 需 SERVER_NAME）：
+        # 直接从 url_map 找端点规则，替换路径参数
+        try:
+            rule = current_app.url_map._rules_by_endpoint.get(endpoint)
+            if not rule:
+                raise KeyError(endpoint)
+            # 选择第一个匹配的规则（通常只有一个）
+            r = rule[0]
+            path = r.rule
+            # URL 参数默认值（如无）不需要处理；仅替换 path 中的 <...>
+            import re as _re
+            def _conv(m):
+                pname = m.group(1).split(':')[-1] if m.group(1) else ''
+                return str(values.get(pname, ''))
+            path = _re.sub(r'<(?:(?:string|int|float|path):)?([^<>]*)>', _conv, path)
+            # 端点可能带 url_prefix，url_map 规则已含前缀（Blueprint 注册时自动加）
+            return f'{base}{path}'
+        except Exception as e:
+            logger.warning('build_site_url 解析失败 endpoint=%s: %s', endpoint, e)
+            # 回退：依赖 SERVER_NAME 或请求上下文
+            return url_for(endpoint, _external=True, **values)
+    return url_for(endpoint, _external=True, **values)
 
 
 def escape_like(value: str) -> str:

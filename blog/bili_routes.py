@@ -1377,9 +1377,11 @@ def _check_new_videos(mid: int, app):
                         from blog.mail import queue_video_notify
 
                         emit(f'新视频通知已暂存（等待定时批量发送）给 {len(subs)} 个订阅者', 'MAIL')
+                        from blog.utils import build_site_url
                         for sub in subs:
-                            unsub_url = url_for(
-                                'bili_public.unsubscribe', token=sub.token, _external=True
+                            # worker 后台线程无请求上下文，用 SITE_BASE_URL 生成退订链接
+                            unsub_url = build_site_url(
+                                'bili_public.unsubscribe', token=sub.token
                             )
                             up_display = up.name or str(up.mid)
                             for v in new_videos_data:

@@ -19,7 +19,7 @@ import os
 import secrets
 import time
 
-from flask import Blueprint, current_app, jsonify, render_template, request, url_for
+from flask import Blueprint, current_app, jsonify, render_template, request
 
 from blog.models import BiliSubscription, BiliUp, BiliUpHistory, BiliVideo, BiliVideoHistory, WordCloudData, db
 from blog.utils import get_client_ip, RateLimiter, escape_like
@@ -469,9 +469,10 @@ def subscribe():
     selected_ups = BiliUp.query.filter(BiliUp.id.in_(new_up_ids)).all()
     up_names = [u.name or str(u.mid) for u in selected_ups]
 
-    # 构造验证和取消订阅的完整 URL
-    verify_url = url_for('bili_public.verify_subscription', token=token, _external=True)
-    unsubscribe_url = url_for('bili_public.unsubscribe', token=token, _external=True)
+    # 构造验证和取消订阅的完整 URL（优先基于 SITE_BASE_URL 生成，worker 线程也正确）
+    from blog.utils import build_site_url
+    verify_url = build_site_url('bili_public.verify_subscription', token=token)
+    unsubscribe_url = build_site_url('bili_public.unsubscribe', token=token)
 
     from blog.mail import send_verify_email
 

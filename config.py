@@ -191,6 +191,13 @@ class Config:
     SERVER_NAME = os.environ.get('SERVER_NAME') or None
     # 外部 URL 协议（配合 SERVER_NAME 使用）
     PREFERRED_URL_SCHEME = os.environ.get('PREFERRED_URL_SCHEME', 'http')
+    # 站点对外访问的基础 URL（用于邮件链接等需要绝对 URL 的场景）。
+    # 优先推荐设置此项，例如 https://hoshino-blog.iepose.cn ：
+    #   - worker 后台线程构建 url_for(_external=True) 时不依赖请求上下文，
+    #     直接基于此基础 URL 生成，避免生成 localhost/内网 IP 链接
+    #   - 未设置时回退到 SERVER_NAME + PREFERRED_URL_SCHEME，
+    #     两者都未设置时仅在请求上下文中可用
+    SITE_BASE_URL = (os.environ.get('SITE_BASE_URL') or '').rstrip('/')
 
     # 密钥用于 Session 签名、CSRF token 加密。
     # 优先级：.env 中的 SECRET_KEY > .secret_keys 文件（自动轮换）
