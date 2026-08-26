@@ -477,18 +477,30 @@ def subscribe():
 
     # 邮件标题显示：不超过 3 个用顿号分隔，超过 3 个显示总数
     label = '、'.join(up_names) if len(up_names) <= 3 else f'{len(up_names)} 个 UP 主（{"、".join(up_names[:3])}…）'
-    send_verify_email(email, label, verify_url, unsubscribe_url)
+    try:
+        send_verify_email(email, label, verify_url, unsubscribe_url)
+    except Exception as e:
+        # 邮件发送失败不阻塞订阅入库：记录日志并提示稍后重试。
+        # 若用户再次提交，未验证记录会复用/更新 token 重新发信。
+        logger.error('发送订阅验证邮件失败 email=%s: %s', email, e)
+        return jsonify({
+            'ok': False,
+            'error': '验证邮件发送失败，请稍后重试或检查邮箱地址',
+        }), 500
 
     msg = f'验证邮件已发送至 {email}，请检查邮箱并确认订阅'
     return jsonify({'ok': True, 'message': msg})
 
 
-@bili_public_bp.route('/verify/<token>', methods=['POST'])
+@bili_public_bp.route('/verify/<token>', methods=['GET', 'POST'])
 def verify_subscription(token):
     """验证邮件订阅（批量验证同一 token 的所有订阅记录）
 
     用户点击邮件中的验证链接后，将 token 对应的所有订阅记录
     标记为 verified=True。若所有记录此前已验证，则提示无需重复操作。
+
+    注意：邮件中的验证链接是 <a href>（GET 请求），因此路由必须
+    同时接受 GET（不能只允许 POST，否则点击邮件链接会 405）。
 
     Args:
         token (str): 订阅验证令牌（URL-safe 随机字符串）
@@ -522,12 +534,15 @@ def verify_subscription(token):
     )
 
 
-@bili_public_bp.route('/unsubscribe/<token>', methods=['POST'])
+@bili_public_bp.route('/unsubscribe/<token>', methods=['GET', 'POST'])
 def unsubscribe(token):
     """取消订阅（批量删除同一 token 的所有订阅记录）
 
     用户点击邮件中的取消订阅链接后，删除 token 对应的所有 BiliSubscription 记录。
     提示用户已取消哪些 UP 主的通知。
+
+    注意：邮件中的退订链接是 <a href>（GET 请求），因此路由必须
+    同时接受 GET（不能只允许 POST，否则点击邮件链接会 405）。
 
     Args:
         token (str): 订阅验证令牌
