@@ -2,11 +2,11 @@
      邮件模板 — 新视频通知（批量聚合版）
      =======================
      订阅的多个 UP 主发布新视频后，系统定时聚合为一封邮件发送。
-     邮件按 UP 主分组列出全部新视频，每个视频带跳转按钮。
+     邮件按 UP 主分组列出全部新视频，每个视频带标题、简介与跳转按钮。
 
      Template: mail/batched_video_notify.html
      Context:
-       groups         — [{up_name, videos:[{title,url,pub_date,duration,view_count,like_count}]}]
+       groups         — [{up_name, videos:[{title,url,pub_date,duration,description}]}]
        unsubscribe_url — 退订链接
        total_videos   — 新视频总数
      ============================================================ -->
@@ -27,16 +27,10 @@
 {% for v in group.videos %}
 <tr><td style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:16px;margin-bottom:10px;display:block">
 <h2 style="color:#e8edf5;font-size:14px;font-weight:500;margin:0 0 6px">{{ v.title }}</h2>
-<table style="width:100%;margin-bottom:12px">
-<tr>
-<td style="color:rgba(255,255,255,0.4);font-size:12px;padding:2px 0">📅 {{ v.pub_date }}</td>
-<td style="color:rgba(255,255,255,0.4);font-size:12px;padding:2px 0">⏱ {{ v.duration }}</td>
-</tr>
-<tr>
-<td style="color:rgba(255,255,255,0.4);font-size:12px;padding:2px 0">▶ {{ '{:,}'.format(v.view_count) if v.view_count else 0 }}</td>
-<td style="color:rgba(255,255,255,0.4);font-size:12px;padding:2px 0">👍 {{ '{:,}'.format(v.like_count) if v.like_count else 0 }}</td>
-</tr>
-</table>
+<div style="color:rgba(255,255,255,0.35);font-size:12px;margin-bottom:8px">📅 {{ v.pub_date }} &nbsp;·&nbsp; ⏱ {{ v.duration }}</div>
+{% if v.description %}
+<p style="color:rgba(255,255,255,0.6);font-size:12px;line-height:1.6;margin:0 0 12px">{{ v.description[:120] }}{% if v.description|length > 120 %}…{% endif %}</p>
+{% endif %}
 <a href="{{ v.url }}" target="_blank" style="display:inline-block;padding:8px 22px;background:linear-gradient(135deg,#ff6b9d,#c084fc);border-radius:20px;color:#ffffff;font-size:12px;font-weight:600;text-decoration:none">▶ 观看视频</a>
 </td></tr>
 {% endfor %}

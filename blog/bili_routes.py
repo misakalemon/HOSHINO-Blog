@@ -1355,7 +1355,7 @@ def _check_new_videos(mid: int, app):
                         .limit(count)
                         .all()
                     )
-                    # 构造邮件模板所需的数据
+                    # 构造邮件模板所需的数据（含简介，不含播放量等统计）
                     new_videos_data = [
                         {
                             'title': v.title or '',
@@ -1365,8 +1365,7 @@ def _check_new_videos(mid: int, app):
                             'duration': f'{v.duration // 60}:{v.duration % 60:02d}'
                             if v.duration
                             else '',
-                            'view_count': v.view_count or 0,
-                            'like_count': v.like_count or 0,
+                            'description': v.description or '',
                         }
                         for v in new_videos
                     ]
