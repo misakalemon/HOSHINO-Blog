@@ -34,7 +34,7 @@
         <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:0.8rem;color:rgba(255,255,255,0.35)">
             <span>BV: <a href="https://www.bilibili.com/video/{{ video.bvid }}" target="_blank" rel="noopener" style="color:#a78bfa;text-decoration:none" class="bv-link">{{ video.bvid }}</a></span>
             <span>时长: {{ '%d:%02d'|format(video.duration//60, video.duration%60) if video.duration else '-' }}</span>
-            <span>发布: {{ video.pub_date.strftime('%Y/%m/%d %H:%M') if video.pub_date else '-' }}</span>
+            <span>发布: {{ video.pub_datetime.strftime('%Y/%m/%d %H:%M') if video.pub_datetime else (video.pub_date.strftime('%Y/%m/%d') if video.pub_date else '-') }}</span>
         </div>
 
         {% if video.description %}

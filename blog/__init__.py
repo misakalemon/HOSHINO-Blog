@@ -512,6 +512,23 @@ def _migrate_bili_video_fields(app):
         return
     from sqlalchemy import text
 
+    # 无论列是否刚创建，只要存在 pub_datetime 列就执行回填：
+    # 老数据（字段后加之前入库）或爬取异常时 pub_datetime 可能为 NULL，
+    # 用已有 pubdate 时间戳补齐，避免模板显示 00:00。
+    if 'pub_datetime' in cols:
+        try:
+            db.session.execute(
+                text(
+                    'UPDATE bili_videos SET pub_datetime = FROM_UNIXTIME(pubdate) '
+                    'WHERE pubdate IS NOT NULL AND pub_datetime IS NULL'
+                )
+            )
+            db.session.commit()
+            app.logger.info('迁移: 回填 bili_videos.pub_datetime (NULL 行)')
+        except Exception as e:
+            db.session.rollback()
+            app.logger.warning('迁移: 回填 pub_datetime 失败: %s', e)
+
     if 'pub_datetime' not in cols:
         try:
             db.session.execute(text('ALTER TABLE bili_videos ADD COLUMN pub_datetime DATETIME'))
