@@ -336,12 +336,14 @@ def send_batched_video_notify(app):
         if r is None:
             return
         with app.app_context():
-            # 扫描所有暂存队列键
+            # 扫描所有暂存队列键（redis-py 返回 bytes，需解码为 str）
             cursor = 0
             emails = []
             while True:
                 cursor, keys = r.scan(cursor, match=f'{_NOTIFY_PREFIX}:list:*', count=100)
                 for k in keys:
+                    if isinstance(k, bytes):
+                        k = k.decode('utf-8', 'ignore')
                     emails.append(k.split(':')[-1])
                 if cursor == 0:
                     break
@@ -356,19 +358,27 @@ def send_batched_video_notify(app):
                     items = r.hgetall(key)
                     if not items:
                         continue
-                    # 按 UP 分组
+                    # 按 UP 分组（hgetall 的 field/value 均为 bytes）
                     groups = {}
                     for bvid, raw in items.items():
                         try:
+                            if isinstance(raw, bytes):
+                                raw = raw.decode('utf-8', 'ignore')
                             v = _json.loads(raw)
                         except (TypeError, ValueError):
+                            continue
+                        if not isinstance(v, dict):
                             continue
                         up_name = v.pop('up_name', 'UP主')
                         groups.setdefault(up_name, []).append(v)
                     if not groups:
                         r.delete(key)
                         continue
-                    unsub_url = (r.hget(meta_key, 'unsub_url') or b'').decode('utf-8', 'ignore')
+                    # decode_responses=True 时 hget 返回 str；兼容 bytes 客户端
+                    _unsub = r.hget(meta_key, 'unsub_url') or ''
+                    if isinstance(_unsub, bytes):
+                        _unsub = _unsub.decode('utf-8', 'ignore')
+                    unsub_url = _unsub
                     # 渲染聚合邮件（按 UP 分组列表）
                     groups_list = [
                         {'up_name': up_name, 'videos': videos}
