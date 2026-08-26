@@ -465,6 +465,21 @@ def _init_worker_scheduler(app):
             replace_existing=True,
         )
 
+        # 新视频通知批量发送：默认每 15 分钟聚合一次。
+        # 发现新视频时先暂存 Redis 队列，此处统一按收件人发送一封聚合邮件，
+        # 避免"每个 UP 一封邮件"刷屏订阅者邮箱。
+        from blog.mail import send_batched_video_notify
+        _notify_minutes = int(os.environ.get('BILI_NOTIFY_MINUTES', '15'))
+        scheduler.add_job(
+            func=lambda: send_batched_video_notify(app),
+            trigger='interval',
+            minutes=_notify_minutes,
+            id='batched_video_notify',
+            replace_existing=True,
+            coalesce=True,
+            max_instances=2,
+        )
+
         # 04:00 全站词云预计算（深扫完成后，且与 B站词云错开）
         from blog.wordcloud import precompute_all_wordclouds
         def _job_all_wc():
@@ -517,7 +532,8 @@ def _init_worker_scheduler(app):
 
         app.logger.info(
             'Worker 定时任务: 02:00深扫 03:00密钥轮换 03:30历史清理 '
-            '04:00全站词云 04:30B站词云 每15min增量检查'
+            '04:00全站词云 04:30B站词云 每15min增量检查 每%dmin批量视频通知',
+            _notify_minutes
         )
     except Exception as e:
         app.logger.warning('定时任务启动失败（不影响运行）: %s', e)

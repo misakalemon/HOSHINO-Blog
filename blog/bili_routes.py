@@ -1373,16 +1373,18 @@ def _check_new_videos(mid: int, app):
                     # 查询已通过邮箱验证的订阅者
                     subs = BiliSubscription.query.filter_by(up_id=up.id, verified=True).all()
                     if subs:
-                        from blog.mail import send_new_video_notify
+                        # 批量通知：先写入 Redis 暂存队列，由 Worker 定时聚合发送。
+                        # 避免"每个 UP 每次增量一封邮件"导致订阅多个 UP 时邮箱刷屏。
+                        from blog.mail import queue_video_notify
 
-                        emit(f'发送邮件通知给 {len(subs)} 个订阅者', 'MAIL')
+                        emit(f'新视频通知已暂存（等待定时批量发送）给 {len(subs)} 个订阅者', 'MAIL')
                         for sub in subs:
                             unsub_url = url_for(
                                 'bili_public.unsubscribe', token=sub.token, _external=True
                             )
-                            send_new_video_notify(
-                                sub.email, up.name or str(up.mid), new_videos_data, unsub_url
-                            )
+                            up_display = up.name or str(up.mid)
+                            for v in new_videos_data:
+                                queue_video_notify(sub.email, up_display, v, unsub_url)
                 except Exception as e:
                     logger.error('发送新视频通知失败 mid=%d: %s', mid, e)
 

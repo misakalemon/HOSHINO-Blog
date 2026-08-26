@@ -1,0 +1,50 @@
+<!-- ============================================================
+     邮件模板 — 新视频通知（批量聚合版）
+     =======================
+     订阅的多个 UP 主发布新视频后，系统定时聚合为一封邮件发送。
+     邮件按 UP 主分组列出全部新视频，每个视频带跳转按钮。
+
+     Template: mail/batched_video_notify.html
+     Context:
+       groups         — [{up_name, videos:[{title,url,pub_date,duration,view_count,like_count}]}]
+       unsubscribe_url — 退订链接
+       total_videos   — 新视频总数
+     ============================================================ -->
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>新视频通知</title></head>
+<body style="margin:0;padding:0;background:#0f0d1e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+<table role="presentation" style="width:100%;max-width:600px;margin:0 auto;padding:40px 20px">
+<tr><td style="text-align:center;padding-bottom:24px">
+<h1 style="color:#e8edf5;font-size:20px;font-weight:500;margin:0">{{ total_videos }} 个新视频动态汇总</h1>
+<p style="color:rgba(255,255,255,0.5);font-size:13px;margin:8px 0 0">以下 UP 主发布了新视频：</p>
+</td></tr>
+
+{% for group in groups %}
+<tr><td style="padding:18px 0 6px">
+<div style="color:#c4b5fd;font-size:14px;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:8px">📺 {{ group.up_name }}（{{ group.videos|length }} 个）</div>
+</td></tr>
+{% for v in group.videos %}
+<tr><td style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:16px;margin-bottom:10px;display:block">
+<h2 style="color:#e8edf5;font-size:14px;font-weight:500;margin:0 0 6px">{{ v.title }}</h2>
+<table style="width:100%;margin-bottom:12px">
+<tr>
+<td style="color:rgba(255,255,255,0.4);font-size:12px;padding:2px 0">📅 {{ v.pub_date }}</td>
+<td style="color:rgba(255,255,255,0.4);font-size:12px;padding:2px 0">⏱ {{ v.duration }}</td>
+</tr>
+<tr>
+<td style="color:rgba(255,255,255,0.4);font-size:12px;padding:2px 0">▶ {{ '{:,}'.format(v.view_count) if v.view_count else 0 }}</td>
+<td style="color:rgba(255,255,255,0.4);font-size:12px;padding:2px 0">👍 {{ '{:,}'.format(v.like_count) if v.like_count else 0 }}</td>
+</tr>
+</table>
+<a href="{{ v.url }}" target="_blank" style="display:inline-block;padding:8px 22px;background:linear-gradient(135deg,#ff6b9d,#c084fc);border-radius:20px;color:#ffffff;font-size:12px;font-weight:600;text-decoration:none">▶ 观看视频</a>
+</td></tr>
+{% endfor %}
+{% endfor %}
+
+<tr><td style="text-align:center;padding:24px 0 0">
+<a href="{{ unsubscribe_url }}" style="color:rgba(255,255,255,0.25);font-size:12px;text-decoration:none">取消订阅通知</a>
+</td></tr>
+</table>
+</body>
+</html>

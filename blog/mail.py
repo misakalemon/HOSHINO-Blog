@@ -250,3 +250,143 @@ def send_new_video_notify(to: str, up_name: str, videos: list, unsubscribe_url: 
     site_name = app.config.get('SITE_NAME', 'Hoshino')
     count = len(videos)
     send_email(to, f'[{site_name}] {up_name} 发布了 {count} 个新视频', html, to_name=to_name)
+
+
+# ═══════════════════════════════════════════════
+# 新视频通知 — 批量暂存 + 定时聚合发送
+# ═══════════════════════════════════════════════
+# 背景：此前每个 UP 每次增量发现新视频就单独发一封邮件，
+#       订阅多个 UP 时邮箱会被"刷屏"。改为：
+#       1. 发现新视频时先写入 Redis 暂存队列（按收件人分组，视频去重）
+#       2. Worker 定时任务（默认每 15 分钟）聚合所有暂存视频，
+#          每个收件人只收一封邮件（按 UP 分组列出全部新视频），然后清空队列
+#
+# Redis 键结构：
+#   hblog:notify:meta:{email}  → JSON {"unsub_url": "...", "updated_at": ts}
+#   hblog:notify:list:{email}  → Hash {bvid: JSON(video), ...}   （bvid 天然去重）
+
+_NOTIFY_PREFIX = 'notify'
+
+
+def _notify_redis():
+    """获取通知暂存用的 Redis 客户端（不可用时返回 None）。"""
+    try:
+        from blog.cache import _redis_client
+        return _redis_client
+    except Exception:
+        return None
+
+
+def queue_video_notify(email: str, up_name: str, video: dict, unsubscribe_url: str):
+    """将一条新视频通知加入暂存队列（不立即发邮件）。
+
+    同一收件人同一视频（按 bvid 去重）只保留一份；视频数据若已存在则更新。
+
+    Args:
+        email: 收件人邮箱
+        up_name: UP 主名称
+        video: 视频信息 dict（title/bvid/url/pub_date/duration/view_count/like_count）
+        unsubscribe_url: 退订链接（每个收件人一份，存储于 meta）
+    """
+    if not email or not video:
+        return
+    try:
+        import json as _json
+        r = _notify_redis()
+        if r is None:
+            # Redis 不可用时降级为立即发送（保底不丢通知）
+            logger.warning('Redis 不可用，降级为立即发送视频通知 → %s', email)
+            send_new_video_notify(email, up_name, [video], unsubscribe_url or '')
+            return
+        bvid = video.get('bvid') or ''
+        if not bvid:
+            return
+        key = f'{_NOTIFY_PREFIX}:list:{email}'
+        meta_key = f'{_NOTIFY_PREFIX}:meta:{email}'
+        # 视频信息补 up_name，聚合发送时按 UP 分组
+        v = dict(video)
+        v['up_name'] = up_name
+        r.hset(key, bvid, _json.dumps(v, ensure_ascii=False))
+        r.hset(meta_key, 'unsub_url', unsubscribe_url or '')
+        r.hset(meta_key, 'updated_at', str(time.time()))
+        # 暂存队列保留 7 天，防止长期未发送导致堆积
+        r.expire(key, 7 * 24 * 3600)
+        r.expire(meta_key, 7 * 24 * 3600)
+    except Exception as e:
+        logger.warning('视频通知暂存失败 email=%s: %s', email, e)
+
+
+def send_batched_video_notify(app):
+    """聚合发送所有暂存的新视频通知（Worker 定时任务调用）。
+
+    扫描 Redis 中所有 notify:list:* 队列，对每个收件人：
+      1. 读取其全部暂存视频（按 up_name 分组）
+      2. 渲染聚合邮件模板（batched_video_notify.html）
+      3. 后台发送一封邮件
+      4. 发送成功后删除该收件人的队列
+
+    无暂存数据时直接返回；失败的单条通知保留在队列等待下轮重试。
+
+    Args:
+        app: Flask 应用实例（用于渲染模板与配置）
+    """
+    try:
+        import json as _json
+        r = _notify_redis()
+        if r is None:
+            return
+        with app.app_context():
+            # 扫描所有暂存队列键
+            cursor = 0
+            emails = []
+            while True:
+                cursor, keys = r.scan(cursor, match=f'{_NOTIFY_PREFIX}:list:*', count=100)
+                for k in keys:
+                    emails.append(k.split(':')[-1])
+                if cursor == 0:
+                    break
+            emails = list(dict.fromkeys(emails))  # 去重保序
+            if not emails:
+                return
+            logger.info('批量视频通知: %d 个收件人待聚合', len(emails))
+            for email in emails:
+                try:
+                    key = f'{_NOTIFY_PREFIX}:list:{email}'
+                    meta_key = f'{_NOTIFY_PREFIX}:meta:{email}'
+                    items = r.hgetall(key)
+                    if not items:
+                        continue
+                    # 按 UP 分组
+                    groups = {}
+                    for bvid, raw in items.items():
+                        try:
+                            v = _json.loads(raw)
+                        except (TypeError, ValueError):
+                            continue
+                        up_name = v.pop('up_name', 'UP主')
+                        groups.setdefault(up_name, []).append(v)
+                    if not groups:
+                        r.delete(key)
+                        continue
+                    unsub_url = (r.hget(meta_key, 'unsub_url') or b'').decode('utf-8', 'ignore')
+                    # 渲染聚合邮件（按 UP 分组列表）
+                    groups_list = [
+                        {'up_name': up_name, 'videos': videos}
+                        for up_name, videos in groups.items()
+                    ]
+                    html = render_template(
+                        'mail/batched_video_notify.html',
+                        groups=groups_list,
+                        unsubscribe_url=unsub_url,
+                        total_videos=sum(len(v) for v in groups.values()),
+                    )
+                    site_name = app.config.get('SITE_NAME', 'Hoshino')
+                    subject = f'[{site_name}] {len(groups_list)} 个 UP 发布了 {sum(len(v) for v in groups.values())} 个新视频'
+                    send_email(email, subject, html)
+                    # 发送成功（入队）后清空该收件人队列
+                    r.delete(key)
+                    r.delete(meta_key)
+                except Exception as e:
+                    logger.warning('批量视频通知发送失败 email=%s: %s', email, e)
+    except Exception as e:
+        logger.warning('批量视频通知聚合失败: %s', e)
