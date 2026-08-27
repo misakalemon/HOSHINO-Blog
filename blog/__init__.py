@@ -512,14 +512,17 @@ def _migrate_bili_video_fields(app):
         return
     from sqlalchemy import text
 
-    # 无论列是否刚创建，只要存在 pub_datetime 列就执行回填：
     # 老数据（字段后加之前入库）或爬取异常时 pub_datetime 可能为 NULL，
-    # 用已有 pubdate 时间戳补齐，避免模板显示 00:00。
+    # 用已有 pubdate 时间戳补齐。注意：模型入库时 PyMySQL 直接格式化
+    # wall-clock 字段（CST 本地时刻，即北京时间），故回填必须强制东八区墙钟，
+    # 与模型存储约定一致。若直接 FROM_UNIXTIME(pubdate) 且 MySQL 服务器时区
+    # 为 UTC，将产生 8 小时偏差。
     if 'pub_datetime' in cols:
         try:
             db.session.execute(
                 text(
-                    'UPDATE bili_videos SET pub_datetime = FROM_UNIXTIME(pubdate) '
+                    'UPDATE bili_videos SET pub_datetime = CONVERT_TZ('
+                    "FROM_UNIXTIME(pubdate), @@session.time_zone, '+08:00') "
                     'WHERE pubdate IS NOT NULL AND pub_datetime IS NULL'
                 )
             )
@@ -536,7 +539,9 @@ def _migrate_bili_video_fields(app):
             # FROM_UNIXTIME() 是 MySQL 内置函数，将秒级时间戳转为 DATETIME
             db.session.execute(
                 text(
-                    'UPDATE bili_videos SET pub_datetime = FROM_UNIXTIME(pubdate) WHERE pubdate IS NOT NULL AND pub_datetime IS NULL'
+                    'UPDATE bili_videos SET pub_datetime = CONVERT_TZ('
+                    "FROM_UNIXTIME(pubdate), @@session.time_zone, '+08:00') "
+                    'WHERE pubdate IS NOT NULL AND pub_datetime IS NULL'
                 )
             )
             db.session.commit()
