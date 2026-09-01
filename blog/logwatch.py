@@ -166,7 +166,8 @@ def _restart_worker():
         _terminate_process(pid)
         logger.warning('看门狗已终止旧 Worker (PID=%d)', pid)
     _restart_env = {**os.environ, 'WORKER_PROCESS': '1'}
-    # 看门狗进程自身带 LOGWATCH_PROCESS=1，若直接继承会给新 Worker\n    # 错误打上 Watchdog 标签；必须清除
+    # 看门狗进程自身带 LOGWATCH_PROCESS=1，若直接继承会给新 Worker
+    # 错误打上 Watchdog 标签；必须清除
     _restart_env.pop('LOGWATCH_PROCESS', None)
     _restart_env.pop('WORDCLOUD_PROCESS', None)
     proc = subprocess.Popen(
