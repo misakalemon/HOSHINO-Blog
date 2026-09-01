@@ -33,10 +33,11 @@
     <style>
     {% include '_critical_css.html' %}
     </style>
-    <!-- 完整 CSS 异步加载：preload 提示浏览器尽早获取，media=print 技巧实现非阻塞 -->
+    <!-- 完整 CSS：preload 提示尽早获取，同步 link 阻塞渲染防止 FOUC。
+         critical.css 已内联首屏样式，glow-design.css 随后补全剩余样式，
+         既保证首屏秒开，又彻底避免无样式内容闪烁。 -->
     <link rel="preload" as="style" href="{{ url_for('static', filename='css/glow-design.css') }}?v=3">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/glow-design.css') }}?v=3" media="print" onload="this.media='all'">
-    <noscript><link rel="stylesheet" href="{{ url_for('static', filename='css/glow-design.css') }}?v=3"></noscript>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/glow-design.css') }}?v=3">
     <!-- extra_head 块：子模板可注入额外的 <link>/<script>/<meta> -->
     {% block extra_head %}{% endblock %}
 </head>
