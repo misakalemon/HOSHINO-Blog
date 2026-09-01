@@ -1167,14 +1167,13 @@ def _check_new_videos(mid: int, app):
             logger.warning('全局熔断中，跳过增量检查 mid=%d', mid)
             return
 
-    # 深扫/手动刷新互斥检查：若有任意 UP 正在深扫，跳过本次增量检查。
-    # 注意是「任意」而非「同一 mid」：新 UP 深扫期间，若存量 UP 的增量检查
-    # 仍并发进行，两者叠加请求会触发 B站 -352 风控（v_voucher 校验）。
-    # 增量检查每 30 分钟一次，让路一次不影响数据时效（下轮会补上）。
+    # 深扫互斥检查：仅「同一 mid 正在深扫/刷新」才让路，其他 UP 的增量照常执行。
+    # 安全性：全局令牌桶 BILI_GLOBAL_RATE_CAP=1 已将 B站 请求全局串行
+    # （同一时刻仅 1 个 B站 请求在途），不同 UP 并发不增加请求频率，
+    # 不会触发 -352 风控；深扫期间其他 UP 订阅者的新视频通知不再被饿死。
     with _scrape_lock:
-        if _scrape_running:
-            logger.warning('深扫进行中(%s)，跳过增量检查 mid=%d',
-                           list(_scrape_running)[:3], mid)
+        if mid in _scrape_running:
+            logger.warning('本 UP 深扫中(mid=%d)，跳过本次增量', mid)
             return
 
     # 获取该 mid 的进度日志列表（引用，后续直接 append）
@@ -2407,7 +2406,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             db.session.remove()
 
 
-_BATCH_SIZE = min(int(os.environ.get('BILI_BATCH', '1')), 4)
+_BATCH_SIZE = min(int(os.environ.get('BILI_BATCH', '3')), 4)
 
 
 def run_daily_scrape(app):
@@ -2432,7 +2431,14 @@ def run_daily_scrape(app):
             from blog.models import BiliUp
 
             ups = BiliUp.query.all()
-            logger.info('B站 每日刷新启动: 共 %d 个 UP 主, 每批 %d 个', len(ups), _BATCH_SIZE)
+
+            # 整体硬 deadline（分钟，默认 90）：超过后不再启动新批次。
+            # 保证 02:00 深扫最迟约 03:30 结束，绝不撞 04:00/04:30 词云窗口，
+            # 也不把增量检查饿死到 04:00（此前默认串行 BILI_BATCH=1 拖到 ~04:00）。
+            _deadline_minutes = int(os.environ.get('BILI_DAILY_DEADLINE', '90'))
+            _deadline_ts = time.time() + _deadline_minutes * 60
+            logger.info('B站 每日刷新启动: 共 %d 个 UP 主, 每批 %d 个, deadline %d 分钟',
+                        len(ups), _BATCH_SIZE, _deadline_minutes)
 
             with _circuit_lock:
                 if time.time() < _circuit_open_until:
@@ -2456,8 +2462,13 @@ def run_daily_scrape(app):
                     _scrape_progress[mid] = []
                 active.append(up)
 
-            # 分批并发执行：每批 _BATCH_SIZE 个线程同时运行
+            # 分批并发执行：每批 _BATCH_SIZE 个线程同时运行。
+            # 硬 deadline：到达后不再启动新批次（已在批内的线程让其自然收尾）。
             for i in range(0, len(active), _BATCH_SIZE):
+                if time.time() >= _deadline_ts:
+                    logger.warning('B站 每日刷新达到硬 deadline（%d 分钟），不再启动新批次（剩余 %d 个 UP）',
+                                   _deadline_minutes, len(active) - i)
+                    break
                 batch = active[i : i + _BATCH_SIZE]
                 thread_mids: list[tuple[threading.Thread, int]] = []
                 for up in batch:

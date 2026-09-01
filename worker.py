@@ -25,6 +25,7 @@ import logging
 import os
 import random
 import signal
+import subprocess
 import sys
 import threading
 import time
@@ -42,6 +43,40 @@ MAX_WORKER_THREADS = int(os.environ.get('WORKER_THREADS', '3'))
 MAX_WC_THREADS = int(os.environ.get('WC_THREADS', '3'))
 # 评论/字幕刷新视频并发数，可通过环境变量 BILI_COMMENT_WORKERS 覆盖
 MAX_COMMENT_WORKERS = int(os.environ.get('BILI_COMMENT_WORKERS', '3'))
+
+
+# ── 业务心跳（供 logwatch 看门狗判定僵死）──────────────────────
+# Worker 周期性刷新 blog/logs/.activity（内容：Unix时间戳 + 最近业务活动
+# 类型，只写文件、不写日志——与「移除刷屏心跳日志」的决策兼容）。
+# 任何业务活动（增量/深扫/词云/任务完成）即时更新；主循环每
+# BILI_ACTIVITY_INTERVAL（默认 5 分钟）兜底刷新一次，
+# logwatch 据此判定「无业务活动超阈值」是否僵死。
+_ACTIVITY_FILE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), 'blog', 'logs', '.activity'
+)
+_ACTIVITY_LOCK = threading.Lock()
+_last_activity_refresh = [0.0]
+_last_activity_type = ['startup']
+_ACTIVITY_INTERVAL = max(30, int(float(os.environ.get('BILI_ACTIVITY_INTERVAL', '5')) * 60))
+
+
+def record_activity(activity_type: str):
+    """更新业务心跳文件（时间戳 + 最近业务活动类型）。"""
+    with _ACTIVITY_LOCK:
+        _last_activity_type[0] = activity_type
+        _last_activity_refresh[0] = time.time()
+        try:
+            os.makedirs(os.path.dirname(_ACTIVITY_FILE), exist_ok=True)
+            with open(_ACTIVITY_FILE, 'w') as _af:
+                _af.write(f'{time.time():.0f} {activity_type}\n')
+        except Exception as e:
+            logging.getLogger(__name__).warning('业务心跳写入失败: %s', e)
+
+
+def _refresh_activity_periodic():
+    """主循环兜底心跳：超过 BILI_ACTIVITY_INTERVAL 未更新则刷新一次。"""
+    if time.time() - _last_activity_refresh[0] >= _ACTIVITY_INTERVAL:
+        record_activity(_last_activity_type[0] or 'heartbeat')
 
 
 def _setup_signal_handlers(shutdown_flag):
@@ -276,6 +311,8 @@ def _run_task(task, app):
             db.session.remove()
 
         logger.info('任务完成 id=%s type=%s', task_id, task_type)
+        # 业务心跳：任务完成即视为一次业务活动
+        record_activity(f'task:{task_type}')
 
     except Exception as e:
         logger.error('任务失败 id=%s type=%s: %s', task_id, task_type, e, exc_info=True)
@@ -340,20 +377,17 @@ def _run_bili_incremental_check(app):
         with app.app_context():
             from blog.models import BiliUp
             from blog.bili_routes import _check_new_videos, _incremental_running, _scrape_lock, _scrape_running
-            # 批次级协调：若已有任意 UP 正在深扫（新UP爬取/手动刷新），整批增量检查直接跳过。
-            # 深扫与增量并发会叠加 B站 API 请求（不同 UA 多线程同时打同一 IP），
-            # 触发 -352 风控；增量每 30 分钟一次，让路一轮不影响时效。
-            with _scrape_lock:
-                if _scrape_running:
-                    _logger.warning('深扫进行中(%s)，跳过整批增量检查',
-                                    list(_scrape_running)[:3])
-                    return
-
+            # 批次级协调：与深扫不再“整批让路”。深扫期间其他 UP 的增量照常执行，
+            # 只有「正在深扫的同一 mid」让路（_check_new_videos 内部同样做同 mid 互斥）。
+            # 安全性：全局令牌桶 BILI_GLOBAL_RATE_CAP=1 已将 B站 请求全局串行，
+            # 不同 UP 并发不增加请求频率，不会触发 -352 风控。
+            # 收益：深扫期间其他 UP 订阅者的新视频通知不再被饿死 2 小时。
             ups = BiliUp.query.all()
             if not ups:
                 return
 
             _logger.info('增量检查启动: %d 个 UP 主, %d 并发', len(ups), max_workers)
+            record_activity('incremental')
 
             def _check_one(up):
                 try:
@@ -369,7 +403,8 @@ def _run_bili_incremental_check(app):
             # 无需在提交循环里额外错峰，避免 93 个 UP × 2~5s 串行阻塞 APScheduler 线程数分钟。
             for up in ups:
                 with _scrape_lock:
-                    if up.mid in _incremental_running:
+                    # 仅跳过正在深扫的同一 mid（跨进程运行锁由路由层 try_acquire 兜底）
+                    if up.mid in _incremental_running or up.mid in _scrape_running:
                         continue
                     _incremental_running.add(up.mid)
                 futures[executor.submit(_check_one, up)] = up
@@ -431,8 +466,17 @@ def _init_worker_scheduler(app):
         # 避免固定时刻执行被 B站 行为画像识别为定时任务
         from blog.bili_routes import run_daily_scrape
         _daily_minute = random.randint(0, 29)
+
+        def _job_daily_scrape():
+            # 业务心跳：深扫开始即视为业务活动，结束再记一次
+            record_activity('daily_scrape')
+            try:
+                run_daily_scrape(app)
+            finally:
+                record_activity('daily_scrape_done')
+
         scheduler.add_job(
-            func=lambda: run_daily_scrape(app),
+            func=_job_daily_scrape,
             trigger='cron',
             hour=2,
             minute=_daily_minute,
@@ -480,32 +524,56 @@ def _init_worker_scheduler(app):
             max_instances=2,
         )
 
-        # 04:00 全站词云预计算（深扫完成后，且与 B站词云错开）
-        from blog.wordcloud import precompute_all_wordclouds
-        def _job_all_wc():
-            with app.app_context():
-                precompute_all_wordclouds()
+        # ── 词云改为独立子进程 ────────────────────────────
+        # jieba 对 6.3 万视频全量分词是纯 CPU 密集任务，若在 Worker 进程内直接跑
+        # 会长占 GIL，饿死同进程内爬虫的 asyncio 事件循环（历史上 04:54 后日志
+        # 戛然而止即此故障）。改为 spawn 独立解释器进程运行 blog/wordcloud_runner，
+        # 与爬虫进程彻底隔离 GIL 与内存；子进程自带 WORKER_PROCESS=1 跳过迁移。
+        def _spawn_wordcloud(*args):
+            _root = os.path.dirname(os.path.abspath(__file__))
+            cmd = [sys.executable, '-m', 'blog.wordcloud_runner'] + list(args)
+            try:
+                proc = subprocess.Popen(
+                    cmd,
+                    cwd=_root,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=sys.stderr,
+                    env={**os.environ, 'WORKER_PROCESS': '1'},
+                )
+            except Exception as e:
+                app.logger.error('词云子进程启动失败 %s: %s', args, e)
+                return None
+            app.logger.info('词云子进程已启动 (PID=%d) args=%s', proc.pid, args)
+            # 业务心跳：词云调度触发即视为业务活动（子进程自身为 CPU 密集、无需再写心跳）
+            record_activity('wordcloud_subproc')
+            return proc
+
+        # 04:00 全站词云预计算（每日 1 次）
         scheduler.add_job(
-            func=_job_all_wc,
+            func=lambda: _spawn_wordcloud('--all'),
             trigger='cron',
             hour=4,
             minute=0,
             id='precompute_all_wordclouds',
             replace_existing=True,
+            max_instances=1,
         )
 
-        # 04:30 B站词云预计算（全站词云完成后再跑，避免两个大遍历并发）
-        from blog.wordcloud import precompute_bili_wordclouds
-        def _job_bili_wc():
-            with app.app_context():
-                precompute_bili_wordclouds()
+        # 04:30 B站词云预计算 — 默认每周一 04:30（BILI_BILI_WC_CRON 为标准
+        # 5 段 crontab：分 时 日 月 周，留空=每日 04:30）
+        from apscheduler.triggers.cron import CronTrigger as _CronTrigger
+        _bili_wc_cron = (os.environ.get('BILI_BILI_WC_CRON', '30 4 * * 1') or '').strip()
+        _bili_wc_trigger = (
+            _CronTrigger(hour=4, minute=30) if not _bili_wc_cron
+            else _CronTrigger.from_crontab(_bili_wc_cron)
+        )
         scheduler.add_job(
-            func=_job_bili_wc,
-            trigger='cron',
-            hour=4,
-            minute=30,
+            func=lambda: _spawn_wordcloud('--bili'),
+            trigger=_bili_wc_trigger,
             id='precompute_bili_wordclouds',
             replace_existing=True,
+            max_instances=1,
         )
 
         scheduler.start()
@@ -531,9 +599,14 @@ def _init_worker_scheduler(app):
             pass
 
         app.logger.info(
-            'Worker 定时任务: 02:00深扫 03:00密钥轮换 03:30历史清理 '
-            '04:00全站词云 04:30B站词云 每15min增量检查 每%dmin批量视频通知',
-            _notify_minutes
+            'Worker 定时任务: 02:00深扫(deadline=%dmin,并发=%d) 03:00密钥轮换 '
+            '03:30历史清理 04:00全站词云(子进程) B站词云(子进程,%s) '
+            '每%dmin增量检查 每%dmin批量视频通知',
+            int(os.environ.get('BILI_DAILY_DEADLINE', '90')),
+            int(os.environ.get('BILI_BATCH', '3')),
+            _bili_wc_cron or '每日04:30',
+            _inc_minutes,
+            _notify_minutes,
         )
     except Exception as e:
         app.logger.warning('定时任务启动失败（不影响运行）: %s', e)
@@ -571,6 +644,15 @@ def main():
     from blog.task_queue import recover_backup_tasks
     recover_backup_tasks()
 
+    # 记录本进程 PID 供 logwatch 看门狗（BILI_WATCHDOG_RESTART=1 时按此重启）
+    _pid_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'blog', 'logs')
+    try:
+        os.makedirs(_pid_dir, exist_ok=True)
+        with open(os.path.join(_pid_dir, 'worker.pid'), 'w') as _pf:
+            _pf.write(str(os.getpid()))
+    except Exception as e:
+        logger.warning('Worker PID 文件写入失败: %s', e)
+
     elapsed = time.time() - _startup_time
     logger.info('Worker 启动完成 (%.2fs) 并行任务数=%d', elapsed, MAX_WORKER_THREADS)
 
@@ -597,6 +679,10 @@ def main():
         _HAS_PSUTIL = False
 
     while not shutdown_flag[0]:
+        # 业务心跳兜底：超过 BILI_ACTIVITY_INTERVAL 未更新时刷新一次，
+        # 让 logwatch 看门狗始终能看到 Worker 存活（不写日志、无刷屏）
+        _refresh_activity_periodic()
+
         # 周期内存回收：每 _mem_check_period 秒检查一次 RSS，
         # 超阈值（默认 1.5GB）时强制 gc.collect()
         _now = time.time()

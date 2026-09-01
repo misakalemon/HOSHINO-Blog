@@ -516,6 +516,71 @@ if __name__ == '__main__':
     _start_worker()
     atexit.register(_stop_worker)
 
+    # ── 启动独立日志看门狗子进程 ──────────────────────
+    # logwatch 常驻守护：监听 Worker 业务心跳（blog/logs/.activity），
+    # 超 BILI_WATCHDOG_MINUTES 无业务活动判定僵死 → ERROR 日志 + 告警邮件
+    # + 可选重启（BILI_WATCHDOG_RESTART 0/1/2）。独立进程自身 try/except
+    # 自愈容错，不拖累 Web/Worker；异常退出后由本线程自动拉起。
+    import threading as _threading
+
+    _logwatch_py = os.path.join(os.path.dirname(__file__), 'blog', 'logwatch.py')
+    _logwatch_proc = None
+    _logwatch_lock = _threading.Lock()
+
+    def _start_logwatch():
+        """启动独立日志看门狗子进程。"""
+        global _logwatch_proc
+        with _logwatch_lock:
+            if _logwatch_proc and _logwatch_proc.poll() is None:
+                return
+            try:
+                kwargs = dict(
+                    stdout=subprocess.DEVNULL,
+                    stderr=_sys.stderr,
+                    stdin=subprocess.DEVNULL,
+                    cwd=os.path.dirname(__file__),
+                    env={**os.environ, 'WORKER_PROCESS': '1'},
+                )
+                if os.name == 'nt':
+                    kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
+                _logwatch_proc = subprocess.Popen([_sys.executable, _logwatch_py], **kwargs)
+                logger.info('日志看门狗进程已启动 (PID: %d)', _logwatch_proc.pid)
+            except Exception as e:
+                logger.error('日志看门狗进程启动失败: %s', e)
+                _logwatch_proc = None
+
+    def _stop_logwatch():
+        """退出时安全停止日志看门狗子进程。"""
+        global _logwatch_proc
+        with _logwatch_lock:
+            proc = _logwatch_proc
+            _logwatch_proc = None
+        if proc and proc.poll() is None:
+            logger.info('正在停止日志看门狗进程 (PID: %d)...', proc.pid)
+            try:
+                proc.terminate()
+                proc.wait(timeout=10)
+            except Exception:
+                try:
+                    proc.kill()
+                    proc.wait(timeout=5)
+                except Exception:
+                    pass
+            logger.info('日志看门狗进程已停止')
+
+    def _watch_logwatch():
+        """看门狗异常退出后自动拉起（长驻守护退出即失守监控）。"""
+        while True:
+            _threading.Event().wait(30)
+            with _logwatch_lock:
+                proc = _logwatch_proc
+            if proc is None or proc.poll() is not None:
+                _start_logwatch()
+
+    _start_logwatch()
+    _threading.Thread(target=_watch_logwatch, daemon=True).start()
+    atexit.register(_stop_logwatch)
+
     # debug 模式下防止 Flask 热重载重复启动 Worker
     # use_reloader=False 确保主进程只启动一次
     app.run(host=host, port=port, debug=debug, use_reloader=False)
