@@ -174,14 +174,31 @@ def up_videos(up_id):
     ]
     # 读取该 UP 主的专属词云
     bili_wordcloud = None
+    bili_wordcloud_periods = []
     from .models import WordCloudConfig
     wc_config = WordCloudConfig.get_or_create().to_dict()
     try:
+        # 全量 UP 主词云
         wc = WordCloudData.query.filter_by(post_id=None, source='bili', period=f'up_{up_id}').first()
         if wc and wc.data:
             bili_wordcloud = wc.data
+        # 按月分段 UP 主词云（period = up_{up_id}_YYYY-MM）
+        wc_months = (
+            WordCloudData.query
+            .filter_by(post_id=None, source='bili')
+            .filter(WordCloudData.period.like(f'up_{up_id}_%'))
+            .order_by(WordCloudData.period)
+            .all()
+        )
+        for wcm in wc_months:
+            if wcm.period and wcm.data:
+                # period = up_123_2024-01 → 取月份部分 2024-01
+                month = wcm.period.split('_')[-1]
+                bili_wordcloud_periods.append({'period': month, 'data': wcm.data})
+        bili_wc_periods_dict = {p['period']: p['data'] for p in bili_wordcloud_periods}
     except Exception as e:
         logger.warning('读取 UP主词云失败(up_videos): %s', e)
+        bili_wc_periods_dict = {}
     return render_template(
         'bilibili_up.html',
         up=up,
@@ -191,6 +208,8 @@ def up_videos(up_id):
         follower_chart_data=follower_chart_data,
         bili_wordcloud=bili_wordcloud,
         wc_config=wc_config,
+        bili_wordcloud_periods=bili_wordcloud_periods,
+        bili_wc_periods_dict=bili_wc_periods_dict,
     )
 
 

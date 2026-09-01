@@ -1017,7 +1017,7 @@ def precompute_up_wordclouds(up_id: int):
             if done % 500 == 0:
                 _maybe_collect(force=True)
 
-    # ── 聚合 UP 主词云 ──
+    # ── 聚合 UP 主词云（全量 + 按月分段）──
     all_videos = BiliVideo.query.filter_by(up_id=up_id, is_deleted=False).all()
     up_texts = _bili_texts_from_videos(all_videos)
     up_full = ' '.join(up_texts)
@@ -1029,4 +1029,37 @@ def precompute_up_wordclouds(up_id: int):
         db.session.commit()
         logger.info('📊 UP %s 聚合词云已更新', up_id)
 
+    # ── 按月分段 UP 主词云 ──
+    from sqlalchemy import func as _func
+    from datetime import datetime as _dt
+    months = (
+        db.session.query(_func.date_format(BiliVideo.pub_datetime, '%Y-%m'))
+        .filter(BiliVideo.up_id == up_id, BiliVideo.pub_datetime.isnot(None), BiliVideo.is_deleted == False)
+        .distinct()
+        .order_by(_func.date_format(BiliVideo.pub_datetime, '%Y-%m'))
+        .all()
+    )
+    for (month_pubdate,) in months:
+        try:
+            _year, _mon = map(int, month_pubdate.split('-'))
+            _m_start = _dt(_year, _mon, 1)
+            _m_end = _dt(_year + 1, 1, 1) if _mon == 12 else _dt(_year, _mon + 1, 1)
+            month_videos = BiliVideo.query.filter(
+                BiliVideo.up_id == up_id,
+                BiliVideo.pub_datetime >= _m_start,
+                BiliVideo.pub_datetime < _m_end,
+                BiliVideo.is_deleted == False,
+            ).all()
+            month_texts = _bili_texts_from_videos(month_videos)
+            month_full = ' '.join(month_texts)
+            if month_full.strip():
+                month_data = compute_word_frequencies(month_full, top_n=top_n) or []
+                month_period = f'up_{up_id}_{month_pubdate}'
+                _upsert_wordcloud(None, 'bili', month_period, month_data)
+                db.session.flush()
+        except Exception as e:
+            logger.warning('📊 UP %s %s 月词云失败: %s', up_id, month_pubdate, e)
+        _maybe_collect()
+
+    db.session.commit()
     logger.info('📊 UP %s 词云计算完成', up_id)
