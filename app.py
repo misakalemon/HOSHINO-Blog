@@ -523,7 +523,6 @@ if __name__ == '__main__':
     # 自愈容错，不拖累 Web/Worker；异常退出后由本线程自动拉起。
     import threading as _threading
 
-    _logwatch_py = os.path.join(os.path.dirname(__file__), 'blog', 'logwatch.py')
     _logwatch_proc = None
     _logwatch_lock = _threading.Lock()
 
@@ -543,7 +542,9 @@ if __name__ == '__main__':
                 )
                 if os.name == 'nt':
                     kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
-                _logwatch_proc = subprocess.Popen([_sys.executable, _logwatch_py], **kwargs)
+                # -m 方式运行（cwd=项目根）：直接 python blog/logwatch.py 时
+                # sys.path[0] 是 blog/ 目录，会找不到 blog 包
+                _logwatch_proc = subprocess.Popen([_sys.executable, '-m', 'blog.logwatch'], **kwargs)
                 logger.info('日志看门狗进程已启动 (PID: %d)', _logwatch_proc.pid)
             except Exception as e:
                 logger.error('日志看门狗进程启动失败: %s', e)

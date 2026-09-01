@@ -38,6 +38,11 @@ import subprocess
 import sys
 import time
 
+# 兼容直接执行 python blog/logwatch.py：把项目根目录注入 sys.path，
+# 否则 sys.path[0]=blog/ 目录，import blog.logger 会 ModuleNotFoundError。
+# 官方启动路径是 python -m blog.logwatch（app.py 已保证 cwd=项目根）。
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from dotenv import load_dotenv
 
 load_dotenv()

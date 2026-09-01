@@ -91,3 +91,11 @@ precompute_all_wordclouds() / precompute_bili_wordclouds()
 1. `python -m py_compile` 全部改动文件（bili_routes.py / worker.py / app.py / wordcloud_runner.py / logwatch.py）
 2. 增量互斥模拟：深扫 mid=A 时，A 的增量让路、B 的增量放行
 3. 看门狗冒烟：`BILI_WATCHDOG_MINUTES=1` + 打桩告警邮件，确认 心跳→超时→告警 链路
+
+---
+
+## 启动修复（Windows 实测）
+
+| 类型 | 说明 |
+|------|------|
+| fix | **logwatch/wordcloud_runner 子进程 ModuleNotFoundError** — 直接执行 `python blog/logwatch.py` 时 `sys.path[0]=blog/`，`import blog.logger` 失败。app.py 改为 `python -m blog.logwatch`（cwd=项目根）拉起；两个模块顶部均注入项目根到 `sys.path` 兜底 |
