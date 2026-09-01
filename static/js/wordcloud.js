@@ -521,8 +521,8 @@
         var keys = Object.keys(periods);
         if (keys.length === 0) return;
 
-        // 默认显示 'all' 或第一个时段
-        var defaultKey = keys.indexOf('all') >= 0 ? 'all' : keys[0];
+        // 默认显示最新时段（keys 已按时间排序，最后一个 = 最新）
+        var defaultKey = keys[keys.length - 1];
         var data = periods[defaultKey];
         if (data && data.length) renderWordCloud(canvas, data, opts);
 
@@ -538,6 +538,8 @@
         }
         if (slider && keys.length > 1) {
           slider.max = keys.length - 1;
+          slider.value = keys.length - 1;  // 默认滑到最右（最新）
+          if (label) label.textContent = formatPeriodLabel(defaultKey);
           slider.oninput = function() {
             var key = keys[this.value];
             var d = periods[key];
