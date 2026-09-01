@@ -551,7 +551,7 @@
     var hidden = false;
     window.addEventListener('scroll', function () {
       var y = window.scrollY;
-      if (y < 80) { nav.classList.remove('nav-hidden'); hidden = false; lastY = y; return; }
+      if (y < 60) { nav.classList.remove('nav-hidden'); hidden = false; lastY = y; return; }
       if (y > lastY + 6 && !hidden) {
         hidden = true;
         nav.classList.add('nav-hidden');
@@ -566,14 +566,13 @@
   // ── 6. Skip-link ─────────────────────────────────────────
   var skip = document.createElement('a');
   skip.className = 'skip-link';
-  skip.href = '#main-content';
+  skip.href = '#content';
   skip.textContent = '跳转到主内容';
   document.body.insertBefore(skip, document.body.firstChild);
-  // 给第一个 .content 区域加锚点 id（若无）
-  skip.addEventListener('click', function () {
-    var target = document.getElementById('main-content') || document.querySelector('.content');
+  skip.addEventListener('click', function (e) {
+    e.preventDefault();
+    var target = document.getElementById('content') || document.querySelector('.content');
     if (target) {
-      if (!target.id) target.id = 'main-content';
       target.setAttribute('tabindex', '-1');
       target.focus({ preventScroll: false });
     }

@@ -25,6 +25,23 @@
   var imgUrl = canvas.getAttribute('data-src');
   if (!imgUrl) return;
 
+  // ── 降级策略 ──────────────────────────────
+  var prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var lowCores = navigator.hardwareConcurrency && navigator.hardwareConcurrency < 4;
+  var isMobile = window.innerWidth < 768 || ('ontouchstart' in window);
+  // 减少动效偏好 / 低核心数 / 纯移动端 → 显示静态画像替代粒子
+  if (prefersReduced || (lowCores && isMobile)) {
+    var loader = document.getElementById('particleLoader');
+    if (loader) { loader.classList.add('done'); }
+    var staticImg = document.createElement('img');
+    staticImg.src = imgUrl;
+    staticImg.alt = '';
+    staticImg.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.35;pointer-events:none;z-index:1;';
+    canvas.parentNode.insertBefore(staticImg, canvas);
+    canvas.style.display = 'none';
+    return;
+  }
+
   // ── WebGL 初始化 ──────────────────────────────
   var gl = canvas.getContext('webgl', { alpha: true, antialias: false, premultipliedAlpha: true })
         || canvas.getContext('experimental-webgl', { alpha: true, antialias: false, premultipliedAlpha: true });

@@ -156,6 +156,40 @@ document.addEventListener('click',function(e){
   }
 });
 
+// ── glow-select 键盘无障碍支持 ──
+// ↑↓ 导航选项 / Enter 选择 / Esc 关闭 / Space 展开
+document.addEventListener('keydown',function(e){
+  const wrap=e.target.closest('.glow-select-wrap');
+  if(!wrap)return;
+  const isOpen=wrap.classList.contains('is-open');
+  const options=Array.from(wrap.querySelectorAll('.glow-select-option'));
+  let idx=options.findIndex(function(o){return o.classList.contains('is-focused')});
+  function clearFocus(){options.forEach(function(o){o.classList.remove('is-focused');o.removeAttribute('tabindex');});}
+  function setFocus(i){clearFocus();if(options[i]){options[i].classList.add('is-focused');options[i].setAttribute('tabindex','0');options[i].focus();}}
+  switch(e.key){
+    case 'Enter':case ' ':
+      e.preventDefault();
+      if(isOpen && idx>=0){options[idx].click();}
+      else{wrap.querySelector('.glow-select-trigger')&&toggleGlowSelect(wrap.querySelector('.glow-select-trigger'));}
+      break;
+    case 'Escape':
+      e.preventDefault();wrap.classList.remove('is-open');wrap.querySelector('.glow-select-trigger')&&wrap.querySelector('.glow-select-trigger').focus();
+      break;
+    case 'ArrowDown':
+      e.preventDefault();
+      if(!isOpen){wrap.querySelector('.glow-select-trigger')&&toggleGlowSelect(wrap.querySelector('.glow-select-trigger'));}
+      setFocus(idx<options.length-1?idx+1:0);
+      break;
+    case 'ArrowUp':
+      e.preventDefault();
+      if(!isOpen){wrap.querySelector('.glow-select-trigger')&&toggleGlowSelect(wrap.querySelector('.glow-select-trigger'));}
+      setFocus(idx>0?idx-1:options.length-1);
+      break;
+    case 'Home':e.preventDefault();setFocus(0);break;
+    case 'End':e.preventDefault();setFocus(options.length-1);break;
+  }
+});
+
 // ── 全局弹窗（暗色粉紫风格，替换原生 alert/confirm/prompt）──
 // 创建一个全局模态弹窗，替换浏览器原生的 alert/confirm/prompt，
 // 保持与网站暗色粉紫主题一致。弹窗 DOM 只创建一次，后续复用。
