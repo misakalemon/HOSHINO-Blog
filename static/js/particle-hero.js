@@ -29,8 +29,12 @@
   var prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var lowCores = navigator.hardwareConcurrency && navigator.hardwareConcurrency < 4;
   var isMobile = window.innerWidth < 768 || ('ontouchstart' in window);
-  // 减少动效偏好 / 低核心数 / 纯移动端 → 显示静态画像替代粒子
-  if (prefersReduced || (lowCores && isMobile)) {
+  // 华为设备检测：HarmonyOS / HMS / 华为型号常见标识
+  var ua = navigator.userAgent || '';
+  var isHuawei = /HarmonyOS|HMS|Huawei|HONOR|nova\s*\d|Mate\s*\d|P\d{2,3}|MatePad/i.test(ua);
+  // 减少动效偏好 / 低核心数 / 纯移动端 / 华为设备 → 显示静态画像替代粒子
+  // 华为低端机型 GPU 性能较弱，WebGL 粒子容易掉帧发热
+  if (prefersReduced || (lowCores && isMobile) || isHuawei) {
     var loader = document.getElementById('particleLoader');
     if (loader) { loader.classList.add('done'); }
     var staticImg = document.createElement('img');

@@ -67,7 +67,32 @@ function toggleDrawer(){
   // 同步关闭按钮 aria-label
   var closeBtn = drawer.querySelector('.nav-drawer-close');
   if (closeBtn) closeBtn.setAttribute('aria-label', isOpen ? '关闭菜单' : '打开菜单');
+
+  // ── 锁定/恢复 body 滚动 ──
+  document.body.style.overflow = isOpen ? 'hidden' : '';
+
+  // ── HarmonyOS / 安卓侧边返回手势兼容 ──
+  // 抽屉打开时：阻止从左侧边缘开始的水平滑动手势，防止触发系统返回
+  // 但保留左边缘 24px 的「逃生通道」，让用户仍能系统返回
+  if (isOpen) {
+    drawer.addEventListener('touchstart', _drawerEdgeGuard, { passive: false });
+  } else {
+    drawer.removeEventListener('touchstart', _drawerEdgeGuard);
+  }
 }
+
+/** 抽屉边缘守卫：阻止左边缘滑动手势冒泡到系统层
+    保留左边缘 24px 「逃生通道」，让用户仍能触发系统返回 */
+function _drawerEdgeGuard(e) {
+  var touch = e.touches[0];
+  var rect = e.currentTarget.getBoundingClientRect();
+  var x = touch.clientX - rect.left;
+  // 触摸点不在最左边缘 24px 内 → 阻止冒泡，防止触发系统返回
+  if (x > 24) {
+    e.stopPropagation();
+  }
+}
+
 // 抽屉遮罩层点击关闭
 // 使用 addEventListener 而非 onclick，兼容 CSP 策略
 document.getElementById('drawerOverlay')?.addEventListener('click', toggleDrawer);

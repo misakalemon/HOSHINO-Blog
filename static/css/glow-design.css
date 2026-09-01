@@ -3,21 +3,25 @@
    光感设计系统 — 玻璃拟态 + 光效追踪 + 边框流光
    ═══════════════════════════════════════════════ */
 
-/* ── CSS @property 注册：硬件加速自定义属性插值 ── */
-@property --angle {
-  syntax: '<angle>';
-  initial-value: 0deg;
-  inherits: false;
-}
-@property --gx {
-  syntax: '<percentage>';
-  initial-value: 50%;
-  inherits: false;
-}
-@property --gy {
-  syntax: '<percentage>';
-  initial-value: 50%;
-  inherits: false;
+/* ── CSS @property 注册：硬件加速自定义属性插值 ──
+   注：HarmonyOS 2.x/3.x WebView（Chromium 85-95）可能不支持 @property，
+   故用 @supports 包裹，不支持时跳过（不影响核心功能）。 */
+@supports (background: paint(x)) {
+  @property --angle {
+    syntax: '<angle>';
+    initial-value: 0deg;
+    inherits: false;
+  }
+  @property --gx {
+    syntax: '<percentage>';
+    initial-value: 50%;
+    inherits: false;
+  }
+  @property --gy {
+    syntax: '<percentage>';
+    initial-value: 50%;
+    inherits: false;
+  }
 }
 
 /* ── 0. CSS 变量 ──────────────────────────────── */
@@ -90,13 +94,16 @@
 /* 统一盒模型、清除默认边距 */
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 body {
-  /* 字体栈：优先系统字体，回退到中日韩友好字体 */
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  /* 字体栈：优先 HarmonyOS Sans（鸿蒙原生），其次是 iOS/macOS/Windows/Android 系统字体 */
+  font-family: 'HarmonyOS Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
   background: #080a0f;
   color: #e8edf5;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   min-height: 100vh;
   overflow-x: hidden;
+  /* 消除移动端 300ms 点击延迟（HarmonyOS / Android 双击缩放） */
+  touch-action: manipulation;
 }
 a { color: inherit; text-decoration: none; transition: color 0.3s; }
 img { max-width: 100%; height: auto; display: block; }
@@ -1922,7 +1929,8 @@ code[class*="language-"] { position: relative; z-index: 1; }
   display: none;
 }
 @media (max-width: 640px) {
-  /* 左侧滑出式抽屉菜单：通过 left 切换显示/隐藏 */
+  /* 左侧滑出式抽屉菜单：通过 left 切换显示/隐藏
+     touch-action: pan-y 防止与 HarmonyOS / 安卓侧边返回手势冲突 */
   .mobile-drawer {
     display: flex; flex-direction: column; gap: 2px;
     position: fixed; top: 0; left: -280px; width: 260px; height: 100vh;
@@ -1931,6 +1939,8 @@ code[class*="language-"] { position: relative; z-index: 1; }
     backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
     border-right: 1px solid rgba(255,255,255,0.06);
     transition: left 0.3s cubic-bezier(0.16,1,0.3,1);
+    touch-action: pan-y;
+    overscroll-behavior: contain;
   }
   .mobile-drawer.open { left: 0; }
   .mobile-drawer a {
