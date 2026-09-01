@@ -60,15 +60,37 @@
         {% endif %}
     </div>
 
-    {% if bili_wordcloud %}
+    {% if bili_wordcloud or bili_wordcloud_periods %}
     <!-- B站词云（非搜索模式：全站UP主汇总词云） -->
     <div class="site-wordcloud" style="margin-bottom:28px">
         <div class="site-wordcloud-header">
             <span class="site-wordcloud-title">✦ 视频词云</span>
-            <span class="site-wordcloud-hint">B站视频标题 · 高频词</span>
+            <span class="site-wordcloud-hint" id="wcPeriodLabel">
+                {%- if bili_wordcloud_periods|length > 0 -%}
+                    拖动滑块查看不同时段
+                {%- else -%}
+                    B站视频标题 · 高频词
+                {%- endif -%}
+            </span>
         </div>
+        {% if bili_wordcloud_periods|length > 0 %}
+        <!-- 时间轴滑块：按月切换词云 -->
+        <div class="wc-timeline" style="margin-bottom:12px">
+            <input type="range" id="wcSlider" min="0" max="{{ bili_wordcloud_periods|length - 1 }}" value="0"
+                   style="width:100%;accent-color:#a78bfa;height:4px;border-radius:2px;background:rgba(255,255,255,0.08);outline:none;cursor:pointer;-webkit-appearance:none;appearance:none">
+            <div style="display:flex;justify-content:space-between;margin-top:4px">
+                <span style="font-size:0.7rem;color:rgba(255,255,255,0.35)">{{ bili_wordcloud_periods[0].period }}</span>
+                <span style="font-size:0.7rem;color:rgba(255,255,255,0.35)">{{ bili_wordcloud_periods[-1].period }}</span>
+            </div>
+        </div>
+        {% endif %}
         <div class="site-wordcloud-canvas-wrap">
-            <canvas id="wcBili" data-wc='{{ bili_wordcloud | tojson }}'
+            <canvas id="wcBili"
+                    {%- if bili_wordcloud_periods|length > 0 -%}
+                    data-wc-periods='{{ bili_wc_periods_dict | tojson }}'
+                    {%- else -%}
+                    data-wc='{{ bili_wordcloud | tojson }}'
+                    {%- endif -%}
                     data-wc-config='{{ wc_config | tojson }}'
                     data-wc-search-url="/bilibili?q="></canvas>
         </div>

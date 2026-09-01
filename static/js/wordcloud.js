@@ -529,6 +529,13 @@
         // 绑定时间轴滑块
         var slider = document.getElementById('wcSlider');
         var label = document.getElementById('wcPeriodLabel');
+        function formatPeriodLabel(key) {
+          if (key === 'all') return '所有时段';
+          // YYYY-MM → YYYY年M月
+          var m = key.match(/^(\d{4})-(\d{1,2})$/);
+          if (m) return m[1] + '年' + parseInt(m[2]) + '月';
+          return key;
+        }
         if (slider && keys.length > 1) {
           slider.max = keys.length - 1;
           slider.oninput = function() {
@@ -536,7 +543,7 @@
             var d = periods[key];
             if (d && d.length) {
               renderWordCloud(canvas, d, opts);
-              if (label) label.textContent = key === 'all' ? '所有文章' : key + ' 月';
+              if (label) label.textContent = formatPeriodLabel(key);
             }
           };
         }

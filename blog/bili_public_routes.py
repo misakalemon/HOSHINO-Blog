@@ -96,15 +96,37 @@ def index():
         )
         # 读取 B站词云（兼容旧表缺少 period/source 列的情况）
         bili_wordcloud = None
+        bili_wordcloud_periods = []  # [(period_label, data), ...]
         from .models import WordCloudConfig
         wc_config = WordCloudConfig.get_or_create().to_dict()
         try:
+            # 全量词云
             wc = WordCloudData.query.filter_by(post_id=None, source='bili', period='all').first()
             if wc and wc.data:
                 bili_wordcloud = wc.data
+            # 按月分段词云（供时间轴滑块使用）
+            wc_months = (
+                WordCloudData.query
+                .filter_by(post_id=None, source='bili')
+                .filter(WordCloudData.period != 'all')
+                .filter(WordCloudData.period.notlike('up_%'))
+                .order_by(WordCloudData.period)
+                .all()
+            )
+            for wcm in wc_months:
+                if wcm.period and wcm.data:
+                    bili_wordcloud_periods.append({'period': wcm.period, 'data': wcm.data})
+            # 构建 periods 字典供前端词云时间轴使用
+            bili_wc_periods_dict = {p['period']: p['data'] for p in bili_wordcloud_periods}
         except Exception as e:
             logger.warning('读取 B站词云失败: %s', e)
-        return render_template('bilibili.html', pagination=pagination, q='', all_ups=all_ups, bili_wordcloud=bili_wordcloud, wc_config=wc_config)
+        return render_template(
+            'bilibili.html',
+            pagination=pagination, q='', all_ups=all_ups,
+            bili_wordcloud=bili_wordcloud, wc_config=wc_config,
+            bili_wordcloud_periods=bili_wordcloud_periods,
+            bili_wc_periods_dict=bili_wc_periods_dict,
+        )
 
 
 @bili_public_bp.route('/up/<int:up_id>')

@@ -154,6 +154,31 @@
             </div>
         </div>
         <div id="videoChart" style="width:100%;height:280px"></div>
+        
+        <!-- 时间轴滑块 -->
+        <div id="timelineSlider" style="margin-top:16px;padding:0 8px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                <span id="timelineLabel" style="font-size:0.75rem;color:rgba(255,255,255,0.4)">拖动滑块选择时间范围</span>
+                <button id="timelineReset" data-action="resetTimeline" style="padding:3px 10px;background:transparent;border:1px solid rgba(255,255,255,0.08);border-radius:6px;color:rgba(255,255,255,0.35);font-size:0.7rem;cursor:pointer;transition:all 0.2s;display:none">重置</button>
+            </div>
+            <div id="timelineTrack" style="position:relative;height:36px;cursor:pointer;-webkit-user-select:none;user-select:none">
+                <!-- 轨道背景 -->
+                <div style="position:absolute;top:14px;left:0;right:0;height:6px;background:rgba(255,255,255,0.04);border-radius:3px;overflow:hidden">
+                    <!-- 选中范围高亮 -->
+                    <div id="timelineRange" style="position:absolute;top:0;height:100%;background:linear-gradient(90deg,rgba(167,139,250,0.4),rgba(255,107,157,0.4));border-radius:3px;transition:left 0.05s,width 0.05s"></div>
+                </div>
+                <!-- 开始手柄 -->
+                <div id="timelineHandleStart" style="position:absolute;top:6px;width:20px;height:20px;background:linear-gradient(135deg,#ff8aae,#c084fc);border-radius:50%;border:2px solid rgba(255,255,255,0.9);box-shadow:0 2px 8px rgba(0,0,0,0.4);cursor:grab;transition:transform 0.15s;z-index:2">
+                    <div style="position:absolute;top:-24px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:0.65rem;color:rgba(255,255,255,0.6);background:rgba(0,0,0,0.6);padding:2px 8px;border-radius:4px;pointer-events:none;opacity:0;transition:opacity 0.2s" class="timeline-tooltip"></div>
+                </div>
+                <!-- 结束手柄 -->
+                <div id="timelineHandleEnd" style="position:absolute;top:6px;width:20px;height:20px;background:linear-gradient(135deg,#c084fc,#7c5cfc);border-radius:50%;border:2px solid rgba(255,255,255,0.9);box-shadow:0 2px 8px rgba(0,0,0,0.4);cursor:grab;transition:transform 0.15s;z-index:2">
+                    <div style="position:absolute;top:-24px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:0.65rem;color:rgba(255,255,255,0.6);background:rgba(0,0,0,0.6);padding:2px 8px;border-radius:4px;pointer-events:none;opacity:0;transition:opacity 0.2s" class="timeline-tooltip"></div>
+                </div>
+            </div>
+            <!-- 刻度标签 -->
+            <div id="timelineTicks" style="position:relative;height:16px;margin-top:2px"></div>
+        </div>
     </div>
     {% endif %}
 
@@ -688,6 +713,139 @@
 
     renderChart();
     window.addEventListener('resize', function(){ chart.resize(); });
+
+    // ── 时间轴滑块（双柄范围选择器）─────────────────
+    (function() {
+        var trackEl = document.getElementById('timelineTrack');
+        var rangeEl = document.getElementById('timelineRange');
+        var handleStart = document.getElementById('timelineHandleStart');
+        var handleEnd = document.getElementById('timelineHandleEnd');
+        var labelEl = document.getElementById('timelineLabel');
+        var resetBtn = document.getElementById('timelineReset');
+        if (!trackEl || !handleStart || !handleEnd) return;
+
+        var totalMs = maxDate.getTime() - minDate.getTime();
+        var trackPadding = 10; // 手柄半径
+        var trackWidth = trackEl.clientWidth - trackPadding * 2;
+
+        // 当前滑块位置（0~1）
+        var startPos = 0;
+        var endPos = 1;
+
+        function posToDate(pos) {
+            var t = minDate.getTime() + totalMs * pos;
+            return new Date(t);
+        }
+        function dateToPos(date) {
+            return (date.getTime() - minDate.getTime()) / totalMs;
+        }
+        function formatDateShort(d) {
+            return (d.getMonth() + 1) + '/' + d.getDate();
+        }
+        function updateUI() {
+            var startX = trackPadding + startPos * trackWidth;
+            var endX = trackPadding + endPos * trackWidth;
+            handleStart.style.left = (startX - 10) + 'px';
+            handleEnd.style.left = (endX - 10) + 'px';
+            rangeEl.style.left = (startX) + 'px';
+            rangeEl.style.width = (endX - startX) + 'px';
+
+            var sDate = posToDate(startPos);
+            var eDate = posToDate(endPos);
+            labelEl.textContent = formatDateShort(sDate) + ' - ' + formatDateShort(eDate);
+            if (resetBtn) resetBtn.style.display = (startPos > 0.01 || endPos < 0.99) ? 'inline-block' : 'none';
+        }
+        function applyRange() {
+            var s = posToDate(startPos);
+            var e = posToDate(endPos);
+            s.setHours(0, 0, 0, 0);
+            e.setHours(23, 59, 59);
+            currentDateRange = [s, e];
+            renderChart();
+        }
+
+        // 初始化位置
+        if (currentDateRange) {
+            startPos = Math.max(0, Math.min(1, dateToPos(currentDateRange[0])));
+            endPos = Math.max(0, Math.min(1, dateToPos(currentDateRange[1])));
+        }
+        updateUI();
+
+        // 拖拽逻辑
+        var dragging = null; // 'start' | 'end'
+        function getPosFromEvent(e) {
+            var rect = trackEl.getBoundingClientRect();
+            var clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            var x = clientX - rect.left - trackPadding;
+            return Math.max(0, Math.min(1, x / trackWidth));
+        }
+        function onMove(e) {
+            if (!dragging) return;
+            e.preventDefault();
+            var pos = getPosFromEvent(e);
+            if (dragging === 'start') {
+                startPos = Math.min(pos, endPos - 0.02);
+            } else {
+                endPos = Math.max(pos, startPos + 0.02);
+            }
+            updateUI();
+        }
+        function onUp() {
+            if (!dragging) return;
+            dragging = null;
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            document.removeEventListener('touchmove', onMove);
+            document.removeEventListener('touchend', onUp);
+            applyRange();
+        }
+        function startDrag(e, which) {
+            e.preventDefault();
+            dragging = which;
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+            document.addEventListener('touchmove', onMove, { passive: false });
+            document.addEventListener('touchend', onUp);
+        }
+        handleStart.addEventListener('mousedown', function(e) { startDrag(e, 'start'); });
+        handleStart.addEventListener('touchstart', function(e) { startDrag(e, 'start'); }, { passive: false });
+        handleEnd.addEventListener('mousedown', function(e) { startDrag(e, 'end'); });
+        handleEnd.addEventListener('touchstart', function(e) { startDrag(e, 'end'); }, { passive: false });
+
+        // 点击轨道跳转
+        trackEl.addEventListener('click', function(e) {
+            if (e.target === handleStart || e.target === handleEnd || handleStart.contains(e.target) || handleEnd.contains(e.target)) return;
+            var pos = getPosFromEvent(e);
+            var mid = (startPos + endPos) / 2;
+            if (pos < mid) {
+                startPos = Math.min(pos, endPos - 0.02);
+            } else {
+                endPos = Math.max(pos, startPos + 0.02);
+            }
+            updateUI();
+            applyRange();
+        });
+
+        // 重置按钮
+        if (resetBtn) {
+            resetBtn.addEventListener('click', function() {
+                startPos = 0;
+                endPos = 1;
+                currentDateRange = null;
+                document.getElementById('dateRangePicker').value = '';
+                selectedStart = null;
+                selectedEnd = null;
+                updateUI();
+                renderChart();
+            });
+        }
+
+        // 窗口 resize 时更新
+        window.addEventListener('resize', function() {
+            trackWidth = trackEl.clientWidth - trackPadding * 2;
+            updateUI();
+        });
+    })();
 })();
 </script>
 <script src="{{ url_for('static', filename='js/wordcloud.js') }}?v=5" defer></script>
