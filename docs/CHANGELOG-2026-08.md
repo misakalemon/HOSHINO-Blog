@@ -99,3 +99,23 @@ precompute_all_wordclouds() / precompute_bili_wordclouds()
 | 类型 | 说明 |
 |------|------|
 | fix | **logwatch/wordcloud_runner 子进程 ModuleNotFoundError** — 直接执行 `python blog/logwatch.py` 时 `sys.path[0]=blog/`，`import blog.logger` 失败。app.py 改为 `python -m blog.logwatch`（cwd=项目根）拉起；两个模块顶部均注入项目根到 `sys.path` 兜底 |
+---
+
+## 多进程日志标签（日志文件区分进程来源）
+
+| 类型 | 说明 |
+|------|------|
+| feat | **DETAILED_FORMAT/CONSOLE_FORMAT 新增 `%(proc_tag)s`** — 文件与终端日志统一带进程标签，共享日志文件中一眼区分来源 |
+| feat | **ProcessTagFilter** — 构造时按环境变量判定进程类型一次：`Web`（默认）/ `Worker`（WORKER_PROCESS=1）/ `WordCloud`（WORDCLOUD_PROCESS=1）/ `Watchdog`（LOGWATCH_PROCESS=1，优先级最高） |
+| feat | **接线** — `setup_logging()` 为文件/错误/终端/Flask 所有 handler 挂载过滤器；`logwatch._setup_logging()` 显式标注 Watchdog；`wordcloud_runner` 启动时设置 WORDCLOUD_PROCESS=1；`app.py` 拉起看门狗时传 LOGWATCH_PROCESS=1 |
+| chore | **移除 Worker 终端手工 `[W]` 前缀** — 由统一的 `[   Worker]` 标签替代（终端与文件格式一致） |
+| fix | **看门狗重启 Worker 时清除 LOGWATCH_PROCESS/WORDCLOUD_PROCESS** — 防止新 Worker 被错误打上 Watchdog/WordCloud 标签 |
+
+示例（hoshino-YYYY-MM-DD.log）：
+
+```
+[2026-09-02 00:16:14] INFO     [     Web] [root:...:...] [...]
+[2026-09-02 00:16:14] INFO     [  Worker] [apscheduler.scheduler:...]
+[2026-09-02 00:16:14] INFO     [Watchdog] [logwatch:...]
+[2026-09-02 04:00:00] INFO     [WordCloud] [blog.wordcloud:...]
+```

@@ -36,6 +36,8 @@ def main():
 
     # 独立进程跳过建表/迁移（与 Worker 相同），读取同一 .env 配置
     os.environ['WORKER_PROCESS'] = '1'
+    # 进程标签：让日志系统打上 WordCloud 标签，共享日志文件中区分来源
+    os.environ['WORDCLOUD_PROCESS'] = '1'
 
     from app import create_app
 

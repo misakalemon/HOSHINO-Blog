@@ -538,7 +538,9 @@ if __name__ == '__main__':
                     stderr=_sys.stderr,
                     stdin=subprocess.DEVNULL,
                     cwd=os.path.dirname(__file__),
-                    env={**os.environ, 'WORKER_PROCESS': '1'},
+                    # LOGWATCH_PROCESS=1：日志系统借此打 [Watchdog] 进程标签，
+                    # 在共享日志文件中与 Web/Worker/WordCloud 区分来源
+                    env={**os.environ, 'WORKER_PROCESS': '1', 'LOGWATCH_PROCESS': '1'},
                 )
                 if os.name == 'nt':
                     kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP

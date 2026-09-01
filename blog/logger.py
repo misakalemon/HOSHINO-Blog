@@ -164,15 +164,50 @@ class DailyFileHandler(logging.Handler):
 
 
 # 日志格式
-#   DETAILED_FORMAT — 文件日志：包含时间、级别、模块名、函数名、行号、线程名，便于追踪问题
-#   CONSOLE_FORMAT  — 终端日志：精简，仅时间+级别+消息，方便实时查看
+#   DETAILED_FORMAT — 文件日志：包含时间、级别、进程标签、模块名、函数名、行号、线程名
+#   CONSOLE_FORMAT  — 终端日志：精简，时间+级别+进程标签+消息
+# 进程标签：%(proc_tag)s — Web / Worker / WordCloud / Watchdog，
+# 由 ProcessTagFilter 注入，各进程（Web/Worker/词云子进程/看门狗）写入同一批每日
+# 文件时可通过该字段轻松区分来源。
 DETAILED_FORMAT = (
-    '[%(asctime)s] %(levelname)-8s [%(name)s:%(funcName)s:%(lineno)d] '
+    '[%(asctime)s] %(levelname)-8s [%(proc_tag)9s] [%(name)s:%(funcName)s:%(lineno)d] '
     '[%(threadName)s] %(message)s'
 )
-CONSOLE_FORMAT = '%(asctime)s  %(levelname)-6s  [%(name)s] %(message)s'
+CONSOLE_FORMAT = '%(asctime)s  %(levelname)-6s  [%(proc_tag)9s]  [%(name)s] %(message)s'
 DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 CONSOLE_DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
+
+
+# ── 进程标签（多进程日志文件中区分来源）────────────────────
+# Web / Worker / WordCloud(独立词云子进程) / Watchdog(独立看门狗)
+# 全部写入同一批每日文件（hoshino-*.log / error-*.log），
+# 挂载 ProcessTagFilter 后格式串 %(proc_tag)s 即可输出来源。
+def _detect_process_tag() -> str:
+    """按环境变量判断当前进程类型（优先级：Watchdog > WordCloud > Worker > Web）。"""
+    if os.environ.get('LOGWATCH_PROCESS') == '1':
+        return 'Watchdog'
+    if os.environ.get('WORDCLOUD_PROCESS') == '1':
+        return 'WordCloud'
+    if os.environ.get('WORKER_PROCESS') == '1':
+        return 'Worker'
+    return 'Web'
+
+
+class ProcessTagFilter(logging.Filter):
+    """给每条日志记录附加 proc_tag 属性，供格式串 %(proc_tag)s 使用。
+
+    进程内标签固定不变（构造时按环境变量判定一次）。
+    注意：所有用到含 %(proc_tag)s 格式串的 handler 都必须挂载本过滤器，
+    否则缺字段会触发 KeyError（logging 会吞掉该记录并打印错误信息）。
+    """
+
+    def __init__(self, tag: str | None = None):
+        super().__init__()
+        self.tag = tag or _detect_process_tag()
+
+    def filter(self, record):
+        record.proc_tag = self.tag
+        return True
 
 
 class _ColorFormatter(logging.Formatter):
@@ -265,16 +300,19 @@ def setup_logging(app):
         and getattr(_console_stream, 'isatty', None)
         and _console_stream.isatty()
     )
-    # Worker 进程终端日志加 [W] 前缀，区分来源
-    if _is_worker:
-        _WORKER_FMT = '%(asctime)s  %(levelname)-6s  [W][%(name)s] %(message)s'
-        console_handler.setFormatter(
-            _ColorFormatter(_WORKER_FMT, CONSOLE_DATE_FORMAT, _color_enabled)
-        )
-    else:
-        console_handler.setFormatter(
-            _ColorFormatter(CONSOLE_FORMAT, CONSOLE_DATE_FORMAT, _color_enabled)
-        )
+    # 终端 Handler：统一使用带进程标签的 CONSOLE_FORMAT（[Web]/[Worker]/[...]），
+    # 替代旧的手工 [W] 前缀——标签信息更完整，且文件日志与终端输出一致
+    console_handler.setFormatter(
+        _ColorFormatter(CONSOLE_FORMAT, CONSOLE_DATE_FORMAT, _color_enabled)
+    )
+
+    # 进程标签过滤器：所有 handler 统一挂载，供格式串 %(proc_tag)s 输出
+    # 来源（Web / Worker / WordCloud / Watchdog），多进程共享日志文件时
+    # 每条记录可一眼区分所属进程
+    _proc_tag_filter = ProcessTagFilter()
+    file_handler.addFilter(_proc_tag_filter)
+    error_handler.addFilter(_proc_tag_filter)
+    console_handler.addFilter(_proc_tag_filter)
 
     # 添加到根日志器
     root_logger.addHandler(file_handler)
@@ -292,6 +330,7 @@ def setup_logging(app):
         console_h.setFormatter(
             _ColorFormatter(CONSOLE_FORMAT, CONSOLE_DATE_FORMAT, _color_enabled)
         )
+        console_h.addFilter(_proc_tag_filter)
         log.addHandler(file_handler)
         log.addHandler(console_h)
         log.propagate = False

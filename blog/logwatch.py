@@ -72,6 +72,16 @@ def _setup_logging():
     ch.setLevel(logging.INFO)
     ch.setFormatter(logging.Formatter(_logger_mod.CONSOLE_FORMAT, _logger_mod.CONSOLE_DATE_FORMAT))
     root.addHandler(ch)
+    # 进程标签：看门狗固定显式标注 Watchdog（不依赖环境变量判定），
+    # 使其在共享日志文件中与 Web/Worker/WordCloud 一目了然
+    try:
+        from blog.logger import ProcessTagFilter as _PTF
+        _tag_filter = _PTF('Watchdog')
+    except Exception:
+        _tag_filter = None
+    if _tag_filter is not None:
+        for _h in (fh, efh, ch):
+            _h.addFilter(_tag_filter)
     return logging.getLogger('logwatch')
 
 
@@ -155,13 +165,17 @@ def _restart_worker():
     if pid:
         _terminate_process(pid)
         logger.warning('看门狗已终止旧 Worker (PID=%d)', pid)
+    _restart_env = {**os.environ, 'WORKER_PROCESS': '1'}
+    # 看门狗进程自身带 LOGWATCH_PROCESS=1，若直接继承会给新 Worker\n    # 错误打上 Watchdog 标签；必须清除
+    _restart_env.pop('LOGWATCH_PROCESS', None)
+    _restart_env.pop('WORDCLOUD_PROCESS', None)
     proc = subprocess.Popen(
         [sys.executable, WORKER_PY],
         cwd=PROJECT_ROOT,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=sys.stderr,
-        env={**os.environ, 'WORKER_PROCESS': '1'},
+        env=_restart_env,
     )
     logger.warning('看门狗已重新拉起 Worker (PID=%d)', proc.pid)
     return proc
