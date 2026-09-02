@@ -12,6 +12,47 @@
  * 所有事件绑定使用 addEventListener（CSP-safe，不依赖 inline onclick）。
  */
 
+// ═══════════════════════════════════════════════
+// 工具函数：节流 / 防抖
+// ═══════════════════════════════════════════════
+
+/**
+ * requestAnimationFrame 节流 — 把高频 scroll/resize 回调限制到每帧一次
+ * 比 setTimeout 更顺滑，且会在页面不可见时自动暂停（节能）
+ */
+function throttleByRAF(fn) {
+  var ticking = false;
+  return function () {
+    var self = this, args = arguments;
+    if (!ticking) {
+      window.requestAnimationFrame(function () {
+        ticking = false;
+        fn.apply(self, args);
+      });
+      ticking = true;
+    }
+  };
+}
+
+/**
+ * 防抖 — 延迟执行，连续触发时重置计时器
+ * @param {number} wait 等待毫秒
+ * @param {boolean} leading 是否在首次触发时立即执行
+ */
+function debounce(fn, wait, leading) {
+  var timer, lastCall = 0;
+  return function () {
+    var self = this, args = arguments, now = Date.now();
+    if (leading && now - lastCall >= wait) {
+      lastCall = now;
+      fn.apply(self, args);
+      return;
+    }
+    clearTimeout(timer);
+    timer = setTimeout(function () { fn.apply(self, args); }, wait);
+  };
+}
+
 // ── 导航栏渐显（仅首页滚动触发）────────────
 // 首页 Hero 区域覆盖整个视口，导航栏初始透明，
 // 滚动超过视口高度 20% 后渐显为半透明玻璃态。
@@ -23,9 +64,11 @@
     var hero = document.querySelector('.hero, .hero-particle');
     // 无 Hero 区域时直接显示导航栏（非首页场景）
     if (!hero) { nav.classList.add('visible'); return; }
-    /** 滚动监听：滚过英雄区 15% 高度后导航栏渐显 */
-    function checkNav() { nav.classList.toggle('visible', window.scrollY > hero.offsetHeight * 0.15); }
-    window.addEventListener('scroll', checkNav, {passive:true});
+    /** 滚动监听：滚过英雄区 15% 高度后导航栏渐显（RAF 节流） */
+    var checkNav = throttleByRAF(function () {
+      nav.classList.toggle('visible', window.scrollY > hero.offsetHeight * 0.15);
+    });
+    window.addEventListener('scroll', checkNav, { passive: true });
     checkNav();
   }
 })();
@@ -34,14 +77,14 @@
 (function(){
   var bar = document.getElementById('scrollProgress');
   if (!bar) return;
-  function updateProgress(){
+  var updateProgress = throttleByRAF(function () {
     var scrollTop = window.scrollY;
     var docHeight = document.documentElement.scrollHeight - window.innerHeight;
     var progress = docHeight > 0 ? (scrollTop / docHeight) * 100 : 0;
     bar.style.width = Math.min(progress, 100) + '%';
-  }
-  window.addEventListener('scroll', updateProgress, {passive: true});
-  window.addEventListener('resize', updateProgress);
+  });
+  window.addEventListener('scroll', updateProgress, { passive: true });
+  window.addEventListener('resize', debounce(updateProgress, 150));
   updateProgress();
 })();
 

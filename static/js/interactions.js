@@ -20,6 +20,47 @@
 (function () {
   'use strict';
 
+  // ═══════════════════════════════════════════════
+  // 工具函数：节流 / 防抖
+  // ═══════════════════════════════════════════════
+
+  /**
+   * requestAnimationFrame 节流 — 把高频 scroll/resize 回调限制到每帧一次
+   * 比 setTimeout 更顺滑，且会在页面不可见时自动暂停（节能）
+   */
+  function throttleByRAF(fn) {
+    var ticking = false;
+    return function () {
+      var self = this, args = arguments;
+      if (!ticking) {
+        window.requestAnimationFrame(function () {
+          ticking = false;
+          fn.apply(self, args);
+        });
+        ticking = true;
+      }
+    };
+  }
+
+  /**
+   * 防抖 — 延迟执行，连续触发时重置计时器
+   * @param {number} wait 等待毫秒
+   * @param {boolean} leading 是否在首次触发时立即执行
+   */
+  function debounce(fn, wait, leading) {
+    var timer, lastCall = 0;
+    return function () {
+      var self = this, args = arguments, now = Date.now();
+      if (leading && now - lastCall >= wait) {
+        lastCall = now;
+        fn.apply(self, args);
+        return;
+      }
+      clearTimeout(timer);
+      timer = setTimeout(function () { fn.apply(self, args); }, wait);
+    };
+  }
+
   var prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   function smoothScrollTo(y) {
@@ -95,13 +136,13 @@
   backTop.addEventListener('click', function () { smoothScrollTo(0); });
   document.body.appendChild(backTop);
   var backTopShow = false;
-  function updateBackTop() {
+  var updateBackTop = throttleByRAF(function () {
     var show = window.scrollY > 400;
     if (show !== backTopShow) {
       backTopShow = show;
       backTop.classList.toggle('visible', show);
     }
-  }
+  });
   window.addEventListener('scroll', updateBackTop, { passive: true });
   updateBackTop();
 
@@ -114,12 +155,44 @@
   var lbIndex = 0;
   var lbZoomed = false;
 
+  // 使用 Set 去重，避免同一图片被多次加入
+  var lbImageSet = new Set();
+
+  function _addLightboxImg(img) {
+    if (lbImageSet.has(img)) return;
+    lbImageSet.add(img);
+    lbImages.push(img);
+  }
+
   function collectLightboxImages() {
-    lbImages = Array.prototype.slice.call(
-      document.querySelectorAll('img[data-lightbox]')
-    );
+    lbImages = [];
+    lbImageSet.clear();
+    var imgs = document.querySelectorAll('img[data-lightbox]');
+    for (var i = 0; i < imgs.length; i++) _addLightboxImg(imgs[i]);
   }
   collectLightboxImages();
+
+  // MutationObserver：懒加载或动态插入的图片自动加入灯箱集合
+  if ('MutationObserver' in window) {
+    new MutationObserver(function (mutations) {
+      var needUpdate = false;
+      for (var m = 0; m < mutations.length; m++) {
+        var nodes = mutations[m].addedNodes;
+        for (var n = 0; n < nodes.length; n++) {
+          var node = nodes[n];
+          if (node.nodeType === 1) {
+            if (node.tagName === 'IMG' && node.hasAttribute('data-lightbox')) {
+              _addLightboxImg(node);
+              needUpdate = true;
+            } else if (node.querySelectorAll) {
+              var imgs = node.querySelectorAll('img[data-lightbox]');
+              for (var i = 0; i < imgs.length; i++) { _addLightboxImg(imgs[i]); needUpdate = true; }
+            }
+          }
+        }
+      }
+    }).observe(document.body, { childList: true, subtree: true });
+  }
 
   function openLightboxAt(idx) {
     if (!lightbox || !lightboxImg || !lbImages.length) return;
@@ -227,12 +300,12 @@
     searchModal.classList.remove('open');
   }
 
-  function onSearchInput() {
-    if (searchTimer) clearTimeout(searchTimer);
+  // 搜索防抖：首次输入立即搜索（leading），连续输入时 250ms 后执行最后一次
+  var onSearchInput = debounce(function () {
     var q = searchInput.value.trim();
     if (!q) { searchResults.innerHTML = ''; searchItems = []; searchActiveIndex = -1; return; }
-    searchTimer = setTimeout(function () { doSearch(q); }, 250);
-  }
+    doSearch(q);
+  }, 250, true);
 
   function doSearch(q) {
     fetch(searchUrl + '?q=' + encodeURIComponent(q), {
@@ -549,7 +622,7 @@
     if (!nav || nav.hasAttribute('data-nav-auto')) return; // 首页有自己的渐显逻辑
     var lastY = window.scrollY;
     var hidden = false;
-    window.addEventListener('scroll', function () {
+    var onScroll = throttleByRAF(function () {
       var y = window.scrollY;
       if (y < 60) { nav.classList.remove('nav-hidden'); hidden = false; lastY = y; return; }
       if (y > lastY + 6 && !hidden) {
@@ -560,7 +633,8 @@
         nav.classList.remove('nav-hidden');
       }
       lastY = y;
-    }, { passive: true });
+    });
+    window.addEventListener('scroll', onScroll, { passive: true });
   })();
 
   // ── 6. Skip-link ─────────────────────────────────────────
