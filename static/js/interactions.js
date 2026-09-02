@@ -568,11 +568,10 @@
     var form = e.target && e.target.closest ? e.target.closest('.comment-form form') : null;
     if (!form) return;
     var submitBtn = form.querySelector('button[type="submit"]');
-    if (!submitBtn || submitBtn.disabled) return;
+    if (!submitBtn || submitBtn.disabled || submitBtn.classList.contains('is-loading')) return;
     e.preventDefault();
     submitBtn.disabled = true;
-    var originalText = submitBtn.textContent;
-    submitBtn.textContent = '提交中…';
+    submitBtn.classList.add('is-loading');
     var fd = new FormData(form);
     // CSRF token 由表单 hidden_tag 提供
     fetch(form.action, {
@@ -583,7 +582,7 @@
       .then(function (r) { return r.json(); })
       .then(function (data) {
         submitBtn.disabled = false;
-        submitBtn.textContent = originalText;
+        submitBtn.classList.remove('is-loading');
         if (data && data.ok) {
           // 成功提示（替换为 toast 样式提示条）
           showCommentToast(data.message || '评论已提交');
@@ -595,7 +594,7 @@
       .catch(function () {
         // 网络错误回退到原生提交
         submitBtn.disabled = false;
-        submitBtn.textContent = originalText;
+        submitBtn.classList.remove('is-loading');
         form.submit();
       });
   });

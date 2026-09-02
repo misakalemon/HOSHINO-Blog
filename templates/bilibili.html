@@ -50,7 +50,7 @@
         <form method="GET" action="{{ url_for('bili_public.index') }}" style="display:flex;gap:0">
             <input type="text" name="q" value="{{ q or '' }}" placeholder="搜索 UP 主名称或视频标题..." required
                    style="flex:1;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px 0 0 12px;color:#e8edf5;font-size:0.85rem;outline:none">
-            <button type="submit" style="padding:10px 16px;background:rgba(255,107,157,0.15);border:1px solid rgba(255,107,157,0.25);border-radius:0 12px 12px 0;color:#ff8aae;font-size:0.8rem;cursor:pointer;transition:all 0.3s" class-bili-search-btn>搜索</button>
+            <button type="submit" class="btn" style="border-radius:0 12px 12px 0;padding:10px 18px;">搜索</button>
         </form>
         {% if q %}
         <div style="text-align:center;margin-top:8px">
