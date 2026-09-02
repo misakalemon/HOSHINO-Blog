@@ -11,7 +11,7 @@
 {% block content %}
 <div class="content" style="padding-top:100px;max-width:1200px">
     <div style="margin-bottom:20px">
-        <a href="javascript:smartBack('{{ url_for('bili_public.index') }}')" style="color:rgba(255,255,255,0.3);text-decoration:none;font-size:0.85rem">← 返回</a>
+        <a href="{{ url_for('bili_public.index') }}" class="back-link">← B站 UP 主</a>
     </div>
 
     <h1 style="font-size:1.5rem;font-weight:400;color:rgba(255,255,255,0.8);margin:0 0 24px">📊 视频对比</h1>

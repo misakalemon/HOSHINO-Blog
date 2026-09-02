@@ -181,19 +181,19 @@
     <div class="pagination-wrap" style="margin-top:28px">
         <ul class="pagination">
             {% if pagination.has_prev %}
-            <li><a href="{{ url_for('bili_public.index', page=pagination.prev_num, q=q) }}">←</a></li>
+            <li><a class="js-scroll-restore" href="{{ url_for('bili_public.index', page=pagination.prev_num, q=q) }}">←</a></li>
             {% endif %}
             {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                 {% if page_num %}
                 <li {% if page_num == pagination.page %}class="active"{% endif %}>
-                    <a href="{{ url_for('bili_public.index', page=page_num, q=q) }}">{{ page_num }}</a>
+                    <a class="js-scroll-restore" href="{{ url_for('bili_public.index', page=page_num, q=q) }}">{{ page_num }}</a>
                 </li>
                 {% else %}
                 <li><span>···</span></li>
                 {% endif %}
             {% endfor %}
             {% if pagination.has_next %}
-            <li><a href="{{ url_for('bili_public.index', page=pagination.next_num, q=q) }}">→</a></li>
+            <li><a class="js-scroll-restore" href="{{ url_for('bili_public.index', page=pagination.next_num, q=q) }}">→</a></li>
             {% endif %}
         </ul>
         <div class="page-jump">

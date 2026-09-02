@@ -690,6 +690,8 @@
     var max = parseInt(input.getAttribute('data-max') || '1', 10);
     var base = input.getAttribute('data-base-url') || '';
     if (isNaN(p) || p < 1 || p > max) return;
+    // 保存滚动位置（与分页链接点击一致）
+    try { sessionStorage.setItem('hoshino_scroll_y', String(window.scrollY || 0)); } catch (err) {}
     var usp = new URLSearchParams(window.location.search);
     usp.set('page', String(p));
     window.location = base + '?' + usp.toString();

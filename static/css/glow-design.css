@@ -322,6 +322,22 @@ ul { list-style: none; }
   outline: 2px solid rgba(132,94,247,0.75); outline-offset: 2px;
 }
 .back-btn:active { transform: scale(0.97); }
+/* 文本返回链接：用于 B站等子页面的面包屑式返回 */
+.back-link {
+  color: rgba(255,255,255,0.3);
+  text-decoration: none;
+  font-size: 0.85rem;
+  transition: color 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.back-link:hover { color: rgba(255,255,255,0.6); }
+.back-link:focus-visible {
+  outline: 2px solid rgba(132,94,247,0.75);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
 .hero .btn:hover, .btn-pill:hover {
   background: rgba(255,255,255,0.1);
   border-color: rgba(255,255,255,0.55);
