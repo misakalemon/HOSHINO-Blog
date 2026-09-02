@@ -118,8 +118,7 @@
                 <!-- 时间区间选择 -->
                 <div style="display:flex;align-items:center;gap:6px;position:relative">
                     <span style="font-size:0.75rem;color:rgba(255,255,255,0.4)">时间:</span>
-                    <input type="text" id="dateRangePicker" placeholder="选择日期范围" 
-                           style="width:220px;padding:4px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.6);font-size:0.75rem;cursor:pointer"
+                    <input type="text" id="dateRangePicker" class="date-picker-trigger" placeholder="选择日期范围 📅"
                            readonly data-action="toggleCalendar">
                     <button data-action="clearDateSelection" style="padding:4px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.5);font-size:0.75rem;cursor:pointer;transition:all 0.2s" class="cal-btn-hover">清除</button>
                     <!-- 自定义日历容器 -->
@@ -696,18 +695,20 @@
     // 切换日历显示
     window.toggleCalendar = function() {
         var cal = document.getElementById('customCalendar');
-        cal.style.display = cal.style.display === 'none' ? 'block' : 'none';
-        if (cal.style.display === 'block') {
-            renderCalendar();
-        }
+        var input = document.getElementById('dateRangePicker');
+        var willOpen = cal.style.display === 'none';
+        cal.style.display = willOpen ? 'block' : 'none';
+        if (input) input.classList.toggle('is-open', willOpen);
+        if (willOpen) renderCalendar();
     };
-    
+
     // 点击外部关闭日历
     document.addEventListener('click', function(e) {
         var cal = document.getElementById('customCalendar');
         var input = document.getElementById('dateRangePicker');
-        if (cal && !cal.contains(e.target) && e.target !== input) {
+        if (cal && !cal.contains(e.target) && e.target !== input && !input.contains(e.target)) {
             cal.style.display = 'none';
+            if (input) input.classList.remove('is-open');
         }
     });
 

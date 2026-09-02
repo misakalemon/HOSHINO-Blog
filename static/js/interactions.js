@@ -572,6 +572,7 @@
     e.preventDefault();
     submitBtn.disabled = true;
     submitBtn.classList.add('is-loading');
+    var originalText = submitBtn.textContent || submitBtn.innerText || '提交';
     var fd = new FormData(form);
     // CSRF token 由表单 hidden_tag 提供
     fetch(form.action, {
@@ -584,11 +585,24 @@
         submitBtn.disabled = false;
         submitBtn.classList.remove('is-loading');
         if (data && data.ok) {
-          // 成功提示（替换为 toast 样式提示条）
+          // 成功：按钮短暂显示 "✓ 已提交"
+          submitBtn.classList.add('is-success');
+          submitBtn.textContent = '✓ 已提交';
           showCommentToast(data.message || '评论已提交');
           form.reset();
+          setTimeout(function () {
+            submitBtn.classList.remove('is-success');
+            submitBtn.textContent = originalText;
+          }, 1800);
         } else {
+          // 失败：按钮短暂显示 "✗ 失败"
+          submitBtn.classList.add('is-error');
+          submitBtn.textContent = '✗ ' + ((data && data.message) || '失败');
           showCommentToast((data && data.message) || '提交失败，请重试', true);
+          setTimeout(function () {
+            submitBtn.classList.remove('is-error');
+            submitBtn.textContent = originalText;
+          }, 1800);
         }
       })
       .catch(function () {
