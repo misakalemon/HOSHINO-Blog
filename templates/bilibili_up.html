@@ -114,7 +114,7 @@
                         </label>
                     </td>
                     <td data-label="标题" style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ v.title }}">
-                        <a href="{{ url_for('bili_public.video_detail', video_id=v.id) }}#video-{{ v.id }}" style="color:#d0c8f0;text-decoration:none;transition:color 0.2s" class="compare-link-hover" >{{ v.title }}</a>
+                        <a href="{{ url_for('bili_public.video_detail', video_id=v.id) }}?ref_page={{ pagination.page }}{% if q %}&q={{ q|urlencode }}{% endif %}#video-{{ v.id }}" style="color:#d0c8f0;text-decoration:none;transition:color 0.2s" class="compare-link-hover" >{{ v.title }}</a>
                     </td>
                     <td data-label="时长">{{ '%d:%02d'|format(v.duration//60, v.duration%60) if v.duration else '-' }}</td>
                     <td data-label="日期">{{ v.pub_datetime.strftime('%Y/%m/%d %H:%M') if v.pub_datetime else v.pub_datetime.strftime('%Y/%m/%d %H:%M') if v.pub_datetime else v.pub_date.strftime('%Y/%m/%d') if v.pub_date else '-' }}</td>
