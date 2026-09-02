@@ -186,7 +186,7 @@ def up_videos(up_id):
         wc_months = (
             WordCloudData.query
             .filter_by(post_id=None, source='bili')
-            .filter(WordCloudData.period.like(f'up_{up_id}_%'))
+            .filter(WordCloudData.period.startswith(f'up_{up_id}_'))
             .order_by(WordCloudData.period)
             .all()
         )
