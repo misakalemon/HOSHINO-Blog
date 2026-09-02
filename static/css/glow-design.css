@@ -1802,7 +1802,7 @@ code[class*="language-"] { position: relative; z-index: 1; }
 .preset-swatch {
   width: 36px; height: 36px; border-radius: 50%; cursor: pointer;
   transition: color 0.2s, background 0.2s, background-color 0.2s, border-color 0.2s, transform 0.2s, box-shadow 0.2s, opacity 0.2s;
-  cubic-bezier(0.22,1,0.36,1)
+  transition-timing-function: cubic-bezier(0.22,1,0.36,1);
   border: 2px solid transparent; flex-shrink: 0;
   box-shadow: 0 2px 10px rgba(0,0,0,0.3); position: relative;
 }
@@ -1893,7 +1893,7 @@ code[class*="language-"] { position: relative; z-index: 1; }
   color: #e0daff; font-weight: 500; font-size: 13px;
   box-shadow: 0 20px 60px rgba(0,0,0,0.8);
   opacity: 0; transition: color 0.4s, background 0.4s, background-color 0.4s, border-color 0.4s, transform 0.4s, box-shadow 0.4s, opacity 0.4s;
-  cubic-bezier(0.22,1,0.36,1)
+  transition-timing-function: cubic-bezier(0.22,1,0.36,1);
   pointer-events: none; z-index: 999;
 }
 .color-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -2319,9 +2319,6 @@ code[class*="language-"] { position: relative; z-index: 1; }
   background: rgba(255,255,255,0.04) !important;
 }
 
-/* ── B站搜索按钮 hover（替代内联 onmouseover）── */
-.class-bili-search-btn:hover { background: rgba(255,107,157,0.25) !important; }
-
 /* ── 列表项 hover（替代内联 onmouseover，class-hover 标记）── */
 .class-hover:hover {
   border-color: rgba(255,255,255,0.12) !important;
@@ -2388,10 +2385,8 @@ code[class*="language-"] { position: relative; z-index: 1; }
   }
 }
 
-/* ── 触摸反馈：按钮/卡片 active 态 ── */
-.btn:active,
-.btn-pill:active,
-.back-btn:active,
+/* ── 触摸反馈：卡片/选项 active 态 ── */
+/* 注：.btn / .btn-pill / .back-btn 的 :active 已在前部按钮区精确定义（含 translateY(0)+box-shadow:none），此处不再覆盖 */
 .featured-card:active,
 .glass-card:active,
 .tool-tab:active,
