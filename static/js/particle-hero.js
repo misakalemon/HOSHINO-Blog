@@ -488,16 +488,21 @@
   }, { passive: true });
   window.addEventListener('pointerleave', function () { mouse.active = false; });
 
+  var _scrollRAF = null;
   window.addEventListener('scroll', function () {
-    var h = window.innerHeight;
-    scrollRatio = Math.min(window.scrollY / h, 1.0);
-    if (window.scrollY > h * 0.85) {
-      canvas.style.pointerEvents = 'none';
-      canvas.style.opacity = Math.max(0, 1 - (window.scrollY - h * 0.85) / (h * 0.15));
-    } else {
-      canvas.style.pointerEvents = 'auto';
-      canvas.style.opacity = 1;
-    }
+    if (_scrollRAF) return;
+    _scrollRAF = requestAnimationFrame(function () {
+      _scrollRAF = null;
+      var h = window.innerHeight;
+      scrollRatio = Math.min(window.scrollY / h, 1.0);
+      if (window.scrollY > h * 0.85) {
+        canvas.style.pointerEvents = 'none';
+        canvas.style.opacity = Math.max(0, 1 - (window.scrollY - h * 0.85) / (h * 0.15));
+      } else {
+        canvas.style.pointerEvents = 'auto';
+        canvas.style.opacity = 1;
+      }
+    });
   }, { passive: true });
 
   canvas.addEventListener('pointerdown', function (e) {

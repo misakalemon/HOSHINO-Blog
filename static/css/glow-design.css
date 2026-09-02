@@ -427,7 +427,7 @@ ul { list-style: none; }
               border-color 0.4s ease, box-shadow 0.4s ease;
   box-shadow: 0 8px 32px -16px rgba(0, 0, 0, 0.6),
               0 0 0 1px rgba(255,255,255,0.02) inset;
-  will-change: transform; overflow: hidden;
+  overflow: hidden;
 }
 .glass-card:hover {
   transform: translateY(-6px);
@@ -488,7 +488,7 @@ ul { list-style: none; }
   font-size: 0.75rem; padding: 0.2rem 0.8rem; border-radius: 20px;
   letter-spacing: 0.04em;
   border: 1px solid rgba(255, 255, 255, 0.04);
-  transition: 0.3s;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
 }
 .pill-light:hover {
   background: rgba(255, 255, 255, 0.12);

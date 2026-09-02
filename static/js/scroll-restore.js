@@ -19,16 +19,27 @@
     try { sessionStorage.setItem(STORAGE_KEY, String(window.scrollY || 0)); } catch (err) {}
   });
 
-  // 页面加载后恢复滚动位置（仅一次）
+  // 页面加载后恢复滚动位置（仅一次，延迟到图片加载稳定后避免 CLS 漂移）
   function restore() {
     try {
       var raw = sessionStorage.getItem(STORAGE_KEY);
       if (raw === null) return;
-      sessionStorage.removeItem(STORAGE_KEY); // 只恢复一次
+      sessionStorage.removeItem(STORAGE_KEY);
       var y = parseInt(raw, 10);
       if (!isNaN(y) && y > 0) {
-        // 等待布局稳定后恢复
         window.scrollTo(0, y);
+        // 图片加载完成后可能会撑开高度，再次校正
+        var _checked = 0;
+        function recheck() {
+          if (_checked++ > 4) return;
+          var h = document.documentElement.scrollHeight;
+          window.scrollTo(0, Math.min(y, h - window.innerHeight));
+          setTimeout(function () {
+            var h2 = document.documentElement.scrollHeight;
+            if (Math.abs(h2 - h) > 50) recheck();
+          }, 300);
+        }
+        setTimeout(recheck, 300);
       }
     } catch (err) {}
   }
