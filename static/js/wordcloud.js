@@ -322,9 +322,9 @@
     var searchUrl = opts.searchUrl || '/search?q=';
     var maxDisplay = opts.maxDisplay || 100;
 
-    // 计算画布尺寸
-    var rect = canvas.parentElement.getBoundingClientRect();
-    var w = (rect.width || canvas.parentElement.clientWidth || 600) | 0;
+    // 计算画布尺寸：使用 clientWidth（排除 border，避免 canvas 溢出被 overflow:hidden 截断）
+    var parent = canvas.parentElement;
+    var w = ((parent && parent.clientWidth) || 600) | 0;
     var defaultH = Math.max(300, Math.min(500, (w * 0.5) | 0)) | 0;
     var h = opts.canvasHeight || defaultH;
 

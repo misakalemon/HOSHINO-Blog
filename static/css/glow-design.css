@@ -1080,13 +1080,17 @@ code[class*="language-"] { position: relative; z-index: 1; }
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
-#wcSite {
+#wcSite,
+#wcBili,
+#wcBiliUp {
   display: block;
   width: 100%;
   height: 220px;
   cursor: pointer;
 }
 #wordcloudCanvas {
+  display: block;
+  width: 100%;
   cursor: pointer;
 }
 /* 时间轴滑块 */
