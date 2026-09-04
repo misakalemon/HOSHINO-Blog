@@ -957,6 +957,10 @@ def _crawl_video_danmakus(video, force: bool = False):
     )
     from .models import BiliDanmaku
 
+    # 读写模块级熔断变量需显式 global，否则 Python 视为函数局部变量，
+    # 在其被赋值前读取会抛 UnboundLocalError（cannot access local variable ...）
+    global _circuit_open_until
+
     # 已完整爬取过且非强制刷新则跳过（避免每次刷新重复全量拉取）
     if not force and video.danmaku_crawled_at:
         return 0

@@ -162,6 +162,10 @@ def requeue_task(task, original_raw):
     try:
         if original_raw:
             redis_client.lrem(_TASK_BACKUP_KEY, 1, original_raw)
+        # 重签名：retry 时 Worker 会修改 data（如 _retries），payload 已变，
+        # 旧 sig 失效 → 重新入队后 verify_task_signature 校验失败导致丢弃。
+        # 用修正后的载荷重算 HMAC 再入队。
+        task['sig'] = _sign(_canonical({k: v for k, v in task.items() if k != 'sig'}))
         redis_client.lpush(_TASK_QUEUE_KEY, json.dumps(task))
         return True
     except Exception as e:

@@ -135,6 +135,28 @@
 | fix | **`delete_up` 显式先删订阅（bili_routes.py）** — `BiliSubscription.query.filter_by(up_id=...).delete()`，与现有"按依赖顺序手动删除"（订阅 → 历史快照 → 视频 → UP 主）一致，不依赖关系级联，彻底消除 NULLify 冲突 |
 | fix | **`delete_up` 补删 `BiliUpHistory`（bili_routes.py）** — 首轮修复后下一处同类冲突：`bili_up_history.up_id` 同样 NOT NULL 且 `passive_deletes` 又在 many 侧；显式 `BiliUpHistory.query.filter(up_id==...).delete()`，删除顺序修正为：订阅 → UP 粉丝数历史 → 视频历史 → 视频 → UP 主 |
 
+## Worker 弹幕任务失败（`UnboundLocalError: cannot access local variable '_circuit_open_until'`）
+
+> 现象：`danmaku_refresh` 任务在 `_crawl_video_danmakus` 中失败：
+> `UnboundLocalError: cannot access local variable '_circuit_open_until' where it is not associated with a value`。
+> 根因：Python 作用域规则 —— 函数内一旦给某名字赋值，该名字即视为函数局部变量；
+> `_crawl_video_danmakus` 在 1084 行读取全局熔断变量 `_circuit_open_until`、1086 行赋值，
+> 但未声明 `global _circuit_open_until` → 赋值的"使用前"读取触发 UnboundLocalError。
+
+| 类型 | 说明 |
+|------|------|
+| fix | **`_crawl_video_danmakus` 声明 `global _circuit_open_until`（bili_routes.py）** — 与 `_check_new_videos` / `_run_scrape` 保持一致；其余读写 `_circuit_open_until` 的函数均已确认有 global 或仅读不写 |
+
+## 任务重试被"签名校验失败"丢弃（`task_queue.requeue_task`）
+
+> 现象：任务失败重试（第 1 次）后日志出现"任务签名校验失败，丢弃"，重试机制失效。
+> 根因：`worker.py` 重试时修改 `data._retries`，但 `requeue_task` 直接入队未重签名；
+> `verify_task_signature` 用含 `_retries` 的新 payload 验旧 sig → HMAC 不匹配 → 丢弃。
+
+| 类型 | 说明 |
+|------|------|
+| fix | **`requeue_task` 入队前重算 HMAC 签名（task_queue.py）** — 用修正后载荷 `_sign(_canonical(不含 sig))` 更新 `task['sig']` 再入队，重试任务可被正确验签执行 |
+
 ---
 
 ## 技术细节
