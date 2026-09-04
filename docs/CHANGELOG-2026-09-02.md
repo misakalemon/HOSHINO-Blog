@@ -133,6 +133,7 @@
 | 类型 | 说明 |
 |------|------|
 | fix | **`delete_up` 显式先删订阅（bili_routes.py）** — `BiliSubscription.query.filter_by(up_id=...).delete()`，与现有"按依赖顺序手动删除"（订阅 → 历史快照 → 视频 → UP 主）一致，不依赖关系级联，彻底消除 NULLify 冲突 |
+| fix | **`delete_up` 补删 `BiliUpHistory`（bili_routes.py）** — 首轮修复后下一处同类冲突：`bili_up_history.up_id` 同样 NOT NULL 且 `passive_deletes` 又在 many 侧；显式 `BiliUpHistory.query.filter(up_id==...).delete()`，删除顺序修正为：订阅 → UP 粉丝数历史 → 视频历史 → 视频 → UP 主 |
 
 ---
 

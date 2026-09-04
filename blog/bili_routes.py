@@ -375,10 +375,14 @@ def delete_up(up_id):
         flash('该 UP 主正在爬取中，请等待完成后再删除', 'error')
         return redirect(url_for('bili.index'))
     # 手动按依赖顺序删除，避免 ORM 级联置 NULL 触发 NOT NULL 冲突：
-    # 先删邮件订阅 → 历史快照 → 视频 → 最后删 UP 主
-    # 注：BiliSubscription.up_id 为 NOT NULL 且 passive_deletes 需配置在父侧
-    # （BiliUp.subscriptions），否则删 up 时 SQLAlchemy 会尝试置 NULL 触发 1048。
+    # 先删邮件订阅 → UP 粉丝数历史 → 视频历史 → 视频 → 最后删 UP 主
+    # 注：BiliSubscription / BiliUpHistory 的 up_id 均为 NOT NULL，
+    # 且 passive_deletes 被配置在 many 侧（BiliSubscription.up / BiliUpHistory.up），
+    # 父侧 backref（subscriptions / history_records）未生效时，删 up 会让
+    # SQLAlchemy 对关联子对象做 FK NULLify（UPDATE up_id=NULL）→ 数据库 1048。
+    # 因此必须显式先删这些子表，不依赖关系级联。
     BiliSubscription.query.filter(BiliSubscription.up_id == up.id).delete(synchronize_session=False)
+    BiliUpHistory.query.filter(BiliUpHistory.up_id == up.id).delete(synchronize_session=False)
     video_ids = [v.id for v in up.videos if v.id]
     if video_ids:
         BiliVideoHistory.query.filter(BiliVideoHistory.video_id.in_(video_ids)).delete(synchronize_session=False)
