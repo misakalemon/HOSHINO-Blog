@@ -374,9 +374,12 @@ def delete_up(up_id):
     if is_running(up.mid) or up.mid in _scrape_running or up.mid in _incremental_running:
         flash('该 UP 主正在爬取中，请等待完成后再删除', 'error')
         return redirect(url_for('bili.index'))
-    # 手动按依赖顺序删除，避免 ORM 级联置 NULL 触发 video_id NOT NULL 冲突：
-    # 先删历史快照 → 再删视频 → 最后删 UP 主
-    video_ids = [v.id for v in up.videos]
+    # 手动按依赖顺序删除，避免 ORM 级联置 NULL 触发 NOT NULL 冲突：
+    # 先删邮件订阅 → 历史快照 → 视频 → 最后删 UP 主
+    # 注：BiliSubscription.up_id 为 NOT NULL 且 passive_deletes 需配置在父侧
+    # （BiliUp.subscriptions），否则删 up 时 SQLAlchemy 会尝试置 NULL 触发 1048。
+    BiliSubscription.query.filter(BiliSubscription.up_id == up.id).delete(synchronize_session=False)
+    video_ids = [v.id for v in up.videos if v.id]
     if video_ids:
         BiliVideoHistory.query.filter(BiliVideoHistory.video_id.in_(video_ids)).delete(synchronize_session=False)
     BiliVideo.query.filter(BiliVideo.up_id == up.id).delete(synchronize_session=False)

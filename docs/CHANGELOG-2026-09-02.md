@@ -122,6 +122,18 @@
 | fix | **`SESSION_COOKIE_SECURE` 默认改 `false`（config.py）** — 匹配 start.bat HTTP 部署实际；session cookie 在 HTTP 下正常保存，页面 token 与提交 token 一致。生产 HTTPS 需显式设置 `SESSION_COOKIE_SECURE=true` |
 | chore | **建议 .env 固定 SECRET_KEY** — 未设置时启用每日自动轮换；固定密钥后 session/CSRF 在服务重启后依然稳定，彻底消除轮换相关失效 |
 
+## 删除 UP 主报错（`IntegrityError 1048 Column 'up_id' cannot be null`）
+
+> 现象：`POST /admin/bilibili/delete/79` 删除 UP 主时 commit 失败：
+> `UPDATE bili_subscriptions SET up_id=NULL WHERE id=N` → 数据库列 NOT NULL 拒绝 → 500。
+> 根因：`BiliSubscription.up`（many 侧）设置 `passive_deletes=True` 不生效——SQLAlchemy 的
+> `passive_deletes` 须配置在 one-to-many **父侧**（`BiliUp.subscriptions`）；父侧 backref 未配置，
+> 删除 `BiliUp` 时 SQLAlchemy 默认对已关联订阅做 FK NULLify（而非级联删除），而 `up_id NOT NULL` → 1048。
+
+| 类型 | 说明 |
+|------|------|
+| fix | **`delete_up` 显式先删订阅（bili_routes.py）** — `BiliSubscription.query.filter_by(up_id=...).delete()`，与现有"按依赖顺序手动删除"（订阅 → 历史快照 → 视频 → UP 主）一致，不依赖关系级联，彻底消除 NULLify 冲突 |
+
 ---
 
 ## 技术细节
