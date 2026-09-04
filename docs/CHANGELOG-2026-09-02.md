@@ -110,6 +110,18 @@
 | fix | **Web 服务器单线程 → 多线程（app.py）** — `app.run(..., threaded=True)`。Flask 开发服务器默认单线程：一个慢请求（B站大数据查询 / 词云大页面）会阻塞所有后续请求导致全站无响应；多线程下单请求慢速不再卡死整个 Web |
 | fix | **Worker / 看门狗子进程不再共享控制台（app.py）** — `stderr` 从 `_sys.stderr` 改为 `DEVNULL`：子进程日志已完整写入 `blog/logs/*.log` 文件，避免大任务刷屏或控制台写阻塞（缓冲区慢 / QuickEdit）拖慢 Web 进程，零阻塞面 |
 
+## CSRF 校验失效修复（`400 POST ... CSRF token is invalid`）
+
+> 现象：HTTP 内网访问下操作提交（删除 UP 等）偶发 400 CSRF token invalid。
+> 根因：`SESSION_COOKIE_SECURE` 默认 `true`，secure cookie 仅在 HTTPS 下浏览器保存/发送；
+> 项目经 start.bat 以 HTTP（内网 IP）部署时 cookie 拒发 → session 每次新建 →
+> 页面里嵌入的 CSRF token 与提交时 session 中的 token 不匹配 → CSRF invalid。
+
+| 类型 | 说明 |
+|------|------|
+| fix | **`SESSION_COOKIE_SECURE` 默认改 `false`（config.py）** — 匹配 start.bat HTTP 部署实际；session cookie 在 HTTP 下正常保存，页面 token 与提交 token 一致。生产 HTTPS 需显式设置 `SESSION_COOKIE_SECURE=true` |
+| chore | **建议 .env 固定 SECRET_KEY** — 未设置时启用每日自动轮换；固定密钥后 session/CSRF 在服务重启后依然稳定，彻底消除轮换相关失效 |
+
 ---
 
 ## 技术细节

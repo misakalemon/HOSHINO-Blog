@@ -213,8 +213,12 @@ class Config:
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
     # 使用独立环境变量控制，不依赖 FLASK_ENV
+    # 默认 false：本项目经 start.bat 以 HTTP（内网 IP / 局域网）部署，
+    # secure cookie 仅在 HTTPS 下发，HTTP 下浏览器拒发 → session 每次新建
+    # → 页面 CSRF token 与 session 不匹配（400 CSRF invalid）。
+    # 生产 HTTPS 部署请显式设置 SESSION_COOKIE_SECURE=true。
     SESSION_COOKIE_SECURE = os.environ.get(
-        'SESSION_COOKIE_SECURE', 'true'
+        'SESSION_COOKIE_SECURE', 'false'
     ).lower() in ('true', '1')
     PERMANENT_SESSION_LIFETIME = timedelta(days=7)
 
