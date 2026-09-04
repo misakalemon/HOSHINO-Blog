@@ -70,6 +70,18 @@ if errorlevel 1 (
 echo [OK] 环境激活成功
 echo.
 
+rem ── 3.5 禁用控制台快速编辑模式（Windows QuickEdit 防冻结）──
+rem 默认开启的 QuickEdit Mode 下，误点控制台窗口会使整个控制台进入
+rem "选择/冻结"状态：所有共享该控制台的进程（Web/Worker/看门狗写日志）
+rem 都会阻塞 —— 表现为全站卡死、网页无响应，需按 Esc 或 Ctrl+C 才恢复。
+rem 此处用 SetConsoleMode 去掉 ENABLE_QUICK_EDIT_MODE / ENABLE_EXTENDED_FLAGS，
+rem 保留基本输入（processed|line|echo|insert），锁定后误点不再冻结。
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$s='[DllImport(\"kernel32.dll\")] public static extern bool SetConsoleMode(System.IntPtr h, uint m); public static extern System.IntPtr GetStdHandle(int n);';" ^
+  "$t=Add-Type -MemberDefinition $s -Name ConsoleMode -Namespace Win32 -PassThru;" ^
+  "[void]$t::SetConsoleMode($t::GetStdHandle(-10), 0x27)" >nul 2>nul
+echo.
+
 rem ── 4. 启动 Flask + Worker ──
 echo [2/2] 启动 app.py (Flask + Worker) ...
 if defined DEBUG_FLAG (

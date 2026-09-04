@@ -99,6 +99,17 @@
 | fix | **`scrape()` 新 UP 添加改用 `refresh_all` 任务（force=True）** — 原提交 `refresh_up`（force=False）导致 `_run_scrape` 按 `total_in_db > 0` 落入 `_fill_max_pages=3` 分支（默认限翻 3 页 ≈ 30 视频）：一旦 DB 已有该 UP 的少量视频（爬取中断残留 / 先通过"添加视频"建了 UP + 单视频），新添加的 UP 永远只能拿到最近 ~30 个视频，无法补全全部 |
 | fix | **全量翻页保障** — `refresh_all` 在 Worker 以 `force=True` 调用 `_run_scrape`，`should_fill=True` 且 `_fill_max_pages` 保持 `None`（不限页），覆盖 API 声明的全部视频 |
 
+## 全站卡死稳定性修复
+
+> 现象：整个项目系统偶发直接卡住，网页全部无响应，需到命令行按 Ctrl+C 才能恢复。
+> 根因：Windows 控制台快速编辑模式（QuickEdit）+ Flask 开发服务器单线程 + 子进程共享控制台写日志。
+
+| 类型 | 说明 |
+|------|------|
+| fix | **禁用 Windows 控制台 QuickEdit Mode（start.bat）** — 默认 QuickEdit 下误点控制台窗口进入"选择/冻结"状态，所有共享该控制台写日志的进程（Web/Worker/看门狗）全部阻塞 → 全站卡死。start.bat 启动前用 `SetConsoleMode` 去掉 `ENABLE_QUICK_EDIT_MODE / ENABLE_EXTENDED_FLAGS`（保留 `processed\|line\|echo\|insert`），误点不再冻结 |
+| fix | **Web 服务器单线程 → 多线程（app.py）** — `app.run(..., threaded=True)`。Flask 开发服务器默认单线程：一个慢请求（B站大数据查询 / 词云大页面）会阻塞所有后续请求导致全站无响应；多线程下单请求慢速不再卡死整个 Web |
+| fix | **Worker / 看门狗子进程不再共享控制台（app.py）** — `stderr` 从 `_sys.stderr` 改为 `DEVNULL`：子进程日志已完整写入 `blog/logs/*.log` 文件，避免大任务刷屏或控制台写阻塞（缓冲区慢 / QuickEdit）拖慢 Web 进程，零阻塞面 |
+
 ---
 
 ## 技术细节

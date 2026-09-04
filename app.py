@@ -479,9 +479,13 @@ if __name__ == '__main__':
         global _worker_proc
         if _worker_proc and _worker_proc.poll() is None:
             return
+        # stderr 不共享主控制台（DEVNULL）：Worker 日志已完整写入
+        # blog/logs/*.log 文件；若共享 _sys.stderr，大量刷屏或 Windows
+        # 控制台写阻塞（QuickEdit/缓冲区慢）会让写控制台卡住从而拖慢
+        # 整个 Web 进程（全站间接卡死）。改为只写文件，零阻塞面。
         kwargs = dict(
             stdout=subprocess.DEVNULL,
-            stderr=_sys.stderr,
+            stderr=subprocess.DEVNULL,
             stdin=subprocess.DEVNULL,
             cwd=os.path.dirname(__file__),
             env={**os.environ, 'WORKER_PROCESS': '1'},
@@ -533,9 +537,11 @@ if __name__ == '__main__':
             if _logwatch_proc and _logwatch_proc.poll() is None:
                 return
             try:
+                # stderr 不共享主控制台（DEVNULL）：看门狗日志已写入文件，
+                # 避免向控制台写日志在任何情况下拖慢 Web 进程。
                 kwargs = dict(
                     stdout=subprocess.DEVNULL,
-                    stderr=_sys.stderr,
+                    stderr=subprocess.DEVNULL,
                     stdin=subprocess.DEVNULL,
                     cwd=os.path.dirname(__file__),
                     # LOGWATCH_PROCESS=1：日志系统借此打 [Watchdog] 进程标签，
@@ -586,4 +592,7 @@ if __name__ == '__main__':
 
     # debug 模式下防止 Flask 热重载重复启动 Worker
     # use_reloader=False 确保主进程只启动一次
-    app.run(host=host, port=port, debug=debug, use_reloader=False)
+    # threaded=True：Flask 开发服务器默认单线程，一个慢请求（如 B站/词云
+    # 大查询）会阻塞所有后续请求导致全站无响应。多线程并行处理，
+    # 单请求慢速不再卡死整个 Web。
+    app.run(host=host, port=port, debug=debug, use_reloader=False, threaded=True)
