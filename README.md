@@ -75,8 +75,9 @@ HOSHINO Blog 是一个基于 Python Flask 框架构建的个人博客系统。�
 | 分类页面 | 按分类查看文章 |
 | 关于页面 | 管理员通过富文本编辑器自定义内容 |
 | 联系表单 | 访客留言 |
-| **粒子画像** | **首页 Hero Canvas 粒子系统 — 后台上传 PNG 画像，2 万粒子实时渲染** |
+| **粒子画像** | **首页 Hero Canvas 粒子系统 — 后台上传 PNG 画像，2 万粒子实时渲染，华为/低端设备自动降级为静态画像** |
 | **B站数据** | **UP 主视频数据爬取、新视频自动发现、粉丝/播放量趋势图、全局视频搜索、邮件订阅、视频对比、自定义日历选择器（拖拽选择、跨月选择）** |
+| **B站时间轴** | **视频详情图表双柄范围滑块 + 自定义日历、全站/UP 主页/单视频词云按月时间轴滑块（后端预计算月度切片）** |
 | 工具箱 | 密码生成器、图片压缩、颜色选择器、Base64/JSON/哈希/时间戳 |
 | RSS 订阅 | `/feed.xml` 标准 RSS 输出 |
 | 响应式设计 | PC / 平板 / 手机全适配 |
@@ -101,7 +102,9 @@ HOSHINO Blog 是一个基于 Python Flask 框架构建的个人博客系统。�
 - **玻璃态卡片**: `backdrop-filter blur` + 半透明背景
 - **自定义下拉框**: 自研 `glow-select-wrap` 组件，全站统一风格
 - **图片灯箱**: 点击图片全屏查看
-- **Hero 粒子画像**: Canvas 采样 PNG → WebGL（GPU）渲染 2 万粒子，鼠标拨开/点击涟漪/滚动散开，移动端自适应
+- **Hero 粒子画像**: Canvas 采样 PNG → WebGL（GPU）渲染 2 万粒子，鼠标拨开/点击涟漪/滚动散开，滚动/指针事件 RAF 节流
+- **按钮状态链**: 全站按钮统一 default/hover/focus-visible/active/disabled/loading 六态，键盘可完整导航
+- **鸿蒙适配**: HarmonyOS Sans 字体优先、抽屉侧滑手势保护、华为设备粒子静态降级、touch-action 消除点击延迟
 
 ---
 
@@ -240,7 +243,9 @@ hoshino_blog/
 │   ├── mail.py                # SMTP 邮件发送（非阻塞后台线程）
 │   ├── cache.py               # Redis 缓存封装（降级友好）
 │   ├── wordcloud.py           # 词云系统（jieba 分词 + 异步队列 + 预计算）
-│   ├── logger.py              # 日志系统（文件 + 终端，每日轮转）
+│   ├── wordcloud_runner.py    # 词云独立子进程入口（GIL 隔离，python -m blog.wordcloud_runner）
+│   ├── logwatch.py            # 业务心跳看门狗（僵死检测 + 告警邮件 + 可选重启）
+│   ├── logger.py              # 日志系统（文件 + 终端，每日轮转，多进程标签）
 │   └── bilibili/              # Bilibili 模块
 │       ├── __init__.py        # 包标记 + 模块文档
 │       ├── config.py          # 请求间隔/Cookie 路径/UA/HEADERS
@@ -291,13 +296,16 @@ hoshino_blog/
 │
 └── static/
     ├── css/
-    │   └── glow-design.css    # 完整样式表（粉紫暗色科技风）
+    │   ├── glow-design.css    # 完整样式表（粉紫暗色科技风）
+    │   └── tiptap-editor.css  # 富文本编辑器样式
     ├── js/
-    │   ├── base.js            # 基础 JS（导航/灯箱/抽屉菜单）
+    │   ├── base.js            # 基础 JS（导航/灯箱/抽屉/glow-select）
+    │   ├── interactions.js    # 全站交互层（事件委托/搜索弹层/评论 AJAX）
+    │   ├── scroll-restore.js  # 分页滚动位置保存与恢复
     │   ├── admin.js           # 后台 JS（富文本编辑器/表单交互）
-    │   ├── particle-hero.js   # Hero 粒子画像（Canvas/WebGL）
+    │   ├── particle-hero.js   # Hero 粒子画像（Canvas/WebGL，RAF 节流）
     │   ├── tools.js           # 工具箱 JS
-    │   ├── wordcloud.js       # 词云渲染（零依赖 Canvas）
+    │   ├── wordcloud.js       # 词云渲染（零依赖 Canvas，多时段滑块）
     │   └── cookie-banner.js   # Cookie 横幅
     ├── font/                  # 字体文件
     ├── images/
@@ -314,7 +322,7 @@ hoshino_blog/
 
 │   └── docs/                      # 文档
 │       ├── ARCHITECTURE.md        # 详细技术架构文档
-│       └── CHANGELOG-*.md         # 变更日志（12 个）
+│       └── CHANGELOG-*.md         # 变更日志（15 个）
 
 ├── migrations/                # Flask-Migrate 迁移脚本
 │   ├── alembic.ini
@@ -502,6 +510,7 @@ arc/search API（按 pubdate 倒序翻页）
 | `blog` |（post_id） | 单篇文章 | 每篇 1 行 |
 | `bili` | `all` / `YYYY-MM` | B站全站 + 按月切片 | ~13 行 |
 | `bili` | `up_{id}` | 单 UP 主聚合 | 每 UP 1 行 |
+| `bili` | `up_{id}_YYYY-MM` | UP 主按月切片（时间轴滑块） | 每 UP 每月 1 行 |
 | `bili_video` | `bvid_{bvid}` | 单视频 | 每视频 1 行 |
 
 ### 计算入口
@@ -522,7 +531,7 @@ arc/search API（按 pubdate 倒序翻页）
 - 阿基米德螺旋线布局 + 矩形碰撞检测
 - 5 种形状（circle/star/heart/cloud/rectangle）
 - 3 套配色（glow/ocean/forest）
-- 点击词条跳搜索、多时段滑块切换
+- 点击词条跳搜索、多时段滑块切换（全站/UP 主页均支持按月浏览）
 - 社区词云配置页（后台管理）
 
 ### 自定义形状
@@ -695,6 +704,9 @@ python app.py
 
 ## 开发日志
 
+- [2026-09-02 — 全站视觉升级 v3.0 / B站时间轴滑块 / 鸿蒙适配 / 按钮交互直觉化 / 导航逻辑优化 / 流畅性优化 / 词云数据泄漏根治](docs/CHANGELOG-2026-09-02.md)
+- [2026-08-31 — 深扫饿死增量根治 / GIL 隔离子进程词云 / 独立日志看门狗 / 多进程日志标签](docs/CHANGELOG-2026-08.md)
+- [2026-07-28 — Tiptap 工具栏固定修复 / B站单个视频爬取功能 / 数据库迁移优化](docs/CHANGELOG-2026-07-28.md)
 - [2026-07-23 — 词云系统完整升级（异步队列 / ZLIB 压缩 / UP 主页聚合 / 自定义形状 / 线程安全审计 / 内存优化）](docs/CHANGELOG-2026-07-23.md)
 - [2026-07-20 — 安全审计修复 / 并发竞态消除 / 代码完整注释](docs/CHANGELOG-2026-07-20.md)
 - [2026-07-19 — 首页粒子画像系统 / 移除价格爬取 / 启动性能优化 / 全站注释](docs/CHANGELOG-2026-07-19.md)

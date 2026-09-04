@@ -1595,7 +1595,11 @@ def scrape():
     if not is_queue_available():
         mark_done(mid)
         return {'ok': False, 'error': '任务队列不可用（Redis 未连接）'}
-    task_id = submit_task('refresh_up', mid=mid, space_url=space_url)
+    # 添加新 UP 用 refresh_all（force=True）：无论该 UP 在 DB 已有多少视频，
+    # 都全量翻页补齐（而非 refresh_up 的限翻 3 页 ≈ 30 视频）。
+    # 否则一旦 DB 已有该 UP 的少量视频（如上次爬取中断/先单视频添加），
+    # _run_scrape 会按 total_in_db>0 落入 max_pages=3 分支，永远补不全。
+    task_id = submit_task('refresh_all', mid=mid, space_url=space_url)
     if task_id:
         return {'ok': True, 'mid': mid, 'task_id': task_id}
     mark_done(mid)
