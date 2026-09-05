@@ -69,6 +69,8 @@ __pycache__/
 .ruff_cache/
 .pytest_cache/
 pytest-cache-files-*/
+.coverage
+htmlcov/
 # Playwright
 .playwright-mcp/
 # Logs

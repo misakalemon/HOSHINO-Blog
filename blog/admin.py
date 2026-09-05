@@ -1172,12 +1172,32 @@ def analytics():
 def category_list():
     """分类列表页。
 
+    支持搜索（q）和排序（sort）：
+      q    — 按名称或 slug 模糊搜索
+      sort — name（默认）/ posts（按文章数降序）/ created（按创建时间降序）
+
     Template: admin/category-list.html
     """
-    categories = Category.query.order_by(Category.name).all()
-    # 一次性 GROUP BY 聚合各分类已发布文章数，避免模板逐行 COUNT（N+1）
     from sqlalchemy import func as _sa_func
     from .models import post_categories
+
+    q = (request.args.get('q') or '').strip()
+    sort = request.args.get('sort', 'name')
+
+    query = Category.query
+    if q:
+        like = f'%{q}%'
+        query = query.filter(db.or_(Category.name.like(like), Category.slug.like(like)))
+
+    if sort == 'created':
+        query = query.order_by(Category.created_at.desc())
+    elif sort == 'posts':
+        query = query.outerjoin(post_categories, post_categories.c.category_id == Category.id) \
+            .group_by(Category.id) \
+            .order_by(_sa_func.count(post_categories.c.post_id).desc(), Category.name)
+    else:
+        query = query.order_by(Category.name)
+    categories = query.all()
 
     post_counts: dict[int, int] = {}
     try:
@@ -1192,7 +1212,11 @@ def category_list():
     except Exception:
         pass
     return render_template(
-        'admin/category-list.html', categories=categories, post_counts=post_counts
+        'admin/category-list.html',
+        categories=categories,
+        post_counts=post_counts,
+        q=q,
+        sort=sort,
     )
 
 
@@ -1282,6 +1306,85 @@ def delete_category(id):
     _invalidate_sidebar_cache()
     flash('分类已删除', 'success')
     return _redirect_list('admin.category_list')
+
+
+@admin_bp.route('/categories/batch-delete', methods=['POST'])
+@editor_required
+def category_batch_delete():
+    """批量删除分类。
+
+    JSON body: {"ids": [1, 2, 3]}
+    删除前解除所有文章关联，返回 {"deleted": n}。
+    """
+    data = request.get_json(silent=True) or {}
+    ids = data.get('ids')
+    if not isinstance(ids, list) or not ids:
+        return jsonify(error='未选择分类'), 400
+    ids = [int(i) for i in ids if str(i).isdigit()]
+    if not ids:
+        return jsonify(error='无效 ID'), 400
+
+    from sqlalchemy.orm import joinedload
+    cats = Category.query.filter(Category.id.in_(ids)).all()
+    if not cats:
+        return jsonify(error='分类不存在'), 404
+
+    cat_ids = {c.id for c in cats}
+    for post in (
+        Post.query.options(joinedload(Post.categories))
+        .filter(Post.categories.any(Category.id.in_(cat_ids)))
+        .all()
+    ):
+        post.categories = [c for c in post.categories if c.id not in cat_ids]
+    for cat in cats:
+        db.session.delete(cat)
+    db.session.commit()
+    _invalidate_sidebar_cache()
+    return jsonify(deleted=len(cats))
+
+
+@admin_bp.route('/categories/merge', methods=['POST'])
+@editor_required
+def category_merge():
+    """合并分类：将源分类的所有文章转移到目标分类，然后删除源分类。
+
+    JSON body: {"source_id": 1, "target_id": 2}
+    源分类的文章关联全部转移到目标分类（去重），源分类随后删除。
+    """
+    data = request.get_json(silent=True) or {}
+    source_id = data.get('source_id')
+    target_id = data.get('target_id')
+    if not source_id or not target_id:
+        return jsonify(error='请选择源分类和目标分类'), 400
+    try:
+        source_id = int(source_id)
+        target_id = int(target_id)
+    except (TypeError, ValueError):
+        return jsonify(error='无效 ID'), 400
+    if source_id == target_id:
+        return jsonify(error='源分类和目标分类不能相同'), 400
+
+    source = Category.query.get(source_id)
+    target = Category.query.get(target_id)
+    if not source or not target:
+        return jsonify(error='分类不存在'), 404
+
+    from sqlalchemy.orm import joinedload
+    moved = 0
+    for post in (
+        Post.query.options(joinedload(Post.categories))
+        .filter(Post.categories.any(Category.id == source_id))
+        .all()
+    ):
+        if target not in post.categories:
+            post.categories = [c for c in post.categories if c.id != source_id] + [target]
+        else:
+            post.categories = [c for c in post.categories if c.id != source_id]
+        moved += 1
+    db.session.delete(source)
+    db.session.commit()
+    _invalidate_sidebar_cache()
+    return jsonify(merged=True, moved=moved, target=target.name)
 
 
 # ═══════════════════════════════════════════════

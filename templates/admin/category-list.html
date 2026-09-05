@@ -1,12 +1,15 @@
 <!-- ============================================================
      分类列表管理 (admin/category-list.html)
-     用途：后台分类管理表格，可编辑和删除分类
+     用途：后台分类管理表格，支持搜索、排序、批量删除、合并
      继承：admin/base_admin.html
      定义块：
        - title         : 页面标题
        - admin_content : 后台主体内容
      模板变量：
        - categories  : 全部分类列表
+       - post_counts : {分类ID: 文章数}
+       - q           : 搜索关键词
+       - sort        : 排序方式 (name/posts/created)
        - csrf_token() : CSRF 令牌函数
      ============================================================ -->
 {% extends 'admin/base_admin.html' %}
@@ -16,20 +19,46 @@
     <h3>分类管理</h3>
     <a href="{{ url_for('admin.new_category') }}" class="btn btn-primary">+ 新建分类</a>
 </div>
+
+<!-- 搜索 + 排序工具栏 -->
+<div class="admin-card" style="margin-bottom:16px;padding:12px 16px">
+    <form method="GET" action="{{ url_for('admin.category_list') }}" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+        <input type="text" name="q" value="{{ q or '' }}" placeholder="搜索分类名称或 Slug…" class="form-input" style="flex:1;min-width:200px">
+        <select name="sort" class="form-input" style="width:auto" onchange="this.form.submit()">
+            <option value="name" {% if sort == 'name' %}selected{% endif %}>按名称排序</option>
+            <option value="posts" {% if sort == 'posts' %}selected{% endif %}>按文章数排序</option>
+            <option value="created" {% if sort == 'created' %}selected{% endif %}>按创建时间排序</option>
+        </select>
+        <button type="submit" class="btn btn-primary btn-sm">搜索</button>
+        {% if q or sort != 'name' %}
+        <a href="{{ url_for('admin.category_list') }}" class="btn btn-sm" style="background:rgba(255,255,255,0.08)">重置</a>
+        {% endif %}
+    </form>
+</div>
+
 <div class="admin-card">
+    <!-- 批量操作工具栏 -->
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:0.85rem;color:rgba(255,255,255,0.6)">
+            <input type="checkbox" id="selectAllCats" style="accent-color:var(--glow-accent,#7c5cff)"> 全选
+        </label>
+        <button class="btn btn-danger btn-sm" id="batchDeleteBtn" disabled style="opacity:0.5">批量删除</button>
+        <button class="btn btn-primary btn-sm" id="mergeBtn" disabled style="opacity:0.5">合并到…</button>
+        <span style="margin-left:auto;font-size:0.8rem;color:rgba(255,255,255,0.4)">共 {{ categories|length }} 个分类</span>
+    </div>
+
     <div class="admin-table-wrapper">
     <table class="admin-table">
-        <tr><th>名称</th><th>Slug</th><th>文章数</th><th>操作</th></tr>
-        <!-- 遍历分类列表 -->
+        <tr><th style="width:32px"><input type="checkbox" id="selectAllCatsHead" style="accent-color:var(--glow-accent,#7c5cff)"></th><th>名称</th><th>Slug</th><th>描述</th><th>文章数</th><th>操作</th></tr>
         {% for cat in categories %}
         <tr>
+            <td data-label="选择"><input type="checkbox" class="cat-checkbox" value="{{ cat.id }}" data-name="{{ cat.name }}" style="accent-color:var(--glow-accent,#7c5cff)"></td>
             <td data-label="名称"><strong>{{ cat.name }}</strong></td>
             <td data-label="Slug">{{ cat.slug }}</td>
-            <!-- 使用路由预聚合的 post_counts，避免逐行 COUNT -->
+            <td data-label="描述" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ cat.description or '—' }}</td>
             <td data-label="文章数">{{ post_counts.get(cat.id, 0) }}</td>
             <td data-label="操作" style="white-space:nowrap">
                 <a href="{{ url_for('admin.edit_category', id=cat.id) }}" class="btn btn-primary btn-sm">编辑</a>
-                <!-- 删除确认：提示相关文章将变为未分类 -->
                 <form method="POST" action="{{ url_for('admin.delete_category', id=cat.id) }}" style="display:inline" onsubmit="var _f=this;event.preventDefault();showConfirm('确定删除 ' + {{ cat.name|tojson }} + '？相关文章将变为未分类。',function(r){if(r){_f.onsubmit=null;_f.submit()}})">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button class="btn btn-danger btn-sm">删除</button>
@@ -37,9 +66,126 @@
             </td>
         </tr>
         {% else %}
-        <tr><td colspan="4">暂无分类</td></tr>
+        <tr><td colspan="6" style="text-align:center;padding:32px;color:rgba(255,255,255,0.4)">{% if q %}未找到匹配 "{{ q }}" 的分类{% else %}暂无分类{% endif %}</td></tr>
         {% endfor %}
     </table>
     </div>
 </div>
+
+<!-- 合并分类对话框 -->
+<div id="mergeDialog" style="display:none;position:fixed;inset:0;z-index:9999;align-items:center;justify-content:center;background:rgba(0,0,0,0.6)">
+    <div style="background:var(--glow-card-bg,#1a1a2e);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:24px;max-width:420px;width:90%">
+        <h4 style="margin:0 0 16px">合并分类</h4>
+        <p style="font-size:0.85rem;color:rgba(255,255,255,0.6);margin-bottom:16px">将选中的源分类的所有文章转移到目标分类，然后删除源分类。</p>
+        <div style="margin-bottom:12px">
+            <label style="font-size:0.8rem;color:rgba(255,255,255,0.5)">源分类（将被删除）</label>
+            <div id="mergeSourceList" style="margin-top:4px;font-size:0.85rem"></div>
+        </div>
+        <div style="margin-bottom:16px">
+            <label style="font-size:0.8rem;color:rgba(255,255,255,0.5)">目标分类（保留）</label>
+            <select id="mergeTargetSelect" class="form-input" style="width:100%;margin-top:4px">
+                {% for cat in categories %}
+                <option value="{{ cat.id }}">{{ cat.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+            <button class="btn btn-sm" id="mergeCancelBtn" style="background:rgba(255,255,255,0.08)">取消</button>
+            <button class="btn btn-danger btn-sm" id="mergeConfirmBtn">确认合并</button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    var csrf = document.querySelector('meta[name="csrf-token"]').content;
+
+    // ── 全选 ──
+    function syncSelectAll() {
+        var boxes = document.querySelectorAll('.cat-checkbox');
+        var checked = document.querySelectorAll('.cat-checkbox:checked');
+        var allHead = document.getElementById('selectAllCatsHead');
+        var allBar = document.getElementById('selectAllCats');
+        allHead.checked = boxes.length > 0 && checked.length === boxes.length;
+        allBar.checked = boxes.length > 0 && checked.length === boxes.length;
+        updateButtons();
+    }
+    function updateButtons() {
+        var checked = document.querySelectorAll('.cat-checkbox:checked');
+        var delBtn = document.getElementById('batchDeleteBtn');
+        var mergeBtn = document.getElementById('mergeBtn');
+        var enable = checked.length > 0;
+        delBtn.disabled = !enable;
+        mergeBtn.disabled = checked.length < 1;
+        delBtn.style.opacity = enable ? '1' : '0.5';
+        mergeBtn.style.opacity = enable ? '1' : '0.5';
+    }
+    document.getElementById('selectAllCatsHead').addEventListener('change', function() {
+        document.querySelectorAll('.cat-checkbox').forEach(function(cb) { cb.checked = this.checked; }, this);
+        document.getElementById('selectAllCats').checked = this.checked;
+        updateButtons();
+    });
+    document.getElementById('selectAllCats').addEventListener('change', function() {
+        document.querySelectorAll('.cat-checkbox').forEach(function(cb) { cb.checked = this.checked; }, this);
+        document.getElementById('selectAllCatsHead').checked = this.checked;
+        updateButtons();
+    });
+    document.querySelectorAll('.cat-checkbox').forEach(function(cb) { cb.addEventListener('change', syncSelectAll); });
+
+    // ── 批量删除 ──
+    document.getElementById('batchDeleteBtn').addEventListener('click', function() {
+        var checked = document.querySelectorAll('.cat-checkbox:checked');
+        if (!checked.length) return;
+        var names = Array.from(checked).map(function(c) { return c.dataset.name; });
+        showConfirm('确定删除 ' + checked.length + ' 个分类？(' + names.join('、') + ') 相关文章将变为未分类。', function(r) {
+            if (!r) return;
+            var ids = Array.from(checked).map(function(c) { return parseInt(c.value); });
+            fetch('{{ url_for("admin.category_batch_delete") }}', {
+                method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf},
+                body: JSON.stringify({ids: ids})
+            }).then(function(r) { return r.json(); }).then(function(d) {
+                if (d.error) { alert(d.error); return; }
+                alert('已删除 ' + d.deleted + ' 个分类');
+                location.reload();
+            }).catch(function() { alert('删除失败，请重试'); });
+        });
+    });
+
+    // ── 合并分类 ──
+    var mergeDialog = document.getElementById('mergeDialog');
+    document.getElementById('mergeBtn').addEventListener('click', function() {
+        var checked = document.querySelectorAll('.cat-checkbox:checked');
+        if (!checked.length) return;
+        var sourceList = document.getElementById('mergeSourceList');
+        sourceList.innerHTML = Array.from(checked).map(function(c) {
+            return '<span style="display:inline-block;background:rgba(255,107,107,0.15);border:1px solid rgba(255,107,107,0.3);border-radius:4px;padding:2px 8px;margin:2px">' + c.dataset.name + '</span>';
+        }).join('');
+        // 目标下拉排除已选源
+        var selectedIds = Array.from(checked).map(function(c) { return c.value; });
+        var targetSelect = document.getElementById('mergeTargetSelect');
+        Array.from(targetSelect.options).forEach(function(opt) {
+            opt.style.display = selectedIds.indexOf(opt.value) >= 0 ? 'none' : '';
+        });
+        targetSelect.value = Array.from(targetSelect.options).find(function(o) { return o.style.display !== 'none'; }) ? Array.from(targetSelect.options).find(function(o) { return o.style.display !== 'none'; }).value : '';
+        mergeDialog.style.display = 'flex';
+    });
+    document.getElementById('mergeCancelBtn').addEventListener('click', function() { mergeDialog.style.display = 'none'; });
+    document.getElementById('mergeConfirmBtn').addEventListener('click', function() {
+        var checked = document.querySelectorAll('.cat-checkbox:checked');
+        var targetId = document.getElementById('mergeTargetSelect').value;
+        if (!targetId) { alert('请选择目标分类'); return; }
+        var promises = Array.from(checked).map(function(c) {
+            return fetch('{{ url_for("admin.category_merge") }}', {
+                method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf},
+                body: JSON.stringify({source_id: parseInt(c.value), target_id: parseInt(targetId)})
+            }).then(function(r) { return r.json(); });
+        });
+        Promise.all(promises).then(function(results) {
+            var ok = results.every(function(r) { return r.merged; });
+            if (ok) { alert('合并完成，已转移 ' + results.length + ' 个分类'); location.reload(); }
+            else { alert('部分合并失败: ' + results.filter(function(r) { return r.error; }).map(function(r) { return r.error; }).join('; ')); }
+        }).catch(function() { alert('合并失败，请重试'); });
+    });
+})();
+</script>
 {% endblock %}
