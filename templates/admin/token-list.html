@@ -92,4 +92,58 @@
     </table>
     </div>
 </div>
+
+<!-- API 调用示例（可直接复制提供给 AI agent） -->
+<div class="admin-card" style="margin-top:20px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+        <h4 style="margin:0;color:rgba(255,255,255,0.9)">API 调用示例（可直接复制提供给 AI agent）</h4>
+        <button type="button" class="btn btn-primary btn-sm" onclick="copyApiGuide()">复制全部</button>
+    </div>
+    <pre id="apiGuide" style="background:rgba(0,0,0,0.4);color:#e2e8f0;padding:16px;border-radius:8px;overflow:auto;font-size:0.8rem;line-height:1.5;max-height:520px;white-space:pre-wrap;word-break:break-all;margin:0"></pre>
+</div>
+<script>
+(function(){
+    var BASE = location.origin;
+    var TOKEN = {{ new_token|tojson }} || '你的令牌';
+    var g = '# Hoshino Blog 发布博文 API\n\n';
+    g += '## 认证\n所有请求携带头：\n  Authorization: Bearer ' + TOKEN + '\n  Content-Type: application/json\n\n';
+    g += '## 端点\n';
+    g += 'GET    /api/v1/me                 验证令牌、查看当前用户\n';
+    g += 'GET    /api/v1/categories         获取所有分类(id/name/slug)\n';
+    g += 'GET    /api/v1/posts              文章列表(分页)\n';
+    g += 'GET    /api/v1/posts/<id或slug>   文章详情\n';
+    g += 'POST   /api/v1/posts              创建文章\n';
+    g += 'PUT    /api/v1/posts/<id或slug>   编辑文章(仅传需改字段)\n\n';
+    g += '不支持通过 API 删除文章。\n\n';
+    g += '## 文章字段\n';
+    g += 'title        string  创建必填  标题,最长256\n';
+    g += 'slug         string  创建必填  URL标识,仅小写字母/数字/连字符,全局唯一\n';
+    g += 'content      string  否        Markdown正文,最长500000\n';
+    g += 'summary      string  否        摘要\n';
+    g += 'cover_image  string  否        封面图URL\n';
+    g += 'html_content string  否        自定义HTML源码(优先于content)\n';
+    g += 'categories   array   否        分类数组,元素为整数id或字符串slug,最多15个\n';
+    g += 'is_published bool    否        是否发布,默认false(草稿)\n\n';
+    g += '## 响应\n成功: {"ok":true,"post":{...}}  列表: {"ok":true,"total":N,"page":1,"per_page":20,"posts":[...]}\n失败: {"ok":false,"error":"..."},状态码400/401/403/404/409\n\n';
+    g += '## 调用示例(curl)\n\n';
+    g += '# 1. 验证令牌\ncurl -H "Authorization: Bearer ' + TOKEN + '" ' + BASE + '/api/v1/me\n\n';
+    g += '# 2. 查询可用分类\ncurl -H "Authorization: Bearer ' + TOKEN + '" ' + BASE + '/api/v1/categories\n\n';
+    g += '# 3. 创建并发布博文\ncurl -X POST ' + BASE + '/api/v1/posts \\\n';
+    g += '  -H "Authorization: Bearer ' + TOKEN + '" -H "Content-Type: application/json" \\\n';
+    g += '  -d \'{"title":"AI博文","slug":"ai-post-1","summary":"摘要","content":"# 你好\\n\\n正文","categories":["tech"],"is_published":true}\'\n\n';
+    g += '# 4. 先存草稿再发布\ncurl -X POST ' + BASE + '/api/v1/posts \\\n  -H "Authorization: Bearer ' + TOKEN + '" -H "Content-Type: application/json" \\\n  -d \'{"title":"草稿","slug":"draft-1","content":"# 待完善","is_published":false}\'\n\n';
+    g += 'curl -X PUT ' + BASE + '/api/v1/posts/draft-1 \\\n  -H "Authorization: Bearer ' + TOKEN + '" -H "Content-Type: application/json" \\\n  -d \'{"is_published":true,"title":"已完善"}\'\n\n';
+    g += '# 5. 文章列表(分页+只看已发布)\ncurl -H "Authorization: Bearer ' + TOKEN + '" "' + BASE + '/api/v1/posts?page=1&per_page=10&status=published"\n\n';
+    g += '# 6. 文章详情\ncurl -H "Authorization: Bearer ' + TOKEN + '" ' + BASE + '/api/v1/posts/ai-post-1\n\n';
+    g += '# 7. 编辑(仅传要改字段)\ncurl -X PUT ' + BASE + '/api/v1/posts/ai-post-1 \\\n  -H "Authorization: Bearer ' + TOKEN + '" -H "Content-Type: application/json" \\\n  -d \'{"content":"# 更新内容","summary":"新摘要"}\'\n\n';
+    g += '## 最小流程\n1. GET /api/v1/me 确认令牌有效\n2. GET /api/v1/categories 拿分类slug\n3. POST /api/v1/posts 创建(is_published:true即发布)\n4. 需修改: PUT /api/v1/posts/<slug> 传要改字段\n\n';
+    g += '## 注意\n- slug必须全局唯一,冲突返回409\n- 正文经白名单过滤,html_content中script等危险标签会被移除\n- 作者只能编辑自己的文章;编辑/管理员可编辑任何文章\n- 令牌失效/过期/禁用返回401\n';
+    document.getElementById('apiGuide').textContent = g;
+})();
+function copyApiGuide(){
+    var t = document.getElementById('apiGuide').textContent;
+    if(navigator.clipboard){ navigator.clipboard.writeText(t).then(function(){alert('已复制到剪贴板')}); }
+    else { var ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); alert('已复制到剪贴板'); }
+}
+</script>
 {% endblock %}
