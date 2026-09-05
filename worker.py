@@ -438,6 +438,22 @@ def _run_bili_incremental_check(app):
             pass
 
 
+def _run_scheduled_backup(app):
+    """定时全量备份：DB + uploads，并清理过期备份。"""
+    with app.app_context():
+        try:
+            from blog.backup import run_backup, cleanup_old_backups
+
+            keep = int(os.environ.get('BACKUP_KEEP_COUNT', '7'))
+            run_backup('full')
+            cleanup_old_backups(keep)
+        except Exception as e:
+            try:
+                app.logger.error('定时备份失败: %s', e, exc_info=True)
+            except Exception:
+                pass
+
+
 def _init_worker_scheduler(app):
     """初始化 Worker 专用调度器 — 注册所有后台定时任务。
 
@@ -461,6 +477,18 @@ def _init_worker_scheduler(app):
             id='rotate_secret_key',
             replace_existing=True,
         )
+
+        # 每日数据备份（默认 01:00，BACKUP_HOUR 覆盖；BACKUP_ENABLED=false 关闭）
+        if os.environ.get('BACKUP_ENABLED', 'true').lower() in ('true', '1'):
+            _bk_hour = int(os.environ.get('BACKUP_HOUR', '1'))
+            scheduler.add_job(
+                func=lambda: _run_scheduled_backup(app),
+                trigger='cron',
+                hour=_bk_hour,
+                minute=0,
+                id='daily_backup',
+                replace_existing=True,
+            )
 
         # 02:00 每日深扫 — 分钟数随机（每次进程启动重新随机），
         # 避免固定时刻执行被 B站 行为画像识别为定时任务

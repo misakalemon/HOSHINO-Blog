@@ -996,3 +996,28 @@ class ApiToken(db.Model):
         """更新最后使用时间。"""
         self.last_used_at = now_cst()
         db.session.commit()
+
+
+class BackupRecord(db.Model):
+    """数据库/文件备份记录。
+
+    记录每次备份的元信息（文件名、类型、大小、状态），备份文件本身
+    存放在项目根的 backups/ 目录（已加入 .gitignore）。
+
+    kind 取值：
+      full  — DB 数据 + uploads 文件（一个 zip）
+      db    — 仅 DB 数据（JSON）
+      uploads — 仅 uploads 文件（zip）
+
+    __tablename__ = 'backup_records'
+    """
+
+    __tablename__ = 'backup_records'
+
+    id = db.Column(db.Integer, primary_key=True)
+    filename = db.Column(db.String(256), nullable=False)  # 备份文件名
+    kind = db.Column(db.String(16), nullable=False, index=True)  # full/db/uploads
+    size_bytes = db.Column(db.Integer, default=0)  # 文件大小
+    status = db.Column(db.String(16), default='ok', index=True)  # ok/failed
+    error_msg = db.Column(db.Text, default='')  # 失败时的错误信息
+    created_at = db.Column(db.DateTime, default=now_cst, index=True)

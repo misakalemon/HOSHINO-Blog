@@ -57,6 +57,7 @@
     {% endif %}
     {% if current_user.is_admin %}
     <a href="{{ url_for('admin.user_list') }}" {% if request.endpoint and 'user' in request.endpoint %}class="active"{% endif %}><i class="hm-contacts"></i>用户</a>
+    <a href="{{ url_for('admin.backup_list') }}" {% if request.endpoint and 'backup' in request.endpoint %}class="active"{% endif %}><i class="hm-folder"></i>备份</a>
     {% endif %}
     {% if current_user.is_editor %}
     <a href="{{ url_for('bili.index') }}" {% if request.endpoint and 'bili' in request.endpoint and 'bili_subscription' not in (request.endpoint or '') and 'bili_history_cleanup' not in (request.endpoint or '') %}class="active"{% endif %}><i class="hm-bilibili"></i>Bilibili</a>

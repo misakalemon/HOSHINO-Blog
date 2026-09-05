@@ -60,6 +60,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_file,
     session,
     url_for,
 )
@@ -202,7 +203,7 @@ from .forms import (CategoryForm,
     RegisterForm,
     UserForm,
 )
-from .models import ApiToken, BiliSubscription, BiliUp, Category, Comment, FeaturedCard, HeroImage, Post, User, db
+from .models import ApiToken, BackupRecord, BiliSubscription, BiliUp, Category, Comment, FeaturedCard, HeroImage, Post, User, db
 
 logger = logging.getLogger(__name__)
 
@@ -933,6 +934,98 @@ def delete_token(id):
     logger.info('删除 API 令牌: id=%d name="%s"', token.id, token.name)
     flash('令牌已删除', 'success')
     return redirect(url_for('admin.token_list'))
+
+
+# ═══════════════════════════════════════════════
+# 数据备份
+# ═══════════════════════════════════════════════
+
+
+@admin_bp.route('/backup')
+@admin_required
+def backup_list():
+    """备份记录列表 + 触发按钮。"""
+    records = BackupRecord.query.order_by(BackupRecord.created_at.desc()).limit(100).all()
+    return render_template('admin/backup.html', records=records)
+
+
+@admin_bp.route('/backup/run', methods=['POST'])
+@admin_required
+def backup_run():
+    """触发一次备份。表单字段 kind: full/db/uploads。"""
+    from . import backup as backup_mod
+
+    kind = request.form.get('kind', 'full')
+    record = backup_mod.run_backup(kind=kind)
+    if record.status == 'ok':
+        flash(f'备份完成（{record.kind}）：{record.filename}', 'success')
+    else:
+        flash(f'备份失败：{record.error_msg}', 'error')
+    return redirect(url_for('admin.backup_list'))
+
+
+@admin_bp.route('/backup/download/<int:id>')
+@admin_required
+def backup_download(id):
+    """下载备份文件。"""
+    record = db.session.get(BackupRecord, id)
+    if record is None or record.status != 'ok':
+        abort(404)
+    from . import backup as backup_mod
+
+    path = os.path.join(backup_mod._backup_dir(), record.filename)
+    if not os.path.isfile(path):
+        flash('备份文件已丢失', 'error')
+        return redirect(url_for('admin.backup_list'))
+    return send_file(path, as_attachment=True, download_name=record.filename)
+
+
+@admin_bp.route('/backup/delete/<int:id>', methods=['POST'])
+@admin_required
+def backup_delete(id):
+    """删除备份记录与文件。"""
+    record = db.session.get(BackupRecord, id)
+    if record is None:
+        abort(404)
+    from . import backup as backup_mod
+
+    try:
+        backup_mod.delete_backup(record)
+        flash('备份已删除', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'删除失败：{e}', 'error')
+    return redirect(url_for('admin.backup_list'))
+
+
+@admin_bp.route('/backup/restore/<int:id>', methods=['POST'])
+@admin_required
+def backup_restore(id):
+    """从备份恢复数据库（高危，仅管理员）。
+
+    恢复会清空现有数据再灌入备份内容，恢复后需重启服务刷新缓存。
+    """
+    record = db.session.get(BackupRecord, id)
+    if record is None:
+        abort(404)
+    if record.kind not in ('db', 'full'):
+        flash('仅 DB 或 full 备份可恢复', 'error')
+        return redirect(url_for('admin.backup_list'))
+    from . import backup as backup_mod
+
+    try:
+        info = backup_mod.restore_db_from_record(record)
+        _invalidate_sidebar_cache()
+        flash(
+            f'恢复完成：{info["tables"]} 张表 / {info["rows"]} 行。请尽快重启服务以刷新缓存。',
+            'success',
+        )
+        logger.warning('管理员从备份恢复数据库: backup_id=%d', id)
+    except Exception as e:
+        db.session.rollback()
+        flash(f'恢复失败：{e}', 'error')
+        logger.error('恢复失败: backup_id=%d err=%s', id, e, exc_info=True)
+    return redirect(url_for('admin.backup_list'))
 
 
 # ═══════════════════════════════════════════════

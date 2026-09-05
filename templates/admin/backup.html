@@ -1,0 +1,81 @@
+<!-- ============================================================
+     数据备份管理 (admin/backup.html)
+     用途：触发备份 / 下载 / 恢复 / 删除
+     继承：admin/base_admin.html
+     ============================================================ -->
+{% extends 'admin/base_admin.html' %}
+{% block title %}数据备份{% endblock %}
+{% block admin_content %}
+<div class="admin-header">
+    <h3>数据备份</h3>
+</div>
+
+<p style="color:rgba(255,255,255,0.6);font-size:0.85rem;margin:0 0 16px">
+    备份存放在项目 <code style="color:#7dd3fc">backups/</code> 目录。DB 备份为 JSON（纯数据，schema 由代码重建）；
+    full 备份含 DB 数据 + uploads 文件。<strong style="color:#fde047">恢复会清空现有数据</strong>，恢复后需重启服务。
+</p>
+
+<div class="admin-card" style="margin-bottom:20px">
+    <h4 style="margin:0 0 12px;color:rgba(255,255,255,0.9)">触发备份</h4>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <form method="POST" action="{{ url_for('admin.backup_run') }}" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="kind" value="full">
+            <button type="submit" class="btn btn-primary">完整备份（DB + uploads）</button>
+        </form>
+        <form method="POST" action="{{ url_for('admin.backup_run') }}" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="kind" value="db">
+            <button type="submit" class="btn btn-primary">仅 DB 数据</button>
+        </form>
+        <form method="POST" action="{{ url_for('admin.backup_run') }}" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="kind" value="uploads">
+            <button type="submit" class="btn btn-primary">仅 uploads 文件</button>
+        </form>
+    </div>
+</div>
+
+<div class="admin-card">
+    <div class="admin-table-wrapper">
+    <table class="admin-table">
+        <tr><th>文件名</th><th>类型</th><th>大小</th><th>状态</th><th>时间</th><th>操作</th></tr>
+        {% for r in records %}
+        <tr>
+            <td data-label="文件名" style="word-break:break-all"><strong>{{ r.filename }}</strong></td>
+            <td data-label="类型">{{ r.kind }}</td>
+            <td data-label="大小">
+                {% if r.size_bytes >= 1048576 %}{{ '%.1f MB'|format(r.size_bytes / 1048576) }}
+                {% elif r.size_bytes >= 1024 %}{{ '%.0f KB'|format(r.size_bytes / 1024) }}
+                {% else %}{{ r.size_bytes }} B{% endif %}
+            </td>
+            <td data-label="状态">
+                {% if r.status == 'ok' %}<span style="color:#4ade80">成功</span>
+                {% else %}<span style="color:#f87171" title="{{ r.error_msg }}">失败</span>{% endif %}
+            </td>
+            <td data-label="时间">{{ r.created_at.strftime('%Y-%m-%d %H:%M') if r.created_at else '—' }}</td>
+            <td data-label="操作" style="white-space:nowrap">
+                {% if r.status == 'ok' %}
+                <a href="{{ url_for('admin.backup_download', id=r.id) }}" class="btn btn-primary btn-sm">下载</a>
+                {% if r.kind in ('db', 'full') %}
+                <form method="POST" action="{{ url_for('admin.backup_restore', id=r.id) }}" style="display:inline"
+                      onsubmit="var _f=this;event.preventDefault();showConfirm('⚠ 恢复将清空现有全部数据并灌入此备份内容，不可撤销！确认恢复？',function(c){if(c){_f.onsubmit=null;_f.submit()}})">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-danger btn-sm">恢复</button>
+                </form>
+                {% endif %}
+                {% endif %}
+                <form method="POST" action="{{ url_for('admin.backup_delete', id=r.id) }}" style="display:inline"
+                      onsubmit="return confirm('确定删除此备份？')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-danger btn-sm">删除</button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6">暂无备份记录</td></tr>
+        {% endfor %}
+    </table>
+    </div>
+</div>
+{% endblock %}
