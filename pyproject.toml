@@ -22,3 +22,6 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+markers = [
+    "pure: 纯单元测试，不依赖数据库/Flask 应用，跳过 DB 初始化与 MySQL 预检",
+]

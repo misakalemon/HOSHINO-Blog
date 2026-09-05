@@ -1,7 +1,8 @@
 """HOSHINO Blog — 测试配置和 fixtures"""
+# ruff: noqa: PLC0415
 import os
+
 import pytest
-import tempfile
 
 # 设置测试环境变量（在 import app 之前）
 os.environ['WORKER_PROCESS'] = '1'  # 跳过 DB 迁移
@@ -22,6 +23,7 @@ def app():
     try:
         # 预检 MySQL 连接
         from sqlalchemy import create_engine
+
         from config import _build_database_uri
         probe = create_engine(
             _build_database_uri(),
@@ -52,8 +54,17 @@ def _db(app):
 
 
 @pytest.fixture(autouse=True)
-def _setup_db(app, _db):
-    """每个测试前后清理数据库"""
+def _setup_db(request):
+    """每个测试前后清理数据库
+
+    带 `pure` marker 的纯单元测试不依赖数据库，跳过 DB 初始化，
+    避免触发 MySQL 预检（MySQL 不可用时纯测试仍可运行）。
+    """
+    if request.node.get_closest_marker('pure'):
+        yield
+        return
+    app = request.getfixturevalue('app')
+    _db = request.getfixturevalue('_db')
     with app.app_context():
         _db.create_all()
         yield
