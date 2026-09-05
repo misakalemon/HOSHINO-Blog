@@ -102,12 +102,17 @@ ANALYTICS_DEFAULTS = {
 }
 
 
-def render_analytics_script():
-    """根据配置生成统计脚本 HTML（注入到前台 <head>）。"""
-    provider = SiteSetting.get('analytics_provider', ANALYTICS_DEFAULTS['analytics_provider']) or 'none'
-    src = SiteSetting.get('analytics_src', '') or ''
-    site_id = SiteSetting.get('analytics_site_id', '') or ''
-    custom = SiteSetting.get('analytics_custom', '') or ''
+def render_analytics_script(db_map=None):
+    """根据配置生成统计脚本 HTML（注入到前台 <head>）。
+
+    传入 db_map 可复用已查询的设置字典，避免重复查库。
+    """
+    if db_map is None:
+        db_map = SiteSetting.get_all()
+    provider = db_map.get('analytics_provider', ANALYTICS_DEFAULTS['analytics_provider']) or 'none'
+    src = db_map.get('analytics_src', '') or ''
+    site_id = db_map.get('analytics_site_id', '') or ''
+    custom = db_map.get('analytics_custom', '') or ''
     if provider == 'umami' and src and site_id:
         return f'<script async src="{src}" data-website-id="{site_id}"></script>'
     if provider == 'plausible' and site_id:
@@ -131,11 +136,20 @@ def render_analytics_script():
 
 
 def inject_settings():
-    """上下文处理器：注入 site_settings + site_name 到所有模板。"""
-    settings = get_all_settings()
+    """上下文处理器：注入 site_settings + site_name 到所有模板。
+
+    单次请求只查一次 DB（SiteSetting.get_all），render_analytics_script 复用结果。
+    DB 异常时回退默认值，不影响页面渲染。
+    """
+    try:
+        all_db = SiteSetting.get_all()
+    except Exception:
+        all_db = {}
+    settings = dict(DEFAULTS)
+    settings.update(all_db)
     return {
         'site_settings': settings,
         'site_name': settings.get('site_name', 'Hoshino'),
         'site_subtitle': settings.get('site_subtitle', ''),
-        'analytics_script': render_analytics_script(),
+        'analytics_script': render_analytics_script(all_db),
     }

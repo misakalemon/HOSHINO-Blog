@@ -1118,7 +1118,7 @@ def media_delete():
     if not os.path.isfile(path):
         flash('文件不存在', 'error')
         return redirect(url_for('admin.media_list'))
-    safe_name = name.replace('%', '\\%')
+    safe_name = name.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
     refs = (
         Post.query.filter(
             db.or_(
