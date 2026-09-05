@@ -1,16 +1,65 @@
 """HOSHINO Blog — 测试配置和 fixtures"""
 # ruff: noqa: PLC0415
 import os
+import tempfile
 
 import pytest
 
 # 设置测试环境变量（在 import app 之前）
 os.environ['WORKER_PROCESS'] = '1'  # 跳过 DB 迁移
 os.environ['FLASK_ENV'] = 'testing'
-os.environ['DB_HOST'] = '127.0.0.1'
-os.environ['DB_USER'] = 'hoshino_test'
-os.environ['DB_PASS'] = 'hoshino_test_pass'
-os.environ['DB_NAME'] = 'hoshino_blog_test'
+os.environ['SECRET_KEY'] = 'test-secret-key-for-unit-tests'
+
+# ── 数据库后端选择 ──────────────────────────────
+# TEST_DB_BACKEND=sqlite  → 用 SQLite 文件数据库（无需 MySQL）
+# TEST_DB_BACKEND=mysql   → 用 MySQL（需配置 hoshino_test 用户）
+# 默认 mysql，但 MySQL 不可用时自动回退 sqlite
+_TEST_BACKEND = os.environ.get('TEST_DB_BACKEND', 'mysql')
+
+if _TEST_BACKEND == 'sqlite':
+    # 用临时文件 SQLite，避免 :memory: 多连接问题
+    _sqlite_path = os.path.join(tempfile.gettempdir(), 'hoshino_test.sqlite3')
+    if os.path.exists(_sqlite_path):
+        os.remove(_sqlite_path)
+    os.environ['DATABASE_URL'] = f'sqlite:///{_sqlite_path}'
+else:
+    os.environ.setdefault('DB_HOST', '127.0.0.1')
+    os.environ.setdefault('DB_USER', 'hoshino_test')
+    os.environ.setdefault('DB_PASS', 'hoshino_test_pass')
+    os.environ.setdefault('DB_NAME', 'hoshino_blog_test')
+
+# ── SQLAlchemy.init_app monkey-patch ────────────
+# SQLite 不兼容 MySQL 的 pool_size/max_overflow/connect_timeout 等参数，
+# 在 init_app 前自动清理，使同一套测试代码可在两种后端运行。
+from flask_sqlalchemy import SQLAlchemy as _SA
+
+_orig_init_app = _SA.init_app
+
+
+def _patched_init_app(self, app):
+    uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+    if uri.startswith('sqlite'):
+        opts = app.config.get('SQLALCHEMY_ENGINE_OPTIONS', {})
+        for k in ('pool_size', 'max_overflow', 'pool_timeout'):
+            opts.pop(k, None)
+        ca = opts.get('connect_args', {})
+        for k in ('connect_timeout', 'read_timeout', 'write_timeout'):
+            ca.pop(k, None)
+        if not ca:
+            opts.pop('connect_args', None)
+    _orig_init_app(self, app)
+
+
+_SA.init_app = _patched_init_app
+
+# ── MEDIUMTEXT → TEXT 编译映射（SQLite 兼容）─────
+from sqlalchemy.ext.compiler import compiles as _compiles
+from sqlalchemy.dialects.mysql import MEDIUMTEXT as _MEDIUMTEXT
+
+
+@_compiles(_MEDIUMTEXT, 'sqlite')
+def _compile_mediumtext_sqlite(element, compiler, **kw):
+    return 'TEXT'
 
 
 @pytest.fixture(scope='session')
@@ -20,20 +69,20 @@ def app():
     MySQL 不可用时跳过整个测试套件（而不是收集阶段直接报错），
     使测试可在未配置 MySQL 的机器/CI 上安全运行。
     """
-    try:
-        # 预检 MySQL 连接
-        from sqlalchemy import create_engine
-
-        from config import _build_database_uri
-        probe = create_engine(
-            _build_database_uri(),
-            connect_args={'connect_timeout': 3},
-        )
-        with probe.connect():
-            pass
-        probe.dispose()
-    except Exception as e:
-        pytest.skip(f'MySQL 不可用，跳过测试套件: {e}')
+    if _TEST_BACKEND != 'sqlite':
+        try:
+            # 预检 MySQL 连接
+            from sqlalchemy import create_engine
+            from config import _build_database_uri
+            probe = create_engine(
+                _build_database_uri(),
+                connect_args={'connect_timeout': 3},
+            )
+            with probe.connect():
+                pass
+            probe.dispose()
+        except Exception as e:
+            pytest.skip(f'MySQL 不可用，跳过测试套件: {e}')
 
     from app import create_app
     app = create_app()
