@@ -6,10 +6,11 @@ HOSHINO Blog — 外部 API 蓝图（供 AI agent 等程序化客户端发布/�
 拥有该用户在后台的博文操作权限（创建/编辑自己的文章，编辑/管理员可编辑任何文章）。
 
 端点：
-  GET    /api/v1/posts              — 文章列表（分页）
+  GET    /api/v1/posts              — 文章列表（分页 + 模糊搜索）
   GET    /api/v1/posts/<id_or_slug> — 文章详情
   POST   /api/v1/posts              — 创建文章
   PUT    /api/v1/posts/<id_or_slug> — 编辑文章
+  DELETE /api/v1/posts/<id_or_slug> — 删除文章
 
 安全：
   - 本蓝图已豁免 CSRF（程序化客户端无 session）
@@ -84,9 +85,9 @@ def _resolve_post(id_or_slug):
 def _resolve_categories(raw):
     """把 categories 字段解析为 Category 对象列表。
 
-    支持两种形式：
+    支持三种形式：
       - 整数列表 [1, 2, 3]  → 按 id 查询
-      - 字符串列表 ["tech", "life"] → 按 slug 查询
+      - 字符串列表 ["tech", "Agent"] → 先按 slug 查，未命中再按 name 查
     混合时按元素类型分别处理。返回 (categories, error_msg)。
     """
     if raw is None:
@@ -95,22 +96,28 @@ def _resolve_categories(raw):
         return None, 'categories 必须是数组'
     if len(raw) > _MAX_CATEGORIES:
         return None, f'最多 {_MAX_CATEGORIES} 个分类'
-    ids, slugs = set(), set()
+    ids, names = set(), set()
     for item in raw:
         if isinstance(item, bool):
-            return None, '分类元素必须是整数 id 或字符串 slug'
+            return None, '分类元素必须是整数 id 或字符串 slug/name'
         if isinstance(item, int):
             ids.add(item)
         elif isinstance(item, str):
-            slugs.add(item)
+            names.add(item)
         else:
-            return None, '分类元素必须是整数 id 或字符串 slug'
+            return None, '分类元素必须是整数 id 或字符串 slug/name'
     query = Category.query
     cats = []
     if ids:
         cats.extend(query.filter(Category.id.in_(ids)).all())
-    if slugs:
-        cats.extend(query.filter(Category.slug.in_(slugs)).all())
+    if names:
+        by_slug = {c.slug: c for c in query.filter(Category.slug.in_(names)).all()}
+        matched_slugs = set(by_slug.keys())
+        remaining = names - matched_slugs
+        cats.extend(by_slug.values())
+        if remaining:
+            by_name = {c.name: c for c in query.filter(Category.name.in_(remaining)).all()}
+            cats.extend(by_name.values())
     return cats, None
 
 
@@ -127,22 +134,22 @@ def _validate_post_payload(data, editing=False):
     title = data.get('title')
     if title is not None:
         if not isinstance(title, str) or not title.strip():
-            return None, 'title 不能为空', 400
+            return None, 'title 不能为空', 422
         if len(title) > 256:
-            return None, 'title 最长 256 字符', 400
+            return None, 'title 最长 256 字符', 422
         fields['title'] = title.strip()
     elif not editing:
-        return None, 'title 必填', 400
+        return None, 'title 必填', 422
 
     slug = data.get('slug')
     if slug is not None:
         if not isinstance(slug, str) or not _SLUG_RE.match(slug):
-            return None, 'slug 只允许小写字母、数字和连字符', 400
+            return None, 'slug 只允许小写字母、数字和连字符', 422
         if len(slug) > 256:
-            return None, 'slug 最长 256 字符', 400
+            return None, 'slug 最长 256 字符', 422
         fields['slug'] = slug
     elif not editing:
-        return None, 'slug 必填', 400
+        return None, 'slug 必填', 422
 
     summary = data.get('summary')
     if summary is not None:
@@ -154,7 +161,7 @@ def _validate_post_payload(data, editing=False):
     if content is not None:
         content = str(content)
         if len(content) > _MAX_CONTENT_LEN:
-            return None, f'content 最长 {_MAX_CONTENT_LEN} 字符', 400
+            return None, f'content 最长 {_MAX_CONTENT_LEN} 字符', 422
         fields['content'] = bleach.clean(content or '', tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS)
     elif not editing:
         fields['content'] = ''
@@ -178,7 +185,7 @@ def _validate_post_payload(data, editing=False):
 
     cats, err = _resolve_categories(data.get('categories'))
     if err:
-        return None, err, 400
+        return None, err, 422
     fields['categories'] = cats
 
     return fields, None, None
@@ -186,12 +193,19 @@ def _validate_post_payload(data, editing=False):
 
 def _serialize_post(post):
     """把 Post 序列化为 JSON 可返回的字典。"""
+    from flask import url_for
+    try:
+        post_url = url_for('blog.post', slug=post.slug, _external=True)
+    except Exception:
+        post_url = None
+    content_text = post.content or ''
     return {
         'id': post.id,
         'title': post.title,
         'slug': post.slug,
         'summary': post.summary or '',
-        'content': post.content or '',
+        'content': content_text,
+        'word_count': len(content_text),
         'cover_image': post.cover_image or '',
         'html_content': post.html_content or '',
         'is_published': post.is_published,
@@ -199,6 +213,7 @@ def _serialize_post(post):
         'categories': [{'id': c.id, 'name': c.name, 'slug': c.slug} for c in post.categories],
         'created_at': post.created_at.isoformat() if post.created_at else None,
         'updated_at': post.updated_at.isoformat() if post.updated_at else None,
+        'url': post_url,
     }
 
 
@@ -349,6 +364,33 @@ def update_post(id_or_slug):
     _after_post_change(post)
     logger.info('API 更新文章: id=%d title="%s" by user=%d', post.id, post.title, g.token_user.id)
     return jsonify({'ok': True, 'post': _serialize_post(post)})
+
+
+@api_bp.route('/posts/<id_or_slug>', methods=['DELETE'])
+@token_required
+def delete_post(id_or_slug):
+    """删除文章。
+
+    权限：作者只能删除自己的文章，编辑/管理员可删除任何文章。
+    删除会级联清除关联评论和分类关联（由外键 ON DELETE CASCADE 保证）。
+    """
+    post = _resolve_post(id_or_slug)
+    if post is None:
+        return jsonify({'ok': False, 'error': '文章不存在'}), 404
+    if not _can_edit(post, g.token_user):
+        return jsonify({'ok': False, 'error': '无权删除该文章'}), 403
+
+    post_id, post_title = post.id, post.title
+    db.session.delete(post)
+    db.session.commit()
+    _invalidate_sidebar_cache()
+    try:
+        from .cache import cache_delete_pattern
+        cache_delete_pattern('page:post:*')
+    except Exception:
+        pass
+    logger.info('API 删除文章: id=%d title="%s" by user=%d', post_id, post_title, g.token_user.id)
+    return jsonify({'ok': True, 'deleted': True, 'id': post_id})
 
 
 @api_bp.route('/categories', methods=['GET'])
