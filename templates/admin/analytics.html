@@ -1,0 +1,67 @@
+<!-- ============================================================
+     访问统计 (admin/analytics.html)
+     用途：配置统计脚本（Umami/Plausible/百度/Google/自定义）
+     继承：admin/base_admin.html
+     ============================================================ -->
+{% extends 'admin/base_admin.html' %}
+{% block title %}访问统计{% endblock %}
+{% block admin_content %}
+<div class="admin-header">
+    <h3>访问统计</h3>
+</div>
+
+<p style="color:rgba(255,255,255,0.6);font-size:0.85rem;margin:0 0 16px">
+    选择统计服务并填写配置，脚本会自动注入到全站前台页面。数据请在对应统计平台查看。
+</p>
+
+<form method="POST" action="{{ url_for('admin.analytics') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="admin-card" style="margin-bottom:20px">
+        <div style="margin-bottom:14px">
+            <label style="display:block;color:rgba(255,255,255,0.7);font-size:0.85rem;margin-bottom:4px">统计服务</label>
+            <select name="analytics_provider" id="analyticsProvider" onchange="updateHints()"
+                    style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.3);color:#fff">
+                <option value="none" {{ 'selected' if vals.analytics_provider == 'none' else '' }}>不启用</option>
+                <option value="umami" {{ 'selected' if vals.analytics_provider == 'umami' else '' }}>Umami（自托管）</option>
+                <option value="plausible" {{ 'selected' if vals.analytics_provider == 'plausible' else '' }}>Plausible</option>
+                <option value="baidu" {{ 'selected' if vals.analytics_provider == 'baidu' else '' }}>百度统计</option>
+                <option value="google" {{ 'selected' if vals.analytics_provider == 'google' else '' }}>Google Analytics</option>
+                <option value="custom" {{ 'selected' if vals.analytics_provider == 'custom' else '' }}>自定义脚本</option>
+            </select>
+        </div>
+        <div style="margin-bottom:14px">
+            <label style="display:block;color:rgba(255,255,255,0.7);font-size:0.85rem;margin-bottom:4px">脚本 URL（Umami/Plausible 用，Plausible 可留空用默认）</label>
+            <input type="text" name="analytics_src" value="{{ vals.analytics_src }}"
+                   style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.3);color:#fff">
+        </div>
+        <div style="margin-bottom:14px">
+            <label style="display:block;color:rgba(255,255,255,0.7);font-size:0.85rem;margin-bottom:4px">站点 ID / 域名</label>
+            <input type="text" name="analytics_site_id" value="{{ vals.analytics_site_id }}"
+                   style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.3);color:#fff">
+        </div>
+        <div style="margin-bottom:14px">
+            <label style="display:block;color:rgba(255,255,255,0.7);font-size:0.85rem;margin-bottom:4px">自定义脚本（仅 custom 模式）</label>
+            <textarea name="analytics_custom" rows="4"
+                      style="width:100%;padding:10px;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.3);color:#fff;font-family:monospace;font-size:0.85rem;resize:vertical">{{ vals.analytics_custom }}</textarea>
+        </div>
+        <div id="providerHint" style="background:rgba(125,211,252,0.1);border-radius:6px;padding:10px 12px;font-size:0.8rem;color:rgba(255,255,255,0.7)"></div>
+    </div>
+    <button type="submit" class="btn btn-primary">保存配置</button>
+</form>
+
+<script>
+var hints = {
+    none: '未启用统计',
+    umami: 'Umami 自托管：脚本 URL 填你的 Umami 实例 /script.js，站点 ID 填 website id',
+    plausible: 'Plausible：脚本 URL 可留空（默认 plausible.io），站点 ID 填你的域名',
+    baidu: '百度统计：站点 ID 填 hm.js? 后的 key（在百度统计控制台获取）',
+    google: 'Google Analytics：站点 ID 填 G-XXXXXX（GA4 衡量 ID）',
+    custom: '自定义：直接粘贴完整 <script> 标签代码'
+};
+function updateHints() {
+    var v = document.getElementById('analyticsProvider').value;
+    document.getElementById('providerHint').textContent = hints[v] || '';
+}
+updateHints();
+</script>
+{% endblock %}

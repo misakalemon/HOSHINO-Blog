@@ -1142,6 +1142,27 @@ def media_delete():
 
 
 # ═══════════════════════════════════════════════
+# 访问统计
+# ═══════════════════════════════════════════════
+
+
+@admin_bp.route('/analytics', methods=['GET', 'POST'])
+@admin_required
+def analytics():
+    """访问统计配置（嵌入 Umami/Plausible/百度/Google 脚本到前台）。"""
+    keys = ['analytics_provider', 'analytics_src', 'analytics_site_id', 'analytics_custom']
+    if request.method == 'POST':
+        for k in keys:
+            SiteSetting.set(k, request.form.get(k, ''))
+        flash('统计配置已保存', 'success')
+        return redirect(url_for('admin.analytics'))
+    from . import settings as settings_mod
+
+    vals = {k: SiteSetting.get(k, settings_mod.ANALYTICS_DEFAULTS.get(k, '')) for k in keys}
+    return render_template('admin/analytics.html', vals=vals)
+
+
+# ═══════════════════════════════════════════════
 # 分类管理
 # ═══════════════════════════════════════════════
 

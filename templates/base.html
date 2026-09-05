@@ -42,6 +42,7 @@
     <!-- extra_head 块：子模板可注入额外的 <link>/<script>/<meta> -->
     {% block extra_head %}{% endblock %}
     {% if site_settings and site_settings.custom_css %}<style>{{ site_settings.custom_css|safe }}</style>{% endif %}
+    {% if analytics_script %}{{ analytics_script|safe }}{% endif %}
 </head>
 <body>
 

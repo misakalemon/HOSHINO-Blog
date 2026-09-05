@@ -93,6 +93,43 @@ def is_true(key):
     return get_setting(key, 'false').lower() in ('true', '1', 'yes')
 
 
+# ── 访问统计 ──────────────────────────────────────
+ANALYTICS_DEFAULTS = {
+    'analytics_provider': 'none',  # none/umami/plausible/baidu/google/custom
+    'analytics_src': '',
+    'analytics_site_id': '',
+    'analytics_custom': '',
+}
+
+
+def render_analytics_script():
+    """根据配置生成统计脚本 HTML（注入到前台 <head>）。"""
+    provider = SiteSetting.get('analytics_provider', ANALYTICS_DEFAULTS['analytics_provider']) or 'none'
+    src = SiteSetting.get('analytics_src', '') or ''
+    site_id = SiteSetting.get('analytics_site_id', '') or ''
+    custom = SiteSetting.get('analytics_custom', '') or ''
+    if provider == 'umami' and src and site_id:
+        return f'<script async src="{src}" data-website-id="{site_id}"></script>'
+    if provider == 'plausible' and site_id:
+        s = src or 'https://plausible.io/js/script.js'
+        return f'<script defer data-domain="{site_id}" src="{s}"></script>'
+    if provider == 'baidu' and site_id:
+        return (
+            '<script>var _hmt=_hmt||[];(function(){var hm=document.createElement("script");'
+            f'hm.src="https://hm.baidu.com/hm.js?{site_id}";'
+            'var s=document.getElementsByTagName("script")[0];s.parentNode.insertBefore(hm,s);})();</script>'
+        )
+    if provider == 'google' and site_id:
+        return (
+            f'<script async src="https://www.googletagmanager.com/gtag/js?id={site_id}"></script>'
+            '<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}'
+            f'gtag("js",new Date());gtag("config","{site_id}");</script>'
+        )
+    if provider == 'custom' and custom:
+        return custom
+    return ''
+
+
 def inject_settings():
     """上下文处理器：注入 site_settings + site_name 到所有模板。"""
     settings = get_all_settings()
@@ -100,4 +137,5 @@ def inject_settings():
         'site_settings': settings,
         'site_name': settings.get('site_name', 'Hoshino'),
         'site_subtitle': settings.get('site_subtitle', ''),
+        'analytics_script': render_analytics_script(),
     }
