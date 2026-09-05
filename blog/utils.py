@@ -7,7 +7,7 @@ import datetime
 import logging
 import threading
 from collections import OrderedDict
-from typing import Optional
+
 
 from flask import current_app, request
 

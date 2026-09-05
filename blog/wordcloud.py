@@ -14,10 +14,9 @@ import logging
 import os
 import queue
 import re
-import sys
 import threading
 from collections import Counter
-from typing import Generator, List, Optional
+from typing import List, Optional
 
 from bs4 import BeautifulSoup
 

@@ -7,15 +7,13 @@
 
 import logging
 import os
-import time
 import urllib.parse
 
-import requests
 from bilibili_api import sync
 from bilibili_api.login_v2 import QrCodeLogin, QrCodeLoginEvents
 
 from .bili_api import set_cookies, set_credential as _set_api_credential
-from .config import COOKIE_FILE, CREDENTIAL_FILE, HEADERS, TIMEOUT
+from .config import COOKIE_FILE, CREDENTIAL_FILE
 
 logger = logging.getLogger(__name__)
 
@@ -313,7 +311,7 @@ def apply_cookies():
         logger.info('✅ 已通过 V2 登录，直接使用')
         return True
 
-    from .bili_api import set_cookies, set_credential, is_logged_in
+    from .bili_api import set_credential, is_logged_in
 
     if is_logged_in():
         logger.info('✅ 全局 Credential 已存在，直接使用')

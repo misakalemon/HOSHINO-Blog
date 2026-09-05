@@ -102,8 +102,9 @@ def init_db(app):
         if not User.query.filter_by(username='admin').first():
             import secrets
 
-            admin_password = app.config.get('ADMIN_PASSWORD', 'CHANGE_ME')
-            if admin_password == 'CHANGE_ME':
+            admin_password = app.config.get('ADMIN_PASSWORD') or ''
+            # 空密码或占位符都视为未设置 → 生成随机密码，避免创建空密码管理员
+            if not admin_password or admin_password == 'CHANGE_ME':
                 admin_password = secrets.token_urlsafe(24)
                 # 安全：不把密码明文写入日志（日志保留 30 天，可能被无关人员读取），
                 # 改为写入项目根目录的临时文件（已被 .gitignore 忽略），
@@ -691,7 +692,7 @@ def _migrate_wordcloud_data_fields(app):
                 )
                 db.session.commit()
                 app.logger.info('迁移: 已添加 wordcloud_data.%s 列（含索引）', col_name)
-            except Exception as e:
+            except Exception:
                 db.session.rollback()
                 # 部分 MySQL 可能不支持单条 ALTER 多操作，降级为分别执行
                 try:

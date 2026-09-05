@@ -70,5 +70,5 @@ jieba==0.42.1
 # --- 生产服务器 ---
 waitress==3.0.2
 
-# --- 日志处理 ---
-concurrent-log-handler==0.9.29
+# --- 日志处理（跨进程日志文件锁，logger.py 直接依赖） ---
+portalocker>=2.0

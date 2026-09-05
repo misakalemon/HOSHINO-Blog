@@ -21,7 +21,7 @@ import logging.handlers
 import os
 import signal
 import subprocess
-import sys
+
 import threading
 from datetime import datetime, timedelta
 

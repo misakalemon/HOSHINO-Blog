@@ -37,8 +37,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import queue as _queue_mod
 
-from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
-from flask_login import login_required
+from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from sqlalchemy.exc import IntegrityError
 
@@ -52,7 +51,7 @@ from blog.models import (
     db,
 )
 from .admin import editor_required
-from .utils import now_cst, CST, get_client_ip, escape_like
+from .utils import now_cst
 from .bilibili.bili_api import thread_sleep, ensure_semaphore
 
 logger = logging.getLogger(__name__)
@@ -429,7 +428,7 @@ def watch_video(video_id):
         JSON: {ok: True, watched: True}
               或 {ok: False, error: str}
     """
-    video = BiliVideo.query.get_or_404(video_id)
+    BiliVideo.query.get_or_404(video_id)
     # 检查是否已在重点追踪列表中
     if BiliWatchedVideo.query.filter_by(video_id=video_id).first():
         return {'ok': False, 'error': '已在重点追踪列表中'}
@@ -1656,7 +1655,7 @@ def add_single_video():
             aid = int(av_match.group(1))
             # AV 转 BV 算法
             table = 'fZodR9XQDSUm21yCkr6zBqiveYah8bt4xsWpHnJE7jL5VG3guMTNNPAcF'
-            tr = {c: i for i, c in enumerate(table)}
+
             aid = (aid ^ 177456) // 100
             arr = [0] * 9
             for i in range(9):

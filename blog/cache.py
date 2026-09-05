@@ -74,7 +74,7 @@ def _get_redis(redis_url, max_retries=3, retry_delay=1):
             )
             client.ping()                   # 发送 PING 确认连接可用
             return client
-        except Exception as e:
+        except Exception:
             # 非最后一次尝试时记录警告，最后一次记录降级信息
             if attempt < max_retries - 1:
                 logger.warning('Redis 连接失败 (尝试 %d/%d): %s', attempt + 1, max_retries, safe_url)

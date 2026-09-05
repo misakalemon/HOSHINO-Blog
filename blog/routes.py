@@ -31,10 +31,8 @@ import re
 import threading
 import time
 
-import atexit
-
 import bleach
-from flask import Response, abort, current_app, make_response, redirect, render_template, request, session, url_for
+from flask import Response, abort, current_app, redirect, render_template, request, session, url_for
 
 from sqlalchemy import func
 from sqlalchemy.orm import load_only

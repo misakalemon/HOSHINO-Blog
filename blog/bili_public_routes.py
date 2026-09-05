@@ -17,9 +17,8 @@
 import logging
 import os
 import secrets
-import time
 
-from flask import Blueprint, current_app, jsonify, render_template, request
+from flask import Blueprint, jsonify, render_template, request
 
 from blog.models import BiliSubscription, BiliUp, BiliUpHistory, BiliVideo, BiliVideoHistory, WordCloudData, db
 from blog.utils import get_client_ip, RateLimiter, escape_like

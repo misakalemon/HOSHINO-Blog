@@ -40,7 +40,7 @@ HOSHINO Blog — 数据模型
   SQLAlchemy MEDIUMTEXT — MySQL 长文本类型（最大 16MB）
 """
 
-import datetime
+
 import json
 import logging
 import zlib

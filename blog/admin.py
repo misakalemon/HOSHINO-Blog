@@ -1683,7 +1683,6 @@ def cleanup_unverified_subscriptions():
     删除 created_at 早于当前时间 24 小时前且 verified=False 的订阅，
     避免数据库中积累大量未验证的过期订阅数据。
     """
-    import datetime
 
     cutoff = now_cst() - datetime.timedelta(hours=24)
     deleted = BiliSubscription.query.filter(

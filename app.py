@@ -193,7 +193,7 @@ def create_app():
     }
 
     # ── CSRF 保护（全局，影响所有 POST/PUT/DELETE）──
-    csrf = CSRFProtect(app)
+    CSRFProtect(app)
     # Gzip 压缩哪些 MIME 类型
     app.config['COMPRESS_MIMETYPES'] = [
         'text/html',
@@ -237,7 +237,7 @@ def create_app():
 
     # Flask-Migrate（仅主进程注册，Worker 跳过）
     if 'migrate' not in app.extensions:
-        migrate = Migrate(app, db)
+        Migrate(app, db)
     logger.info('数据库初始化完成')
 
     # ── Redis 缓存（数据库之后，蓝图之前） ────────
@@ -355,7 +355,10 @@ def create_app():
         """
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['X-Frame-Options'] = 'SAMEORIGIN'
-        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+        # HSTS 仅在 HTTPS 部署时发送：HTTP 下浏览器会忽略此头，但若曾通过
+        # HTTPS 访问过，浏览器会强制升级后续请求，导致无法回退到 HTTP 访问。
+        if app.config.get('SESSION_COOKIE_SECURE'):
+            response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
         # TODO: 迁移到 nonce-based CSP：将所有 inline script/style 移出为外部 .js/.css 文件，
         # 然后改用 'nonce-{nonce}' 替代 'unsafe-inline'，彻底杜绝 inline 注入风险。
         response.headers['Content-Security-Policy'] = (

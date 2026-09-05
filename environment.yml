@@ -11,7 +11,7 @@ channels:
 
 dependencies:
   # --- Python 基础 ---
-  - python>=3.12,<3.13
+  - python>=3.11,<3.13
 
   # --- Web 框架 ---
   - flask==3.1.0
@@ -60,12 +60,15 @@ dependencies:
 
   # --- 爬虫 ---
   - requests>=2.28
-  - curl-cffi==0.15.0
   - beautifulsoup4==4.12.2
-  - lxml==4.9.3
+  # lxml>=5.2.1：4.9.3 存在多个已知 CVE（CVE-2024-35178/35179/52595/56167、CVE-2025-24928）
+  - lxml>=5.2.1
 
   # --- 生产服务器 ---
   - waitress==3.0.2
+
+  # --- 日志处理（跨进程日志文件锁） ---
+  - portalocker>=2.0
 
   # --- pip 安装（conda-forge 未打包或版本滞后的包）---
   - pip
