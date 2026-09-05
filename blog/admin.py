@@ -2395,3 +2395,306 @@ def refresh_wordcloud():
     _invalidate_page_cache()
     flash('词云数据已投递到后台计算（博客 + B站）', 'success')
     return redirect(url_for('admin.wordcloud_config'))
+
+
+# ═══════════════════════════════════════════════
+# 数据导出
+# ═══════════════════════════════════════════════
+
+
+@admin_bp.route('/export')
+@admin_required
+def export_data():
+    """数据导出页。
+
+    GET  — 显示导出选项页面
+    POST — 执行导出并返回文件下载
+
+    支持的导出格式（form field "format"）：
+      posts_md     — 文章导出为 Markdown zip（每篇一个 .md，含 YAML front matter）
+      posts_json   — 文章导出为结构化 JSON
+      full_json    — 全站数据 JSON（复用 backup._export_db_data）
+      categories_csv — 分类列表 CSV
+    """
+    if request.method != 'POST':
+        post_count = Post.query.count()
+        cat_count = Category.query.count()
+        return render_template('admin/export.html', post_count=post_count, cat_count=cat_count)
+
+    fmt = request.form.get('format', 'posts_md')
+    ts = now_cst().strftime('%Y%m%d_%H%M%S')
+
+    import csv as _csv
+    import io as _io
+    import json as _json
+    import zipfile as _zf
+
+    if fmt == 'posts_md':
+        buf = _io.BytesIO()
+        with _zf.ZipFile(buf, 'w', _zf.ZIP_DEFLATED) as zf:
+            for post in Post.query.order_by(Post.created_at).all():
+                cats = ', '.join(c.name for c in post.categories)
+                author = User.query.get(post.author_id)
+                front = [
+                    '---',
+                    f'title: "{post.title}"',
+                    f'slug: "{post.slug}"',
+                    f'date: "{post.created_at.strftime("%Y-%m-%d %H:%M:%S")}"' if post.created_at else '',
+                    f'updated: "{post.updated_at.strftime("%Y-%m-%d %H:%M:%S")}"' if post.updated_at else '',
+                    f'author: "{author.username if author else ""}"',
+                    f'categories: [{cats}]',
+                    f'published: {str(post.is_published).lower()}',
+                    f'cover_image: "{post.cover_image or ""}"',
+                    '---',
+                ]
+                md = '\n'.join(l for l in front if l) + '\n\n' + (post.content or '')
+                zf.writestr(f'{post.slug}.md', md)
+        buf.seek(0)
+        return send_file(
+            buf,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=f'posts_md_{ts}.zip',
+        )
+
+    if fmt == 'posts_json':
+        posts_data = []
+        for post in Post.query.order_by(Post.created_at).all():
+            author = User.query.get(post.author_id)
+            posts_data.append({
+                'title': post.title,
+                'slug': post.slug,
+                'summary': post.summary or '',
+                'content': post.content or '',
+                'html_content': post.html_content or '',
+                'cover_image': post.cover_image or '',
+                'author': author.username if author else '',
+                'categories': [c.name for c in post.categories],
+                'is_published': post.is_published,
+                'created_at': post.created_at.strftime('%Y-%m-%d %H:%M:%S') if post.created_at else None,
+                'updated_at': post.updated_at.strftime('%Y-%m-%d %H:%M:%S') if post.updated_at else None,
+            })
+        payload = {'version': 1, 'exported_at': ts, 'posts': posts_data}
+        buf = _io.BytesIO(_json.dumps(payload, ensure_ascii=False, indent=2).encode('utf-8'))
+        buf.seek(0)
+        return send_file(
+            buf,
+            mimetype='application/json',
+            as_attachment=True,
+            download_name=f'posts_{ts}.json',
+        )
+
+    if fmt == 'full_json':
+        from .backup import _export_db_data
+        payload = {
+            'version': 1,
+            'exported_at': ts,
+            'tables': _export_db_data(),
+        }
+        buf = _io.BytesIO(_json.dumps(payload, ensure_ascii=False, default=str).encode('utf-8'))
+        buf.seek(0)
+        return send_file(
+            buf,
+            mimetype='application/json',
+            as_attachment=True,
+            download_name=f'full_export_{ts}.json',
+        )
+
+    if fmt == 'categories_csv':
+        buf = _io.StringIO()
+        writer = _csv.writer(buf)
+        writer.writerow(['id', 'name', 'slug', 'description', 'post_count', 'created_at'])
+        from sqlalchemy import func as _f
+        from .models import post_categories
+        counts = dict(
+            db.session.query(post_categories.c.category_id, _f.count(post_categories.c.post_id))
+            .group_by(post_categories.c.category_id).all()
+        )
+        for cat in Category.query.order_by(Category.name).all():
+            writer.writerow([
+                cat.id, cat.name, cat.slug, cat.description or '',
+                counts.get(cat.id, 0),
+                cat.created_at.strftime('%Y-%m-%d %H:%M:%S') if cat.created_at else '',
+            ])
+        data = buf.getvalue().encode('utf-8-sig')
+        buf2 = _io.BytesIO(data)
+        buf2.seek(0)
+        return send_file(
+            buf2,
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name=f'categories_{ts}.csv',
+        )
+
+    flash('不支持的导出格式', 'error')
+    return redirect(url_for('admin.export_data'))
+
+
+# ═══════════════════════════════════════════════
+# 数据导入
+# ═══════════════════════════════════════════════
+
+
+@admin_bp.route('/import', methods=['GET', 'POST'])
+@admin_required
+def import_data():
+    """数据导入页。
+
+    GET  — 显示导入表单
+    POST — 执行导入
+
+    支持的导入格式（form field "format"）：
+      posts_json — 从 JSON 导入文章（结构同 posts_json 导出格式）
+      posts_md   — 从 Markdown zip 导入文章（每篇 .md 含 YAML front matter）
+
+    选项：
+      dry_run   — 仅预检不实际写入
+      overwrite — slug 冲突时覆盖现有文章
+    """
+    if request.method != 'GET':
+        return _handle_import()
+
+    return render_template('admin/import.html')
+
+
+def _handle_import():
+    """处理导入 POST 请求。"""
+    import io as _io
+    import json as _json
+    import zipfile as _zf
+
+    fmt = request.form.get('format', 'posts_json')
+    dry_run = request.form.get('dry_run') == 'on'
+    overwrite = request.form.get('overwrite') == 'on'
+    file = request.files.get('file')
+
+    if not file or not file.filename:
+        flash('请选择要导入的文件', 'error')
+        return redirect(url_for('admin.import_data'))
+
+    results = {'total': 0, 'created': 0, 'skipped': 0, 'errors': []}
+
+    try:
+        if fmt == 'posts_json':
+            raw = file.read().decode('utf-8')
+            data = _json.loads(raw)
+            posts = data.get('posts', []) if isinstance(data, dict) else data
+            results['total'] = len(posts)
+            for p in posts:
+                slug = p.get('slug', '')
+                if not slug or not p.get('title'):
+                    results['errors'].append(f'缺少 slug 或 title: {p.get("title", "?")}')
+                    continue
+                existing = Post.query.filter_by(slug=slug).first()
+                if existing and not overwrite:
+                    results['skipped'] += 1
+                    continue
+                author_name = p.get('author', '')
+                author = User.query.filter_by(username=author_name).first() if author_name else None
+                if not author:
+                    author = current_user
+                cat_names = p.get('categories', [])
+                cats = Category.query.filter(Category.name.in_(cat_names)).all() if cat_names else []
+                if existing:
+                    existing.title = p['title']
+                    existing.summary = p.get('summary', '')
+                    existing.content = p.get('content', '')
+                    existing.html_content = p.get('html_content', '')
+                    existing.cover_image = p.get('cover_image', '')
+                    existing.is_published = p.get('is_published', False)
+                    existing.categories = cats
+                    results['created'] += 1
+                else:
+                    post = Post(
+                        title=p['title'], slug=slug,
+                        summary=p.get('summary', ''),
+                        content=p.get('content', ''),
+                        html_content=p.get('html_content', ''),
+                        cover_image=p.get('cover_image', ''),
+                        author_id=author.id,
+                        is_published=p.get('is_published', False),
+                        categories=cats,
+                    )
+                    db.session.add(post)
+                    results['created'] += 1
+            if not dry_run:
+                db.session.commit()
+                _invalidate_sidebar_cache()
+
+        elif fmt == 'posts_md':
+            raw = file.read()
+            buf = _io.BytesIO(raw)
+            with _zf.ZipFile(buf, 'r') as zf:
+                names = [n for n in zf.namelist() if n.endswith('.md') and not n.startswith('_')]
+                results['total'] = len(names)
+                for name in names:
+                    try:
+                        md_text = zf.read(name).decode('utf-8')
+                        parsed = _parse_md_front_matter(md_text)
+                        slug = parsed.get('slug', os.path.splitext(name)[0])
+                        title = parsed.get('title', slug)
+                        existing = Post.query.filter_by(slug=slug).first()
+                        if existing and not overwrite:
+                            results['skipped'] += 1
+                            continue
+                        cat_names = parsed.get('categories', '')
+                        cat_list = [c.strip() for c in cat_names.strip('[]').split(',') if c.strip()] if cat_names else []
+                        cats = Category.query.filter(Category.name.in_(cat_list)).all() if cat_list else []
+                        author_name = parsed.get('author', '')
+                        author = User.query.filter_by(username=author_name).first() if author_name else None
+                        if not author:
+                            author = current_user
+                        if existing:
+                            existing.title = title
+                            existing.content = parsed.get('content', '')
+                            existing.is_published = parsed.get('published', 'false').lower() == 'true'
+                            existing.categories = cats
+                            results['created'] += 1
+                        else:
+                            post = Post(
+                                title=title, slug=slug,
+                                content=parsed.get('content', ''),
+                                is_published=parsed.get('published', 'false').lower() == 'true',
+                                author_id=author.id,
+                                categories=cats,
+                            )
+                            db.session.add(post)
+                            results['created'] += 1
+                    except Exception as e:
+                        results['errors'].append(f'{name}: {e}')
+            if not dry_run:
+                db.session.commit()
+                _invalidate_sidebar_cache()
+        else:
+            flash('不支持的导入格式', 'error')
+            return redirect(url_for('admin.import_data'))
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'导入失败: {e}', 'error')
+        return redirect(url_for('admin.import_data'))
+
+    if dry_run:
+        flash(f'预检完成：共 {results["total"]} 篇，可导入 {results["created"]} 篇，跳过 {results["skipped"]} 篇', 'info')
+    else:
+        flash(f'导入完成：共 {results["total"]} 篇，已导入 {results["created"]} 篇，跳过 {results["skipped"]} 篇', 'success')
+    if results['errors']:
+        flash(f'错误 {len(results["errors"])} 条: {"; ".join(results["errors"][:5])}', 'error')
+    return redirect(url_for('admin.import_data'))
+
+
+def _parse_md_front_matter(text):
+    """解析 Markdown YAML front matter，返回 {meta..., content}。"""
+    result = {'content': text}
+    if not text.startswith('---'):
+        return result
+    parts = text[3:].split('---', 1)
+    if len(parts) < 2:
+        return result
+    front_block = parts[0].strip()
+    result['content'] = parts[1].lstrip('\n')
+    for line in front_block.split('\n'):
+        if ':' in line:
+            key, _, val = line.partition(':')
+            result[key.strip()] = val.strip().strip('"').strip("'")
+    return result
