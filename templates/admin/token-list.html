@@ -1,0 +1,95 @@
+<!-- ============================================================
+     API 令牌管理 (admin/token-list.html)
+     用途：查看/创建/禁用/删除 API 令牌，供 AI agent 发布博文
+     继承：admin/base_admin.html
+     模板变量：
+       - tokens     : ApiToken 列表
+       - new_token  : 新创建令牌的明文（仅此一次，可为 None）
+     ============================================================ -->
+{% extends 'admin/base_admin.html' %}
+{% block title %}API 令牌{% endblock %}
+{% block admin_content %}
+<div class="admin-header">
+    <h3>API 令牌</h3>
+</div>
+
+<p style="color:rgba(255,255,255,0.6);font-size:0.85rem;margin:0 0 16px">
+    令牌供 AI agent 等程序化客户端通过 <code style="color:#7dd3fc">/api/v1/posts</code> 接口发布/编辑博文。
+    请求时携带 HTTP 头 <code style="color:#7dd3fc">Authorization: Bearer &lt;令牌&gt;</code>。
+    明文令牌仅在创建时显示一次，请立即保存。
+</p>
+
+{% if new_token %}
+<div style="background:rgba(250,204,21,0.12);border:1px solid rgba(250,204,21,0.5);border-radius:8px;padding:16px 20px;margin-bottom:20px">
+    <div style="color:#fde047;font-weight:600;margin-bottom:8px">⚠ 新令牌已生成（仅显示这一次，请立即复制保存）</div>
+    <code style="display:block;word-break:break-all;background:rgba(0,0,0,0.4);padding:10px 12px;border-radius:6px;color:#fde047;font-size:0.9rem">{{ new_token }}</code>
+    <button type="button" class="btn btn-primary btn-sm" style="margin-top:10px" onclick="navigator.clipboard && navigator.clipboard.writeText({{ new_token|tojson }}).then(function(){alert('已复制到剪贴板')})">复制</button>
+</div>
+{% endif %}
+
+<div class="admin-card" style="margin-bottom:20px">
+    <h4 style="margin:0 0 12px;color:rgba(255,255,255,0.9)">创建新令牌</h4>
+    <form method="POST" action="{{ url_for('admin.new_token') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+            <div style="flex:1;min-width:200px">
+                <label style="display:block;color:rgba(255,255,255,0.7);font-size:0.8rem;margin-bottom:4px">名称（如：AI agent 博文发布）</label>
+                <input type="text" name="name" maxlength="128" required placeholder="令牌用途" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.3);color:#fff">
+            </div>
+            <div style="width:160px">
+                <label style="display:block;color:rgba(255,255,255,0.7);font-size:0.8rem;margin-bottom:4px">过期天数（留空=永久）</label>
+                <input type="number" name="expire_days" min="1" placeholder="如 30" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.3);color:#fff">
+            </div>
+            <button type="submit" class="btn btn-primary">生成令牌</button>
+        </div>
+    </form>
+</div>
+
+<div class="admin-card">
+    <div class="admin-table-wrapper">
+    <table class="admin-table">
+        <tr>
+            <th>名称</th>
+            {% if current_user.is_admin %}<th>所属用户</th>{% endif %}
+            <th>创建时间</th>
+            <th>过期时间</th>
+            <th>最后使用</th>
+            <th>状态</th>
+            <th>操作</th>
+        </tr>
+        {% for token in tokens %}
+        <tr>
+            <td data-label="名称"><strong>{{ token.name }}</strong></td>
+            {% if current_user.is_admin %}<td data-label="所属用户">{{ token.user.username if token.user else '—' }}</td>{% endif %}
+            <td data-label="创建时间">{{ token.created_at.strftime('%Y-%m-%d %H:%M') if token.created_at else '—' }}</td>
+            <td data-label="过期时间">{{ token.expires_at.strftime('%Y-%m-%d %H:%M') if token.expires_at else '永久' }}</td>
+            <td data-label="最后使用">{{ token.last_used_at.strftime('%Y-%m-%d %H:%M') if token.last_used_at else '从未' }}</td>
+            <td data-label="状态">
+                {% if not token.is_active %}
+                    <span style="color:rgba(255,255,255,0.4)">已禁用</span>
+                {% elif token.expires_at and token.expires_at < now_cst() %}
+                    <span style="color:#f87171">已过期</span>
+                {% else %}
+                    <span style="color:#4ade80">有效</span>
+                {% endif %}
+            </td>
+            <td data-label="操作" style="white-space:nowrap">
+                {% if token.is_active %}
+                <form method="POST" action="{{ url_for('admin.revoke_token', id=token.id) }}" style="display:inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-primary btn-sm" onclick="return confirm('确定禁用此令牌？禁用后使用该令牌的请求将被拒绝。')">禁用</button>
+                </form>
+                {% endif %}
+                <form method="POST" action="{{ url_for('admin.delete_token', id=token.id) }}" style="display:inline" onsubmit="return confirm('确定彻底删除此令牌？此操作不可恢复。')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-danger btn-sm">删除</button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="{{ 7 if current_user.is_admin else 6 }}">暂无令牌</td></tr>
+        {% endfor %}
+    </table>
+    </div>
+</div>
+{% endblock %}

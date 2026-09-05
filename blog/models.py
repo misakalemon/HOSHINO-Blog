@@ -918,3 +918,81 @@ class WordCloudData(db.Model):
     )
 
     post = db.relationship('Post', backref=db.backref('wordcloud_data', uselist=False, cascade='all, delete-orphan'))
+
+
+class ApiToken(db.Model):
+    """API 访问令牌模型。
+
+    供外部 AI agent 等程序化客户端通过 /api/v1/* 接口发布/编辑博文。
+    令牌绑定到某个后台用户，拥有该用户的博文操作权限。
+
+    安全设计：
+      - 明文令牌仅在创建时返回一次，数据库只存 SHA-256 哈希
+      - 令牌字符串带 'hsk_' 前缀，便于识别与日志脱敏
+      - 支持过期时间（可选）与启用/禁用开关
+      - 记录最后使用时间，便于审计
+
+    __tablename__ = 'api_tokens'
+    """
+
+    __tablename__ = 'api_tokens'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(128), nullable=False)  # 令牌名称（便于区分用途）
+    token_hash = db.Column(db.String(64), unique=True, nullable=False, index=True)  # SHA-256 hexdigest
+    user_id = db.Column(
+        db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True
+    )
+    expires_at = db.Column(db.DateTime, nullable=True)  # 过期时间（NULL=永不过期）
+    last_used_at = db.Column(db.DateTime, nullable=True)  # 最后使用时间
+    is_active = db.Column(db.Boolean, default=True, index=True)  # 启用/禁用
+    created_at = db.Column(db.DateTime, default=now_cst, index=True)
+
+    user = db.relationship('User', backref=db.backref('api_tokens', lazy='dynamic', cascade='all, delete-orphan'))
+
+    @staticmethod
+    def _hash_token(raw_token: str) -> str:
+        """对明文令牌计算 SHA-256 哈希（hexdigest）。"""
+        import hashlib
+        return hashlib.sha256(raw_token.encode('utf-8')).hexdigest()
+
+    @classmethod
+    def generate(cls, user_id: int, name: str, expires_at=None):
+        """生成一张新令牌。
+
+        Returns:
+            tuple: (raw_token_str, ApiToken_instance) — 明文仅此一次返回
+        """
+        import secrets
+        raw = 'hsk_' + secrets.token_urlsafe(32)
+        token = cls(
+            name=name,
+            token_hash=cls._hash_token(raw),
+            user_id=user_id,
+            expires_at=expires_at,
+            is_active=True,
+        )
+        db.session.add(token)
+        db.session.commit()
+        return raw, token
+
+    @classmethod
+    def lookup(cls, raw_token: str):
+        """按明文令牌查找有效令牌记录。
+
+        Returns:
+            ApiToken or None: 令牌无效/过期/禁用时返回 None
+        """
+        if not raw_token or not raw_token.startswith('hsk_'):
+            return None
+        token = cls.query.filter_by(token_hash=cls._hash_token(raw_token), is_active=True).first()
+        if token is None:
+            return None
+        if token.expires_at is not None and token.expires_at < now_cst():
+            return None
+        return token
+
+    def touch(self):
+        """更新最后使用时间。"""
+        self.last_used_at = now_cst()
+        db.session.commit()

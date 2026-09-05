@@ -193,7 +193,7 @@ def create_app():
     }
 
     # ── CSRF 保护（全局，影响所有 POST/PUT/DELETE）──
-    CSRFProtect(app)
+    csrf = CSRFProtect(app)
     # Gzip 压缩哪些 MIME 类型
     app.config['COMPRESS_MIMETYPES'] = [
         'text/html',
@@ -293,6 +293,11 @@ def create_app():
     from blog.bili_public_routes import bili_public_bp
 
     app.register_blueprint(bili_public_bp)
+    # 外部 API blueprint（供 AI agent 发布博文，Bearer token 认证，豁免 CSRF）
+    from blog.api import api_bp
+
+    app.register_blueprint(api_bp)
+    csrf.exempt(api_bp)
     logger.info('蓝图注册完成')
 
     # ── Gzip 压缩 ────────────────────────────────

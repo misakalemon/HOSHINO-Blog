@@ -34,6 +34,7 @@ admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 # 这种 "先声明蓝图、再导入模型、最后导入路由" 的顺序是关键，
 # 可以避免 Flask 常见的循环导入问题。
 from .models import (
+    ApiToken,
     BiliSubscription,
     BiliUp,
     BiliUpHistory,
@@ -1274,7 +1275,7 @@ def _migrate_ensure_model_columns(app):
         'featured_cards', 'bili_ups', 'bili_videos', 'bili_video_comments',
         'bili_danmakus', 'bili_up_history', 'bili_video_history',
         'bili_watched_videos', 'bili_subscriptions', 'bili_cleanup_config',
-        'hero_images', 'wordcloud_config', 'wordcloud_data',
+        'hero_images', 'wordcloud_config', 'wordcloud_data', 'api_tokens',
     ]
 
     inspector = db.inspect(engine)

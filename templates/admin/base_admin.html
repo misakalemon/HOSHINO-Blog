@@ -65,6 +65,7 @@
     <a href="{{ url_for('admin.bili_history_cleanup') }}" style="padding-left:36px;font-size:0.8rem" {% if request.endpoint and 'bili_history_cleanup' in request.endpoint %}class="active"{% endif %}><i class="hm-public-history"></i>历史清理</a>
     {% endif %}
     {% endif %}
+    <a href="{{ url_for('admin.token_list') }}" {% if request.endpoint and 'token' in request.endpoint %}class="active"{% endif %}><i class="hm-public-key"></i>API 令牌</a>
     <a href="{{ url_for('admin.profile') }}" {% if request.endpoint == 'admin.profile' %}class="active"{% endif %}><i class="hm-set"></i>个人资料</a>
     <a href="{{ url_for('blog.index') }}" target="_blank" rel="noopener" style="color:rgba(255,255,255,0.6);margin-top:20px;font-size:0.75rem">← 查看网站（新标签）</a>
     <form method="POST" action="{{ url_for('admin.logout') }}" style="display:inline;margin:0" onsubmit="return confirm('确定退出登录吗？')">

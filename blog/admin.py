@@ -202,7 +202,7 @@ from .forms import (CategoryForm,
     RegisterForm,
     UserForm,
 )
-from .models import BiliSubscription, BiliUp, Category, Comment, FeaturedCard, HeroImage, Post, User, db
+from .models import ApiToken, BiliSubscription, BiliUp, Category, Comment, FeaturedCard, HeroImage, Post, User, db
 
 logger = logging.getLogger(__name__)
 
@@ -846,6 +846,93 @@ def delete_post(id):
     submit_task('site')
     flash('文章已删除', 'success')
     return _redirect_list('admin.post_list')
+
+
+# ═══════════════════════════════════════════════
+# API 令牌管理
+# ═══════════════════════════════════════════════
+
+
+@admin_bp.route('/tokens')
+@author_required
+def token_list():
+    """API 令牌列表 + 创建表单。
+
+    普通用户只能看到自己的令牌；管理员可看到全部令牌。
+    创建后明文令牌通过一次性 session 变量传递到模板，仅显示一次。
+    """
+    if current_user.is_admin:
+        tokens = ApiToken.query.order_by(ApiToken.created_at.desc()).all()
+    else:
+        tokens = (
+            ApiToken.query.filter_by(user_id=current_user.id)
+            .order_by(ApiToken.created_at.desc())
+            .all()
+        )
+    new_token = session.pop('_new_api_token', None)
+    return render_template('admin/token-list.html', tokens=tokens, new_token=new_token, now_cst=now_cst)
+
+
+@admin_bp.route('/tokens/new', methods=['POST'])
+@author_required
+def new_token():
+    """创建 API 令牌。
+
+    表单字段：
+      name      — 令牌名称（必填）
+      expire_days — 过期天数（选填，留空=永不过期）
+    """
+    name = (request.form.get('name') or '').strip()
+    if not name or len(name) > 128:
+        flash('请填写有效的令牌名称（1-128 字符）', 'error')
+        return redirect(url_for('admin.token_list'))
+    expire_days = request.form.get('expire_days', '').strip()
+    expires_at = None
+    if expire_days:
+        try:
+            days = int(expire_days)
+            if days > 0:
+                expires_at = now_cst() + datetime.timedelta(days=days)
+        except ValueError:
+            flash('过期天数必须是正整数', 'error')
+            return redirect(url_for('admin.token_list'))
+    raw, token = ApiToken.generate(user_id=current_user.id, name=name, expires_at=expires_at)
+    session['_new_api_token'] = raw
+    logger.info('用户 %d 创建 API 令牌: id=%d name="%s"', current_user.id, token.id, name)
+    flash('令牌已创建，请立即复制保存（仅显示一次）', 'success')
+    return redirect(url_for('admin.token_list'))
+
+
+@admin_bp.route('/tokens/<int:id>/revoke', methods=['POST'])
+@author_required
+def revoke_token(id):
+    """禁用令牌（保留记录便于审计）。"""
+    token = db.session.get(ApiToken, id)
+    if token is None:
+        abort(404)
+    if token.user_id != current_user.id and not current_user.is_admin:
+        abort(403)
+    token.is_active = False
+    db.session.commit()
+    logger.info('禁用 API 令牌: id=%d name="%s"', token.id, token.name)
+    flash('令牌已禁用', 'success')
+    return redirect(url_for('admin.token_list'))
+
+
+@admin_bp.route('/tokens/<int:id>/delete', methods=['POST'])
+@author_required
+def delete_token(id):
+    """彻底删除令牌。"""
+    token = db.session.get(ApiToken, id)
+    if token is None:
+        abort(404)
+    if token.user_id != current_user.id and not current_user.is_admin:
+        abort(403)
+    db.session.delete(token)
+    db.session.commit()
+    logger.info('删除 API 令牌: id=%d name="%s"', token.id, token.name)
+    flash('令牌已删除', 'success')
+    return redirect(url_for('admin.token_list'))
 
 
 # ═══════════════════════════════════════════════
