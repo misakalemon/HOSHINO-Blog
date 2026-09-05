@@ -300,6 +300,11 @@ def create_app():
     csrf.exempt(api_bp)
     logger.info('蓝图注册完成')
 
+    # ── 站点设置上下文处理器（注入 site_settings / site_name / site_subtitle）──
+    from blog.settings import inject_settings
+
+    app.context_processor(inject_settings)
+
     # ── Gzip 压缩 ────────────────────────────────
     compress.init_app(app)
     logger.info('Gzip 压缩已启用')

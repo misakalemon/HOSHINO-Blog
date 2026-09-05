@@ -46,6 +46,7 @@ from .models import (
     FeaturedCard,
     HeroImage,
     Post,
+    SiteSetting,
     User,
     db,
 )
@@ -1276,7 +1277,7 @@ def _migrate_ensure_model_columns(app):
         'bili_danmakus', 'bili_up_history', 'bili_video_history',
         'bili_watched_videos', 'bili_subscriptions', 'bili_cleanup_config',
         'hero_images', 'wordcloud_config', 'wordcloud_data', 'api_tokens',
-        'backup_records',
+        'backup_records', 'site_settings',
     ]
 
     inspector = db.inspect(engine)

@@ -1021,3 +1021,39 @@ class BackupRecord(db.Model):
     status = db.Column(db.String(16), default='ok', index=True)  # ok/failed
     error_msg = db.Column(db.Text, default='')  # 失败时的错误信息
     created_at = db.Column(db.DateTime, default=now_cst, index=True)
+
+
+class SiteSetting(db.Model):
+    """站点设置键值对（运行时可改，替代改源码）。
+
+    存储站点名、Hero 文案、注册开关、自定义 CSS/JS 等配置。
+    值统一存字符串，布尔值用 'true'/'false' 表示。
+
+    __tablename__ = 'site_settings'
+    """
+
+    __tablename__ = 'site_settings'
+
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    value = db.Column(db.Text, default='')
+    updated_at = db.Column(db.DateTime, default=now_cst, onupdate=now_cst)
+
+    @classmethod
+    def get(cls, key, default=None):
+        row = cls.query.filter_by(key=key).first()
+        return row.value if row is not None else default
+
+    @classmethod
+    def set(cls, key, value):
+        row = cls.query.filter_by(key=key).first()
+        if row is None:
+            row = cls(key=key, value=str(value))
+            db.session.add(row)
+        else:
+            row.value = str(value)
+        db.session.commit()
+
+    @classmethod
+    def get_all(cls):
+        return {r.key: r.value for r in cls.query.all()}

@@ -72,20 +72,20 @@
     <canvas id="particleCanvas" data-src="{{ hero_image }}"></canvas>
     <div id="particleLoader"><div class="bar"><i></i></div>粒子重构中 …</div>
     <div class="hero-particle-text">
-        <div class="hero-badge">✦ 个人博客</div>
-        <h1>最喜欢<br><span class="highlight">小鸟游星野</span></h1>
+        <div class="hero-badge">{{ site_settings.hero_badge|default('✦ 个人博客') }}</div>
+        <h1>{{ site_settings.hero_title|default('最喜欢<br><span class="highlight">小鸟游星野</span>')|safe }}</h1>
         <p>{{ blog_subtitle }}</p>
         <div class="hero-particle-actions">
-            <button id="btnScatter" data-action="_particleToggle">粒子散开</button>
-            <button data-action="_particleBurst">星尘迸发</button>
+            <button id="btnScatter" data-action="_particleToggle">{{ site_settings.hero_button1|default('粒子散开') }}</button>
+            <button data-action="_particleBurst">{{ site_settings.hero_button2|default('星尘迸发') }}</button>
         </div>
         <div class="scroll-hint" data-action="scrollToFeatured"><span>↓ 向下滚动 ↓</span></div>
     </div>
 </section>
 {% else %}
 <section class="hero" id="heroSection">
-    <div class="hero-badge">✦ 个人博客</div>
-    <h1>最喜欢<br><span class="highlight">小鸟游星野</span></h1>
+    <div class="hero-badge">{{ site_settings.hero_badge|default('✦ 个人博客') }}</div>
+    <h1>{{ site_settings.hero_title|default('最喜欢<br><span class="highlight">小鸟游星野</span>')|safe }}</h1>
     <p>{{ blog_subtitle }}</p>
     <div class="scroll-hint" data-action="scrollToFeatured"><span>↓ 向下滚动 ↓</span></div>
 </section>

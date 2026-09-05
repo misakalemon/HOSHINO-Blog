@@ -1,0 +1,46 @@
+<!-- ============================================================
+     站点设置 (admin/settings.html)
+     用途：运行时修改站点配置，存数据库
+     继承：admin/base_admin.html
+     ============================================================ -->
+{% extends 'admin/base_admin.html' %}
+{% block title %}站点设置{% endblock %}
+{% block admin_content %}
+<div class="admin-header">
+    <h3>站点设置</h3>
+</div>
+
+<p style="color:rgba(255,255,255,0.6);font-size:0.85rem;margin:0 0 16px">
+    修改后即时生效（前台下次请求即更新）。布尔开关勾选=启用。
+</p>
+
+<form method="POST" action="{{ url_for('admin.site_settings') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% for group in groups %}
+    <div class="admin-card" style="margin-bottom:20px">
+        <h4 style="margin:0 0 14px;color:rgba(255,255,255,0.9)">{{ group.title }}</h4>
+        {% for field in group.fields %}
+        {% set val = settings.get(field.key, '') %}
+        <div style="margin-bottom:14px">
+            {% if field.type == 'bool' %}
+            <label style="display:flex;align-items:center;gap:8px;color:rgba(255,255,255,0.8);cursor:pointer">
+                <input type="checkbox" name="{{ field.key }}" value="1" {% if val == 'true' %}checked{% endif %}
+                       style="width:18px;height:18px;cursor:pointer">
+                <span>{{ field.label }}</span>
+            </label>
+            {% elif field.type == 'textarea' %}
+            <label style="display:block;color:rgba(255,255,255,0.7);font-size:0.85rem;margin-bottom:4px">{{ field.label }}</label>
+            <textarea name="{{ field.key }}" rows="{{ 8 if field.key in ('custom_css', 'custom_js') else 3 }}"
+                      style="width:100%;padding:10px;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.3);color:#fff;font-family:monospace;font-size:0.85rem;resize:vertical">{{ val }}</textarea>
+            {% else %}
+            <label style="display:block;color:rgba(255,255,255,0.7);font-size:0.85rem;margin-bottom:4px">{{ field.label }}</label>
+            <input type="text" name="{{ field.key }}" value="{{ val }}"
+                   style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.3);color:#fff">
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endfor %}
+    <button type="submit" class="btn btn-primary">保存设置</button>
+</form>
+{% endblock %}

@@ -203,7 +203,7 @@ from .forms import (CategoryForm,
     RegisterForm,
     UserForm,
 )
-from .models import ApiToken, BackupRecord, BiliSubscription, BiliUp, Category, Comment, FeaturedCard, HeroImage, Post, User, db
+from .models import ApiToken, BackupRecord, BiliSubscription, BiliUp, Category, Comment, FeaturedCard, HeroImage, Post, SiteSetting, User, db
 
 logger = logging.getLogger(__name__)
 
@@ -270,6 +270,14 @@ def _check_active():
     """检查当前用户是否被禁用，禁用则 403。"""
     if not current_user.is_active:
         abort(403)
+
+
+def _registration_enabled():
+    """注册是否开放：DB 站点设置优先，回退 ENABLE_REGISTRATION 环境变量。"""
+    db_val = SiteSetting.get('enable_registration', None)
+    if db_val is not None:
+        return db_val.lower() in ('true', '1')
+    return _registration_enabled()
 
 
 def admin_required(f):
@@ -442,7 +450,7 @@ def login():
         ]
         if len(_login_attempts[ip]) >= LOGIN_RATE_LIMIT:
             flash('登录尝试过于频繁，请稍后再试', 'error')
-            return render_template('admin/login.html', form=LoginForm(), register_enabled=current_app.config.get('ENABLE_REGISTRATION', False))
+            return render_template('admin/login.html', form=LoginForm(), register_enabled=_registration_enabled())
 
     form = LoginForm()
     if form.validate_on_submit():
@@ -450,7 +458,7 @@ def login():
         if user and user.check_password(form.password.data):
             if not user.is_active:
                 flash('账号已被禁用，请联系管理员', 'error')
-                return render_template('admin/login.html', form=form, register_enabled=current_app.config.get('ENABLE_REGISTRATION', False))
+                return render_template('admin/login.html', form=form, register_enabled=_registration_enabled())
             # ── 登录成功：清除该 IP 的失败记录，更新用户统计信息 ─
             with _login_attempts_lock:
                 _login_attempts[ip] = []
@@ -468,7 +476,7 @@ def login():
         with _login_attempts_lock:
             _login_attempts[ip].append(now)
         flash('用户名或密码错误', 'error')
-    return render_template('admin/login.html', form=form, register_enabled=current_app.config.get('ENABLE_REGISTRATION', False))
+    return render_template('admin/login.html', form=form, register_enabled=_registration_enabled())
 
 
 @admin_bp.route('/register', methods=['GET', 'POST'])
@@ -486,7 +494,7 @@ def register():
     if current_user.is_authenticated:
         return redirect(url_for('admin.profile'))
 
-    if not current_app.config.get('ENABLE_REGISTRATION', False):
+    if not _registration_enabled():
         abort(404)  # 注册功能默认关闭，返回 404 避免暴露注册入口
 
     form = RegisterForm()
@@ -518,7 +526,7 @@ def register():
             _login_attempts[REGISTER_KEY].append(now)
 
         # 双重检查：防止在表单提交窗口期内配置被关闭
-        if not current_app.config.get('ENABLE_REGISTRATION', False):
+        if not _registration_enabled():
             flash('注册功能已关闭', 'error')
             return render_template('admin/register.html', form=form)
         if User.query.filter_by(username=form.username.data).first():
@@ -1026,6 +1034,35 @@ def backup_restore(id):
         flash(f'恢复失败：{e}', 'error')
         logger.error('恢复失败: backup_id=%d err=%s', id, e, exc_info=True)
     return redirect(url_for('admin.backup_list'))
+
+
+# ═══════════════════════════════════════════════
+# 站点设置
+# ═══════════════════════════════════════════════
+
+
+@admin_bp.route('/settings', methods=['GET', 'POST'])
+@admin_required
+def site_settings():
+    """站点设置（运行时可改，存数据库）。"""
+    from . import settings as settings_mod
+
+    if request.method == 'POST':
+        for group in settings_mod.GROUPS:
+            for field in group['fields']:
+                key = field['key']
+                if field['type'] == 'bool':
+                    val = 'true' if request.form.get(key) else 'false'
+                else:
+                    val = request.form.get(key, '')
+                settings_mod.set_setting(key, val)
+        flash('设置已保存', 'success')
+        return redirect(url_for('admin.site_settings'))
+    return render_template(
+        'admin/settings.html',
+        groups=settings_mod.GROUPS,
+        settings=settings_mod.get_all_settings(),
+    )
 
 
 # ═══════════════════════════════════════════════

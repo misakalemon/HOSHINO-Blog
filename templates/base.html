@@ -20,7 +20,7 @@
     <!-- title 块：渲染页面标题，默认显示 site_name 或 'Hoshino' -->
     <title>{% block title %}{{ site_name|default('Hoshino') }}{% endblock %}</title>
     <!-- description 块：页面描述，默认 'Hoshino Blog' -->
-    <meta name="description" content="{% block description %}Hoshino Blog{% endblock %}">
+    <meta name="description" content="{% block description %}{{ site_settings.meta_description|default('Hoshino Blog') }}{% endblock %}">
     <meta name="theme-color" content="#0b0e17">
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <meta property="og:title" content="{{ self.title() }}">
@@ -41,6 +41,7 @@
     <meta name="view-transition" content="same-origin">
     <!-- extra_head 块：子模板可注入额外的 <link>/<script>/<meta> -->
     {% block extra_head %}{% endblock %}
+    {% if site_settings and site_settings.custom_css %}<style>{{ site_settings.custom_css|safe }}</style>{% endif %}
 </head>
 <body>
 
@@ -64,7 +65,7 @@
         <button type="button" class="nav-hamburger" data-action="toggleDrawer" aria-label="打开菜单" aria-expanded="false">
             <span class="nav-hamburger-icon"></span>
         </button>
-        <a href="{{ url_for('blog.index') }}" class="nav-logo" id="navLogo">✦ Hoshino <span style="font-size:0.65rem;font-weight:400;background:linear-gradient(135deg,#ff8aae,#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:0.08em">—— 星野、参上！——</span></a>
+        <a href="{{ url_for('blog.index') }}" class="nav-logo" id="navLogo">✦ {{ site_name|default('Hoshino') }} <span style="font-size:0.65rem;font-weight:400;background:linear-gradient(135deg,#ff8aae,#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:0.08em">—— {{ site_subtitle|default('星野、参上！') }} ——</span></a>
     </div>
     <div class="nav-links">
         <a href="{{ url_for('blog.index') }}" {% if request.endpoint == 'blog.index' or request.endpoint == 'blog.category' %}class="nav-link-active"{% endif %}><i class="hm-public-home"></i>博客</a>
@@ -136,6 +137,7 @@
     <script src="{{ url_for('static', filename='js/interactions.js') }}?v=1" defer></script>
 
 {% block scripts %}{% endblock %}
+{% if site_settings and site_settings.custom_js %}<script>{{ site_settings.custom_js|safe }}</script>{% endif %}
 
 </body>
 </html>

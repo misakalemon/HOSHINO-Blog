@@ -517,12 +517,14 @@ def single_post(slug):
 
     # ── 处理评论提交 ──────────────────────────
     if form.validate_on_submit():
+        from . import settings as settings_mod
+
         comment = Comment(
             post_id=post.id,
             author_name=form.author_name.data,
             author_email=form.author_email.data,
             content=bleach.clean(form.content.data or '', tags=[], strip=True),
-            is_approved=False,  # 新评论默认隐藏，需管理员审核
+            is_approved=not settings_mod.is_true('comment_moderation'),
         )
         db.session.add(comment)
         db.session.commit()
