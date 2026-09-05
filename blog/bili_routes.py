@@ -1995,13 +1995,14 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
 
                     # 补全页数上限（412 风控核心缓解）：
                     # - force=True（手动全量刷新/新 UP）→ 不限页（全量）
+                    # - 续爬（_fill_attempt > 0）→ 不限页（翻完被截断的剩余视频）
                     # - 显式设置 BILI_FILL_MAX_PAGES → 按其值
                     # - 存量 UP（已有视频记录）→ 默认限 _FILL_DEFAULT_PAGES 页
                     #   （默认 3 页 ≈ 最近 45 个视频，覆盖日常新增；历史缺失由手动全量刷新补齐）
                     # 背景：arc/search 全量翻页是 412 高发点，每日深扫对所有 UP 全量翻页
                     # 是每天 02:00 触发风控的根因（日志 08/15~08/19 连续 412）。
                     _fill_max_pages = None
-                    if not force:
+                    if not force and _fill_attempt == 0:
                         if os.environ.get('BILI_FILL_MAX_PAGES'):
                             _fill_max_pages = max(1, int(os.environ['BILI_FILL_MAX_PAGES']))
                         elif _total_in_db_now > 0:
@@ -2112,6 +2113,8 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                     _broken = _fill_progress.get('broken', False)
                     _last_page = _fill_progress.get('last_page', _fill_start_page)
                     if _broken and _fill_attempt < _MAX_FILL_RETRY:
+                        # 显式提交本轮已入库的批量，避免续爬异常时丢失
+                        db.session.commit()
                         _backoff = min(60 * (2 ** _fill_attempt), 600)
                         emit(
                             f'[补全] 翻页被风控截断（已翻到第 {_last_page} 页，本次入库见上），'
