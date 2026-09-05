@@ -1066,6 +1066,82 @@ def site_settings():
 
 
 # ═══════════════════════════════════════════════
+# 媒体库
+# ═══════════════════════════════════════════════
+
+
+@admin_bp.route('/media')
+@editor_required
+def media_list():
+    """媒体库：浏览 uploads 文件，支持搜索与分页。"""
+    upload_dir = current_app.config['UPLOAD_FOLDER']
+    q = (request.args.get('q') or '').strip().lower()
+    page = max(1, request.args.get('page', 1, type=int))
+    per_page = 24
+
+    files = []
+    if os.path.isdir(upload_dir):
+        for fn in os.listdir(upload_dir):
+            full = os.path.join(upload_dir, fn)
+            if not os.path.isfile(full):
+                continue
+            if q and q not in fn.lower():
+                continue
+            st = os.stat(full)
+            files.append(
+                {
+                    'name': fn,
+                    'size': st.st_size,
+                    'mtime': datetime.datetime.fromtimestamp(st.st_mtime),
+                    'url': f'/static/uploads/{fn}',
+                    'thumb': f'/thumb?path=uploads/{fn}&w=300&fmt=webp',
+                }
+            )
+    files.sort(key=lambda x: x['mtime'], reverse=True)
+    total = len(files)
+    items = files[(page - 1) * per_page : page * per_page]
+    return render_template(
+        'admin/media.html', files=items, total=total, page=page, per_page=per_page, q=q
+    )
+
+
+@admin_bp.route('/media/delete', methods=['POST'])
+@editor_required
+def media_delete():
+    """删除媒体文件（删除前检查文章引用并提示）。"""
+    name = (request.form.get('name') or '').strip()
+    if not name or '/' in name or '\\' in name or '..' in name:
+        flash('无效的文件名', 'error')
+        return redirect(url_for('admin.media_list'))
+    upload_dir = current_app.config['UPLOAD_FOLDER']
+    path = os.path.join(upload_dir, name)
+    if not os.path.isfile(path):
+        flash('文件不存在', 'error')
+        return redirect(url_for('admin.media_list'))
+    safe_name = name.replace('%', '\\%')
+    refs = (
+        Post.query.filter(
+            db.or_(
+                Post.cover_image.like(f'%{safe_name}%', escape='\\'),
+                Post.content.like(f'%{safe_name}%', escape='\\'),
+                Post.html_content.like(f'%{safe_name}%', escape='\\'),
+            )
+        ).all()
+    )
+    try:
+        os.remove(path)
+    except OSError as e:
+        flash(f'删除失败：{e}', 'error')
+        return redirect(url_for('admin.media_list'))
+    if refs:
+        titles = '、'.join(p.title for p in refs[:5])
+        flash(f'已删除 {name}（被 {len(refs)} 篇文章引用：{titles}…，建议更新相关文章）', 'success')
+    else:
+        flash(f'已删除 {name}', 'success')
+    return redirect(url_for('admin.media_list'))
+
+
+# ═══════════════════════════════════════════════
 # 分类管理
 # ═══════════════════════════════════════════════
 

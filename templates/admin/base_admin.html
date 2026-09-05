@@ -46,6 +46,7 @@
     <a href="{{ url_for('admin.post_list') }}" {% if request.endpoint and 'post' in request.endpoint %}class="active"{% endif %}><i class="hm-public-file"></i>文章</a>
     {% if current_user.is_editor %}
     <a href="{{ url_for('admin.category_list') }}" {% if request.endpoint and 'category' in request.endpoint %}class="active"{% endif %}><i class="hm-folder"></i>分类</a>
+    <a href="{{ url_for('admin.media_list') }}" {% if request.endpoint and 'media' in request.endpoint %}class="active"{% endif %}><i class="hm-public-file"></i>媒体库</a>
     {% endif %}
     {% if current_user.is_admin %}
     <a href="{{ url_for('admin.featured_card_list') }}" {% if request.endpoint and 'featured_card' in request.endpoint %}class="active"{% endif %}><i class="hm-public-highlights"></i>特色卡片</a>
