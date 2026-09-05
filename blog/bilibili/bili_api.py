@@ -9,12 +9,14 @@
 
 import asyncio
 import atexit
+import functools
 import logging
 import os
 import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Generator
 
@@ -31,6 +33,39 @@ logger = logging.getLogger(__name__)
 
 # 东八区（CST，中国标准时间）
 CST = timezone(timedelta(hours=8))
+
+
+# ── 集中配置（配置驱动）──────────────────────────────────
+# 所有 B站爬取相关环境变量在此一次性解析为 frozen dataclass，
+# 消除散落的 os.environ.get，便于配置审计与单元测试 mock。
+# 运行时不可变（frozen=True），如需调整限速等参数请改环境变量后重启进程。
+@dataclass(frozen=True)
+class BiliConfig:
+    """B站爬取配置（集中读取环境变量）。"""
+    semaphore: int = int(os.environ.get('BILI_SEMAPHORE', '0'))
+    global_rate: float = float(os.environ.get('BILI_GLOBAL_RATE', '0.33'))
+    rate_cap: float = float(os.environ.get('BILI_GLOBAL_RATE_CAP', '1'))
+    rate_min: float = float(os.environ.get('BILI_RATE_MIN', '0.05'))
+    rate_recover_seconds: float = float(os.environ.get('BILI_RATE_RECOVER_SECONDS', '600'))
+    slow_start_seconds: float = float(os.environ.get('BILI_SLOW_START', '120'))
+    stat_workers: int = int(os.environ.get('BILI_STAT_WORKERS', '5'))
+    api_timeout: float = float(os.environ.get('BILI_API_TIMEOUT', '30.0'))
+    video_sleep_base: float = float(os.environ.get('BILI_VIDEO_SLEEP', '10.0'))
+    video_sleep_jitter: float = float(os.environ.get('BILI_VIDEO_JITTER', '5.0'))
+    retry_delay: float = float(os.environ.get('BILI_RETRY_DELAY', '30.0'))
+    backoff_cap: float = float(os.environ.get('BILI_BACKOFF_CAP', '600'))
+    max_retries: int = int(os.environ.get('BILI_MAX_RETRIES', str(MAX_RETRIES)))
+    soft_risk_window: float = float(os.environ.get('BILI_SOFT_RISK_WINDOW', '60'))
+    soft_risk_trigger: int = int(os.environ.get('BILI_SOFT_RISK_TRIGGER', '2'))
+    soft_cooldown: float = float(os.environ.get('BILI_SOFT_COOLDOWN', '300'))
+    first_request_delay: tuple = field(
+        default_factory=lambda: tuple(
+            float(x) for x in os.environ.get('BILI_FIRST_DELAY', '1.0,3.0').split(',')
+        )
+    )
+
+
+CONFIG = BiliConfig()
 
 # 全局 Credential 对象，初始为 None（匿名模式）
 _credential: Credential | None = None
@@ -81,10 +116,16 @@ _loop_local = threading.local()
 # phase offset 让各线程的 sleep 节奏错开，避免所有线程在同一时刻发出请求
 _thread_local = threading.local()
 
+# HEADERS 写入锁 — bilibili_api.utils.network.HEADERS 是模块级全局 dict，
+# 默认 BILI_SEMAPHORE=0 不启用信号量时，多线程会并发 patch HEADERS，
+# 导致线程 A 的请求携带线程 B 的 UA，加重风控画像混乱。
+# 锁临界区仅 4 次 dict 赋值（微秒级），不构成性能瓶颈。
+_HEADER_LOCK = threading.Lock()
+
 # 并发信号量 — 限制同时发往 B 站 API 的请求数，防风控
 # BILI_SEMAPHORE=0（默认）时不限制，由各线程的 sleep 节奏自控并发
 # BILI_SEMAPHORE>0 时启用全局信号量限流
-_BILI_SEMAPHORE = int(os.environ.get('BILI_SEMAPHORE', '0'))
+_BILI_SEMAPHORE = CONFIG.semaphore
 _api_semaphore = threading.Semaphore(_BILI_SEMAPHORE) if _BILI_SEMAPHORE > 0 else None
 
 
@@ -149,18 +190,18 @@ class _AdaptiveTokenBucket:
         return wait
 
 
-_BILI_RATE = float(os.environ.get('BILI_GLOBAL_RATE', '0.33'))  # 20 请求/分钟
+_BILI_RATE = CONFIG.global_rate  # 20 请求/分钟
 # 突发上限：默认 1，即全局同时最多 1 个 B站 请求在途，所有请求严格串行。
 # 新UP深扫与存量UP增量检查并发时，若允许突发（如 3），多个不同 UA 线程会
 # 在同一瞬间打向同一 IP，触发 B站 -352 风控（v_voucher 校验）。
 # 串行后同一时刻只有一个 UA 活跃，最接近"单浏览器浏览"指纹。
-_BILI_RATE_CAP = float(os.environ.get('BILI_GLOBAL_RATE_CAP', '1'))
+_BILI_RATE_CAP = CONFIG.rate_cap
 # 风控降速下限（请求/秒）：即使连续风控也保留极低速率探测，而非完全停止
-_BILI_RATE_MIN = float(os.environ.get('BILI_RATE_MIN', '0.05'))
+_BILI_RATE_MIN = CONFIG.rate_min
 # 风控后降速持续时间（秒），到期自动恢复原速率
-_BILI_RATE_RECOVER = float(os.environ.get('BILI_RATE_RECOVER_SECONDS', '600'))
+_BILI_RATE_RECOVER = CONFIG.rate_recover_seconds
 # 进程启动慢启动时长（秒）：期间速率减半，避免重启后立即高频
-_BILI_SLOW_START = float(os.environ.get('BILI_SLOW_START', '120'))
+_BILI_SLOW_START = CONFIG.slow_start_seconds
 _BILI_RATE_LIMITER = _AdaptiveTokenBucket(
     rate=_BILI_RATE,
     capacity=_BILI_RATE_CAP,
@@ -201,7 +242,7 @@ def _get_batch_pool() -> ThreadPoolExecutor:
     if _BATCH_POOL is None:
         with _BATCH_POOL_LOCK:
             if _BATCH_POOL is None:
-                n = int(os.environ.get('BILI_STAT_WORKERS', '5'))
+                n = CONFIG.stat_workers
                 _BATCH_POOL = ThreadPoolExecutor(
                     max_workers=n, thread_name_prefix='bili-batch'
                 )
@@ -220,22 +261,20 @@ def _shutdown_batch_pool():
         _BATCH_POOL = None
 
 # 单次 API 调用超时时间（秒）
-_API_TIMEOUT = float(os.environ.get('BILI_API_TIMEOUT', '30.0'))
+_API_TIMEOUT = CONFIG.api_timeout
 
 # 视频间 sleep 参数（供 bili_routes.py 的 thread_sleep 使用）
-_VIDEO_SLEEP_BASE = float(os.environ.get('BILI_VIDEO_SLEEP', '10.0'))
-_VIDEO_SLEEP_JITTER = float(os.environ.get('BILI_VIDEO_JITTER', '5.0'))
+_VIDEO_SLEEP_BASE = CONFIG.video_sleep_base
+_VIDEO_SLEEP_JITTER = CONFIG.video_sleep_jitter
 
 # 风控指数退避初始等待（秒）：触发风控后首次等待时长，之后翻倍
-_RISK_RETRY_DELAY = float(os.environ.get('BILI_RETRY_DELAY', '30.0'))
+_RISK_RETRY_DELAY = CONFIG.retry_delay
 # 风控退避上限（秒）
-_BACKOFF_CAP = float(os.environ.get('BILI_BACKOFF_CAP', '600'))
+_BACKOFF_CAP = CONFIG.backoff_cap
 # 单页/单视频风控最大重试次数
-_MAX_RETRIES = int(os.environ.get('BILI_MAX_RETRIES', str(MAX_RETRIES)))
+_MAX_RETRIES = CONFIG.max_retries
 # 每次翻页/单视频请求前的基础随机短延迟范围（秒），错峰避免同一秒并发触发风控
-_FIRST_REQUEST_DELAY = tuple(
-    float(x) for x in os.environ.get('BILI_FIRST_DELAY', '1.0,3.0').split(',')
-)
+_FIRST_REQUEST_DELAY = CONFIG.first_request_delay
 
 
 def _ensure_thread_binding():
@@ -320,13 +359,17 @@ def _patch_request_headers():
     旧代码通过 `settings['user-agent']` 设置是无效的（bilibili_api 无此模块
     属性，异常被吞掉），导致所有请求一直用库硬编码的 Mac UA，缺少
     accept-language，成为风控诱因之一。此处直接 patch 生效。
+
+    线程安全：默认 BILI_SEMAPHORE=0 时信号量不启用，多线程会并发进入此函数，
+    通过 _HEADER_LOCK 串行化 HEADERS 写入，消除 UA 错乱。
     """
     try:
         from bilibili_api.utils import network as _bili_net
-        _bili_net.HEADERS['User-Agent'] = _thread_local.ua
-        _bili_net.HEADERS['Referer'] = 'https://www.bilibili.com/'
-        _bili_net.HEADERS['Origin'] = 'https://www.bilibili.com'
-        _bili_net.HEADERS['accept-language'] = 'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7'
+        with _HEADER_LOCK:
+            _bili_net.HEADERS['User-Agent'] = _thread_local.ua
+            _bili_net.HEADERS['Referer'] = 'https://www.bilibili.com/'
+            _bili_net.HEADERS['Origin'] = 'https://www.bilibili.com'
+            _bili_net.HEADERS['accept-language'] = 'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7'
     except Exception:
         pass
 
@@ -430,15 +473,48 @@ def _is_auth_error(e: Exception) -> bool:
     return any(c in err_str for c in codes)
 
 
+def with_risk_retry(func):
+    """统一风控指数退避重试装饰器。
+
+    仅处理 _is_risk_control 命中的软风控（-352/-509/429），
+    命中后按 _RISK_RETRY_DELAY 起始、每次翻倍至上限 _BACKOFF_CAP 退避重试，
+    最多 _MAX_RETRIES 次；耗尽后重新抛出最后一次异常。
+    鉴权过期（_is_auth_error）与非风控异常不重试，直接抛出，
+    由被装饰函数自行处理降级逻辑。
+
+    用法：@with_risk_retry 装饰单个 API 调用函数，函数内部只管
+    "凭证 → 匿名"降级，风控退避交给本装饰器统一处理。
+    """
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        retry_delay = _RISK_RETRY_DELAY
+        for attempt in range(_MAX_RETRIES + 1):
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                if _is_risk_control(e) and attempt < _MAX_RETRIES:
+                    logger.warning(
+                        '⚠️ 触发风控，等待 %ds 后重试 (第 %d/%d 次)',
+                        retry_delay, attempt + 1, _MAX_RETRIES,
+                    )
+                    time.sleep(retry_delay)
+                    retry_delay = min(retry_delay * 2, _BACKOFF_CAP)
+                    continue
+                raise
+        # 理论不可达：最后一次 attempt 不满足 attempt < _MAX_RETRIES 会直接 raise
+        raise RuntimeError(f'{func.__name__} 风控重试耗尽')
+    return wrapper
+
+
 # ── 软风控（-352/-509/429）分级冷却 ──────────────────
 # 与 412 硬封禁不同，-352 是"软"风控（v_voucher 校验/限流），单个请求触发
 # 只退避重试即可；但**短时间窗口内连续触发**说明 UA/IP 已被标记，
 # 此时进入中等冷却（默认 5 分钟），期间所有请求挂起等待，避免继续触发。
 _soft_risk_times: list[float] = []
 _soft_risk_lock = threading.Lock()
-_SOFT_RISK_WINDOW = float(os.environ.get('BILI_SOFT_RISK_WINDOW', '60'))     # 计数窗口（秒）
-_SOFT_RISK_TRIGGER = int(os.environ.get('BILI_SOFT_RISK_TRIGGER', '2'))      # 窗口内触发冷却的阈值
-_SOFT_COOLDOWN = float(os.environ.get('BILI_SOFT_COOLDOWN', '300'))          # 中等冷却时长（秒）
+_SOFT_RISK_WINDOW = CONFIG.soft_risk_window     # 计数窗口（秒）
+_SOFT_RISK_TRIGGER = CONFIG.soft_risk_trigger      # 窗口内触发冷却的阈值
+_SOFT_COOLDOWN = CONFIG.soft_cooldown          # 中等冷却时长（秒）
 _soft_cooldown_until: float = 0.0
 
 
@@ -486,10 +562,24 @@ def _reset_network_session():
         for pool_name in ('session_pool', 'request_client_pool', 'request_client'):
             try:
                 pool = getattr(_bili_net, pool_name, None)
-                if isinstance(pool, dict) and loop is not None:
+                if pool is None:
+                    continue
+                if loop is None:
+                    continue
+                # 防御性适配多种池结构，避免 bilibili_api 版本迭代后静默失效
+                if isinstance(pool, dict):
                     pool.pop(loop, None)
-                elif pool_name == 'request_client' and pool is not None:
-                    # 某些版本是全局单例，无法按 loop 移除——保持不动
+                elif hasattr(pool, 'discard'):
+                    # set 风格容器
+                    pool.discard(loop)
+                elif hasattr(pool, 'pop') and not isinstance(pool, (list, tuple)):
+                    # WeakKeyDictionary 等支持 pop(key, default) 的映射
+                    try:
+                        pool.pop(loop, None)
+                    except TypeError:
+                        pass
+                elif pool_name == 'request_client':
+                    # 全局单例，无法按 loop 移除——保持不动
                     pass
             except Exception:
                 continue
@@ -569,7 +659,11 @@ def is_logged_in() -> bool:
         logger.info('Credential 无 verify/check_valid 方法，假定已登录')
         return True
     except Exception as e:
-        logger.warning('Credential 登录态检查异常: %s', e)
+        # 异常信息可能含 cookie/token 或完整响应体，截断脱敏后输出
+        msg = str(e)
+        if len(msg) > 200:
+            msg = msg[:200] + '...'
+        logger.warning('Credential 登录态检查异常（已截断脱敏）: %s', msg)
         return False
 
 
@@ -641,40 +735,83 @@ def get_user_info(mid: int) -> dict:
     }
 
 
-def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, None, None]:
+def get_user_video_count(mid: int) -> int:
+    """快速获取 UP 主视频总数（仅请求 1 条数据，节省带宽）。
+
+    利用 arc/search 的 page.count 字段，ps=1/pn=1 只拉 1 条视频即可拿到总数，
+    相比 get_user_info 的 video 字段更可靠（acc/info 的 video 偶有延迟不同步）。
+    凭证过期时自动降级匿名重试一次。
+
+        mid:      UP 主用户 ID。
+        returns:  视频总数；获取失败返回 0。
+    """
+    try:
+        u = _user_mod.User(mid, credential=_credential)
+        data = _sync(u.get_videos(ps=1, pn=1))
+        return int(data.get('page', {}).get('count', 0) or 0)
+    except Exception as e:
+        if _credential and _is_auth_error(e):
+            try:
+                u = _user_mod.User(mid)
+                data = _sync(u.get_videos(ps=1, pn=1))
+                return int(data.get('page', {}).get('count', 0) or 0)
+            except Exception:
+                pass
+        logger.warning('获取 UP 主 %d 视频总数失败: %s', mid, e)
+        return 0
+
+
+@with_risk_retry
+def _fetch_video_page(u, pn: int) -> dict:
+    """获取单页视频列表（风控指数退避由 with_risk_retry 统一处理）。
+
+        u:  bilibili_api.user.User 实例（带凭证或匿名）。
+        pn: 页码（从 1 开始）。
+    """
+    return _sync(u.get_videos(ps=PAGE_SIZE, pn=pn))
+
+
+def get_video_list(
+    mid: int,
+    max_pages: int | None = None,
+    start_page: int = 1,
+    progress: dict | None = None,
+) -> Generator[dict, None, None]:
     """分页获取 UP 主视频列表（pubdate 倒序）。
 
     使用 arc/search API，逐页 yield 视频 dict。
     含四种错误处理路径：
       1) Cookie 过期 → 切换匿名 User 重试（仅一次）
       2) IP 级封禁 412 → 立即 break，不重试
-      3) 风控限流 → 指数退避等待后重试（每页最多 3 次）
+      3) 风控限流 → 指数退避等待后重试（每页最多 _MAX_RETRIES 次，由装饰器统一处理）
       4) 其他错误 → break 终止迭代
 
     pagination 策略：
       - 有 page.count 时按 total_pages 计算翻页数
       - page.count==0 或缺失时按 vlist 长度判断（len < PAGE_SIZE 即最后一页）
 
-        mid:       UP 主用户 ID。
-        max_pages: 最大翻页数，None 表示无限制（直到 API 返回空或页数耗尽）。
-        yields:    视频信息 dict，包含 aid/bvid/title/description/duration/pubdate 等字段。
+    断点续爬：风控/异常 break 时，progress['broken']=True 且 progress['last_page']
+    记录最后成功翻到的页码，调用方可据此从 start_page=last_page+1 续爬。
+
+        mid:        UP 主用户 ID。
+        max_pages:  最大翻页数，None 表示无限制（直到 API 返回空或页数耗尽）。
+        start_page: 起始页码（断点续爬用），默认 1。
+        progress:   可选 dict，用于回传翻页进度。成功翻页时写入 'last_page'；
+                    风控/异常截断时写入 'broken'=True。
+        yields:     视频信息 dict，包含 aid/bvid/title/description/duration/pubdate 等字段。
     """
     # 首次请求前随机短延迟，避免多线程同一秒发出第 1 页请求触发风控
     time.sleep(random.uniform(*_FIRST_REQUEST_DELAY))
     u = _user_mod.User(mid, credential=_credential)
-    pn = 1                     # 当前页码，从第 1 页开始
-    retry_delay = _RISK_RETRY_DELAY   # 风控指数退避初始等待时间（秒）
+    pn = max(1, start_page)    # 当前页码，断点续爬时从 start_page 开始
     auth_retried = False       # 标记是否已降级为匿名（仅重试一次）
-    page_retries = 0           # 当前页风控重试计数
-    MAX_PAGE_RETRIES = _MAX_RETRIES   # 每页最大风控重试次数
 
     while True:
         if max_pages is not None and pn > max_pages:
             break
         logger.info('正在获取第 %d 页视频列表 ...', pn)
         try:
-            data = _sync(u.get_videos(ps=PAGE_SIZE, pn=pn))
-            page_retries = 0  # 成功则重置本页重试计数
+            data = _fetch_video_page(u, pn)
         except Exception as e:
             # 先判断异常类型再决定日志内容（避免 412 时输出完整 HTML）
             if _is_ip_blocked(e):
@@ -682,36 +819,33 @@ def get_video_list(mid: int, max_pages: int | None = None) -> Generator[dict, No
                 with _last_412_lock:
                     _last_412_time = time.time()
                 logger.error('触发风控(412) - 获取第 %d 页视频列表失败', pn)
+                if progress is not None:
+                    progress['broken'] = True
+                    progress['last_page'] = pn - 1
                 break
+            # 风控退避已由 _fetch_video_page 的装饰器耗尽，此处收到风控异常即终止本页
             if _is_risk_control(e):
-                logger.warning('触发风控限流 - 获取第 %d 页视频列表失败', pn)
-            else:
-                logger.error('获取第 %d 页视频列表失败: %s', pn, e)
+                logger.error('第 %d 页重试 %d 次仍被风控，停止', pn, _MAX_RETRIES)
+                if progress is not None:
+                    progress['broken'] = True
+                    progress['last_page'] = pn - 1
+                break
             # 路径 1: 凭证过期 → 降级为匿名重试
             if _credential and _is_auth_error(e) and not auth_retried:
-                logger.warning('凭证过期，切换为匿名访问后重试第 %d 页', pn)
+                logger.warning('凭证过期，切换为匿名访问后重试第 %d 页: %s', pn, e)
                 auth_retried = True
                 u = _user_mod.User(mid)
                 continue
-            # 路径 3: 风控限流 → 指数退避重试
-            if _is_risk_control(e):
-                page_retries += 1
-                if page_retries > MAX_PAGE_RETRIES:
-                    logger.error('第 %d 页重试 %d 次仍被风控，停止', pn, MAX_PAGE_RETRIES)
-                    break
-                logger.warning(
-                    '⚠️ 触发风控，等待 %ds 后重试 (第 %d/%d 次)...',
-                    retry_delay,
-                    page_retries,
-                    MAX_PAGE_RETRIES,
-                )
-                time.sleep(retry_delay)
-                retry_delay = min(retry_delay * 2, _BACKOFF_CAP)  # 每次翻倍，上限 600s（10 分钟）
-                continue
             # 路径 4: 其他异常 → 终止
+            logger.error('获取第 %d 页视频列表失败: %s', pn, e)
+            if progress is not None:
+                progress['broken'] = True
+                progress['last_page'] = pn - 1
             break
 
         vlist = data.get('list', {}).get('vlist', [])
+        if progress is not None:
+            progress['last_page'] = pn
         if not vlist:
             logger.info('第 %d 页 vlist 为空，结束迭代', pn)
             break
@@ -941,6 +1075,7 @@ def get_video_stats_batch(bvids: list[str], max_workers: int | None = None) -> t
     return results, deleted
 
 
+@with_risk_retry
 def get_video_stat(bvid: str) -> dict:
     """获取单个视频的详细统计数据，Cookie 过期时自动降级为匿名，风控时指数退避重试
 
@@ -956,26 +1091,16 @@ def get_video_stat(bvid: str) -> dict:
                   }
         raises:   RuntimeError — 重试耗尽后仍失败。
     """
-    retry_delay = _RISK_RETRY_DELAY
-    for attempt in range(_MAX_RETRIES + 1):
-        try:
-            v = _video_mod.Video(bvid=bvid, credential=_credential)
+    try:
+        v = _video_mod.Video(bvid=bvid, credential=_credential)
+        info = _sync(v.get_info())
+    except Exception as e:
+        if _credential and _is_auth_error(e):
+            logger.warning('视频统计获取凭证过期，使用匿名: %s', e)
+            v = _video_mod.Video(bvid=bvid)
             info = _sync(v.get_info())
-        except Exception as e:
-            if _credential and _is_auth_error(e) and attempt == 0:
-                logger.warning('视频统计获取凭证过期，使用匿名: %s', e)
-                v = _video_mod.Video(bvid=bvid)
-                continue
-            if _is_risk_control(e) and attempt < _MAX_RETRIES:
-                logger.warning('视频 %s 触发风控，等待 %ds 后重试 (第 %d/%d 次)', bvid, retry_delay, attempt + 1, _MAX_RETRIES)
-                time.sleep(retry_delay)
-                retry_delay = min(retry_delay * 2, 600)
-                continue
+        else:
             raise
-        break
-    else:
-        # for 循环正常结束（未 break），说明重试耗尽
-        raise RuntimeError(f'视频 {bvid} 统计获取重试耗尽')
     stat = info.get('stat', {})
     return {
         'view_count': stat.get('view', 0),
@@ -988,6 +1113,7 @@ def get_video_stat(bvid: str) -> dict:
     }
 
 
+@with_risk_retry
 def get_video_full_info(bvid: str) -> dict:
     """获取单个视频的完整信息，用于单独添加视频。
 
@@ -1020,25 +1146,16 @@ def get_video_full_info(bvid: str) -> dict:
     Raises:
         RuntimeError: 重试耗尽后仍失败
     """
-    retry_delay = _RISK_RETRY_DELAY
-    for attempt in range(_MAX_RETRIES + 1):
-        try:
-            v = _video_mod.Video(bvid=bvid, credential=_credential)
+    try:
+        v = _video_mod.Video(bvid=bvid, credential=_credential)
+        info = _sync(v.get_info())
+    except Exception as e:
+        if _credential and _is_auth_error(e):
+            logger.warning('视频信息获取凭证过期，使用匿名: %s', e)
+            v = _video_mod.Video(bvid=bvid)
             info = _sync(v.get_info())
-        except Exception as e:
-            if _credential and _is_auth_error(e) and attempt == 0:
-                logger.warning('视频信息获取凭证过期，使用匿名: %s', e)
-                v = _video_mod.Video(bvid=bvid)
-                continue
-            if _is_risk_control(e) and attempt < _MAX_RETRIES:
-                logger.warning('视频 %s 触发风控，等待 %ds 后重试 (第 %d/%d 次)', bvid, retry_delay, attempt + 1, _MAX_RETRIES)
-                time.sleep(retry_delay)
-                retry_delay = min(retry_delay * 2, 600)
-                continue
+        else:
             raise
-        break
-    else:
-        raise RuntimeError(f'视频 {bvid} 信息获取重试耗尽')
 
     stat = info.get('stat', {})
     owner = info.get('owner', {})
@@ -1178,6 +1295,30 @@ def get_video_comments(aid: int, page: int = 1, order=None) -> list[dict]:
     return results
 
 
+def iter_video_comments(aid: int, order=None, max_pages: int | None = None) -> Generator[dict, None, None]:
+    """迭代获取视频全部评论（自动翻页直到空页或达到 max_pages）。
+
+    封装 get_video_comments 的翻页逻辑：逐页拉取并 yield 每条评论，
+    遇到空页即终止。第 2 页起需登录态，未登录时第 2 页会失败返回空列表，
+    循环自然终止。翻页间加入随机间隔以降低风控概率。
+
+        aid:       视频稿件 ID（av 号）。
+        order:     排序方式，默认 OrderType.LIKE（热门），可传 OrderType.TIME（最新）。
+        max_pages: 最大页数，None 表示不限（直到返回空页）。
+        yields:    单条评论 dict（格式同 get_video_comments 的元素）。
+    """
+    page = 1
+    while max_pages is None or page <= max_pages:
+        comments = get_video_comments(aid, page=page, order=order)
+        if not comments:
+            break
+        for c in comments:
+            yield c
+        page += 1
+        # 翻页间隔，避免连续请求触发风控
+        time.sleep(REQUEST_INTERVAL + random.random() * REQUEST_INTERVAL_JITTER)
+
+
 # 弹幕分段长度：B站 每段 6 分钟（360 秒），见 _crawl_video_danmakus 的 ceil(dur/360)
 
 
@@ -1212,13 +1353,18 @@ def get_video_pages(bvid: str) -> list[dict]:
         if not isinstance(p, dict):
             p = getattr(p, '__dict__', {}) or {}
         dur = p.get('duration') or 0
-        # pagelist 的 duration 是字符串（如 "12:34" / "1:02:33"），统一转秒
+        # pagelist 的 duration 可能是字符串（如 "12:34" / "1:02:33"）或整数秒数，
+        # 统一转秒
         if isinstance(dur, str):
             try:
                 parts = [int(x) for x in str(dur).split(':')]
                 dur = sum(x * 60 ** (len(parts) - 1 - i) for i, x in enumerate(parts))
             except (ValueError, TypeError):
                 dur = 0
+        elif isinstance(dur, (int, float)):
+            dur = int(dur)
+        else:
+            dur = 0
         results.append({
             'cid': p.get('cid') or 0,
             'duration': int(dur or 0),

@@ -1965,117 +1965,170 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             if should_fill:
                 from blog.bilibili.bili_api import get_video_list as _get_video_list
 
-                # 计算需补数量：-1 表示数量未知，翻全量
-                need = (total_in_api - total_in_db) if total_in_api is not None and total_in_api > 0 else -1
-                if need > 0:
-                    emit(f'[补全] 发现 {need} 个缺失视频，开始补齐...', 'FILL')
-                else:
-                    emit(f'[补全] DB 有 {total_in_db} 个视频，开始从 API 补齐...', 'FILL')
+                # 断点续爬：风控截断后从断点页重试，最多 _MAX_FILL_RETRY 次
+                _MAX_FILL_RETRY = int(os.environ.get('BILI_FILL_MAX_RETRY', '3'))
+                _fill_start_page = 1
 
-                _batch_count = 0
-
-                # 补全页数上限（412 风控核心缓解）：
-                # - 显式设置 BILI_FILL_MAX_PAGES → 按其值
-                # - 存量 UP（已有视频记录）且非 force → 默认限 _FILL_DEFAULT_PAGES 页
-                #   （默认 3 页 ≈ 最近 45 个视频，覆盖日常新增；历史缺失由手动全量刷新补齐）
-                # - 全新 UP（total_in_db==0）或手动强制刷新（force）→ 不限页（全量）
-                # 背景：arc/search 全量翻页是 412 高发点，每日深扫对所有 UP 全量翻页
-                # 是每天 02:00 触发风控的根因（日志 08/15~08/19 连续 412）。
-                _fill_max_pages = None
-                if os.environ.get('BILI_FILL_MAX_PAGES'):
-                    _fill_max_pages = max(1, int(os.environ['BILI_FILL_MAX_PAGES']))
-                elif not force and total_in_db > 0:
-                    _fill_max_pages = max(
-                        1, int(os.environ.get('BILI_FILL_MAX_PAGES_DEFAULT', '3'))
+                for _fill_attempt in range(_MAX_FILL_RETRY + 1):
+                    # 每次重试重新计算 need（上次可能已入库部分视频）
+                    _total_in_db_now = BiliVideo.query.filter_by(
+                        up_id=up.id, is_deleted=False
+                    ).count()
+                    need = (
+                        (total_in_api - _total_in_db_now)
+                        if total_in_api is not None and total_in_api > 0
+                        else -1
                     )
-                if _fill_max_pages:
-                    emit(f'[补全] arc/search 限翻 {_fill_max_pages} 页（风控保护）', 'FILL')
+                    if _fill_attempt == 0:
+                        if need > 0:
+                            emit(f'[补全] 发现 {need} 个缺失视频，开始补齐...', 'FILL')
+                        else:
+                            emit(f'[补全] DB 有 {_total_in_db_now} 个视频，开始从 API 补齐...', 'FILL')
+                    else:
+                        emit(
+                            f'[补全] 第 {_fill_attempt}/{_MAX_FILL_RETRY} 次续爬，'
+                            f'从第 {_fill_start_page} 页开始，剩余 {need if need > 0 else "?"} 个缺失',
+                            'FILL',
+                        )
 
-                def _fill_fetch_stat(vi):
-                    with app.app_context():
-                        _fbvid = vi['bvid']
-                        _fts = (vi.get('title') or '')[:30]
-                        try:
-                            _fstat = get_video_stat(_fbvid)
-                            vi.update(_fstat)
-                            thread_sleep()
-                            return True
-                        except Exception:
-                            logger.warning('视频 %s 「%s」补全时统计获取失败', _fbvid, _fts)
-                            time.sleep(float(os.environ.get('BILI_FILL_FAIL_SLEEP', '12.0')))
-                            return False
+                    _batch_count = 0
 
-                _fill_q = _queue_mod.Queue(maxsize=_UPDATE_THREADS * 2)
-                _fill_stop_evt = threading.Event()
+                    # 补全页数上限（412 风控核心缓解）：
+                    # - force=True（手动全量刷新/新 UP）→ 不限页（全量）
+                    # - 显式设置 BILI_FILL_MAX_PAGES → 按其值
+                    # - 存量 UP（已有视频记录）→ 默认限 _FILL_DEFAULT_PAGES 页
+                    #   （默认 3 页 ≈ 最近 45 个视频，覆盖日常新增；历史缺失由手动全量刷新补齐）
+                    # 背景：arc/search 全量翻页是 412 高发点，每日深扫对所有 UP 全量翻页
+                    # 是每天 02:00 触发风控的根因（日志 08/15~08/19 连续 412）。
+                    _fill_max_pages = None
+                    if not force:
+                        if os.environ.get('BILI_FILL_MAX_PAGES'):
+                            _fill_max_pages = max(1, int(os.environ['BILI_FILL_MAX_PAGES']))
+                        elif _total_in_db_now > 0:
+                            _fill_max_pages = max(
+                                1, int(os.environ.get('BILI_FILL_MAX_PAGES_DEFAULT', '3'))
+                            )
+                    if _fill_max_pages:
+                        emit(f'[补全] arc/search 限翻 {_fill_max_pages} 页（风控保护）', 'FILL')
 
-                def _fill_producer():
-                    with app.app_context():
-                        try:
-                            for video_info in _get_video_list(mid, max_pages=_fill_max_pages):
-                                if _fill_stop_evt.is_set():
+                    def _fill_fetch_stat(vi):
+                        with app.app_context():
+                            _fbvid = vi['bvid']
+                            _fts = (vi.get('title') or '')[:30]
+                            try:
+                                _fstat = get_video_stat(_fbvid)
+                                vi.update(_fstat)
+                                thread_sleep()
+                                return True
+                            except Exception:
+                                # 统计获取失败仍入库：arc/search 已含基础 view/comment 数据，
+                                # like/coin/share 等缺失字段由 D 阶段统计更新补齐。
+                                logger.warning(
+                                    '视频 %s 「%s」统计获取失败，用 arc/search 基础数据入库',
+                                    _fbvid, _fts,
+                                )
+                                time.sleep(float(os.environ.get('BILI_FILL_FAIL_SLEEP', '12.0')))
+                                return True
+
+                    _fill_q = _queue_mod.Queue(maxsize=_UPDATE_THREADS * 2)
+                    _fill_stop_evt = threading.Event()
+                    _fill_progress: dict = {}
+
+                    def _fill_producer():
+                        with app.app_context():
+                            try:
+                                for video_info in _get_video_list(
+                                    mid,
+                                    max_pages=_fill_max_pages,
+                                    start_page=_fill_start_page,
+                                    progress=_fill_progress,
+                                ):
+                                    if _fill_stop_evt.is_set():
+                                        break
+                                    _pbvid = video_info['bvid']
+                                    _paid = video_info['aid']
+                                    _pts = (video_info.get('title') or '')[:30]
+                                    _pknown = _pbvid in existing_ids or _paid in existing_aids
+                                    logger.info('补全循环: bvid=%s title=%s known=%s', _pbvid, _pts, _pknown)
+                                    if _pknown:
+                                        continue
+                                    _fill_q.put(video_info)
+                            except Exception as _pfe:
+                                logger.warning('补全生成器异常: %s', _pfe)
+                            finally:
+                                _fill_q.put(None)
+
+                    _producer_t = threading.Thread(target=_fill_producer, daemon=True)
+                    _producer_t.start()
+
+                    with ThreadPoolExecutor(max_workers=_UPDATE_THREADS) as _fill_pool:
+                        _fill_futs = {}
+                        # 已提交处理的数量（含处理中）；need/max_videos 均作为硬上限
+                        _fill_submitted = 0
+                        _fill_quota = need if need > 0 else (max_videos or 0)
+                        while True:
+                            try:
+                                _item = _fill_q.get(timeout=0.5)
+                            except _queue_mod.Empty:
+                                if not _producer_t.is_alive() and _fill_q.empty():
                                     break
-                                _pbvid = video_info['bvid']
-                                _paid = video_info['aid']
-                                _pts = (video_info.get('title') or '')[:30]
-                                _pknown = _pbvid in existing_ids or _paid in existing_aids
-                                logger.info('补全循环: bvid=%s title=%s known=%s', _pbvid, _pts, _pknown)
-                                if _pknown:
-                                    continue
-                                _fill_q.put(video_info)
-                        except Exception as _pfe:
-                            logger.warning('补全生成器异常: %s', _pfe)
-                        finally:
-                            _fill_q.put(None)
-
-                _producer_t = threading.Thread(target=_fill_producer, daemon=True)
-                _producer_t.start()
-
-                with ThreadPoolExecutor(max_workers=_UPDATE_THREADS) as _fill_pool:
-                    _fill_futs = {}
-                    # 已提交处理的数量（含处理中）；need/max_videos 均作为硬上限
-                    _fill_submitted = 0
-                    _fill_quota = need if need > 0 else (max_videos or 0)
-                    while True:
-                        try:
-                            _item = _fill_q.get(timeout=0.5)
-                        except _queue_mod.Empty:
-                            if not _producer_t.is_alive() and _fill_q.empty():
+                                continue
+                            if _item is None:
                                 break
-                            continue
-                        if _item is None:
-                            break
-                        # 达到配额上限（need 或 max_videos）时停止消费并通知生产者
-                        if _fill_quota and _fill_submitted >= _fill_quota:
-                            _fill_stop_evt.set()
-                            break
-                        _fill_futs[_fill_pool.submit(_fill_fetch_stat, _item)] = _item
-                        _fill_submitted += 1
+                            # 达到配额上限（need 或 max_videos）时停止消费并通知生产者
+                            if _fill_quota and _fill_submitted >= _fill_quota:
+                                _fill_stop_evt.set()
+                                break
+                            _fill_futs[_fill_pool.submit(_fill_fetch_stat, _item)] = _item
+                            _fill_submitted += 1
 
-                    for _ff in as_completed(_fill_futs):
-                        _vi = _fill_futs[_ff]
-                        try:
-                            _ok_stat = _ff.result()
-                        except Exception:
-                            continue
-                        if not _ok_stat:
-                            continue
-                        _fbvid = _vi['bvid']
-                        _faid = _vi['aid']
-                        _fts = (_vi.get('title') or '')[:30]
-                        video, ok = _insert_or_update_video(up, _vi, _faid, _fbvid, _fts)
-                        if not ok:
-                            continue
-                        _batch_count += 1
-                        if _batch_count >= 20:
-                            db.session.commit()
-                            _batch_count = 0
-                        fill_count += 1
-                        existing_ids.add(_fbvid)
-                        existing_aids.add(_faid)
-                        fill_new_bvids.add(_fbvid)
-                        emit(f'[补全] ({fill_count}) 「{_fts}」', 'FILL')
+                        for _ff in as_completed(_fill_futs):
+                            _vi = _fill_futs[_ff]
+                            try:
+                                _ok_stat = _ff.result()
+                            except Exception:
+                                continue
+                            if not _ok_stat:
+                                continue
+                            _fbvid = _vi['bvid']
+                            _faid = _vi['aid']
+                            _fts = (_vi.get('title') or '')[:30]
+                            video, ok = _insert_or_update_video(up, _vi, _faid, _fbvid, _fts)
+                            if not ok:
+                                continue
+                            _batch_count += 1
+                            if _batch_count >= 20:
+                                db.session.commit()
+                                _batch_count = 0
+                            fill_count += 1
+                            existing_ids.add(_fbvid)
+                            existing_aids.add(_faid)
+                            fill_new_bvids.add(_fbvid)
+                            emit(f'[补全] ({fill_count}) 「{_fts}」', 'FILL')
 
-                _producer_t.join(timeout=30)
+                    _producer_t.join(timeout=30)
+
+                    # 断点续爬检测：风控截断且未达重试上限 → 退避后从断点页续爬
+                    _broken = _fill_progress.get('broken', False)
+                    _last_page = _fill_progress.get('last_page', _fill_start_page)
+                    if _broken and _fill_attempt < _MAX_FILL_RETRY:
+                        _backoff = min(60 * (2 ** _fill_attempt), 600)
+                        emit(
+                            f'[补全] 翻页被风控截断（已翻到第 {_last_page} 页，本次入库见上），'
+                            f'等待 {_backoff}s 后从第 {_last_page + 1} 页续爬'
+                            f'（重试 {_fill_attempt + 1}/{_MAX_FILL_RETRY}）',
+                            'RISK',
+                        )
+                        time.sleep(_backoff)
+                        _fill_start_page = _last_page + 1
+                        continue
+                    if _broken:
+                        emit(
+                            f'[补全] 翻页被风控截断，已达重试上限 {_MAX_FILL_RETRY} 次，'
+                            f'本次补全结束（已入库 {fill_count} 个）',
+                            'WARN',
+                        )
+                    break
 
             # C. 动态发现兜底：始终执行，捕获 arc/search 可能遗漏的 shorts/新视频
             from blog.bilibili.bili_api import get_video_list_from_dynamics
