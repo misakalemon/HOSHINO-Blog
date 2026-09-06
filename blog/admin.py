@@ -952,9 +952,30 @@ def delete_token(id):
 @admin_bp.route('/backup')
 @admin_required
 def backup_list():
-    """备份记录列表 + 触发按钮。"""
+    """备份记录列表 + 触发按钮 + 定时设置。"""
     records = BackupRecord.query.order_by(BackupRecord.created_at.desc()).limit(100).all()
-    return render_template('admin/backup.html', records=records)
+    from . import settings as settings_mod
+    bk = {k: SiteSetting.get(k, settings_mod.BACKUP_DEFAULTS.get(k, '')) for k in settings_mod.BACKUP_DEFAULTS}
+    return render_template('admin/backup.html', records=records, bk=bk)
+
+
+@admin_bp.route('/backup/settings', methods=['POST'])
+@admin_required
+def backup_settings():
+    """保存定时备份/清理设置。"""
+    from . import settings as settings_mod
+
+    keys = list(settings_mod.BACKUP_DEFAULTS.keys())
+    for k in keys:
+        val = request.form.get(k, '')
+        if k in ('backup_hour', 'backup_minute', 'backup_interval_hours', 'backup_weekday', 'backup_keep_count', 'backup_keep_days'):
+            try:
+                val = str(int(val))
+            except (TypeError, ValueError):
+                val = settings_mod.BACKUP_DEFAULTS[k]
+        SiteSetting.set(k, val)
+    flash('备份设置已保存', 'success')
+    return redirect(url_for('admin.backup_list'))
 
 
 @admin_bp.route('/backup/run', methods=['POST'])

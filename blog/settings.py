@@ -101,6 +101,19 @@ ANALYTICS_DEFAULTS = {
     'analytics_custom': '',
 }
 
+# ── 备份调度 ──────────────────────────────────────
+BACKUP_DEFAULTS = {
+    'backup_enabled': 'true',
+    'backup_mode': 'daily',          # daily / hourly / every_n_hours / weekly
+    'backup_hour': '1',              # 0-23（daily / weekly 模式）
+    'backup_minute': '0',            # 0-59
+    'backup_interval_hours': '6',    # 每 N 小时（every_n_hours 模式）
+    'backup_weekday': '0',           # 0=周日...6=周六（weekly 模式）
+    'backup_kind': 'full',           # full / db / uploads
+    'backup_keep_count': '7',        # 保留份数（0=不限）
+    'backup_keep_days': '0',         # 保留天数（0=不限）
+}
+
 
 def render_analytics_script(db_map=None):
     """根据配置生成统计脚本 HTML（注入到前台 <head>）。

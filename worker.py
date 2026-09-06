@@ -443,10 +443,14 @@ def _run_scheduled_backup(app):
     with app.app_context():
         try:
             from blog.backup import run_backup, cleanup_old_backups
+            from blog.models import SiteSetting
+            from blog.settings import BACKUP_DEFAULTS
 
-            keep = int(os.environ.get('BACKUP_KEEP_COUNT', '7'))
-            run_backup('full')
-            cleanup_old_backups(keep)
+            kind = SiteSetting.get('backup_kind', BACKUP_DEFAULTS['backup_kind']) or 'full'
+            keep = int(SiteSetting.get('backup_keep_count', BACKUP_DEFAULTS['backup_keep_count']) or '7')
+            keep_days = int(SiteSetting.get('backup_keep_days', BACKUP_DEFAULTS['backup_keep_days']) or '0')
+            run_backup(kind)
+            cleanup_old_backups(keep, keep_days)
         except Exception as e:
             try:
                 app.logger.error('定时备份失败: %s', e, exc_info=True)
@@ -478,16 +482,42 @@ def _init_worker_scheduler(app):
             replace_existing=True,
         )
 
-        # 每日数据备份（默认 01:00，BACKUP_HOUR 覆盖；BACKUP_ENABLED=false 关闭）
-        if os.environ.get('BACKUP_ENABLED', 'true').lower() in ('true', '1'):
-            _bk_hour = int(os.environ.get('BACKUP_HOUR', '1'))
+        # 定时数据备份 — 从 DB 读配置（回退环境变量再回退默认值）
+        try:
+            from blog.models import SiteSetting
+            from blog.settings import BACKUP_DEFAULTS
+            with app.app_context():
+                bk_enabled = SiteSetting.get('backup_enabled', BACKUP_DEFAULTS['backup_enabled'])
+                bk_mode = SiteSetting.get('backup_mode', BACKUP_DEFAULTS['backup_mode'])
+                bk_hour = int(SiteSetting.get('backup_hour', BACKUP_DEFAULTS['backup_hour']) or '1')
+                bk_minute = int(SiteSetting.get('backup_minute', BACKUP_DEFAULTS['backup_minute']) or '0')
+                bk_interval = int(SiteSetting.get('backup_interval_hours', BACKUP_DEFAULTS['backup_interval_hours']) or '6')
+                bk_weekday = int(SiteSetting.get('backup_weekday', BACKUP_DEFAULTS['backup_weekday']) or '0')
+        except Exception:
+            bk_enabled = os.environ.get('BACKUP_ENABLED', 'true')
+            bk_mode = 'daily'
+            bk_hour = int(os.environ.get('BACKUP_HOUR', '1'))
+            bk_minute = 0
+            bk_interval = 6
+            bk_weekday = 0
+
+        if str(bk_enabled).lower() in ('true', '1', 'yes'):
+            trigger_kwargs = {}
+            if bk_mode == 'hourly':
+                trigger_kwargs = {'hour': '*'}
+            elif bk_mode == 'every_n_hours':
+                trigger_kwargs = {'hour': f'*/{max(1, bk_interval)}'}
+            elif bk_mode == 'weekly':
+                trigger_kwargs = {'day_of_week': bk_weekday, 'hour': bk_hour}
+            else:  # daily
+                trigger_kwargs = {'hour': bk_hour}
+            trigger_kwargs['minute'] = bk_minute
             scheduler.add_job(
                 func=lambda: _run_scheduled_backup(app),
                 trigger='cron',
-                hour=_bk_hour,
-                minute=0,
-                id='daily_backup',
+                id='scheduled_backup',
                 replace_existing=True,
+                **trigger_kwargs,
             )
 
         # 02:00 每日深扫 — 分钟数随机（每次进程启动重新随机），

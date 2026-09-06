@@ -257,16 +257,36 @@ def delete_backup(record):
     db.session.commit()
 
 
-def cleanup_old_backups(keep=7):
-    """保留最近 keep 份 full 备份，删除更早的（含文件与记录）。"""
-    keep = max(1, int(keep))
+def cleanup_old_backups(keep=7, keep_days=0):
+    """清理过期备份。
+
+    Args:
+        keep:      保留最近 N 份 full 备份（0=不限）
+        keep_days: 删除超过 N 天的备份（0=不限）
+
+    两个条件取并集：超过份数限制或超过天数限制的都会被删除。
+    """
+    from datetime import timedelta
+
     records = (
         BackupRecord.query.filter_by(kind='full', status='ok')
         .order_by(BackupRecord.created_at.desc())
         .all()
     )
+    cutoff = now_cst() - timedelta(days=int(keep_days)) if keep_days and int(keep_days) > 0 else None
+    keep = max(0, int(keep))
+    to_delete = set()
+    if keep > 0:
+        for record in records[keep:]:
+            to_delete.add(record.id)
+    if cutoff:
+        for record in records:
+            if record.created_at and record.created_at < cutoff:
+                to_delete.add(record.id)
     removed = 0
-    for record in records[keep:]:
+    for record in records:
+        if record.id not in to_delete:
+            continue
         try:
             delete_backup(record)
             removed += 1
@@ -274,5 +294,5 @@ def cleanup_old_backups(keep=7):
             db.session.rollback()
             logger.warning('清理旧备份失败: id=%d', record.id)
     if removed:
-        logger.info('清理旧备份: 删除 %d 份（保留 %d 份）', removed, keep)
+        logger.info('清理旧备份: 删除 %d 份（保留 %d 份）', removed, len(records) - removed)
     return removed
