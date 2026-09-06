@@ -2423,7 +2423,7 @@ def refresh_wordcloud():
 # ═══════════════════════════════════════════════
 
 
-@admin_bp.route('/export')
+@admin_bp.route('/export', methods=['GET', 'POST'])
 @admin_required
 def export_data():
     """数据导出页。
