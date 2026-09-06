@@ -12,7 +12,7 @@
 {% extends 'base.html' %}
 {% block title %}{{ video.title[:30] }} - Hoshino{% endblock %}
 {% block content %}
-<div class="content" style="padding-top:100px;max-width:1000px">
+<div class="content" style="padding-top:100px;max-width:1200px">
     <div style="margin-bottom:20px">
         <a href="{{ url_for('bili_public.up_videos', up_id=up.id, page=request.args.get('ref_page', 1)) }}{% if request.args.get('q') %}&q={{ request.args.get('q')|urlencode }}{% endif %}" class="back-link">← {{ up.name or 'UP主' }}</a>
     </div>

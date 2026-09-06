@@ -356,7 +356,7 @@ ul { list-style: none; }
 /* 自适应列数的网格布局，每列最小 260px */
 .featured-grid {
   position: relative; z-index: 10;
-  max-width: 1320px; margin: 0 auto; padding: 0 28px 60px;
+  max-width: 1520px; margin: 0 auto; padding: 0 28px 60px;
   display: grid; grid-template-columns: repeat(auto-fill, minmax(260px,1fr)); gap: 16px;
 }
 .featured-card {
@@ -396,7 +396,7 @@ ul { list-style: none; }
 /* ── 5. 内容区 ──────────────────────────────── */
 .content {
   position: relative; z-index: 10;
-  max-width: 1320px; margin: 0 auto; padding: 0 28px 60px;
+  max-width: 1520px; margin: 0 auto; padding: 0 28px 60px;
 }
 .section-title {
   font-size: 1.8rem; font-weight: 250; letter-spacing: 0.02em;
@@ -948,7 +948,7 @@ ul { list-style: none; }
 
 /* ── 13. 文章详情 ──────────────────────────────── */
 /* 居中窄列（720px）提高阅读体验 */
-.post-detail { max-width: 1250px; margin: 0 auto; }
+.post-detail { max-width: 1450px; margin: 0 auto; }
 .featured-image { border-radius: 20px; overflow: hidden; margin-bottom: 24px; }
 .post-content { font-size: 1rem; line-height: 1.75; color: rgba(255,255,255,0.82); }
 .post-content h1 { font-size: 1.8rem; margin-top: 1.5em; margin-bottom: 0.5em; font-weight: 500; color: rgba(255,255,255,0.95); }
@@ -1082,7 +1082,7 @@ code[class*="language-"] { position: relative; z-index: 1; }
 
 /* site wordcloud — 首页独立区块 */
 .site-wordcloud {
-  max-width: 1320px;
+  max-width: 1520px;
   margin: 0 auto;
   padding: 0 clamp(16px, 3vw, 24px);
   margin-bottom: 20px;
@@ -2080,7 +2080,7 @@ code[class*="language-"] { position: relative; z-index: 1; }
 .masonry-item:nth-child(8) { animation-delay: 0.54s; }
 
 /* ── 25. 布局系统 ──────────────────────────── */
-.container { max-width: 1320px; margin: 0 auto; padding: 0 clamp(16px, 3vw, 24px); }
+.container { max-width: 1520px; margin: 0 auto; padding: 0 clamp(16px, 3vw, 24px); }
 .row { display: flex; gap: clamp(20px, 3vw, 32px); flex-wrap: wrap; }
 .row .col-8 { flex: 1; min-width: 0; }
 .row .col-4 { width: 100%; }
@@ -2090,7 +2090,7 @@ code[class*="language-"] { position: relative; z-index: 1; }
 /* ── 26. 页脚 ──────────────────────────────── */
 .footer {
   position: relative; z-index: 10;
-  max-width: 1200px; margin: 40px auto 0;
+  max-width: 1400px; margin: 40px auto 0;
   padding: 24px 28px 32px;
   border-top: 1px solid rgba(255,255,255,0.04);
   display: flex; justify-content: space-between;
