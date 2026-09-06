@@ -212,7 +212,7 @@ def _serialize_post(post):
     """把 Post 序列化为 JSON 可返回的字典。"""
     from flask import url_for
     try:
-        post_url = url_for('blog.post', slug=post.slug, _external=True)
+        post_url = url_for('blog.single_post', slug=post.slug, _external=True)
     except Exception:
         post_url = None
     content_text = post.content or ''
@@ -239,7 +239,7 @@ def _serialize_post_brief(post):
     """精简序列化（列表用），省略 content/html_content 全文。"""
     from flask import url_for
     try:
-        post_url = url_for('blog.post', slug=post.slug, _external=True)
+        post_url = url_for('blog.single_post', slug=post.slug, _external=True)
     except Exception:
         post_url = None
     return {
