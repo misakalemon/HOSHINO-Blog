@@ -270,7 +270,7 @@ class TestValidatePostPayloadPure:
     # ── cover / html / is_published ──
     def test_cover_truncated_to_512(self):
         fields, err, _ = api_mod._validate_post_payload({
-            'title': 'T', 'slug': 's', 'cover_image': 'x' * 600
+            'title': 'T', 'slug': 's', 'cover_image': 'https://example.com/' + 'x' * 600
         })
         assert err is None
         assert len(fields['cover_image']) == 512
@@ -289,19 +289,26 @@ class TestValidatePostPayloadPure:
         assert err is None
         assert fields['html_content'] == ''
 
-    def test_is_published_truthy(self):
+    def test_is_published_true(self):
         fields, err, _ = api_mod._validate_post_payload({
-            'title': 'T', 'slug': 's', 'is_published': 1
+            'title': 'T', 'slug': 's', 'is_published': True
         })
         assert err is None
         assert fields['is_published'] is True
 
-    def test_is_published_falsy(self):
+    def test_is_published_false(self):
         fields, err, _ = api_mod._validate_post_payload({
-            'title': 'T', 'slug': 's', 'is_published': 0
+            'title': 'T', 'slug': 's', 'is_published': False
         })
         assert err is None
         assert fields['is_published'] is False
+
+    def test_is_published_non_bool_rejected(self):
+        fields, err, code = api_mod._validate_post_payload({
+            'title': 'T', 'slug': 's', 'is_published': 'false'
+        })
+        assert err is not None
+        assert code == 422
 
     # ── create 默认值 ──
     def test_create_defaults(self):
@@ -313,7 +320,7 @@ class TestValidatePostPayloadPure:
         assert fields['cover_image'] == ''
         assert fields['html_content'] == ''
         assert fields['is_published'] is False
-        assert fields['categories'] == []
+        assert 'categories' not in fields
 
     def test_summary_provided(self):
         fields, err, _ = api_mod._validate_post_payload({
@@ -329,19 +336,19 @@ class TestValidatePostPayloadPure:
         assert code is None
         assert fields['title'] == 'New'
         assert 'slug' not in fields
-        assert fields['categories'] == []
+        assert 'categories' not in fields
 
     def test_editing_no_fields(self):
         fields, err, code = api_mod._validate_post_payload({}, editing=True)
         assert err is None
-        assert fields == {'categories': []}
+        assert fields == {}
 
     def test_editing_keeps_provided_only(self):
         fields, err, _ = api_mod._validate_post_payload(
             {'summary': 'only summary'}, editing=True
         )
         assert err is None
-        assert fields == {'summary': 'only summary', 'categories': []}
+        assert fields == {'summary': 'only summary'}
 
     # ── categories 错误分支（不查 DB）──
     def test_categories_not_list(self):
@@ -872,12 +879,12 @@ class TestCreatePost:
     def test_missing_title(self, app, _db, client, api_user_token):
         raw, _ = api_user_token
         rv = client.post('/api/v1/posts', json={'slug': 's'}, headers=_auth(raw))
-        assert rv.status_code == 400
+        assert rv.status_code == 422
 
     def test_missing_slug(self, app, _db, client, api_user_token):
         raw, _ = api_user_token
         rv = client.post('/api/v1/posts', json={'title': 'T'}, headers=_auth(raw))
-        assert rv.status_code == 400
+        assert rv.status_code == 422
 
     def test_duplicate_slug(self, app, _db, client, api_user_token):
         raw, _ = api_user_token
@@ -894,7 +901,7 @@ class TestCreatePost:
         rv = client.post('/api/v1/posts',
                          json={'title': 'T', 'slug': 'Invalid Slug', 'content': 'c'},
                          headers=_auth(raw))
-        assert rv.status_code == 400
+        assert rv.status_code == 422
 
     def test_published_flag(self, app, _db, client, api_user_token):
         raw, _ = api_user_token

@@ -29,7 +29,7 @@ from flask import Blueprint, abort, g, jsonify, request
 from .admin import _invalidate_sidebar_cache, _sanitize_html
 from .models import ApiToken, Category, Post, User, db
 from .routes import ALLOWED_ATTRS, ALLOWED_TAGS
-from .utils import now_cst
+from .utils import is_safe_image_url, now_cst
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +67,7 @@ def token_required(f):
             token.touch()
         except Exception:
             db.session.rollback()
+            logger.warning('更新令牌 last_used_at 失败', exc_info=True)
         return f(*args, **kwargs)
 
     return decorated
@@ -153,7 +154,7 @@ def _validate_post_payload(data, editing=False):
 
     summary = data.get('summary')
     if summary is not None:
-        fields['summary'] = str(summary)
+        fields['summary'] = bleach.clean(str(summary), tags=[], strip=True)[:2000]
     elif not editing:
         fields['summary'] = ''
 
@@ -168,30 +169,41 @@ def _validate_post_payload(data, editing=False):
 
     cover = data.get('cover_image')
     if cover is not None:
-        fields['cover_image'] = str(cover)[:512]
+        cover_str = str(cover)[:512]
+        if cover_str and not is_safe_image_url(cover_str):
+            return None, 'cover_image 必须是 http/https URL 或站内路径', 422
+        fields['cover_image'] = cover_str
     elif not editing:
         fields['cover_image'] = ''
 
     html_content = data.get('html_content')
     if html_content is not None:
-        fields['html_content'] = _sanitize_html(str(html_content))
+        html_content = str(html_content)
+        if len(html_content) > _MAX_CONTENT_LEN:
+            return None, f'html_content 最长 {_MAX_CONTENT_LEN} 字符', 422
+        fields['html_content'] = _sanitize_html(html_content)
     elif not editing:
         fields['html_content'] = ''
 
     if 'is_published' in data:
-        fields['is_published'] = bool(data['is_published'])
+        if not isinstance(data['is_published'], bool):
+            return None, 'is_published 必须是布尔值', 422
+        fields['is_published'] = data['is_published']
     elif not editing:
         fields['is_published'] = False
 
     if 'is_top' in data:
-        fields['is_top'] = bool(data['is_top'])
+        if not isinstance(data['is_top'], bool):
+            return None, 'is_top 必须是布尔值', 422
+        fields['is_top'] = data['is_top']
     elif not editing:
         fields['is_top'] = False
 
-    cats, err = _resolve_categories(data.get('categories'))
-    if err:
-        return None, err, 422
-    fields['categories'] = cats
+    if 'categories' in data:
+        cats, err = _resolve_categories(data.get('categories'))
+        if err:
+            return None, err, 422
+        fields['categories'] = cats
 
     return fields, None, None
 
@@ -213,6 +225,29 @@ def _serialize_post(post):
         'word_count': len(content_text),
         'cover_image': post.cover_image or '',
         'html_content': post.html_content or '',
+        'is_published': post.is_published,
+        'is_top': post.is_top,
+        'author_id': post.author_id,
+        'categories': [{'id': c.id, 'name': c.name, 'slug': c.slug} for c in post.categories],
+        'created_at': post.created_at.isoformat() if post.created_at else None,
+        'updated_at': post.updated_at.isoformat() if post.updated_at else None,
+        'url': post_url,
+    }
+
+
+def _serialize_post_brief(post):
+    """精简序列化（列表用），省略 content/html_content 全文。"""
+    from flask import url_for
+    try:
+        post_url = url_for('blog.post', slug=post.slug, _external=True)
+    except Exception:
+        post_url = None
+    return {
+        'id': post.id,
+        'title': post.title,
+        'slug': post.slug,
+        'summary': post.summary or '',
+        'cover_image': post.cover_image or '',
         'is_published': post.is_published,
         'is_top': post.is_top,
         'author_id': post.author_id,
@@ -281,7 +316,7 @@ def list_posts():
         'total': total,
         'page': page,
         'per_page': per_page,
-        'posts': [_serialize_post(p) for p in items],
+        'posts': [_serialize_post_brief(p) for p in items],
     })
 
 
@@ -312,6 +347,9 @@ def create_post():
       categories   — 分类数组（整数 id 或字符串 slug）
       is_published — 是否发布（默认 false）
     """
+    if not g.token_user.is_author:
+        return jsonify({'ok': False, 'error': '无发文权限'}), 403
+
     fields, err, code = _validate_post_payload(request.get_json(silent=True) or {}, editing=False)
     if err:
         return jsonify({'ok': False, 'error': err}), code
