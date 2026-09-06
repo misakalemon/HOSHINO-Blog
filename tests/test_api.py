@@ -320,7 +320,7 @@ class TestValidatePostPayloadPure:
         assert fields['cover_image'] == ''
         assert fields['html_content'] == ''
         assert fields['is_published'] is False
-        assert 'categories' not in fields
+        assert fields['categories'] == []
 
     def test_summary_provided(self):
         fields, err, _ = api_mod._validate_post_payload({

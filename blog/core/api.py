@@ -204,6 +204,8 @@ def _validate_post_payload(data, editing=False):
         if err:
             return None, err, 422
         fields['categories'] = cats
+    elif not editing:
+        fields['categories'] = []
 
     return fields, None, None
 
