@@ -396,8 +396,14 @@ def _render_index(page, category_slug, per_page):
         cat = Category.query.filter_by(slug=category_slug).first_or_404()
         query = query.filter(Post.categories.any(id=cat.id))
 
-    # 分页（置顶优先，同置顶按创建时间倒序）
-    posts = query.order_by(Post.is_top.desc(), Post.created_at.desc()).paginate(
+    # 随机加权排序：新文章权重高，加入随机扰动使排列不固定
+    # seed 每小时变化一次，确保同一小时内翻页顺序一致
+    # 扰动范围 ±3.5 天（rand()-0.5)*604800，新文章大概率在前但偶尔老文章穿插
+    _seed = int(time.time() // 3600)
+    posts = query.order_by(
+        Post.is_top.desc(),
+        (func.unix_timestamp(Post.created_at) + (func.rand(_seed * Post.id) - 0.5) * 604800).desc(),
+    ).paginate(
         page=page, per_page=per_page, error_out=False
     )
     categories, recent_posts, cat_post_counts = _get_sidebar_data()
