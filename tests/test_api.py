@@ -629,16 +629,8 @@ class TestTokenAuth:
         rv = client.get('/api/v1/me', headers=_auth('hsk_invalid_token'))
         assert rv.status_code == 401
 
-    def test_expired_token(self, app, _db, client, monkeypatch):
+    def test_expired_token(self, app, _db, client):
         from blog.core.models import ApiToken, User
-        import blog.core.models as models_mod
-
-        # 生产代码比较 token.expires_at（DB 读出为 naive）与 now_cst()（aware），
-        # 混合 aware/naive 会 TypeError。monkey-patch 返回 naive 使比较一致。
-        monkeypatch.setattr(
-            models_mod, 'now_cst',
-            lambda: datetime.datetime.now()
-        )
 
         with app.app_context():
             u = User(username='exp', email='e@t.com', role='user', is_active=True)

@@ -1035,8 +1035,12 @@ class ApiToken(db.Model):
         token = cls.query.filter_by(token_hash=cls._hash_token(raw_token), is_active=True).first()
         if token is None:
             return None
-        if token.expires_at is not None and token.expires_at < now_cst():
-            return None
+        if token.expires_at is not None:
+            _now = now_cst()
+            if _now.tzinfo is not None:
+                _now = _now.replace(tzinfo=None)
+            if token.expires_at < _now:
+                return None
         return token
 
     def touch(self):

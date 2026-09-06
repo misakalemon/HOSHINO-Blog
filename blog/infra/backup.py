@@ -274,6 +274,8 @@ def cleanup_old_backups(keep=7, keep_days=0):
         .all()
     )
     cutoff = now_cst() - timedelta(days=int(keep_days)) if keep_days and int(keep_days) > 0 else None
+    if cutoff and cutoff.tzinfo is not None:
+        cutoff = cutoff.replace(tzinfo=None)
     keep = max(0, int(keep))
     to_delete = set()
     if keep > 0:
