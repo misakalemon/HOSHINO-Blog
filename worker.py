@@ -135,7 +135,7 @@ def _get_incremental_pool() -> ThreadPoolExecutor:
 def _run_task(task, app):
     """在线程池中执行单个任务，确保 mark_done 始终被调用。"""
     from blog import db
-    from blog.task_queue import mark_done, ack_task
+    from blog.infra.task_queue import mark_done, ack_task
 
     task_type = task.get('type')
     data = task.get('data', {})
@@ -147,7 +147,7 @@ def _run_task(task, app):
     try:
         with app.app_context():
             if task_type == 'refresh_up':
-                from blog.bili_routes import _run_scrape
+                from blog.bilibili.admin_routes import _run_scrape
                 _run_scrape(
                     mid=data['mid'],
                     space_url=data['space_url'],
@@ -155,7 +155,7 @@ def _run_task(task, app):
                     max_videos=data.get('max_videos'),
                 )
             elif task_type == 'refresh_all':
-                from blog.bili_routes import _run_scrape
+                from blog.bilibili.admin_routes import _run_scrape
                 _run_scrape(
                     mid=data['mid'],
                     space_url=data['space_url'],
@@ -163,11 +163,11 @@ def _run_task(task, app):
                     force=True,
                 )
             elif task_type == 'bili_wordcloud':
-                from blog.wordcloud import precompute_up_wordclouds
+                from blog.wordcloud.generator import precompute_up_wordclouds
                 precompute_up_wordclouds(data['up_id'])
             elif task_type == 'bili_wordcloud_single':
-                from blog.wordcloud import _compute_single_video_wordcloud
-                from blog.models import BiliVideo
+                from blog.wordcloud.generator import _compute_single_video_wordcloud
+                from blog.core.models import BiliVideo
                 video = BiliVideo.query.filter_by(id=data.get('video_id')).first()
                 if not video and data.get('bvid'):
                     video = BiliVideo.query.filter_by(bvid=data['bvid']).first()
@@ -177,16 +177,16 @@ def _run_task(task, app):
                     logger.warning('bili_wordcloud_single: 视频不存在 id=%s bvid=%s',
                                    data.get('video_id'), data.get('bvid'))
             elif task_type == 'comment_refresh':
-                from blog.bili_routes import _crawl_video_comments
-                from blog.models import BiliVideo
+                from blog.bilibili.admin_routes import _crawl_video_comments
+                from blog.core.models import BiliVideo
                 video = BiliVideo.query.filter_by(bvid=data['bvid']).first()
                 if video:
                     _crawl_video_comments(video)
                 else:
                     logger.warning('comment_refresh: 视频不存在 bvid=%s', data['bvid'])
             elif task_type == 'refresh_up_comments':
-                from blog.bili_routes import _crawl_video_comments
-                from blog.models import BiliVideo
+                from blog.bilibili.admin_routes import _crawl_video_comments
+                from blog.core.models import BiliVideo
                 from concurrent.futures import ThreadPoolExecutor, as_completed
                 up_id = data['up_id']
                 video_ids = [r[0] for r in BiliVideo.query.filter_by(
@@ -217,11 +217,11 @@ def _run_task(task, app):
                             future.result()
                         except Exception as e:
                             logger.warning('评论爬取线程异常: %s', e)
-                from blog.task_queue import submit_task
+                from blog.infra.task_queue import submit_task
                 submit_task('bili_wordcloud', up_id=up_id)
             elif task_type == 'danmaku_refresh':
-                from blog.bili_routes import _crawl_video_danmakus
-                from blog.models import BiliVideo
+                from blog.bilibili.admin_routes import _crawl_video_danmakus
+                from blog.core.models import BiliVideo
                 video = BiliVideo.query.filter_by(bvid=data['bvid']).first()
                 if video:
                     # 新视频弹幕：不强制，若已爬过（如重复入库）则跳过
@@ -229,8 +229,8 @@ def _run_task(task, app):
                 else:
                     logger.warning('danmaku_refresh: 视频不存在 bvid=%s', data['bvid'])
             elif task_type == 'refresh_up_danmakus':
-                from blog.bili_routes import _crawl_video_danmakus
-                from blog.models import BiliVideo
+                from blog.bilibili.admin_routes import _crawl_video_danmakus
+                from blog.core.models import BiliVideo
                 from concurrent.futures import ThreadPoolExecutor, as_completed
                 up_id = data['up_id']
                 video_ids = [r[0] for r in BiliVideo.query.filter_by(
@@ -262,10 +262,10 @@ def _run_task(task, app):
                             future.result()
                         except Exception as e:
                             logger.warning('弹幕爬取线程异常: %s', e)
-                from blog.task_queue import submit_task
+                from blog.infra.task_queue import submit_task
                 submit_task('bili_wordcloud', up_id=up_id)
             elif task_type == 'refresh_up_subtitles':
-                from blog.models import BiliVideo
+                from blog.core.models import BiliVideo
                 from concurrent.futures import ThreadPoolExecutor, as_completed
                 up_id = data['up_id']
                 video_ids = [r[0] for r in BiliVideo.query.filter_by(
@@ -302,7 +302,7 @@ def _run_task(task, app):
                         except Exception as e:
                             logger.warning('字幕爬取线程异常: %s', e)
                 logger.info('字幕刷新完成: UP %s 成功 %d/%d', up_id, ok, total)
-                from blog.task_queue import submit_task
+                from blog.infra.task_queue import submit_task
                 submit_task('bili_wordcloud', up_id=up_id)
             else:
                 logger.warning('未知任务类型: %s', task_type)
@@ -324,16 +324,16 @@ def _run_task(task, app):
         )
         retries = int(task.get('data', {}).get('_retries', 0) or 0)
         if task_type in _RETRYABLE_TYPES and retries < 2:
-            from blog.task_queue import requeue_task
+            from blog.infra.task_queue import requeue_task
             original_raw = json.dumps(task)
             task.setdefault('data', {})['_retries'] = retries + 1
             if requeue_task(task, original_raw):
                 logger.warning('任务将重试 id=%s type=%s (第 %d 次)', task_id, task_type, retries + 1)
             else:
-                from blog.task_queue import ack_task as _ack
+                from blog.infra.task_queue import ack_task as _ack
                 _ack(task)
         else:
-            from blog.task_queue import ack_task as _ack
+            from blog.infra.task_queue import ack_task as _ack
             _ack(task)
     finally:
         # 无论成功还是异常，都归还 DB 连接，防止连接池被长任务泄漏
@@ -375,8 +375,8 @@ def _run_bili_incremental_check(app):
     # 避免 BiliUp.query.all() 或提交循环卡死导致连接池被长期占用（08-06 事故根因）。
     try:
         with app.app_context():
-            from blog.models import BiliUp
-            from blog.bili_routes import _check_new_videos, _incremental_running, _scrape_lock, _scrape_running
+            from blog.core.models import BiliUp
+            from blog.bilibili.admin_routes import _check_new_videos, _incremental_running, _scrape_lock, _scrape_running
             # 批次级协调：与深扫不再“整批让路”。深扫期间其他 UP 的增量照常执行，
             # 只有「正在深扫的同一 mid」让路（_check_new_videos 内部同样做同 mid 互斥）。
             # 安全性：全局令牌桶 BILI_GLOBAL_RATE_CAP=1 已将 B站 请求全局串行，
@@ -442,9 +442,9 @@ def _run_scheduled_backup(app):
     """定时全量备份：DB + uploads，并清理过期备份。"""
     with app.app_context():
         try:
-            from blog.backup import run_backup, cleanup_old_backups
-            from blog.models import SiteSetting
-            from blog.settings import BACKUP_DEFAULTS
+            from blog.infra.backup import run_backup, cleanup_old_backups
+            from blog.core.models import SiteSetting
+            from blog.core.settings import BACKUP_DEFAULTS
 
             kind = SiteSetting.get('backup_kind', BACKUP_DEFAULTS['backup_kind']) or 'full'
             keep = int(SiteSetting.get('backup_keep_count', BACKUP_DEFAULTS['backup_keep_count']) or '7')
@@ -484,8 +484,8 @@ def _init_worker_scheduler(app):
 
         # 定时数据备份 — 从 DB 读配置（回退环境变量再回退默认值）
         try:
-            from blog.models import SiteSetting
-            from blog.settings import BACKUP_DEFAULTS
+            from blog.core.models import SiteSetting
+            from blog.core.settings import BACKUP_DEFAULTS
             with app.app_context():
                 bk_enabled = SiteSetting.get('backup_enabled', BACKUP_DEFAULTS['backup_enabled'])
                 bk_mode = SiteSetting.get('backup_mode', BACKUP_DEFAULTS['backup_mode'])
@@ -522,7 +522,7 @@ def _init_worker_scheduler(app):
 
         # 02:00 每日深扫 — 分钟数随机（每次进程启动重新随机），
         # 避免固定时刻执行被 B站 行为画像识别为定时任务
-        from blog.bili_routes import run_daily_scrape
+        from blog.bilibili.admin_routes import run_daily_scrape
         _daily_minute = random.randint(0, 29)
 
         def _job_daily_scrape():
@@ -557,7 +557,7 @@ def _init_worker_scheduler(app):
         )
 
         # 03:30 历史数据自动清理（与深扫/词云错开，避免资源竞争）
-        from blog.bili_routes import auto_cleanup_history
+        from blog.bilibili.admin_routes import auto_cleanup_history
         scheduler.add_job(
             func=lambda: auto_cleanup_history(app),
             trigger='cron',
@@ -570,7 +570,7 @@ def _init_worker_scheduler(app):
         # 新视频通知批量发送：默认每 15 分钟聚合一次。
         # 发现新视频时先暂存 Redis 队列，此处统一按收件人发送一封聚合邮件，
         # 避免"每个 UP 一封邮件"刷屏订阅者邮箱。
-        from blog.mail import send_batched_video_notify
+        from blog.infra.mail import send_batched_video_notify
         _notify_minutes = int(os.environ.get('BILI_NOTIFY_MINUTES', '15'))
         scheduler.add_job(
             func=lambda: send_batched_video_notify(app),
@@ -589,7 +589,7 @@ def _init_worker_scheduler(app):
         # 与爬虫进程彻底隔离 GIL 与内存；子进程自带 WORKER_PROCESS=1 跳过迁移。
         def _spawn_wordcloud(*args):
             _root = os.path.dirname(os.path.abspath(__file__))
-            cmd = [sys.executable, '-m', 'blog.wordcloud_runner'] + list(args)
+            cmd = [sys.executable, '-m', 'blog.wordcloud.generator_runner'] + list(args)
             try:
                 proc = subprocess.Popen(
                     cmd,
@@ -681,7 +681,7 @@ def main():
     _init_worker_scheduler(app)
     logger.info('定时任务调度器已启动')
 
-    from blog.task_queue import init_task_queue, get_task
+    from blog.infra.task_queue import init_task_queue, get_task
     from blog import db
 
     # Worker 进程同样执行弹幕表列类型修复迁移（幂等）。
@@ -699,7 +699,7 @@ def main():
 
     # 恢复上次崩溃遗留的备份任务（Worker 在 brpoplpush 之后、ack 之前
     # 崩溃的任务会滞留在 backup 列表，此处重新入队避免永久丢失）
-    from blog.task_queue import recover_backup_tasks
+    from blog.infra.task_queue import recover_backup_tasks
     recover_backup_tasks()
 
     # 记录本进程 PID 供 logwatch 看门狗（BILI_WATCHDOG_RESTART=1 时按此重启）
@@ -782,7 +782,7 @@ def main():
             task_type = task.get('type', '?')
 
             # 任务签名校验：防止 Redis 被投毒时执行伪造任务（如任意 space_url 爬取）
-            from blog.task_queue import verify_task_signature, ack_task as _ack_task
+            from blog.infra.task_queue import verify_task_signature, ack_task as _ack_task
             if not verify_task_signature(task):
                 logger.warning('任务签名校验失败，丢弃 id=%s type=%s', task.get('id'), task_type)
                 _ack_task(task)

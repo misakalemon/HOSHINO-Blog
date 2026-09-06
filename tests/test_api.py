@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-import blog.api as api_mod
+import blog.core.api as api_mod
 
 
 # ── _SLUG_RE (纯函数) ───────────────────────────────────────
@@ -203,20 +203,20 @@ class TestValidatePostPayloadPure:
     # ── title 校验 ──
     def test_create_missing_title(self):
         _, err, code = api_mod._validate_post_payload({'slug': 's'})
-        assert code == 400
+        assert code == 422
         assert 'title' in err
 
     def test_create_empty_title(self):
         _, err, code = api_mod._validate_post_payload({'title': '   ', 'slug': 's'})
-        assert code == 400
+        assert code == 422
 
     def test_title_not_string(self):
         _, err, code = api_mod._validate_post_payload({'title': 123, 'slug': 's'})
-        assert code == 400
+        assert code == 422
 
     def test_title_too_long(self):
         _, err, code = api_mod._validate_post_payload({'title': 'x' * 257, 'slug': 's'})
-        assert code == 400
+        assert code == 422
 
     def test_title_stripped(self):
         fields, err, _ = api_mod._validate_post_payload({'title': '  T  ', 'slug': 's'})
@@ -226,27 +226,27 @@ class TestValidatePostPayloadPure:
     # ── slug 校验 ──
     def test_create_missing_slug(self):
         _, err, code = api_mod._validate_post_payload({'title': 'T'})
-        assert code == 400
+        assert code == 422
         assert 'slug' in err
 
     def test_invalid_slug_uppercase(self):
         _, err, code = api_mod._validate_post_payload({'title': 'T', 'slug': 'Bad'})
-        assert code == 400
+        assert code == 422
 
     def test_invalid_slug_space(self):
         _, err, code = api_mod._validate_post_payload({'title': 'T', 'slug': 'bad slug'})
-        assert code == 400
+        assert code == 422
 
     def test_slug_too_long(self):
         _, err, code = api_mod._validate_post_payload({'title': 'T', 'slug': 'a' * 257})
-        assert code == 400
+        assert code == 422
 
     # ── content 校验 ──
     def test_content_too_long(self):
         _, err, code = api_mod._validate_post_payload({
             'title': 'T', 'slug': 's', 'content': 'x' * (api_mod._MAX_CONTENT_LEN + 1)
         })
-        assert code == 400
+        assert code == 422
 
     def test_content_bleached(self):
         fields, err, _ = api_mod._validate_post_payload({
@@ -342,26 +342,26 @@ class TestValidatePostPayloadPure:
         _, err, code = api_mod._validate_post_payload({
             'title': 'T', 'slug': 's', 'categories': 'not a list'
         })
-        assert code == 400
+        assert code == 422
 
     def test_categories_too_many(self):
         _, err, code = api_mod._validate_post_payload({
             'title': 'T', 'slug': 's',
             'categories': list(range(api_mod._MAX_CATEGORIES + 1))
         })
-        assert code == 400
+        assert code == 422
 
     def test_categories_bool_element(self):
         _, err, code = api_mod._validate_post_payload({
             'title': 'T', 'slug': 's', 'categories': [True]
         })
-        assert code == 400
+        assert code == 422
 
     def test_categories_invalid_element(self):
         _, err, code = api_mod._validate_post_payload({
             'title': 'T', 'slug': 's', 'categories': [1.5]
         })
-        assert code == 400
+        assert code == 422
 
     def test_categories_none(self):
         fields, err, _ = api_mod._validate_post_payload({
@@ -432,7 +432,7 @@ class TestTokenRequiredPure:
 @pytest.fixture
 def api_user_token(app, _db):
     """创建普通用户 + 有效令牌，返回 (raw_token, user_id)。"""
-    from blog.models import ApiToken, User
+    from blog.core.models import ApiToken, User
 
     with app.app_context():
         user = User(username='apiuser', email='api@t.com', role='user', is_active=True)
@@ -446,7 +446,7 @@ def api_user_token(app, _db):
 @pytest.fixture
 def api_editor_token(app, _db):
     """创建编辑用户 + 有效令牌，返回 (raw_token, user_id)。"""
-    from blog.models import ApiToken, User
+    from blog.core.models import ApiToken, User
 
     with app.app_context():
         user = User(username='editor', email='ed@t.com', role='editor', is_active=True)
@@ -464,7 +464,7 @@ def _auth(raw):
 # ── _resolve_post (DB) ──────────────────────────────────────
 class TestResolvePost:
     def test_by_id(self, app, _db):
-        from blog.models import Post, User
+        from blog.core.models import Post, User
 
         with app.app_context():
             u = User(username='rp', email='rp@t.com')
@@ -480,7 +480,7 @@ class TestResolvePost:
             assert found.id == pid
 
     def test_by_slug(self, app, _db):
-        from blog.models import Post, User
+        from blog.core.models import Post, User
 
         with app.app_context():
             u = User(username='rp2', email='rp2@t.com')
@@ -506,7 +506,7 @@ class TestResolvePost:
 # ── _resolve_categories 成功分支 (DB) ───────────────────────
 class TestResolveCategoriesDb:
     def test_by_ids(self, app, _db):
-        from blog.models import Category
+        from blog.core.models import Category
 
         with app.app_context():
             c1 = Category(name='A', slug='a')
@@ -518,7 +518,7 @@ class TestResolveCategoriesDb:
             assert len(cats) == 2
 
     def test_by_slugs(self, app, _db):
-        from blog.models import Category
+        from blog.core.models import Category
 
         with app.app_context():
             c = Category(name='Tech', slug='tech')
@@ -530,7 +530,7 @@ class TestResolveCategoriesDb:
             assert cats[0].slug == 'tech'
 
     def test_mixed_ids_and_slugs(self, app, _db):
-        from blog.models import Category
+        from blog.core.models import Category
 
         with app.app_context():
             c1 = Category(name='A', slug='a')
@@ -554,7 +554,7 @@ class TestResolveCategoriesDb:
             assert cats == []
 
     def test_dedup_ids(self, app, _db):
-        from blog.models import Category
+        from blog.core.models import Category
 
         with app.app_context():
             c = Category(name='A', slug='a')
@@ -576,7 +576,7 @@ class TestValidatePostPayloadDb:
         assert fields['categories'] == []
 
     def test_categories_by_ids(self, app, _db):
-        from blog.models import Category
+        from blog.core.models import Category
 
         with app.app_context():
             c = Category(name='A', slug='a')
@@ -589,7 +589,7 @@ class TestValidatePostPayloadDb:
             assert len(fields['categories']) == 1
 
     def test_categories_by_slugs(self, app, _db):
-        from blog.models import Category
+        from blog.core.models import Category
 
         with app.app_context():
             _db.session.add(Category(name='Tech', slug='tech'))
@@ -604,7 +604,7 @@ class TestValidatePostPayloadDb:
 # ── _after_post_change (DB) ─────────────────────────────────
 class TestAfterPostChange:
     def test_silent_on_wordcloud_failure(self, app, _db):
-        from blog.models import Post, User
+        from blog.core.models import Post, User
 
         with app.app_context():
             u = User(username='wc', email='w@t.com')
@@ -630,8 +630,8 @@ class TestTokenAuth:
         assert rv.status_code == 401
 
     def test_expired_token(self, app, _db, client, monkeypatch):
-        from blog.models import ApiToken, User
-        import blog.models as models_mod
+        from blog.core.models import ApiToken, User
+        import blog.core.models as models_mod
 
         # 生产代码比较 token.expires_at（DB 读出为 naive）与 now_cst()（aware），
         # 混合 aware/naive 会 TypeError。monkey-patch 返回 naive 使比较一致。
@@ -651,7 +651,7 @@ class TestTokenAuth:
         assert rv.status_code == 401
 
     def test_inactive_user_token(self, app, _db, client):
-        from blog.models import ApiToken, User
+        from blog.core.models import ApiToken, User
 
         with app.app_context():
             u = User(username='inactive', email='i@t.com', role='user', is_active=False)
@@ -677,7 +677,7 @@ class TestWhoami:
         assert data['user']['is_editor'] is False
 
     def test_display_name_fallback(self, app, _db, client):
-        from blog.models import ApiToken, User
+        from blog.core.models import ApiToken, User
 
         with app.app_context():
             u = User(username='noname', email='n@t.com', role='user', is_active=True,
@@ -788,7 +788,7 @@ class TestGetPost:
 
     def test_non_author_cannot_view_others(self, app, _db, client):
         """普通用户不能查看他人的文章（返回 404 而非 403，避免泄露存在性）。"""
-        from blog.models import ApiToken, User
+        from blog.core.models import ApiToken, User
 
         with app.app_context():
             a = User(username='owner', email='o@t.com', role='user', is_active=True)
@@ -833,7 +833,7 @@ class TestCreatePost:
         assert data['post']['is_published'] is False
 
     def test_with_categories(self, app, _db, client, api_user_token):
-        from blog.models import Category
+        from blog.core.models import Category
 
         raw, _ = api_user_token
         with app.app_context():
@@ -850,7 +850,7 @@ class TestCreatePost:
         assert cats[0]['slug'] == 'tech'
 
     def test_with_category_slugs(self, app, _db, client, api_user_token):
-        from blog.models import Category
+        from blog.core.models import Category
 
         raw, _ = api_user_token
         with app.app_context():
@@ -946,7 +946,7 @@ class TestUpdatePost:
         assert rv.status_code == 404
 
     def test_non_author_cannot_edit(self, app, _db, client):
-        from blog.models import ApiToken, User
+        from blog.core.models import ApiToken, User
 
         with app.app_context():
             a = User(username='auth', email='a@t.com', role='user', is_active=True)
@@ -996,7 +996,7 @@ class TestListCategories:
         assert rv.get_json()['categories'] == []
 
     def test_returns_categories(self, app, _db, client, api_user_token):
-        from blog.models import Category
+        from blog.core.models import Category
 
         raw, _ = api_user_token
         with app.app_context():

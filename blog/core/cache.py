@@ -15,7 +15,7 @@ HOSHINO Blog — Redis 缓存层
    rss:feed              — RSS XML 输出（TTL: CACHE_TTL_RSS）
 
 使用方式：
-   from blog.cache import cache_get, cache_set, cache_delete_pattern
+   from blog.core.cache import cache_get, cache_set, cache_delete_pattern
 
    # 读缓存
    data = cache_get('sidebar:categories')

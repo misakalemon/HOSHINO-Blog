@@ -131,7 +131,7 @@ def client(app):
 @pytest.fixture
 def admin_user(app, _db):
     """创建测试管理员用户"""
-    from blog.models import User
+    from blog.core.models import User
     with app.app_context():
         user = User(
             username='testadmin',

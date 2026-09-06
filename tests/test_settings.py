@@ -6,7 +6,7 @@
 # ruff: noqa: PLR2004, PLC0415
 import pytest
 
-import blog.settings as settings_mod
+import blog.core.settings as settings_mod
 
 
 # ── 常量完整性 (纯函数) ─────────────────────────────────────
@@ -171,7 +171,7 @@ class TestGetAllSettings:
             assert result[k] == v
 
     def test_db_overrides_defaults(self, app, _db):
-        from blog.models import SiteSetting
+        from blog.core.models import SiteSetting
 
         with app.app_context():
             SiteSetting.set('site_name', 'Custom')
@@ -180,7 +180,7 @@ class TestGetAllSettings:
             assert result['site_subtitle'] == settings_mod.DEFAULTS['site_subtitle']
 
     def test_db_exception_falls_back(self, app, _db, monkeypatch):
-        from blog.models import SiteSetting
+        from blog.core.models import SiteSetting
 
         def boom(cls):
             raise RuntimeError('db down')
@@ -194,7 +194,7 @@ class TestGetAllSettings:
 # ── get_setting (DB) ────────────────────────────────────────
 class TestGetSetting:
     def test_db_priority(self, app, _db):
-        from blog.models import SiteSetting
+        from blog.core.models import SiteSetting
 
         with app.app_context():
             SiteSetting.set('site_name', 'DB')
@@ -221,21 +221,21 @@ class TestGetSetting:
 # ── set_setting (DB) ────────────────────────────────────────
 class TestSetSetting:
     def test_valid_key(self, app, _db):
-        from blog.models import SiteSetting
+        from blog.core.models import SiteSetting
 
         with app.app_context():
             settings_mod.set_setting('site_name', 'New')
             assert SiteSetting.get('site_name') == 'New'
 
     def test_invalid_key_ignored(self, app, _db):
-        from blog.models import SiteSetting
+        from blog.core.models import SiteSetting
 
         with app.app_context():
             settings_mod.set_setting('bogus_key', 'x')
             assert SiteSetting.get('bogus_key') is None
 
     def test_update_existing(self, app, _db):
-        from blog.models import SiteSetting
+        from blog.core.models import SiteSetting
 
         with app.app_context():
             settings_mod.set_setting('site_name', 'First')
@@ -243,7 +243,7 @@ class TestSetSetting:
             assert SiteSetting.get('site_name') == 'Second'
 
     def test_value_converted_to_string(self, app, _db):
-        from blog.models import SiteSetting
+        from blog.core.models import SiteSetting
 
         with app.app_context():
             settings_mod.set_setting('site_name', 123)
@@ -259,7 +259,7 @@ class TestIsTrue:
         ('random', False),
     ])
     def test_values(self, app, _db, value, expected):
-        from blog.models import SiteSetting
+        from blog.core.models import SiteSetting
 
         with app.app_context():
             SiteSetting.set('enable_registration', value)
@@ -291,7 +291,7 @@ class TestInjectSettings:
             assert k in result['site_settings']
 
     def test_db_overrides(self, app, _db):
-        from blog.models import SiteSetting
+        from blog.core.models import SiteSetting
 
         with app.app_context():
             SiteSetting.set('site_name', 'Injected')
@@ -300,7 +300,7 @@ class TestInjectSettings:
             assert result['site_settings']['site_name'] == 'Injected'
 
     def test_analytics_script_included(self, app, _db):
-        from blog.models import SiteSetting
+        from blog.core.models import SiteSetting
 
         with app.app_context():
             SiteSetting.set('analytics_provider', 'custom')
@@ -309,7 +309,7 @@ class TestInjectSettings:
             assert result['analytics_script'] == '<script>x</script>'
 
     def test_db_exception_falls_back(self, app, _db, monkeypatch):
-        from blog.models import SiteSetting
+        from blog.core.models import SiteSetting
 
         def boom(cls):
             raise RuntimeError('db down')
@@ -329,7 +329,7 @@ class TestRenderAnalyticsScriptDb:
         assert result == ''
 
     def test_with_db_data(self, app, _db):
-        from blog.models import SiteSetting
+        from blog.core.models import SiteSetting
 
         with app.app_context():
             SiteSetting.set('analytics_provider', 'custom')
@@ -338,7 +338,7 @@ class TestRenderAnalyticsScriptDb:
             assert result == '<script>c</script>'
 
     def test_umami_from_db(self, app, _db):
-        from blog.models import SiteSetting
+        from blog.core.models import SiteSetting
 
         with app.app_context():
             SiteSetting.set('analytics_provider', 'umami')

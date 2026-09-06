@@ -13,7 +13,7 @@ from decimal import Decimal
 
 import pytest
 
-import blog.backup as backup_mod
+import blog.infra.backup as backup_mod
 
 
 # ── _json_default (纯函数) ─────────────────────────────────
@@ -245,7 +245,7 @@ class TestExportDbData:
         assert data['users'][0]['username'] == 'testadmin'
 
     def test_contains_all_tables(self, app, _db):
-        from blog.models import db
+        from blog.core.models import db
 
         with app.app_context():
             data = backup_mod._export_db_data()
@@ -352,7 +352,7 @@ class TestRunBackup:
 # ── restore_db_from_record ──────────────────────────────────
 class TestRestoreDbFromRecord:
     def test_uploads_kind_raises(self, app, _db, backup_dir):
-        from blog.models import BackupRecord
+        from blog.core.models import BackupRecord
 
         with app.app_context():
             rec = BackupRecord(filename='x.zip', kind='uploads')
@@ -369,7 +369,7 @@ class TestRestoreDbFromRecord:
             assert result['rows'] == 0
 
     def test_backup_and_restore_user(self, app, _db, backup_dir):
-        from blog.models import User
+        from blog.core.models import User
         from sqlalchemy import inspect as sa_inspect
 
         # SQLite DateTime 不接受字符串（MySQL 驱动自动转换），跳过
@@ -399,7 +399,7 @@ class TestRestoreDbFromRecord:
 
     def test_restore_skips_unknown_tables(self, app, _db, backup_dir):
         """payload 中含未知表名时跳过，不报错。"""
-        from blog.models import BackupRecord
+        from blog.core.models import BackupRecord
 
         with app.app_context():
             path = backup_dir / 'custom.json'
@@ -414,7 +414,7 @@ class TestRestoreDbFromRecord:
 
     def test_restore_failure_rolls_back(self, app, _db, backup_dir):
         """恢复无效数据时回滚并抛异常。"""
-        from blog.models import BackupRecord, User
+        from blog.core.models import BackupRecord, User
 
         with app.app_context():
             u = User(username='keep_me', email='k@k.com')
@@ -437,7 +437,7 @@ class TestRestoreDbFromRecord:
 # ── delete_backup ───────────────────────────────────────────
 class TestDeleteBackup:
     def test_deletes_file_and_record(self, app, _db, backup_dir):
-        from blog.models import BackupRecord
+        from blog.core.models import BackupRecord
 
         with app.app_context():
             record = backup_mod.run_backup('db')
@@ -449,7 +449,7 @@ class TestDeleteBackup:
             assert BackupRecord.query.count() == 0
 
     def test_missing_file_ok(self, app, _db, backup_dir):
-        from blog.models import BackupRecord
+        from blog.core.models import BackupRecord
 
         with app.app_context():
             rec = BackupRecord(filename='nonexistent.json', kind='db')
@@ -462,7 +462,7 @@ class TestDeleteBackup:
 # ── cleanup_old_backups ─────────────────────────────────────
 class TestCleanupOldBackups:
     def test_keep_recent(self, app, _db, backup_dir):
-        from blog.models import BackupRecord
+        from blog.core.models import BackupRecord
 
         with app.app_context():
             for i in range(5):
@@ -475,7 +475,7 @@ class TestCleanupOldBackups:
             assert BackupRecord.query.count() == 2
 
     def test_keep_minimum_one(self, app, _db, backup_dir):
-        from blog.models import BackupRecord
+        from blog.core.models import BackupRecord
 
         with app.app_context():
             rec = BackupRecord(filename='f.zip', kind='full', status='ok')
@@ -491,7 +491,7 @@ class TestCleanupOldBackups:
         assert removed == 0
 
     def test_only_full_kind_counted(self, app, _db, backup_dir):
-        from blog.models import BackupRecord
+        from blog.core.models import BackupRecord
 
         with app.app_context():
             for kind in ('db', 'uploads'):
@@ -502,7 +502,7 @@ class TestCleanupOldBackups:
             assert removed == 0
 
     def test_only_ok_status_counted(self, app, _db, backup_dir):
-        from blog.models import BackupRecord
+        from blog.core.models import BackupRecord
 
         with app.app_context():
             rec = BackupRecord(filename='f.zip', kind='full', status='failed')
@@ -512,7 +512,7 @@ class TestCleanupOldBackups:
             assert removed == 0
 
     def test_keep_more_than_available(self, app, _db, backup_dir):
-        from blog.models import BackupRecord
+        from blog.core.models import BackupRecord
 
         with app.app_context():
             for i in range(3):

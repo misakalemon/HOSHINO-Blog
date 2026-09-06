@@ -16,7 +16,7 @@ os.environ.setdefault('DATABASE_URL', 'mysql+pymysql://hoshino:hoshino_pass@127.
 
 from app import create_app
 from blog import db
-from blog.models import User, Category, Post, Comment
+from blog.core.models import User, Category, Post, Comment
 
 # ─── 测试数据 ─────────────────────────────────
 

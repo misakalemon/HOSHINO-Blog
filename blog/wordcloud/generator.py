@@ -5,7 +5,7 @@ HOSHINO Blog — 博文词云模块
 分词结果通过 Redis 缓存，按 post.id + updated_at 失效。
 
 用法:
-    from .wordcloud import compute_word_frequencies
+    from ..wordcloud.generator import compute_word_frequencies
     data = compute_word_frequencies(post.content, top_n=60)
 """
 
@@ -108,8 +108,8 @@ def _upsert_wordcloud(post_id, source, period, data):
     - post_id 为 NULL（全站/B站/UP/视频词云）：MySQL 唯一索引不覆盖 NULL 行，
       由 _wc_write_lock 串行化本进程写入（跨进程残留窗口极小，由启动迁移清理兜底）。
     """
-    from . import db
-    from .models import WordCloudData, now_cst
+    from .. import db
+    from ..core.models import WordCloudData, now_cst
 
     if post_id is None:
         with _wc_write_lock:
@@ -169,7 +169,7 @@ def _run_heavy_task(task_type: str, kwargs: dict):
                     precompute_all_wordclouds()
                     precompute_bili_wordclouds()
             finally:
-                from . import db
+                from .. import db
                 db.session.remove()
     except Exception as e:
         logger.error('词云重型任务失败 type=%s: %s', task_type, e)
@@ -193,7 +193,7 @@ def _worker_loop():
             except Exception as e:
                 logger.error('词云任务失败 type=%s: %s', task.get('type', '?'), e)
             finally:
-                from . import db
+                from .. import db
                 db.session.remove()
                 _task_queue.task_done()
 
@@ -468,7 +468,7 @@ def compute_word_frequencies(text: str, top_n: int = 60) -> Optional[list]:
 
     # 加载用户自定义屏蔽词（每行一个）
     try:
-        from .models import WordCloudConfig
+        from ..core.models import WordCloudConfig
         cfg = WordCloudConfig.get_or_create()
         if cfg.stop_words and cfg.stop_words.strip():
             extra_stops = {
@@ -522,7 +522,7 @@ def compute_word_frequencies_stream(texts, top_n: int = 60, chunk_size: int = 20
 
     # 加载用户自定义屏蔽词（每行一个）
     try:
-        from .models import WordCloudConfig
+        from ..core.models import WordCloudConfig
         cfg = WordCloudConfig.get_or_create()
         if cfg.stop_words and cfg.stop_words.strip():
             extra_stops = {
@@ -584,8 +584,8 @@ def precompute_post_wordcloud(post_id):
     Args:
         post_id: 文章 ID
     """
-    from . import db
-    from .models import Post, WordCloudData, WordCloudConfig
+    from .. import db
+    from ..core.models import Post, WordCloudData, WordCloudConfig
 
     post = db.session.get(Post, post_id)
     if not post:
@@ -610,8 +610,8 @@ def precompute_site_wordcloud():
       - post_id=NULL, period='all'    → 全站全量
       - post_id=NULL, period='2026-01' → 某月全站
     """
-    from . import db
-    from .models import Post, WordCloudData, WordCloudConfig
+    from .. import db
+    from ..core.models import Post, WordCloudData, WordCloudConfig
     from sqlalchemy import func
 
     top_n = WordCloudConfig.get_or_create().top_n_site
@@ -664,7 +664,7 @@ def precompute_all_wordclouds():
     每篇文章独立 try/except，单篇失败不影响后续。
     """
     precompute_site_wordcloud()
-    from .models import Post
+    from ..core.models import Post
 
     for post in Post.query.filter_by(is_published=True).all():
         try:
@@ -685,7 +685,7 @@ def _bili_texts_from_videos(videos):
     弹幕按视频取前 BILI_DANMAKU_WC_LIMIT 条（词云只需代表性样本，
     避免单视频上万条弹幕拖垮内存）。
     """
-    from .models import BiliDanmaku, BiliVideoComment
+    from ..core.models import BiliDanmaku, BiliVideoComment
 
     # 词云用：每视频最多取多少条弹幕/评论（超过则截取，词频已足够代表）
     _dm_limit = int(os.environ.get('BILI_DANMAKU_WC_LIMIT', '300'))
@@ -745,8 +745,8 @@ def precompute_bili_wordclouds():
     文本采用流式分词（compute_word_frequencies_stream），
     峰值内存只与单批文本相关，不随视频总量线性增长。
     """
-    from . import db
-    from .models import BiliUp, BiliVideo, WordCloudData, WordCloudConfig
+    from .. import db
+    from ..core.models import BiliUp, BiliVideo, WordCloudData, WordCloudConfig
     from sqlalchemy import func
 
     top_n = WordCloudConfig.get_or_create().top_n_bili
@@ -875,8 +875,8 @@ def _save_bili_record(period, data):
 def _compute_video_wc_wrapper(video_id, app):
     """线程安全的单视频词云计算包装。"""
     with app.app_context():
-        from . import db
-        from .models import BiliVideo
+        from .. import db
+        from ..core.models import BiliVideo
         try:
             video = db.session.get(BiliVideo, video_id)
             if video:
@@ -895,7 +895,7 @@ def precompute_video_wordclouds():
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
     from flask import current_app
-    from .models import BiliVideo
+    from ..core.models import BiliVideo
 
     total = BiliVideo.query.filter_by(is_deleted=False).count()
     video_ids = [
@@ -935,8 +935,8 @@ def _compute_single_video_wordcloud(video):
     文本来源权重：字幕×5 > 标题×3 > 弹幕×2 > 评论×2 > 标签×2 > 简介×1
     弹幕/评论按前 N 条截取（词云只需代表性样本，避免单视频上万条驻留内存）。
     """
-    from . import db
-    from .models import BiliDanmaku, WordCloudConfig, WordCloudData
+    from .. import db
+    from ..core.models import BiliDanmaku, WordCloudConfig, WordCloudData
 
     # 已删除/不可见的稿件不再生成词云
     if getattr(video, 'is_deleted', False):
@@ -992,8 +992,8 @@ def precompute_up_wordclouds(up_id: int):
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
     from flask import current_app
-    from . import db
-    from .models import BiliVideo, WordCloudConfig, WordCloudData
+    from .. import db
+    from ..core.models import BiliVideo, WordCloudConfig, WordCloudData
 
     videos = BiliVideo.query.filter_by(up_id=up_id, is_deleted=False).with_entities(BiliVideo.id).all()
     video_ids = [v.id for v in videos]

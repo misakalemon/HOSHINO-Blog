@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ['CONFIG_PATH'] = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
 
 from app import create_app
-from blog.models import db, BiliVideoHistory, BiliUpHistory
+from blog.core.models import db, BiliVideoHistory, BiliUpHistory
 
 app = create_app()
 

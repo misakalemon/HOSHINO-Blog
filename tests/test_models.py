@@ -1,6 +1,6 @@
 """HOSHINO Blog — 数据模型测试"""
 import pytest
-from blog.models import User, Post, Category, ContactMessage
+from blog.core.models import User, Post, Category, ContactMessage
 
 
 class TestUser:

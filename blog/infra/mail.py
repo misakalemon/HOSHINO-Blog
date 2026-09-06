@@ -19,7 +19,7 @@ HOSHINO Blog — 邮件发送模块
    SITE_NAME            — 站点名称，用于邮件标题
 
 使用方式：
-   from blog.mail import send_email, send_verify_email, send_new_video_notify
+   from blog.infra.mail import send_email, send_verify_email, send_new_video_notify
 
    send_email('user@example.com', '主题', '<html>内容</html>')
    send_verify_email('user@example.com', 'UP主名', '验证链接', '退订链接')
@@ -271,7 +271,7 @@ _NOTIFY_PREFIX = 'notify'
 def _notify_redis():
     """获取通知暂存用的 Redis 客户端（不可用时返回 None）。"""
     try:
-        from blog.cache import _redis_client
+        from blog.core.cache import _redis_client
         return _redis_client
     except Exception:
         return None

@@ -30,10 +30,10 @@ blog_bp = Blueprint('blog', __name__)
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
 
-# 先导入模型，确保 admin 和 routes 中的 from .models import ... 可用
+# 先导入模型，确保 admin 和 routes 中的 from .core.models import ... 可用
 # 这种 "先声明蓝图、再导入模型、最后导入路由" 的顺序是关键，
 # 可以避免 Flask 常见的循环导入问题。
-from .models import (
+from .core.models import (
     ApiToken,
     BiliSubscription,
     BiliUp,
@@ -1319,4 +1319,4 @@ def _migrate_ensure_model_columns(app):
 # 此处的 import 必须放在模型和 init_db 之后，否则会导致循环引用：
 #   __init__.py → routes.py → __init__.py
 # 延迟导入打破了这个循环。
-from . import admin, routes
+from .core import admin, routes

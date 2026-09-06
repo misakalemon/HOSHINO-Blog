@@ -20,8 +20,8 @@ import secrets
 
 from flask import Blueprint, jsonify, render_template, request
 
-from blog.models import BiliSubscription, BiliUp, BiliUpHistory, BiliVideo, BiliVideoHistory, WordCloudData, db
-from blog.utils import get_client_ip, RateLimiter, escape_like
+from blog.core.models import BiliSubscription, BiliUp, BiliUpHistory, BiliVideo, BiliVideoHistory, WordCloudData, db
+from blog.core.utils import get_client_ip, RateLimiter, escape_like
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +96,7 @@ def index():
         # 读取 B站词云（兼容旧表缺少 period/source 列的情况）
         bili_wordcloud = None
         bili_wordcloud_periods = []  # [(period_label, data), ...]
-        from .models import WordCloudConfig
+        from ..core.models import WordCloudConfig
         wc_config = WordCloudConfig.get_or_create().to_dict()
         try:
             # 全量词云
@@ -174,7 +174,7 @@ def up_videos(up_id):
     # 读取该 UP 主的专属词云
     bili_wordcloud = None
     bili_wordcloud_periods = []
-    from .models import WordCloudConfig
+    from ..core.models import WordCloudConfig
     wc_config = WordCloudConfig.get_or_create().to_dict()
     try:
         # 全量 UP 主词云
@@ -306,7 +306,7 @@ def video_detail(video_id):
         # 历史不足 2 条时增量均为 0
         growth = {m: {'total': 0, 'last': 0} for m in metrics}
 
-    from .models import BiliDanmaku, BiliVideoComment, WordCloudConfig, WordCloudData
+    from ..core.models import BiliDanmaku, BiliVideoComment, WordCloudConfig, WordCloudData
 
     wc_record = WordCloudData.query.filter_by(
         post_id=None, source='bili_video', period=f'bvid_{video.bvid}'
@@ -510,11 +510,11 @@ def subscribe():
     up_names = [u.name or str(u.mid) for u in selected_ups]
 
     # 构造验证和取消订阅的完整 URL（优先基于 SITE_BASE_URL 生成，worker 线程也正确）
-    from blog.utils import build_site_url
+    from blog.core.utils import build_site_url
     verify_url = build_site_url('bili_public.verify_subscription', token=token)
     unsubscribe_url = build_site_url('bili_public.unsubscribe', token=token)
 
-    from blog.mail import send_verify_email
+    from blog.infra.mail import send_verify_email
 
     # 邮件标题显示：不超过 3 个用顿号分隔，超过 3 个显示总数
     label = '、'.join(up_names) if len(up_names) <= 3 else f'{len(up_names)} 个 UP 主（{"、".join(up_names[:3])}…）'

@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 
 
 def main() -> int:
-    from blog.bili_routes import _run_scrape
-    from blog.models import BiliUp
+    from blog.bilibili.admin_routes import _run_scrape
+    from blog.core.models import BiliUp
     from app import create_app
 
     app = create_app()

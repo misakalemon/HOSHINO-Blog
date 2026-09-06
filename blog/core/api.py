@@ -226,7 +226,7 @@ def _after_post_change(post):
     """文章变更后的副作用：清缓存 + 投递词云任务。"""
     _invalidate_sidebar_cache()
     try:
-        from .wordcloud import submit_task
+        from ..wordcloud.generator import submit_task
         submit_task('post', post_id=post.id)
     except Exception:
         logger.warning('词云任务投递失败，已忽略', exc_info=True)

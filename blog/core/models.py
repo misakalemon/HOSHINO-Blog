@@ -810,7 +810,7 @@ class WordCloudConfig(db.Model):
         config = cls.query.first()
         if config is None:
             config = cls()
-            from . import db
+            from .. import db
             db.session.add(config)
             db.session.commit()
         return config

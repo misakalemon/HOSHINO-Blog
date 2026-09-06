@@ -37,7 +37,7 @@ from flask import Response, abort, current_app, redirect, render_template, reque
 from sqlalchemy import func
 from sqlalchemy.orm import load_only
 
-from . import blog_bp
+from .. import blog_bp
 from .forms import CommentForm, ContactForm
 from .models import Category, Comment, FeaturedCard, Post, db, post_categories
 from .utils import LRUDict, validate_url_protocol, escape_like
@@ -404,7 +404,7 @@ def _render_index(page, category_slug, per_page):
     featured_cards = _cached_featured_cards()
     cat_lookup = {c['slug']: c['name'] for c in categories}
 
-    from blog.models import HeroImage
+    from blog.core.models import HeroImage
 
     # 从激活的 Hero 画像中随机选一张，供粒子引擎渲染
     # 无画像时 hero_image=None，模板降级为纯文字 hero

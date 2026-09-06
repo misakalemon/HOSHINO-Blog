@@ -25,10 +25,10 @@
 
 自愈容错：
   - 自身主循环每个迭代独立 try/except，任一异常不会终止本守门进程；
-  - 告警邮件懒加载 create_app（WORKER_PROCESS=1）复用 blog.mail.send_email，
+  - 告警邮件懒加载 create_app（WORKER_PROCESS=1）复用 blog.infra.mail.send_email，
     初始化/发送失败只记日志，不影响判定循环。
 
-用法：python -m blog.logwatch
+用法：python -m blog.infra.logwatch
 """
 
 import logging
@@ -39,8 +39,8 @@ import sys
 import time
 
 # 兼容直接执行 python blog/logwatch.py：把项目根目录注入 sys.path，
-# 否则 sys.path[0]=blog/ 目录，import blog.logger 会 ModuleNotFoundError。
-# 官方启动路径是 python -m blog.logwatch（app.py 已保证 cwd=项目根）。
+# 否则 sys.path[0]=blog/ 目录，import blog.infra.logger 会 ModuleNotFoundError。
+# 官方启动路径是 python -m blog.infra.logwatch（app.py 已保证 cwd=项目根）。
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
@@ -57,7 +57,7 @@ WORKER_PY = os.path.join(PROJECT_ROOT, 'worker.py')
 
 def _setup_logging():
     """配置与主进程一致的多进程安全日志（文件 + 错误文件 + 终端）。"""
-    import blog.logger as _logger_mod
+    import blog.infra.logger as _logger_mod
     root = logging.getLogger()
     root.setLevel(logging.DEBUG)
     for h in root.handlers[:]:
@@ -75,7 +75,7 @@ def _setup_logging():
     # 进程标签：看门狗固定显式标注 Watchdog（不依赖环境变量判定），
     # 使其在共享日志文件中与 Web/Worker/WordCloud 一目了然
     try:
-        from blog.logger import ProcessTagFilter as _PTF
+        from blog.infra.logger import ProcessTagFilter as _PTF
         _tag_filter = _PTF('Watchdog')
     except Exception:
         _tag_filter = None
@@ -122,12 +122,12 @@ def _watchdog_emails() -> list:
 
 
 def _send_alert(subject: str, html_body: str):
-    """发送告警邮件（懒加载 create_app，复用 blog.mail.send_email）。"""
+    """发送告警邮件（懒加载 create_app，复用 blog.infra.mail.send_email）。"""
     try:
         from app import create_app
         app = create_app()
         with app.app_context():
-            from blog.mail import send_email
+            from blog.infra.mail import send_email
             for addr in _watchdog_emails():
                 try:
                     send_email(addr, subject, html_body)

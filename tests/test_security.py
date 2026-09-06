@@ -36,7 +36,7 @@ class TestHTMLSanitizer:
     """回归测试：_sanitize_html 白名单不得放行可执行/表单标签"""
 
     def _sanitize(self, html):
-        from blog.admin import _sanitize_html
+        from blog.core.admin import _sanitize_html
         return _sanitize_html(html)
 
     def test_script_tag_removed(self, app):
@@ -81,19 +81,19 @@ class TestImageUrlSafety:
     """回归测试：is_safe_image_url 拒绝路径穿越"""
 
     def test_traversal_rejected(self, app):
-        from blog.utils import is_safe_image_url
+        from blog.core.utils import is_safe_image_url
         assert not is_safe_image_url('uploads/avatar_../../../app.py')
         assert not is_safe_image_url('/static/../../config.py')
         assert not is_safe_image_url('uploads/../.env')
 
     def test_normal_paths_accepted(self, app):
-        from blog.utils import is_safe_image_url
+        from blog.core.utils import is_safe_image_url
         assert is_safe_image_url('uploads/avatar_123.webp')
         assert is_safe_image_url('/static/uploads/x.png')
         assert is_safe_image_url('https://example.com/a.png')
 
     def test_javascript_rejected(self, app):
-        from blog.utils import is_safe_image_url
+        from blog.core.utils import is_safe_image_url
         assert not is_safe_image_url('javascript:alert(1)')
 
 
@@ -101,10 +101,10 @@ class TestEscapeLike:
     """回归测试：escape_like 必须转义反斜杠本身"""
 
     def test_backslash_escaped(self, app):
-        from blog.utils import escape_like
+        from blog.core.utils import escape_like
         assert escape_like('100\\%') == '100\\\\\\%'
         assert '\\\\' in escape_like('a\\b')
 
     def test_wildcards_escaped(self, app):
-        from blog.utils import escape_like
+        from blog.core.utils import escape_like
         assert escape_like('50%_off') == '50\\%\\_off'

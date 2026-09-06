@@ -68,7 +68,7 @@ from flask_login import current_user, login_required, login_user, logout_user
 
 import bleach
 
-from . import admin_bp
+from .. import admin_bp
 from .routes import ALLOWED_TAGS, ALLOWED_ATTRS
 from .utils import LRUDict, now_cst, get_client_ip, validate_url_protocol, is_safe_image_url, escape_like
 
@@ -730,7 +730,7 @@ def new_post():
         _invalidate_sidebar_cache()
         logger.info('创建文章: id=%d title="%s"', post.id, post.title)
         # 后台异步计算单篇词云
-        from .wordcloud import submit_task
+        from ..wordcloud.generator import submit_task
         submit_task('post', post_id=post.id)
         flash('文章已发布', 'success')
         return _redirect_list('admin.post_list')
@@ -810,7 +810,7 @@ def edit_post(id):
         post.categories = Category.query.filter(Category.id.in_(form.categories.data)).all()
         db.session.commit()
         _invalidate_sidebar_cache()
-        from .wordcloud import submit_task
+        from ..wordcloud.generator import submit_task
         submit_task('post', post_id=post.id)
         flash('文章已更新', 'success')
         return _redirect_list('admin.post_list')
@@ -851,7 +851,7 @@ def delete_post(id):
 
     cache_delete('dashboard:stats')
     # 异步投递全站词云重算（删除一篇文章后需刷新全站 + 按月切片）
-    from .wordcloud import submit_task
+    from ..wordcloud.generator import submit_task
     submit_task('site')
     flash('文章已删除', 'success')
     return _redirect_list('admin.post_list')
@@ -982,7 +982,7 @@ def backup_settings():
 @admin_required
 def backup_run():
     """触发一次备份。表单字段 kind: full/db/uploads。"""
-    from . import backup as backup_mod
+    from ..infra import backup as backup_mod
 
     kind = request.form.get('kind', 'full')
     record = backup_mod.run_backup(kind=kind)
@@ -1000,7 +1000,7 @@ def backup_download(id):
     record = db.session.get(BackupRecord, id)
     if record is None or record.status != 'ok':
         abort(404)
-    from . import backup as backup_mod
+    from ..infra import backup as backup_mod
 
     path = os.path.join(backup_mod._backup_dir(), record.filename)
     if not os.path.isfile(path):
@@ -1016,7 +1016,7 @@ def backup_delete(id):
     record = db.session.get(BackupRecord, id)
     if record is None:
         abort(404)
-    from . import backup as backup_mod
+    from ..infra import backup as backup_mod
 
     try:
         backup_mod.delete_backup(record)
@@ -1040,7 +1040,7 @@ def backup_restore(id):
     if record.kind not in ('db', 'full'):
         flash('仅 DB 或 full 备份可恢复', 'error')
         return redirect(url_for('admin.backup_list'))
-    from . import backup as backup_mod
+    from ..infra import backup as backup_mod
 
     try:
         info = backup_mod.restore_db_from_record(record)
@@ -2144,8 +2144,8 @@ def bili_history_cleanup():
     自动清理通过定时任务调用 cleanup_old_history() 实现。
     Template: admin/bili_history_cleanup.html
     """
-    from blog.bili_routes import cleanup_old_history
-    from blog.models import BiliCleanupConfig, BiliVideoHistory
+    from blog.bilibili.admin_routes import cleanup_old_history
+    from blog.core.models import BiliCleanupConfig, BiliVideoHistory
 
     # 获取或创建配置
     cfg = BiliCleanupConfig.query.first()
@@ -2399,7 +2399,7 @@ def wordcloud_config():
         _invalidate_page_cache()
         flash('词云配置已保存', 'success')
         # 自动投递全量词云重算（使屏蔽词等立即生效）
-        from .wordcloud import submit_task
+        from ..wordcloud.generator import submit_task
         submit_task('all')
         return redirect(url_for('admin.wordcloud_config'))
 
@@ -2410,7 +2410,7 @@ def wordcloud_config():
 @admin_required
 def refresh_wordcloud():
     """手动触发博客+ B站词云重新计算（异步后台执行）。"""
-    from .wordcloud import submit_task
+    from ..wordcloud.generator import submit_task
 
     submit_task('all')
     _invalidate_page_cache()
@@ -2506,7 +2506,7 @@ def export_data():
         )
 
     if fmt == 'full_json':
-        from .backup import _export_db_data
+        from ..infra.backup import _export_db_data
         payload = {
             'version': 1,
             'exported_at': ts,

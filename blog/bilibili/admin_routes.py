@@ -41,7 +41,7 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from sqlalchemy.exc import IntegrityError
 
-from blog.models import (
+from blog.core.models import (
     BiliSubscription,
     BiliUp,
     BiliUpHistory,
@@ -50,9 +50,9 @@ from blog.models import (
     BiliWatchedVideo,
     db,
 )
-from .admin import editor_required
-from .utils import now_cst
-from .bilibili.bili_api import thread_sleep, ensure_semaphore
+from ..core.admin import editor_required
+from ..core.utils import now_cst
+from .bili_api import thread_sleep, ensure_semaphore
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ def index():
     """
     ups = BiliUp.query.order_by(BiliUp.updated_at.desc()).all()
     # 检查 B站 登录状态
-    from blog.bilibili.login import apply_cookies
+    from .login import apply_cookies
 
     logged_in = apply_cookies()
     return render_template('admin/bili_index.html', ups=ups, bili_logged_in=logged_in)
@@ -90,7 +90,7 @@ def qr_generate():
         JSON: {ok: True, qrcode_key: str, img: str(base64)}
               或 {ok: False, error: str}
     """
-    from blog.bilibili.login import generate_qr_v2
+    from .login import generate_qr_v2
 
     try:
         data = generate_qr_v2()
@@ -116,7 +116,7 @@ def qr_poll():
     if not qrcode_key:
         return {'ok': False, 'error': 'missing key'}
 
-    from blog.bilibili.login import poll_qr_v2
+    from .login import poll_qr_v2
 
     return poll_qr_v2(qrcode_key)
 
@@ -132,9 +132,9 @@ def logout_bili():
     Returns:
         HTTP 重定向到 bili.index
     """
-    from blog.bilibili.config import COOKIE_FILE, CREDENTIAL_FILE
+    from .config import COOKIE_FILE, CREDENTIAL_FILE
     from blog.bilibili import login as _bili_login
-    from blog.bilibili.bili_api import set_credential
+    from .bili_api import set_credential
 
     try:
         for f in (CREDENTIAL_FILE, COOKIE_FILE):
@@ -192,7 +192,7 @@ def refresh_up(up_id):
         HTTP 重定向到 up_detail 页
     """
     up = BiliUp.query.get_or_404(up_id)
-    from blog.task_queue import submit_task, try_acquire, mark_done, is_queue_available
+    from blog.infra.task_queue import submit_task, try_acquire, mark_done, is_queue_available
     # 原子占位：并发请求只有一个能抢到运行锁，杜绝重复提交
     if not try_acquire(up.mid):
         flash('该 UP 主正在爬取中（Worker 进程）', 'error')
@@ -230,7 +230,7 @@ def refresh_up_all(up_id):
         HTTP 重定向到 up_detail 页
     """
     up = BiliUp.query.get_or_404(up_id)
-    from blog.task_queue import submit_task, try_acquire, mark_done, is_queue_available
+    from blog.infra.task_queue import submit_task, try_acquire, mark_done, is_queue_available
     if not try_acquire(up.mid):
         flash('该 UP 主正在爬取中（Worker 进程）', 'error')
         return redirect(url_for('bili.up_detail', up_id=up_id))
@@ -266,7 +266,7 @@ def refresh_up_comments(up_id):
         HTTP 重定向到 up_detail 页
     """
     up = BiliUp.query.get_or_404(up_id)
-    from blog.task_queue import submit_task, try_acquire, mark_done, is_queue_available
+    from blog.infra.task_queue import submit_task, try_acquire, mark_done, is_queue_available
     if not try_acquire(up.mid):
         flash('该 UP 主正在爬取中（Worker 进程）', 'error')
         return redirect(url_for('bili.up_detail', up_id=up_id))
@@ -302,7 +302,7 @@ def refresh_up_danmakus(up_id):
         HTTP 重定向到 up_detail 页
     """
     up = BiliUp.query.get_or_404(up_id)
-    from blog.task_queue import submit_task, try_acquire, mark_done, is_queue_available
+    from blog.infra.task_queue import submit_task, try_acquire, mark_done, is_queue_available
     if not try_acquire(up.mid):
         flash('该 UP 主正在爬取中（Worker 进程）', 'error')
         return redirect(url_for('bili.up_detail', up_id=up_id))
@@ -332,7 +332,7 @@ def refresh_up_subtitles(up_id):
     通过 Redis 任务队列投递到 worker.py 执行。
     """
     up = BiliUp.query.get_or_404(up_id)
-    from blog.task_queue import submit_task, try_acquire, mark_done, is_queue_available
+    from blog.infra.task_queue import submit_task, try_acquire, mark_done, is_queue_available
     if not try_acquire(up.mid):
         flash('该 UP 主正在爬取中（Worker 进程）', 'error')
         return redirect(url_for('bili.up_detail', up_id=up_id))
@@ -369,7 +369,7 @@ def delete_up(up_id):
     """
     up = BiliUp.query.get_or_404(up_id)
     # 如果正在爬取，拒绝删除以防止数据不一致
-    from blog.task_queue import is_running
+    from blog.infra.task_queue import is_running
     if is_running(up.mid) or up.mid in _scrape_running or up.mid in _incremental_running:
         flash('该 UP 主正在爬取中，请等待完成后再删除', 'error')
         return redirect(url_for('bili.index'))
@@ -474,15 +474,15 @@ def check_missing():
     from flask import request as _req
 
     force_refresh = _req.args.get('refresh') == '1'
-    from blog.cache import cache_get, cache_set
+    from blog.core.cache import cache_get, cache_set
 
     if not force_refresh:
         cached = cache_get('admin:check_missing')
         if cached is not None:
             return cached
 
-    from blog.bilibili.login import apply_cookies
-    from blog.bilibili.bili_api import get_user_info
+    from .login import apply_cookies
+    from .bili_api import get_user_info
 
     apply_cookies()
 
@@ -756,7 +756,7 @@ def _insert_or_update_video(up, video_info, aid, bvid, title_short):
 
     # 主记录已提交：标签/字幕在独立小事务中抓取（不再持有长事务）
     try:
-        from blog.bilibili.bili_api import get_video_tags
+        from .bili_api import get_video_tags
         tags = get_video_tags(bvid)
         if tags:
             video.tags = tags
@@ -766,7 +766,7 @@ def _insert_or_update_video(up, video_info, aid, bvid, title_short):
         logger.warning('视频 %s 标签获取失败: %s', bvid, e)
 
     try:
-        from blog.bilibili.bili_api import get_video_subtitle
+        from .bili_api import get_video_subtitle
         subtitle = get_video_subtitle(bvid)
         if subtitle:
             video.subtitle_text = subtitle
@@ -809,7 +809,7 @@ def _insert_or_update_video(up, video_info, aid, bvid, title_short):
         logger.warning('视频 %s 历史快照写入失败（视频已入库）: %s', bvid, e)
     if is_new:
         try:
-            from blog.task_queue import submit_task
+            from blog.infra.task_queue import submit_task
             submit_task('bili_wordcloud_single', video_id=video.id, bvid=bvid)
             # 新视频入库后异步投递弹幕爬取（受全局令牌桶串行限速保护）
             submit_task('danmaku_refresh', bvid=bvid)
@@ -841,8 +841,8 @@ def _crawl_video_comments(video, hot_pages: int = _COMMENT_HOT_PAGES, newest_pag
         int: 爬取的评论总数
     """
     from bilibili_api.comment import OrderType
-    from blog.bilibili.bili_api import get_video_comments, _is_risk_control, was_recently_blocked
-    from .models import BiliVideoComment
+    from .bili_api import get_video_comments, _is_risk_control, was_recently_blocked
+    from ..core.models import BiliVideoComment
 
     # 在闭包外保存原始值，避免 db.session.remove() 后 ORM 对象 detached
     _aid = video.aid
@@ -951,10 +951,10 @@ def _crawl_video_danmakus(video, force: bool = False):
     Returns:
         int: 爬取的弹幕总数
     """
-    from blog.bilibili.bili_api import (
+    from .bili_api import (
         get_video_danmakus, get_video_pages, _is_risk_control, was_recently_blocked,
     )
-    from .models import BiliDanmaku
+    from ..core.models import BiliDanmaku
 
     # 读写模块级熔断变量需显式 global，否则 Python 视为函数局部变量，
     # 在其被赋值前读取会抛 UnboundLocalError（cannot access local variable ...）
@@ -1081,7 +1081,7 @@ def _crawl_video_danmakus(video, force: bool = False):
     # 打开全局熔断器，让深扫/增量/评论等其他爬取一并暂停，避免连锁触发风控
     # 注意：必须用 BILI_BLOCK_WINDOW 冷却窗口判断（cooldown=0 意味着"只要有
     # 过 412 记录就 True"，会误触发熔断永不关闭）
-    from blog.bilibili.bili_api import was_recently_blocked as _wrb
+    from .bili_api import was_recently_blocked as _wrb
     if _wrb(cooldown=float(os.environ.get('BILI_BLOCK_WINDOW', '300'))):
         with _circuit_lock:
             if time.time() >= _circuit_open_until:
@@ -1202,7 +1202,7 @@ def _check_new_videos(mid: int, app):
         prog.append(f'[{time.strftime("%H:%M:%S")}] [{_up_name[0]}] {tag}{line}')
         logger.info('[%s] %s%s', _up_name[0], tag, line)
         try:
-            from blog.task_queue import update_progress
+            from blog.infra.task_queue import update_progress
             update_progress(mid, prog[:])
         except Exception:
             pass
@@ -1210,7 +1210,7 @@ def _check_new_videos(mid: int, app):
     with app.app_context():
         try:
 
-            from blog.bilibili.bili_api import get_video_list, get_video_stats_batch
+            from .bili_api import get_video_list, get_video_stats_batch
 
             up = BiliUp.query.filter_by(mid=mid).first()
             if not up:
@@ -1242,7 +1242,7 @@ def _check_new_videos(mid: int, app):
             # ── 动态流优先：先检查动态流是否有新视频 ──
             # B站动态接口 1 个请求即可获取最近 ~12 条动态，
             # 大多数 UP 主无新视频时只需这 1 个请求，跳过 arc/search 翻页（节省 2-5 个请求）
-            from blog.bilibili.bili_api import get_video_list_from_dynamics
+            from .bili_api import get_video_list_from_dynamics
 
             _dyn_error = False  # 动态流接口是否异常（区别于正常返回空）
             try:
@@ -1383,10 +1383,10 @@ def _check_new_videos(mid: int, app):
                     if subs:
                         # 批量通知：先写入 Redis 暂存队列，由 Worker 定时聚合发送。
                         # 避免"每个 UP 每次增量一封邮件"导致订阅多个 UP 时邮箱刷屏。
-                        from blog.mail import queue_video_notify
+                        from blog.infra.mail import queue_video_notify
 
                         emit(f'新视频通知已暂存（等待定时批量发送）给 {len(subs)} 个订阅者', 'MAIL')
-                        from blog.utils import build_site_url
+                        from blog.core.utils import build_site_url
                         for sub in subs:
                             # worker 后台线程无请求上下文，用 SITE_BASE_URL 生成退订链接
                             unsub_url = build_site_url(
@@ -1402,7 +1402,7 @@ def _check_new_videos(mid: int, app):
             tracked_ids: set[int] = set()
             snap_videos: list = []  # 需要更新统计的视频 ORM 对象
             try:
-                from blog.bilibili.config import TRACK_LATEST_VIDEOS
+                from .config import TRACK_LATEST_VIDEOS
                 latest = (
                     BiliVideo.query.filter_by(up_id=up.id, is_deleted=False)
                     .order_by(BiliVideo.pubdate.desc())
@@ -1434,7 +1434,7 @@ def _check_new_videos(mid: int, app):
 
                 if snap_videos:
                     # 并发批量获取完整 7 项统计（播放/点赞/投币/收藏/转发/评论/弹幕）
-                    from blog.bilibili.bili_api import get_video_stats_batch
+                    from .bili_api import get_video_stats_batch
                     _batch, _deleted_bvids = get_video_stats_batch([v.bvid for v in snap_videos])
                     # 墓碑：连续多轮"稿件不可见"的视频标记 is_deleted（下次起不再请求）
                     if _deleted_bvids:
@@ -1489,7 +1489,7 @@ def _check_new_videos(mid: int, app):
                 logger.error('视频统计快照失败 mid=%d: %s', mid, e)
 
             # 检查 B站 API 层是否已检测到 412（可能在 get_video_list 内部处理，未抛异常到此处）
-            from blog.bilibili.bili_api import was_recently_blocked
+            from .bili_api import was_recently_blocked
             with _circuit_lock:
                 if was_recently_blocked(cooldown=float(os.environ.get('BILI_BLOCK_WINDOW', '300'))) and time.time() >= _circuit_open_until:
                     _cooldown = _circuit_compute_cooldown()
@@ -1498,7 +1498,7 @@ def _check_new_videos(mid: int, app):
 
         except Exception as e:
             logger.error('增量检查失败 mid=%d: %s', mid, e)
-            from blog.bilibili.bili_api import _is_ip_blocked
+            from .bili_api import _is_ip_blocked
             if _is_ip_blocked(e):
                 with _circuit_lock:
                     _cooldown = _circuit_compute_cooldown()
@@ -1543,7 +1543,7 @@ def scrape_status():
         return {'running': False, 'lines': []}
     from copy import deepcopy
 
-    from blog.task_queue import get_progress
+    from blog.infra.task_queue import get_progress
     redis_lines, redis_running = get_progress(mid)
 
     with _scrape_lock:
@@ -1577,7 +1577,7 @@ def scrape():
         return redirect(url_for('bili.index'))
 
     try:
-        from blog.bilibili.bili_api import extract_mid
+        from .bili_api import extract_mid
 
         mid = extract_mid(space_url)
     except ValueError as e:
@@ -1586,14 +1586,14 @@ def scrape():
 
     # 冷却检查：若最近检测到 B站 412 IP 封禁，拒绝立即添加新 UP。
     # 新UP添加走 wbi/acc/info + arc/search 敏感接口，刚被封禁时立即重试必触发 -352/412。
-    from blog.bilibili.bili_api import was_recently_blocked, get_blocked_remaining
+    from .bili_api import was_recently_blocked, get_blocked_remaining
     _cool_seconds = int(os.environ.get('BILI_ADD_COOLDOWN', '300'))
     if was_recently_blocked(cooldown=_cool_seconds):
         _remain = get_blocked_remaining(_cool_seconds)
         return {'ok': False,
                 'error': f'B站 IP 风控冷却中（最近触发过 412 封禁），请等待约 {_remain} 秒后再添加'}
 
-    from blog.task_queue import try_acquire, mark_done, submit_task, is_queue_available
+    from blog.infra.task_queue import try_acquire, mark_done, submit_task, is_queue_available
     # 原子占位：并发添加同一 UP 只允许一个请求通过
     if not try_acquire(mid):
         return {'ok': False, 'error': '该 UP 主正在爬取中'}
@@ -1685,7 +1685,7 @@ def add_single_video():
 
     # 获取视频完整信息
     try:
-        from blog.bilibili.bili_api import get_video_full_info
+        from .bili_api import get_video_full_info
         video_info = get_video_full_info(bvid)
     except Exception as e:
         logger.error('获取视频 %s 信息失败: %s', bvid, e)
@@ -1888,7 +1888,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
         prog.append(f'[{time.strftime("%H:%M:%S")}] [{_up_name[0]}] {tag}{line}')
         logger.info('[%s] %s%s', _up_name[0], tag, line)
         try:
-            from blog.task_queue import update_progress
+            from blog.infra.task_queue import update_progress
             update_progress(mid, prog[:])
         except Exception:
             pass
@@ -1896,7 +1896,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
     with app.app_context():
         try:
 
-            from blog.bilibili.bili_api import _is_risk_control, get_video_stat, get_user_info
+            from .bili_api import _is_risk_control, get_video_stat, get_user_info
 
             up = BiliUp.query.filter_by(mid=mid).first()
             total_in_api = None
@@ -1963,7 +1963,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             existing_ids = {r[0] for r in existing_rows}
             existing_aids = {r[1] for r in existing_rows}
             if should_fill:
-                from blog.bilibili.bili_api import get_video_list as _get_video_list
+                from .bili_api import get_video_list as _get_video_list
 
                 # 断点续爬：风控截断后从断点页重试，最多 _MAX_FILL_RETRY 次
                 _MAX_FILL_RETRY = int(os.environ.get('BILI_FILL_MAX_RETRY', '3'))
@@ -2134,7 +2134,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                     break
 
             # C. 动态发现兜底：始终执行，捕获 arc/search 可能遗漏的 shorts/新视频
-            from blog.bilibili.bili_api import get_video_list_from_dynamics
+            from .bili_api import get_video_list_from_dynamics
 
             try:
                 dyn_videos = get_video_list_from_dynamics(mid)
@@ -2217,7 +2217,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                             stat = get_video_stat(bvid)
                             thread_sleep()
                         except Exception as e:
-                            from blog.bilibili.bili_api import _is_video_invisible as _is_gone
+                            from .bili_api import _is_video_invisible as _is_gone
                             if _is_risk_control(e):
                                 logger.warning('触发风控，等待 %ds 后跳过...', local_retry_delay)
                                 emit(f'⚠ 触发风控，等待 {local_retry_delay}s 后跳过「{title_short}」', 'RISK')
@@ -2418,7 +2418,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                 emit(f'完整性检查: Cookie 可能过期，API 返回 video_count=0', 'WARN')
 
             # 检查 B站 API 层是否已检测到 412（可能在 get_video_list 内部处理，未抛异常到此处）
-            from blog.bilibili.bili_api import was_recently_blocked
+            from .bili_api import was_recently_blocked
             with _circuit_lock:
                 if was_recently_blocked(cooldown=float(os.environ.get('BILI_BLOCK_WINDOW', '300'))) and time.time() >= _circuit_open_until:
                     _cooldown = _circuit_compute_cooldown()
@@ -2428,7 +2428,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
             # 评论爬取：为本 UP 主尚未爬取评论的视频补充数据（限 5 个/次）
             # 投递到 Redis 任务队列，由 worker.py 异步处理。
             if not was_recently_blocked(cooldown=float(os.environ.get('BILI_BLOCK_WINDOW', '300'))):
-                from .models import BiliVideoComment
+                from ..core.models import BiliVideoComment
                 from sqlalchemy import func
 
                 videos_missing_comments = (
@@ -2443,7 +2443,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
                 )
                 for v in videos_missing_comments:
                     try:
-                        from blog.task_queue import submit_task
+                        from blog.infra.task_queue import submit_task
                         submit_task('comment_refresh', bvid=v.bvid)
                         emit(f'评论 [{v.bvid[:8]}…] 已投递到任务队列', 'CMT')
                     except Exception as e:
@@ -2452,7 +2452,7 @@ def _run_scrape(mid: int, space_url: str, app, max_videos: int | None = None, fo
         except Exception as e:
             emit(f'爬取失败: {e}', 'ERR')
             logger.exception('爬取失败 mid=%d', mid)
-            from blog.bilibili.bili_api import _is_ip_blocked
+            from .bili_api import _is_ip_blocked
             if _is_ip_blocked(e):
                 with _circuit_lock:
                     _cooldown = _circuit_compute_cooldown()
@@ -2498,7 +2498,7 @@ def run_daily_scrape(app):
     with app.app_context():
         try:
 
-            from blog.models import BiliUp
+            from blog.core.models import BiliUp
 
             ups = BiliUp.query.all()
 
@@ -2579,7 +2579,7 @@ def cleanup_old_history(days=90):
     Returns:
         int: 被删除的记录数
     """
-    from blog.models import BiliVideoHistory, db as _db
+    from blog.core.models import BiliVideoHistory, db as _db
 
 
     cutoff = now_cst() - datetime.timedelta(days=days)
@@ -2608,7 +2608,7 @@ def auto_cleanup_history(app=None):
         return 0
     with app.app_context():
         try:
-            from blog.models import BiliCleanupConfig, db as _db
+            from blog.core.models import BiliCleanupConfig, db as _db
 
             cfg = BiliCleanupConfig.query.first()
             if cfg and cfg.enabled:

@@ -9,8 +9,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-import blog.cache as cache_mod
-import blog.task_queue as tq
+import blog.core.cache as cache_mod
+import blog.infra.task_queue as tq
 
 pytestmark = pytest.mark.pure
 

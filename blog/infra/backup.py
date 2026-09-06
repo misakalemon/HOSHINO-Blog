@@ -25,8 +25,8 @@ import zipfile
 from flask import current_app
 from sqlalchemy import LargeBinary
 
-from .models import BackupRecord, db
-from .utils import now_cst
+from ..core.models import BackupRecord, db
+from ..core.utils import now_cst
 
 logger = logging.getLogger(__name__)
 

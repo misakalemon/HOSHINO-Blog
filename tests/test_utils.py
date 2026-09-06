@@ -1,7 +1,7 @@
 """HOSHINO Blog — 公共工具模块测试"""
 import datetime
 import pytest
-from blog.utils import LRUDict, RateLimiter, now_cst, get_client_ip, validate_url_protocol, escape_like, CST
+from blog.core.utils import LRUDict, RateLimiter, now_cst, get_client_ip, validate_url_protocol, escape_like, CST
 
 
 class TestLRUDict:

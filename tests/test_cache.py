@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-import blog.cache as cache_mod
+import blog.core.cache as cache_mod
 
 pytestmark = pytest.mark.pure
 

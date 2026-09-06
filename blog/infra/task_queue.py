@@ -44,7 +44,7 @@ _MAX_RUNNING_TIME = int(os.environ.get('BILI_MAX_RUNNING', '1800'))  # 30 分钟
 
 def init_task_queue(app):
     global _redis_client, _secret_key
-    from blog.cache import _redis_client as cache_redis
+    from blog.core.cache import _redis_client as cache_redis
     _redis_client = cache_redis
     _secret_key = app.config.get('SECRET_KEY') or ''
     if _redis_client is not None:

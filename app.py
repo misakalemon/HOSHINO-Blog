@@ -207,7 +207,7 @@ def create_app():
 
     # ── 日志系统（必须在其他初始化之前） ────────────
     # 先初始化日志，后续所有模块的 logger 直接可用
-    from blog.logger import log_request, setup_logging
+    from blog.infra.logger import log_request, setup_logging
 
     logger = setup_logging(app)
     logger.info('应用启动中...')
@@ -243,12 +243,12 @@ def create_app():
     # ── Redis 缓存（数据库之后，蓝图之前） ────────
     # 初始化 Redis 连接池。如果 REDIS_URL 未配置，
     # 则静默降级（所有缓存操作直接返回 None，不影响业务）。
-    from blog.cache import init_redis
+    from blog.core.cache import init_redis
 
     init_redis(app)
 
     # ── 任务队列初始化（复用 Redis 连接）──────────
-    from blog.task_queue import init_task_queue
+    from blog.infra.task_queue import init_task_queue
     init_task_queue(app)
 
     # ── 加载 B站 持久化登录凭证 ──
@@ -264,7 +264,7 @@ def create_app():
     login_manager.login_view = 'admin.login'  # 未登录时跳转
     login_manager.login_message = '请先登录'
 
-    from blog.models import User
+    from blog.core.models import User
 
     @login_manager.user_loader
     def load_user(user_id):
@@ -286,22 +286,22 @@ def create_app():
 
     app.register_blueprint(admin_bp)
     # Bilibili 管理 blueprint
-    from blog.bili_routes import bili_bp
+    from blog.bilibili.admin_routes import bili_bp
 
     app.register_blueprint(bili_bp)
     # Bilibili 公开页面 blueprint
-    from blog.bili_public_routes import bili_public_bp
+    from blog.bilibili.public_routes import bili_public_bp
 
     app.register_blueprint(bili_public_bp)
     # 外部 API blueprint（供 AI agent 发布博文，Bearer token 认证，豁免 CSRF）
-    from blog.api import api_bp
+    from blog.core.api import api_bp
 
     app.register_blueprint(api_bp)
     csrf.exempt(api_bp)
     logger.info('蓝图注册完成')
 
     # ── 站点设置上下文处理器（注入 site_settings / site_name / site_subtitle）──
-    from blog.settings import inject_settings
+    from blog.core.settings import inject_settings
 
     app.context_processor(inject_settings)
 
@@ -565,7 +565,7 @@ if __name__ == '__main__':
                     kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
                 # -m 方式运行（cwd=项目根）：直接 python blog/logwatch.py 时
                 # sys.path[0] 是 blog/ 目录，会找不到 blog 包
-                _logwatch_proc = subprocess.Popen([_sys.executable, '-m', 'blog.logwatch'], **kwargs)
+                _logwatch_proc = subprocess.Popen([_sys.executable, '-m', 'blog.infra.logwatch'], **kwargs)
                 logger.info('日志看门狗进程已启动 (PID: %d)', _logwatch_proc.pid)
             except Exception as e:
                 logger.error('日志看门狗进程启动失败: %s', e)
