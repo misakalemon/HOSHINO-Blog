@@ -22,6 +22,7 @@ HOSHINO Blog — 数据模型
   BiliWatchedVideo   — 用户标记的重点追踪视频
   BiliSubscription   — B 站 UP 主邮件订阅（支持批量订阅/验证/取消）
   BiliCleanupConfig  — B 站历史快照自动清理配置
+  BiliDynamic        — B 站 UP 主动态（视频/图文/文字/转发）
 
 --- 其他 ---
 
@@ -735,6 +736,52 @@ class BiliCleanupConfig(db.Model):
     days = db.Column(db.Integer, default=90, nullable=False, comment='清理几天前的数据')
     enabled = db.Column(db.Boolean, default=False, comment='是否启用自动清理')
     updated_at = db.Column(db.DateTime, default=now_cst)
+
+
+class BiliDynamic(db.Model):
+    """B站 UP 主动态
+
+    存储从动态流（x/polymer/web-dynamic/v1/feed/space）爬取的动态数据，
+    支持三种类型：视频投稿(AV)、图文(DRAW)、文字(WORD)，以及转发(FORWARD)。
+
+    __tablename__ = 'bili_dynamics'
+
+    索引：
+      ix_bili_dynamic_up_pub — (up_id, pub_datetime) 加速按 UP 主+时间查询
+      dynamic_id             — 唯一索引，动态 ID 去重
+    """
+
+    __tablename__ = 'bili_dynamics'
+    __table_args__ = (
+        db.Index('ix_bili_dynamic_up_pub', 'up_id', 'pub_datetime'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    up_id = db.Column(
+        db.Integer, db.ForeignKey('bili_ups.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    dynamic_id = db.Column(db.String(32), unique=True, nullable=False, comment='B站动态 ID')
+    dynamic_type = db.Column(db.String(16), nullable=False, index=True, comment='动态类型: AV/DRAW/WORD/FORWARD')
+    pub_datetime = db.Column(db.DateTime, nullable=True, index=True, comment='动态发布时间')
+    content = db.Column(db.Text, nullable=True, comment='文字内容')
+    pics = db.Column(db.JSON, nullable=True, comment='图片 URL 数组')
+    bvid = db.Column(db.String(64), nullable=True, index=True, comment='关联视频 BV 号（AV 类型）')
+    forward_dynamic_id = db.Column(db.String(32), nullable=True, comment='转发目标动态 ID')
+    created_at = db.Column(db.DateTime, default=now_cst)
+    updated_at = db.Column(
+        db.DateTime,
+        default=now_cst,
+        onupdate=now_cst,
+    )
+
+    up = db.relationship(
+        'BiliUp', backref=db.backref('dynamics', lazy='dynamic'),
+        passive_deletes=True,
+    )
+
+    def __repr__(self):
+        return f'<BiliDynamic {self.dynamic_id} type={self.dynamic_type}>'
 
 
 class HeroImage(db.Model):

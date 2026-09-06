@@ -1024,6 +1024,131 @@ def get_video_list_from_dynamics(mid: int) -> list[dict]:
     return results
 
 
+def get_dynamics(mid: int) -> list[dict]:
+    """获取 UP 主最新动态列表（视频/图文/文字/转发）。
+
+    请求 x/polymer/web-dynamic/v1/feed/space 获取最近 ~12 条动态，
+    解析每种类型并提取关键信息：
+
+      DYNAMIC_TYPE_AV      → 视频投稿，提取 bvid
+      DYNAMIC_TYPE_DRAW    → 图文，提取图片 URL 列表
+      DYNAMIC_TYPE_WORD    → 纯文字动态
+      DYNAMIC_TYPE_FORWARD → 转发，记录原动态 ID 并解析原动态内容
+
+    返回 list[dict]，每条包含：
+      dynamic_id, dynamic_type, pub_datetime, content, pics, bvid, forward_dynamic_id
+
+    参数：
+      mid      — UP 主用户 ID
+      returns  — 动态信息字典列表
+    """
+    u = _user_mod.User(mid, credential=_credential)
+    try:
+        data = _sync(u.get_dynamics_new())
+    except Exception as e:
+        if _credential and _is_auth_error(e):
+            u = _user_mod.User(mid)
+            data = _sync(u.get_dynamics_new())
+        else:
+            logger.warning('动态爬取: get_dynamics_new 失败 mid=%d: %s', mid, e)
+            time.sleep(3.0)
+            u = _user_mod.User(mid)
+            try:
+                data = _sync(u.get_dynamics_new())
+            except Exception as e2:
+                logger.warning('动态爬取: get_dynamics_new 重试失败 mid=%d: %s', mid, e2)
+                return []
+
+    items = data.get('items') or []
+    results: list[dict] = []
+
+    for item in items:
+        parsed = _parse_dynamic_item(item)
+        if parsed:
+            results.append(parsed)
+
+    logger.info('动态爬取: mid=%d 获取 %d 条动态', mid, len(results))
+    return results
+
+
+def _parse_dynamic_item(item: dict) -> dict | None:
+    """解析单条动态 item，返回标准化字典或 None（无法解析时）。
+
+    处理转发类型时，会递归解析 orig 中的原动态内容，
+    但保留外层的 dynamic_id 和 forward_dynamic_id 标记。
+    """
+    raw_type = item.get('type', '')
+    dynamic_id = item.get('id_str') or str(item.get('id', ''))
+    if not dynamic_id:
+        return None
+
+    # 类型映射：DYNAMIC_TYPE_AV → AV, DYNAMIC_TYPE_DRAW → DRAW, ...
+    dynamic_type = raw_type.replace('DYNAMIC_TYPE_', '') if raw_type else 'UNKNOWN'
+
+    modules = item.get('modules') or {}
+    mod_author = modules.get('module_author') or {}
+    mod_dynamic = modules.get('module_dynamic') or {}
+    major = mod_dynamic.get('major') or {}
+
+    # 发布时间戳（Unix 秒）
+    pub_ts = mod_author.get('pub_ts', 0)
+    pub_datetime = None
+    if pub_ts:
+        try:
+            pub_datetime = datetime.fromtimestamp(int(pub_ts), tz=CST)
+        except (ValueError, OSError):
+            pub_datetime = None
+
+    # 文字内容
+    desc = mod_dynamic.get('desc') or {}
+    content = desc.get('text', '') or ''
+
+    # 图片列表（图文动态）
+    pics: list[str] = []
+    draw = major.get('draw') or {}
+    if draw:
+        for pic_item in (draw.get('items') or []):
+            src = pic_item.get('src', '')
+            if src:
+                pics.append(src)
+
+    # 关联视频 BV 号（视频动态）
+    bvid = ''
+    archive = major.get('archive') or {}
+    if archive:
+        bvid = archive.get('bvid', '') or ''
+
+    # 转发处理：记录原动态 ID，并解析原动态内容
+    forward_dynamic_id = None
+    if dynamic_type == 'FORWARD':
+        orig = item.get('orig')
+        if orig:
+            forward_dynamic_id = orig.get('id_str') or str(orig.get('id', ''))
+            # 递归解析原动态，提取其内容/图片/视频
+            orig_parsed = _parse_dynamic_item(orig)
+            if orig_parsed:
+                # 保留外层 dynamic_id 和 forward 标记，
+                # 但用原动态的内容填充
+                content = orig_parsed.get('content', '') or content
+                pics = orig_parsed.get('pics', []) or pics
+                bvid = orig_parsed.get('bvid', '') or bvid
+                # 如果原动态是 AV/DRAW/WORD，将类型改为原类型
+                # 方便前台展示（转发的内容本质是原动态）
+                orig_type = orig_parsed.get('dynamic_type', '')
+                if orig_type in ('AV', 'DRAW', 'WORD'):
+                    dynamic_type = orig_type
+
+    return {
+        'dynamic_id': dynamic_id,
+        'dynamic_type': dynamic_type,
+        'pub_datetime': pub_datetime,
+        'content': content,
+        'pics': pics,
+        'bvid': bvid,
+        'forward_dynamic_id': forward_dynamic_id,
+    }
+
+
 def _is_video_invisible(e: Exception) -> bool:
     """判断异常是否为"稿件不可见/已删除"（62002=稿件不可见，62012=视频不可见）。
 

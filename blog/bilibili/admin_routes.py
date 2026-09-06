@@ -42,6 +42,7 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for
 from sqlalchemy.exc import IntegrityError
 
 from blog.core.models import (
+    BiliDynamic,
     BiliSubscription,
     BiliUp,
     BiliUpHistory,
@@ -1146,6 +1147,66 @@ def _load_recent_hist_ids(video_ids, cutoff):
     return hist_id_map
 
 
+def _crawl_and_save_dynamics(up: BiliUp, mid: int, emit):
+    """爬取并保存 UP 主最新动态（跟随增量检查，每 30 分钟一次）。
+
+    调用 get_dynamics(mid) 获取最新 ~12 条动态，
+    按 dynamic_id 去重后插入或更新到 bili_dynamics 表。
+
+    Args:
+        up    — BiliUp ORM 对象
+        mid   — B 站 mid
+        emit  — 进度日志函数
+    """
+    from .bili_api import get_dynamics
+
+    try:
+        dynamics = get_dynamics(mid)
+    except Exception as e:
+        logger.warning('动态爬取失败 mid=%d: %s', mid, e)
+        emit(f'动态爬取失败: {e}', 'ERR')
+        return
+
+    if not dynamics:
+        return
+
+    # 查询已存在的 dynamic_id → 记录映射
+    existing_ids = {d.dynamic_id for d in BiliDynamic.query.filter_by(up_id=up.id).all()}
+    new_count = 0
+    update_count = 0
+
+    for dyn in dynamics:
+        dynamic_id = dyn['dynamic_id']
+        if dynamic_id in existing_ids:
+            # 更新已有记录（内容/图片可能变化）
+            record = BiliDynamic.query.filter_by(up_id=up.id, dynamic_id=dynamic_id).first()
+            if record:
+                record.content = dyn.get('content', '') or ''
+                record.pics = dyn.get('pics', []) or []
+                record.bvid = dyn.get('bvid', '') or ''
+                record.forward_dynamic_id = dyn.get('forward_dynamic_id')
+                update_count += 1
+        else:
+            # 新动态
+            record = BiliDynamic(
+                up_id=up.id,
+                dynamic_id=dynamic_id,
+                dynamic_type=dyn.get('dynamic_type', 'UNKNOWN'),
+                pub_datetime=dyn.get('pub_datetime'),
+                content=dyn.get('content', ''),
+                pics=dyn.get('pics', []),
+                bvid=dyn.get('bvid', ''),
+                forward_dynamic_id=dyn.get('forward_dynamic_id'),
+            )
+            db.session.add(record)
+            new_count += 1
+            existing_ids.add(dynamic_id)
+
+    db.session.commit()
+    if new_count or update_count:
+        emit(f'动态爬取: 新增 {new_count} 条，更新 {update_count} 条', 'DYN')
+
+
 def _check_new_videos(mid: int, app):
     """增量检查 — 每 30 分钟执行，发现新视频并更新统计数据。
 
@@ -1350,6 +1411,10 @@ def _check_new_videos(mid: int, app):
             if dyn_videos:
                 emit(f'动态发现完成，共扫描 {len(dyn_videos)} 个视频', 'DYN')
             db.session.commit()
+
+            # ── 爬取并保存动态（视频/图文/文字/转发）──
+            # 跟随增量检查，每 30 分钟一次，与视频发现共享同一调度周期
+            _crawl_and_save_dynamics(up, mid, emit)
 
             # 更新 UP 主的视频总数（排除已删除墓碑，与实际可见数一致）
             up.video_count = BiliVideo.query.filter_by(up_id=up.id, is_deleted=False).count()
