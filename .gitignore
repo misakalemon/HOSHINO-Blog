@@ -2,9 +2,8 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
-venv/
-.env
 *.egg
+venv/
 
 # Node.js
 node_modules/
@@ -16,6 +15,7 @@ node_modules/
 .idea/
 .vscode/
 .arts/
+.codeartsdoer/
 *.swp
 *.swo
 
@@ -59,22 +59,15 @@ blog/bilibili/.bili_cookies.txt
 .bili_cookies.txt
 .bili_credential.json
 
-
-# IDE
-.arts/
-.codeartsdoer/
-.vscode/
 # Cache
-__pycache__/
 .ruff_cache/
 .pytest_cache/
 pytest-cache-files-*/
 .coverage
 htmlcov/
+
 # Playwright
 .playwright-mcp/
-# Logs
-blog/logs/
-# OS
-Thumbs.db
-.DS_Store
+
+# Env
+.env

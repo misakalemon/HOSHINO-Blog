@@ -77,21 +77,19 @@ hoshino-blog/
 │   ├── test_task_queue.py  # 任务队列测试
 │   └── test_utils.py       # 工具函数测试
 │
-├── tools/                  # 工具脚本
+├── tools/                  # 工具与运维脚本
 │   ├── upload_post.py      # 文章上传工具（md → API → 发布）
-│   └── restructure.py      # 项目重构脚本（一次性）
-│
-├── scripts/                # 运维脚本
-│   ├── bili_daily_scrape.py
-│   ├── bili_incremental.py
-│   ├── fix_db_schema.py
-│   └── fix_timestamps.py
+│   ├── restructure.py      # 项目重构脚本（一次性）
+│   ├── bili_daily_scrape.py # B站每日全量爬取
+│   ├── bili_incremental.py  # B站增量爬取
+│   ├── fix_db_schema.py     # 数据库 schema 修复
+│   └── fix_timestamps.py    # 时间戳修复
 │
 ├── docs/                   # 文档
 │   ├── ARCHITECTURE.md
 │   ├── TECHNICAL_DOCUMENTATION.md
 │   ├── MYSQL_SETUP.md
-│   └── CHANGELOG-*.md
+│   └── changelog/          # 历史变更日志（归档）
 │
 ├── migrations/             # Alembic 数据库迁移
 ├── src/                    # 前端源码（编辑器等）
