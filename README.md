@@ -55,7 +55,7 @@ HOSHINO Blog 是一个基于 Python Flask 框架构建的个人博客系统。�
 | 中文分词 | jieba（精确模式 + 300+ 停用词） |
 | 邮件 | SMTP（163/petalmail，支持批量订阅通知） |
 | 词云渲染 | 零依赖纯 Canvas（5 种形状 + 3 套配色） |
-| 启动器 | Eel（浏览器 GUI，Conda 环境管理） |
+
 | 生产服务器 | waitress（Windows）/ gunicorn（Linux） |
 | 容器化 | Docker Compose（Selenium Chrome） |
 | 代码规范 | Ruff（pyproject.toml） |
@@ -89,11 +89,18 @@ HOSHINO Blog 是一个基于 Python Flask 框架构建的个人博客系统。�
 | 仪表盘 | 文章/评论/用户统计概览 |
 | 富文本编辑器 | 所见即所得，支持标题/粗体/列表/引用/代码块/链接/字体大小，**工具栏固定在顶部** |
 | 文章管理 | CRUD + 发布/草稿切换 + 多分类 |
-| 分类管理 | 新增/编辑/删除分类 |
+| 分类管理 | 新增/编辑/删除分类 + 搜索/排序/批量删除/合并 |
 | 特色卡片 | 首页精选卡片管理，支持图片/图标/链接 |
 | 评论审核 | 待审核/已通过双列表分页，一键审批 |
 | 用户管理 | 列表显示头像，编辑角色，启用/禁用/删除 |
 | 个人资料 | 头像上传、GitCode/GitHub/Gitee/Bilibili 链接、关于页富文本编辑、密码修改 |
+| **API 令牌** | **Bearer token 认证，供 AI agent 程序化发布/编辑/删除博文** |
+| **数据备份** | **手动/定时备份（DB+uploads），支持恢复/下载/自动清理（保留份数+天数）** |
+| **数据导出** | **文章 Markdown ZIP / 文章 JSON / 全站 JSON / 分类 CSV** |
+| **数据导入** | **从 JSON 或 Markdown ZIP 导入文章，支持预检和覆盖** |
+| **站点设置** | **运行时可改的站点名/副标题/SEO/自定义 CSS/JS/统计脚本** |
+| **媒体库** | **uploads 文件浏览/上传/删除/引用追踪** |
+| **访问统计** | **Umami/Plausible/百度/Google/自定义脚本配置** |
 | **B站数据** | **UP 主管理、V2 扫码登录、视频爬取/增量发现、单个视频添加（BV/AV号）、爬取进度实时查看、粉丝/播放量趋势图表、订阅管理、自定义日历选择器** |
 
 ### 科技风设计亮点
@@ -225,6 +232,72 @@ MAIL_TIMEOUT=10
 
 ## 项目结构
 
+```
+hoshino_blog/
+├── app.py                     # 应用入口 / 工厂函数
+├── worker.py                  # Worker 进程（定时任务/爬虫/词云调度）
+├── config.py                  # 集中配置（含 SECRET_KEY 自动轮换）
+├── .env                       # 环境变量（数据库/密钥/缓存）
+├── requirements.txt           # Python 依赖
+│
+├── blog/                      # 主包
+│   ├── __init__.py            # Blueprint + 数据库初始化 + 自动迁移
+│   ├── core/                  # 核心业务逻辑
+│   │   ├── models.py          # 数据模型（User/Post/Category/Comment 等）
+│   │   ├── admin.py           # 后台路由（文章/分类/评论/用户/备份/设置/导出/导入）
+│   │   ├── routes.py          # 前台路由（首页/文章/搜索/RSS/工具）
+│   │   ├── api.py             # 外部 API（Bearer token 认证，供 AI agent 发布博文）
+│   │   ├── forms.py           # WTForms 表单定义
+│   │   ├── cache.py           # Redis 缓存封装（降级友好）
+│   │   ├── settings.py        # 站点设置（DB 驱动，运行时可改）
+│   │   └── utils.py           # 通用工具函数
+│   ├── bilibili/              # B站相关
+│   │   ├── bili_api.py        # B站 API 封装
+│   │   ├── admin_routes.py    # B站后台管理路由
+│   │   ├── public_routes.py   # B站公开页面路由
+│   │   ├── config.py          # 爬取配置
+│   │   └── login.py           # V2 扫码登录
+│   ├── infra/                 # 基础设施
+│   │   ├── logger.py          # 日志系统（每日轮转/多进程安全）
+│   │   ├── logwatch.py        # 业务心跳看门狗
+│   │   ├── mail.py            # SMTP 邮件发送
+│   │   ├── task_queue.py      # 任务队列（Redis 驱动）
+│   │   └── backup.py          # 数据备份/恢复/清理
+│   └── wordcloud/             # 词云
+│       ├── generator.py       # 词云生成（jieba 分词 + 预计算）
+│       └── runner.py          # 独立词云子进程入口
+│
+├── templates/                 # Jinja2 模板
+│   ├── base.html              # 基础布局
+│   ├── index.html             # 首页
+│   ├── single-post.html       # 文章详情
+│   ├── admin/                 # 后台模板
+│   │   ├── base_admin.html    # 后台布局
+│   │   ├── post-form.html     # 富文本编辑器
+│   │   ├── token-list.html    # API 令牌管理
+│   │   ├── backup.html        # 备份管理 + 定时设置
+│   │   ├── export.html        # 数据导出
+│   │   ├── import.html        # 数据导入
+│   │   └── ...
+│   └── ...
+│
+├── static/                    # 静态资源
+│   ├── css/                   # 样式表
+│   ├── js/                    # JavaScript
+│   ├── uploads/               # 用户上传
+│   └── ...
+│
+├── tests/                     # 测试套件（307 测试，94% 覆盖率）
+├── tools/                     # 工具与运维脚本
+│   ├── upload_post.py         # 文章上传工具（md → API → 发布）
+│   └── ...
+├── docs/                      # 文档
+│   ├── ARCHITECTURE.md
+│   ├── changelog/             # 历史变更日志
+│   └── ...
+├── logs/                      # 日志文件（按日期拆分）
+├── migrations/                # Flask-Migrate 迁移脚本
+└── PROJECT_STRUCTURE.md       # 详细项目结构文档
 ```
 hoshino_blog/
 ├── app.py                     # 应用入口 / 工厂函数
@@ -574,6 +647,21 @@ arc/search API（按 pubdate 倒序翻页）
 | GET | `/bilibili/verify/<token>` | 验证订阅链接 |
 | GET | `/bilibili/unsubscribe/<token>` | 取消订阅链接 |
 
+### 外部 API（`/api/v1`）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/v1/me` | 验证令牌、查看当前用户 |
+| GET | `/api/v1/categories` | 获取所有分类 |
+| GET | `/api/v1/posts` | 文章列表（分页 + 模糊搜索） |
+| GET | `/api/v1/posts/<id_or_slug>` | 文章详情 |
+| POST | `/api/v1/posts` | 创建文章 |
+| PUT | `/api/v1/posts/<id_or_slug>` | 编辑文章（仅传需改字段） |
+| DELETE | `/api/v1/posts/<id_or_slug>` | 删除文章 |
+
+认证：`Authorization: Bearer <token>`，令牌在后台 `/admin/tokens` 申请。
+categories 支持 id / slug / name 三种形式。响应含 `url` 和 `word_count` 字段。
+
 ### 后台路由
 
 | 方法 | 路径 | 说明 |
@@ -609,6 +697,13 @@ arc/search API（按 pubdate 倒序翻页）
 | GET/POST | `/admin/featured-cards/new` | 新建卡片（admin） |
 | GET/POST | `/admin/featured-cards/<id>/edit` | 编辑卡片（admin） |
 | POST | `/admin/featured-cards/<id>/delete` | 删除卡片（admin） |
+| GET | `/admin/tokens` | API 令牌管理（user+） |
+| GET | `/admin/backup` | 备份管理 + 定时设置（admin） |
+| GET | `/admin/export` | 数据导出（admin） |
+| GET | `/admin/import` | 数据导入（admin） |
+| GET | `/admin/settings` | 站点设置（admin） |
+| GET | `/admin/analytics` | 访问统计配置（admin） |
+| GET | `/admin/media` | 媒体库（editor+） |
 
 ### Bilibili 后台
 
@@ -704,20 +799,21 @@ python app.py
 
 ## 开发日志
 
-- [2026-09-02 — 全站视觉升级 v3.0 / B站时间轴滑块 / 鸿蒙适配 / 按钮交互直觉化 / 导航逻辑优化 / 流畅性优化 / 词云数据泄漏根治](docs/CHANGELOG-2026-09-02.md)
-- [2026-08-31 — 深扫饿死增量根治 / GIL 隔离子进程词云 / 独立日志看门狗 / 多进程日志标签](docs/CHANGELOG-2026-08.md)
-- [2026-07-28 — Tiptap 工具栏固定修复 / B站单个视频爬取功能 / 数据库迁移优化](docs/CHANGELOG-2026-07-28.md)
-- [2026-07-23 — 词云系统完整升级（异步队列 / ZLIB 压缩 / UP 主页聚合 / 自定义形状 / 线程安全审计 / 内存优化）](docs/CHANGELOG-2026-07-23.md)
-- [2026-07-20 — 安全审计修复 / 并发竞态消除 / 代码完整注释](docs/CHANGELOG-2026-07-20.md)
-- [2026-07-19 — 首页粒子画像系统 / 移除价格爬取 / 启动性能优化 / 全站注释](docs/CHANGELOG-2026-07-19.md)
-- [2026-07-14 — 邮件订阅系统 / 视频对比 / 统计增长指标 / 全站确认保护](docs/CHANGELOG-2026-07-14.md)
-- [2026-07-13 — 动态发现兜底 + 事件循环修复 + 粉丝数 fallback + 互斥/超时/内存泄漏修复](docs/CHANGELOG-2026-07-13.md)
-- [2026-07-12 — B站 爬取架构重构 — 三层更新/凭证持久化/并发优化/匿名降级](docs/CHANGELOG-2026-07-12.md)
-- [2026-07-09 — B站 数据集成、搜索/图表/定时刷新/多 UP 主并行爬取](docs/CHANGELOG-2026-07-06.md)
-- [2026-07-03 — 权限体系重构、社交链接、密码安全](docs/CHANGELOG-2026-07-03.md)
-- [2026-06-30 — 全站主题改版（Hoshino）、特色卡片系统](docs/CHANGELOG_2026-06-30.md)
-- [2026-06-09 — 数据库迁移、分页增强、主题切换](docs/CHANGELOG-2026-06-09.md)
-- [2026-06-05 — 项目初始构建](docs/CHANGELOG-2026-06-05.md)
+- [2026-09-06 — API 改造/后台模块补齐/项目结构深度重构](docs/changelog/CHANGELOG-2026-09-06.md)
+- [2026-09-02 — 全站视觉升级 v3.0 / B站时间轴滑块 / 鸿蒙适配 / 按钮交互直觉化 / 导航逻辑优化 / 流畅性优化 / 词云数据泄漏根治](docs/changelog/CHANGELOG-2026-09-02.md)
+- [2026-08-31 — 深扫饿死增量根治 / GIL 隔离子进程词云 / 独立日志看门狗 / 多进程日志标签](docs/changelog/CHANGELOG-2026-08.md)
+- [2026-07-28 — Tiptap 工具栏固定修复 / B站单个视频爬取功能 / 数据库迁移优化](docs/changelog/CHANGELOG-2026-07-28.md)
+- [2026-07-23 — 词云系统完整升级（异步队列 / ZLIB 压缩 / UP 主页聚合 / 自定义形状 / 线程安全审计 / 内存优化）](docs/changelog/CHANGELOG-2026-07-23.md)
+- [2026-07-20 — 安全审计修复 / 并发竞态消除 / 代码完整注释](docs/changelog/CHANGELOG-2026-07-20.md)
+- [2026-07-19 — 首页粒子画像系统 / 移除价格爬取 / 启动性能优化 / 全站注释](docs/changelog/CHANGELOG-2026-07-19.md)
+- [2026-07-14 — 邮件订阅系统 / 视频对比 / 统计增长指标 / 全站确认保护](docs/changelog/CHANGELOG-2026-07-14.md)
+- [2026-07-13 — 动态发现兜底 + 事件循环修复 + 粉丝数 fallback + 互斥/超时/内存泄漏修复](docs/changelog/CHANGELOG-2026-07-13.md)
+- [2026-07-12 — B站 爬取架构重构 — 三层更新/凭证持久化/并发优化/匿名降级](docs/changelog/CHANGELOG-2026-07-12.md)
+- [2026-07-09 — B站 数据集成、搜索/图表/定时刷新/多 UP 主并行爬取](docs/changelog/CHANGELOG-2026-07-06.md)
+- [2026-07-03 — 权限体系重构、社交链接、密码安全](docs/changelog/CHANGELOG-2026-07-03.md)
+- [2026-06-30 — 全站主题改版（Hoshino）、特色卡片系统](docs/changelog/CHANGELOG_2026-06-30.md)
+- [2026-06-09 — 数据库迁移、分页增强、主题切换](docs/changelog/CHANGELOG-2026-06-09.md)
+- [2026-06-05 — 项目初始构建](docs/changelog/CHANGELOG-2026-06-05.md)
 
 ---
 
