@@ -126,6 +126,7 @@ class PostForm(FlaskForm):
     html_file = FileField('上传 HTML 文件', validators=[Optional()])                   # 自定义 HTML 页面文件，选填
     html_content = TextAreaField('HTML 源码', validators=[Optional()])                 # 自定义 HTML 源码（优先于 html_file）
     is_published = BooleanField('发布')                                                # 是否公开可见
+    is_top = BooleanField('置顶')                                                       # 是否置顶（首页置顶优先展示）
 
 
 class CategoryForm(FlaskForm):

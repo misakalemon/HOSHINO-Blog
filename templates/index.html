@@ -160,32 +160,35 @@
                 <div class="masonry-item">
                     <div class="glass-card">
                         <div class="card-content">
-                            <!-- 文章封面图（可选） -->
-                            {% if post.cover_image %}
-                            <a href="{{ url_for('blog.single_post', slug=post.slug) }}">
-                                <div class="img-glow" style="margin-bottom:1rem">
-                                    <!-- thumbnail 路由生成 WebP 缩略图，onerror 隐藏加载失败的图片 -->
-                                    <img src="{{ url_for('blog.thumbnail', path=post.cover_image, w=400) }}" alt="{{ post.title }}" loading="lazy" decoding="async"{% if loop.first %} fetchpriority="high"{% endif %} style="width:100%;display:block;border-radius:14px" data-hide-on-error>
-                                </div>
-                            </a>
+                            <!-- 置顶徽标 -->
+                            {% if post.is_top %}
+                            <div style="margin-bottom:8px"><span class="pill-light" style="background:rgba(251,191,36,0.12);border-color:rgba(251,191,36,0.25);color:#fbbf24;font-size:0.65rem">📌 置顶</span></div>
                             {% endif %}
-                            <h2 class="text-lg font-light tracking-tight" style="font-size:1.1rem;font-weight:300;letter-spacing:-0.01em;color:rgba(255,255,255,0.9);line-height:1.3">
+                            <!-- 文章封面图（可选，统一 16:9 比例，缺封面时占位以对齐卡片高度） -->
+                            <a href="{{ url_for('blog.single_post', slug=post.slug) }}" class="img-glow" style="display:block;margin-bottom:1rem;aspect-ratio:16/9;overflow:hidden;border-radius:14px">
+                                {% if post.cover_image %}
+                                <img src="{{ url_for('blog.thumbnail', path=post.cover_image, w=400) }}" alt="{{ post.title }}" loading="lazy" decoding="async"{% if loop.first %} fetchpriority="high"{% endif %} style="width:100%;height:100%;object-fit:cover;display:block;border-radius:14px" data-hide-on-error>
+                                {% else %}
+                                <div style="width:100%;height:100%;background:rgba(255,255,255,0.03);display:flex;align-items:center;justify-content:center;font-size:1.4rem;color:rgba(255,255,255,0.15);border-radius:14px">✦</div>
+                                {% endif %}
+                            </a>
+                            <h2 class="text-lg font-light tracking-tight" style="font-size:1.1rem;font-weight:300;letter-spacing:-0.01em;color:rgba(255,255,255,0.9);line-height:1.3;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;min-height:2.6rem">
                                 <a href="{{ url_for('blog.single_post', slug=post.slug) }}" style="transition:color 0.3s">{{ post.title }}</a>
                             </h2>
-                            <!-- 文章内容摘要（截断至 120 字符） -->
+                            <!-- 文章内容摘要（截断至 120 字符，固定 3 行对齐高度） -->
                             {% if post.summary %}
-                            <p style="color:rgba(255,255,255,0.35);font-size:0.75rem;line-height:1.6;margin-top:8px;font-weight:300">
+                            <p style="color:rgba(255,255,255,0.35);font-size:0.75rem;line-height:1.6;margin-top:8px;font-weight:300;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden">
                                 {{ post.summary|truncate(120) }}
                             </p>
                             {% elif post.content %}
-                            <p style="color:rgba(255,255,255,0.35);font-size:0.75rem;line-height:1.6;margin-top:8px;font-weight:300">
+                            <p style="color:rgba(255,255,255,0.35);font-size:0.75rem;line-height:1.6;margin-top:8px;font-weight:300;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden">
                                 {{ post.content|striptags|truncate(120) }}
                             </p>
                             {% endif %}
-                            <!-- 文章分类标签列表 -->
+                            <!-- 文章分类标签列表（点击直达分类筛选） -->
                             <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
                                 {% for cat in post.categories %}
-                                <span class="pill-light">{{ cat.name }}</span>
+                                <a href="{{ url_for('blog.index', category=cat.slug) }}" class="pill-light" style="text-decoration:none;cursor:pointer;display:inline-block;transition:opacity 0.2s" title="查看「{{ cat.name }}」分类">{{ cat.name }}</a>
                                 {% endfor %}
                             </div>
                             <!-- 作者 + 日期（同一行） -->
@@ -207,14 +210,14 @@
                 <ul class="pagination">
                     <!-- 上一页按钮 -->
                     {% if posts.has_prev %}
-                    <li><a class="js-scroll-restore" href="{{ url_for('blog.index', page=posts.prev_num, per_page=current_per_page, q=search_query if search_query is defined and search_query else None) }}">←</a></li>
+                    <li><a class="js-scroll-restore" href="{{ url_for('blog.index', page=posts.prev_num, per_page=current_per_page, category=current_category if current_category else None, q=search_query if search_query is defined and search_query else None) }}">←</a></li>
                     {% endif %}
                     <!-- 迭代页码，left_edge/right_edge 控制两端页码，left_current/right_current 控制当前页两侧 -->
                     {% for page_num in posts.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                         {% if page_num %}
                         <!-- 当前页高亮 -->
                         <li {% if page_num == posts.page %}class="active"{% endif %}>
-                            <a class="js-scroll-restore" href="{{ url_for('blog.index', page=page_num, per_page=current_per_page, q=search_query if search_query is defined and search_query else None) }}">{{ page_num }}</a>
+                            <a class="js-scroll-restore" href="{{ url_for('blog.index', page=page_num, per_page=current_per_page, category=current_category if current_category else None, q=search_query if search_query is defined and search_query else None) }}">{{ page_num }}</a>
                         </li>
                         {% else %}
                         <!-- 页码不连续时显示省略号 -->
@@ -223,7 +226,7 @@
                     {% endfor %}
                     <!-- 下一页按钮 -->
                     {% if posts.has_next %}
-                    <li><a class="js-scroll-restore" href="{{ url_for('blog.index', page=posts.next_num, per_page=current_per_page, q=search_query if search_query is defined and search_query else None) }}">→</a></li>
+                    <li><a class="js-scroll-restore" href="{{ url_for('blog.index', page=posts.next_num, per_page=current_per_page, category=current_category if current_category else None, q=search_query if search_query is defined and search_query else None) }}">→</a></li>
                     {% endif %}
                 </ul>
                 <div class="page-jump">

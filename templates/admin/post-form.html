@@ -222,6 +222,8 @@
                     <div class="form-group" style="margin-top:16px">
                         <!-- 发布状态复选框 -->
                         <label class="glow-checkbox"><input type="checkbox" name="is_published" {% if form.is_published.data %}checked{% endif %}><span class="cb-box"></span><span> 立即发布</span></label>
+                        <label class="glow-checkbox" style="margin-top:10px"><input type="checkbox" name="is_top" {% if form.is_top.data %}checked{% endif %}><span class="cb-box"></span><span> 置顶文章</span></label>
+                        <div style="font-size:12px;color:var(--text-muted);margin-top:4px">置顶文章在首页排列时优先展示</div>
                     </div>
                 </div>
             </div>

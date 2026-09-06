@@ -183,6 +183,11 @@ def _validate_post_payload(data, editing=False):
     elif not editing:
         fields['is_published'] = False
 
+    if 'is_top' in data:
+        fields['is_top'] = bool(data['is_top'])
+    elif not editing:
+        fields['is_top'] = False
+
     cats, err = _resolve_categories(data.get('categories'))
     if err:
         return None, err, 422
@@ -209,6 +214,7 @@ def _serialize_post(post):
         'cover_image': post.cover_image or '',
         'html_content': post.html_content or '',
         'is_published': post.is_published,
+        'is_top': post.is_top,
         'author_id': post.author_id,
         'categories': [{'id': c.id, 'name': c.name, 'slug': c.slug} for c in post.categories],
         'created_at': post.created_at.isoformat() if post.created_at else None,
@@ -323,6 +329,7 @@ def create_post():
         html_file_url='',
         author_id=g.token_user.id,
         is_published=fields['is_published'],
+        is_top=fields['is_top'],
     )
     post.categories = fields['categories']
     db.session.add(post)
@@ -354,7 +361,7 @@ def update_post(id_or_slug):
         if existing:
             return jsonify({'ok': False, 'error': 'slug 已被其他文章使用'}), 409
 
-    for key in ('title', 'slug', 'summary', 'content', 'cover_image', 'html_content', 'is_published'):
+    for key in ('title', 'slug', 'summary', 'content', 'cover_image', 'html_content', 'is_published', 'is_top'):
         if key in fields:
             setattr(post, key, fields[key])
     if 'categories' in fields:

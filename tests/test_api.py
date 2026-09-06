@@ -64,6 +64,7 @@ class TestSerializePost:
         post.cover_image = 'cover.jpg'
         post.html_content = '<p>html</p>'
         post.is_published = True
+        post.is_top = False
         post.author_id = 2
         cat = MagicMock()
         cat.id = 10
@@ -86,6 +87,7 @@ class TestSerializePost:
         assert result['cover_image'] == 'cover.jpg'
         assert result['html_content'] == '<p>html</p>'
         assert result['is_published'] is True
+        assert result['is_top'] is False
         assert result['author_id'] == 2
         assert result['categories'] == [{'id': 10, 'name': 'Tech', 'slug': 'tech'}]
         assert result['created_at'] == '2024-01-01T12:00:00'
@@ -118,6 +120,10 @@ class TestSerializePost:
     def test_empty_categories(self):
         result = api_mod._serialize_post(self._make_post(categories=[]))
         assert result['categories'] == []
+
+    def test_is_top_true(self):
+        result = api_mod._serialize_post(self._make_post(is_top=True))
+        assert result['is_top'] is True
 
 
 # ── _can_edit (纯函数) ──────────────────────────────────────
@@ -823,6 +829,15 @@ class TestCreatePost:
         assert data['post']['slug'] == 'test-post'
         assert data['post']['author_id'] == user_id
         assert data['post']['is_published'] is False
+        assert data['post']['is_top'] is False
+
+    def test_is_top_true(self, app, _db, client, api_user_token):
+        raw, _ = api_user_token
+        rv = client.post('/api/v1/posts', json={
+            'title': 'Top Post', 'slug': 'top-post', 'content': '# T', 'is_top': True,
+        }, headers=_auth(raw))
+        assert rv.status_code == 201
+        assert rv.get_json()['post']['is_top'] is True
 
     def test_with_categories(self, app, _db, client, api_user_token):
         from blog.core.models import Category

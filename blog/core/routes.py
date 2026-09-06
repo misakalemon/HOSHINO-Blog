@@ -389,15 +389,15 @@ def _render_index(page, category_slug, per_page):
     query = Post.query.options(
         db.joinedload(Post.author),
         db.joinedload(Post.categories),
-        load_only(Post.id, Post.title, Post.slug, Post.summary, Post.cover_image, Post.created_at),
+        load_only(Post.id, Post.title, Post.slug, Post.summary, Post.cover_image, Post.created_at, Post.is_top),
     ).filter_by(is_published=True)
     # 按分类筛选（多对多关联：通过中间表 post_categories 关联）
     if category_slug:
         cat = Category.query.filter_by(slug=category_slug).first_or_404()
         query = query.filter(Post.categories.any(id=cat.id))
 
-    # 分页（按创建时间倒序）
-    posts = query.order_by(Post.created_at.desc()).paginate(
+    # 分页（置顶优先，同置顶按创建时间倒序）
+    posts = query.order_by(Post.is_top.desc(), Post.created_at.desc()).paginate(
         page=page, per_page=per_page, error_out=False
     )
     categories, recent_posts, cat_post_counts = _get_sidebar_data()
@@ -640,7 +640,7 @@ def _render_category(cat, page, per_page):
             db.joinedload(Post.categories),
         )
         .filter(Post.categories.any(id=cat.id), Post.is_published == True)
-        .order_by(Post.created_at.desc())
+        .order_by(Post.is_top.desc(), Post.created_at.desc())
         .paginate(page=page, per_page=per_page, error_out=False)
     )
     categories, recent_posts, cat_post_counts = _get_sidebar_data()

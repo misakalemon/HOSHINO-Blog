@@ -723,6 +723,7 @@ def new_post():
             html_file_url='',
             author_id=current_user.id,
             is_published=form.is_published.data,
+            is_top=form.is_top.data,
         )
         post.categories = Category.query.filter(Category.id.in_(form.categories.data)).all()
         db.session.add(post)
@@ -806,6 +807,7 @@ def edit_post(id):
         post.content = form.content.data
         post.cover_image = form.cover_image.data or ''
         post.is_published = form.is_published.data
+        post.is_top = form.is_top.data
         post.updated_at = now_cst()
         post.categories = Category.query.filter(Category.id.in_(form.categories.data)).all()
         db.session.commit()
@@ -2465,6 +2467,7 @@ def export_data():
                     f'author: "{author.username if author else ""}"',
                     f'categories: [{cats}]',
                     f'published: {str(post.is_published).lower()}',
+                    f'is_top: {str(post.is_top).lower()}' if post.is_top else '',
                     f'cover_image: "{post.cover_image or ""}"',
                     '---',
                 ]
@@ -2492,6 +2495,7 @@ def export_data():
                 'author': author.username if author else '',
                 'categories': [c.name for c in post.categories],
                 'is_published': post.is_published,
+                'is_top': post.is_top,
                 'created_at': post.created_at.strftime('%Y-%m-%d %H:%M:%S') if post.created_at else None,
                 'updated_at': post.updated_at.strftime('%Y-%m-%d %H:%M:%S') if post.updated_at else None,
             })
@@ -2623,6 +2627,7 @@ def _handle_import():
                     existing.html_content = p.get('html_content', '')
                     existing.cover_image = p.get('cover_image', '')
                     existing.is_published = p.get('is_published', False)
+                    existing.is_top = p.get('is_top', False)
                     existing.categories = cats
                     results['created'] += 1
                 else:
@@ -2634,6 +2639,7 @@ def _handle_import():
                         cover_image=p.get('cover_image', ''),
                         author_id=author.id,
                         is_published=p.get('is_published', False),
+                        is_top=p.get('is_top', False),
                         categories=cats,
                     )
                     db.session.add(post)
@@ -2669,6 +2675,7 @@ def _handle_import():
                             existing.title = title
                             existing.content = parsed.get('content', '')
                             existing.is_published = parsed.get('published', 'false').lower() == 'true'
+                            existing.is_top = parsed.get('is_top', 'false').lower() == 'true'
                             existing.categories = cats
                             results['created'] += 1
                         else:
@@ -2676,6 +2683,7 @@ def _handle_import():
                                 title=title, slug=slug,
                                 content=parsed.get('content', ''),
                                 is_published=parsed.get('published', 'false').lower() == 'true',
+                                is_top=parsed.get('is_top', 'false').lower() == 'true',
                                 author_id=author.id,
                                 categories=cats,
                             )

@@ -298,6 +298,7 @@ class Post(db.Model):
         db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False
     )
     is_published = db.Column(db.Boolean, default=False, index=True)  # 是否已发布（前台可见）
+    is_top = db.Column(db.Boolean, default=False, index=True, comment='是否置顶（首页置顶优先展示）')
 
     # ── 时间戳 ──────────────────────────────────
     created_at = db.Column(
