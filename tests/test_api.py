@@ -254,12 +254,16 @@ class TestValidatePostPayloadPure:
         })
         assert code == 422
 
-    def test_content_bleached(self):
+    def test_content_preserved_as_markdown(self):
+        # content 是 Markdown 源文本，不做 bleach 清洗（XSS 过滤在渲染端）
+        # 引用符 > 和 HTML 标签都应原样保留，渲染时再 markdown→HTML→bleach.clean
+        raw = '> 引用块\n\n< script >x</script><strong>bold</strong>'
         fields, err, _ = api_mod._validate_post_payload({
-            'title': 'T', 'slug': 's', 'content': '<script>x</script><strong>bold</strong>'
+            'title': 'T', 'slug': 's', 'content': raw
         })
         assert err is None
-        assert '<script>' not in fields['content']
+        assert fields['content'] == raw
+        assert '>' in fields['content']
         assert '<strong>' in fields['content']
 
     def test_content_empty_string(self):

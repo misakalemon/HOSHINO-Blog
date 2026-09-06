@@ -163,7 +163,10 @@ def _validate_post_payload(data, editing=False):
         content = str(content)
         if len(content) > _MAX_CONTENT_LEN:
             return None, f'content 最长 {_MAX_CONTENT_LEN} 字符', 422
-        fields['content'] = bleach.clean(content or '', tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS)
+        # 注意：content 是 Markdown 源文本，不能按 HTML 用 bleach 清洗，
+        # 否则引用符 `>` 等会被转义成 `&gt;` 入库，渲染端将无法识别引用块/列表。
+        # XSS 白名单过滤统一在渲染端 markdown→HTML 之后执行（见 routes.py）。
+        fields['content'] = content or ''
     elif not editing:
         fields['content'] = ''
 
