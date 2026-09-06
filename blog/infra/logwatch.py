@@ -1,7 +1,7 @@
 """HOSHINO Blog — 独立日志看门狗子进程 (logwatch)
 
 随 app.py 启动的独立守护进程，监听 Worker 的业务心跳文件
-（blog/logs/.activity，内容为「Unix时间戳 + 最近业务活动类型」），
+（logs/.activity，内容为「Unix时间戳 + 最近业务活动类型」），
 判定「无业务活动超阈值」是否意味着僵死，然后执行告警与可选自愈重启。
 
 心跳写入方：worker.py
@@ -20,7 +20,7 @@
 
 重启策略（BILI_WATCHDOG_RESTART，默认 1）：
   0：仅告警（邮件 + ERROR 日志）
-  1：kill 旧 Worker（PID 记录于 blog/logs/worker.pid）+ 重新 Popen 拉起
+  1：kill 旧 Worker（PID 记录于 logs/worker.pid）+ 重新 Popen 拉起
   2：重启整个进程组（Web + Worker 一并 SIGTERM，退出码交由外部守护接管）
 
 自愈容错：
@@ -47,9 +47,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))   # .../blog
-PROJECT_ROOT = os.path.dirname(BASE_DIR)                 # 项目根目录
-LOG_DIR = os.path.join(BASE_DIR, 'logs')
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))   # .../blog/infra
+PROJECT_ROOT = os.path.dirname(os.path.dirname(BASE_DIR))  # 项目根目录
+LOG_DIR = os.path.join(PROJECT_ROOT, 'logs')
 ACTIVITY_FILE = os.path.join(LOG_DIR, '.activity')
 WORKER_PID_FILE = os.path.join(LOG_DIR, 'worker.pid')
 WORKER_PY = os.path.join(PROJECT_ROOT, 'worker.py')

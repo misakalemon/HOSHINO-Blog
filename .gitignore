@@ -33,7 +33,7 @@ HarmonyOS_Icons.zip
 initial_admin_password.txt
 
 # Logs
-blog/logs/
+
 logs/
 
 # Uploads (用户上传文件)

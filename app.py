@@ -478,7 +478,7 @@ if __name__ == '__main__':
     logger.info('=' * 50)
 
     # ── 启动后台 Worker 子进程 ──────────────────
-    # Worker 进程共享同一日志目录（blog/logs/，按日期拆分 hoshino-YYYY-MM-DD.log），
+    # Worker 进程共享同一日志目录（logs/，按日期拆分 hoshino-YYYY-MM-DD.log），
     # 终端输出通过 stderr 合并到同一控制台。
     # 使用 creationflags 确保子进程随父进程退出。
     import subprocess
@@ -493,7 +493,7 @@ if __name__ == '__main__':
         if _worker_proc and _worker_proc.poll() is None:
             return
         # stderr 不共享主控制台（DEVNULL）：Worker 日志已完整写入
-        # blog/logs/*.log 文件；若共享 _sys.stderr，大量刷屏或 Windows
+        # logs/*.log 文件；若共享 _sys.stderr，大量刷屏或 Windows
         # 控制台写阻塞（QuickEdit/缓冲区慢）会让写控制台卡住从而拖慢
         # 整个 Web 进程（全站间接卡死）。改为只写文件，零阻塞面。
         kwargs = dict(
@@ -534,7 +534,7 @@ if __name__ == '__main__':
     atexit.register(_stop_worker)
 
     # ── 启动独立日志看门狗子进程 ──────────────────────
-    # logwatch 常驻守护：监听 Worker 业务心跳（blog/logs/.activity），
+    # logwatch 常驻守护：监听 Worker 业务心跳（logs/.activity），
     # 超 BILI_WATCHDOG_MINUTES 无业务活动判定僵死 → ERROR 日志 + 告警邮件
     # + 可选重启（BILI_WATCHDOG_RESTART 0/1/2）。独立进程自身 try/except
     # 自愈容错，不拖累 Web/Worker；异常退出后由本线程自动拉起。

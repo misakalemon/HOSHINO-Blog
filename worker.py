@@ -46,7 +46,7 @@ MAX_COMMENT_WORKERS = int(os.environ.get('BILI_COMMENT_WORKERS', '3'))
 
 
 # ── 业务心跳（供 logwatch 看门狗判定僵死）──────────────────────
-# Worker 周期性刷新 blog/logs/.activity（内容：Unix时间戳 + 最近业务活动
+# Worker 周期性刷新 logs/.activity（内容：Unix时间戳 + 最近业务活动
 # 类型，只写文件、不写日志——与「移除刷屏心跳日志」的决策兼容）。
 # 任何业务活动（增量/深扫/词云/任务完成）即时更新；主循环每
 # BILI_ACTIVITY_INTERVAL（默认 5 分钟）兜底刷新一次，

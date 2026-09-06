@@ -6,8 +6,8 @@ HOSHINO Blog 日志模块
    2. 提供请求日志中间件 log_request()，记录每次 HTTP 请求
 
 日志输出渠道：
-   1. 文件日志     — blog/logs/hoshino-YYYY-MM-DD.log，按日期拆分，保留 30 天
-   2. 错误日志     — blog/logs/error-YYYY-MM-DD.log，仅 ERROR 级别，按日期拆分
+   1. 文件日志     — logs/hoshino-YYYY-MM-DD.log，按日期拆分，保留 30 天
+   2. 错误日志     — logs/error-YYYY-MM-DD.log，仅 ERROR 级别，按日期拆分
    3. 终端日志     — 标准输出，INFO 级别以上，简化格式
 
 集成方式：
@@ -30,8 +30,8 @@ try:
 except ImportError:
     _HAS_PORTALOCKER = False
 
-# 日志目录（位于 blog/logs/）
-LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
+# 日志目录（位于项目根目录 logs/）
+LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'logs')
 try:
     os.makedirs(LOG_DIR, exist_ok=True)
 except OSError as e:
