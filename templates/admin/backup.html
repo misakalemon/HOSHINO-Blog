@@ -10,8 +10,8 @@
     <h3>数据备份</h3>
 </div>
 
-<p style="color:rgba(255,255,255,0.6);font-size:0.85rem;margin:0 0 16px">
-    备份存放在项目 <code style="color:#7dd3fc">backups/</code> 目录。DB 备份为 JSON（纯数据，schema 由代码重建）；
+<p class="form-hint" style="margin:0 0 16px">
+    备份存放在项目 <code style="color:var(--glow-accent,#7c5cff)">backups/</code> 目录。DB 备份为 JSON（纯数据，schema 由代码重建）；
     full 备份含 DB 数据 + uploads 文件。<strong style="color:#fde047">恢复会清空现有数据</strong>，恢复后需重启服务。
 </p>
 
@@ -43,14 +43,15 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div style="display:grid;gap:16px">
             <!-- 开关 + 备份类型 -->
-            <div style="display:flex;gap:24px;flex-wrap:wrap">
-                <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-                    <input type="checkbox" name="backup_enabled" value="true" {% if bk.backup_enabled == 'true' %}checked{% endif %} style="accent-color:var(--glow-accent,#7c5cff)">
+            <div class="check-group" style="align-items:center">
+                <label class="glow-checkbox">
+                    <input type="checkbox" name="backup_enabled" value="true" {% if bk.backup_enabled == 'true' %}checked{% endif %}>
+                    <span class="cb-box"></span>
                     启用定时备份
                 </label>
-                <label style="display:flex;align-items:center;gap:6px">
+                <label class="glow-radio" style="gap:6px">
                     备份类型
-                    <select name="backup_kind" class="form-input" style="width:auto">
+                    <select name="backup_kind" class="form-control" style="width:auto">
                         <option value="full" {% if bk.backup_kind == 'full' %}selected{% endif %}>完整（DB + uploads）</option>
                         <option value="db" {% if bk.backup_kind == 'db' %}selected{% endif %}>仅 DB</option>
                         <option value="uploads" {% if bk.backup_kind == 'uploads' %}selected{% endif %}>仅 uploads</option>
@@ -61,8 +62,8 @@
             <!-- 调度模式 -->
             <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end">
                 <label style="display:flex;flex-direction:column;gap:4px">
-                    <span style="font-size:0.8rem;color:rgba(255,255,255,0.5)">调度模式</span>
-                    <select name="backup_mode" class="form-input" style="width:auto" id="backupMode">
+                    <span class="form-label" style="margin:0">调度模式</span>
+                    <select name="backup_mode" class="form-control" style="width:auto" id="backupMode">
                         <option value="daily" {% if bk.backup_mode == 'daily' %}selected{% endif %}>每天</option>
                         <option value="hourly" {% if bk.backup_mode == 'hourly' %}selected{% endif %}>每小时</option>
                         <option value="every_n_hours" {% if bk.backup_mode == 'every_n_hours' %}selected{% endif %}>每 N 小时</option>
@@ -72,14 +73,14 @@
 
                 <!-- 每天/每周 的时间选择 -->
                 <label style="display:flex;flex-direction:column;gap:4px" id="timeFields">
-                    <span style="font-size:0.8rem;color:rgba(255,255,255,0.5)">执行时间</span>
+                    <span class="form-label" style="margin:0">执行时间</span>
                     <span style="display:flex;gap:4px;align-items:center">
-                        <select name="backup_hour" class="form-input" style="width:70px">
+                        <select name="backup_hour" class="form-control" style="width:70px">
                             {% for h in range(24) %}
                             <option value="{{ h }}" {% if bk.backup_hour == h|string %}selected{% endif %}>{{ '%02d'|format(h) }}</option>
                             {% endfor %}
                         </select> 时
-                        <select name="backup_minute" class="form-input" style="width:70px">
+                        <select name="backup_minute" class="form-control" style="width:70px">
                             {% for m in range(0,60,5) %}
                             <option value="{{ m }}" {% if bk.backup_minute == m|string %}selected{% endif %}>{{ '%02d'|format(m) }}</option>
                             {% endfor %}
@@ -89,14 +90,14 @@
 
                 <!-- 每 N 小时 -->
                 <label style="display:flex;flex-direction:column;gap:4px" id="intervalField">
-                    <span style="font-size:0.8rem;color:rgba(255,255,255,0.5)">间隔小时数</span>
-                    <input type="number" name="backup_interval_hours" value="{{ bk.backup_interval_hours }}" min="1" max="168" class="form-input" style="width:80px">
+                    <span class="form-label" style="margin:0">间隔小时数</span>
+                    <input type="number" name="backup_interval_hours" value="{{ bk.backup_interval_hours }}" min="1" max="168" class="form-control" style="width:80px">
                 </label>
 
                 <!-- 每周几 -->
                 <label style="display:flex;flex-direction:column;gap:4px" id="weekdayField">
-                    <span style="font-size:0.8rem;color:rgba(255,255,255,0.5)">星期</span>
-                    <select name="backup_weekday" class="form-input" style="width:auto">
+                    <span class="form-label" style="margin:0">星期</span>
+                    <select name="backup_weekday" class="form-control" style="width:auto">
                         {% for label, val in [('周日', 0), ('周一', 1), ('周二', 2), ('周三', 3), ('周四', 4), ('周五', 5), ('周六', 6)] %}
                         <option value="{{ val }}" {% if bk.backup_weekday == val|string %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
@@ -108,14 +109,14 @@
             <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-end;border-top:1px solid rgba(255,255,255,0.06);padding-top:16px">
                 <h4 style="margin:0;color:rgba(255,255,255,0.7);font-size:0.9rem;width:100%">自动清理</h4>
                 <label style="display:flex;flex-direction:column;gap:4px">
-                    <span style="font-size:0.8rem;color:rgba(255,255,255,0.5)">保留份数（0=不限）</span>
-                    <input type="number" name="backup_keep_count" value="{{ bk.backup_keep_count }}" min="0" max="365" class="form-input" style="width:80px">
+                    <span class="form-label" style="margin:0">保留份数（0=不限）</span>
+                    <input type="number" name="backup_keep_count" value="{{ bk.backup_keep_count }}" min="0" max="365" class="form-control" style="width:80px">
                 </label>
                 <label style="display:flex;flex-direction:column;gap:4px">
-                    <span style="font-size:0.8rem;color:rgba(255,255,255,0.5)">保留天数（0=不限）</span>
-                    <input type="number" name="backup_keep_days" value="{{ bk.backup_keep_days }}" min="0" max="3650" class="form-input" style="width:80px">
+                    <span class="form-label" style="margin:0">保留天数（0=不限）</span>
+                    <input type="number" name="backup_keep_days" value="{{ bk.backup_keep_days }}" min="0" max="3650" class="form-control" style="width:80px">
                 </label>
-                <span style="font-size:0.78rem;color:rgba(255,255,255,0.4)">两个条件取并集：超过份数或超过天数的都会被删除</span>
+                <span class="form-hint" style="margin:0">两个条件取并集：超过份数或超过天数的都会被删除</span>
             </div>
 
             <div style="text-align:right">
