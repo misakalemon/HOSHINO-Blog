@@ -22,9 +22,9 @@
 
 <!-- 搜索 + 排序工具栏 -->
 <div class="admin-card" style="margin-bottom:16px;padding:12px 16px">
-    <form method="GET" action="{{ url_for('admin.category_list') }}" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
-        <input type="text" name="q" value="{{ q or '' }}" placeholder="搜索分类名称或 Slug…" class="form-input" style="flex:1;min-width:200px">
-        <select name="sort" class="form-input" style="width:auto" onchange="this.form.submit()">
+    <form method="GET" action="{{ url_for('admin.category_list') }}" class="admin-search-compact" style="flex-wrap:wrap">
+        <input type="text" name="q" value="{{ q or '' }}" placeholder="搜索分类名称或 Slug…">
+        <select name="sort" onchange="this.form.submit()" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:8px 12px;color:#e8edf5;font-size:0.8rem;outline:none;font-family:inherit">
             <option value="name" {% if sort == 'name' %}selected{% endif %}>按名称排序</option>
             <option value="posts" {% if sort == 'posts' %}selected{% endif %}>按文章数排序</option>
             <option value="created" {% if sort == 'created' %}selected{% endif %}>按创建时间排序</option>

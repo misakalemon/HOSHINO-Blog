@@ -16,38 +16,49 @@
 
         <!-- 格式选择 -->
         <div style="margin-bottom:16px">
-            <label style="font-size:0.85rem;color:rgba(255,255,255,0.6);display:block;margin-bottom:8px">导入格式</label>
-            <div style="display:flex;gap:16px;flex-wrap:wrap">
-                <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-                    <input type="radio" name="format" value="posts_json" checked style="accent-color:var(--glow-accent,#7c5cff)">
+            <label class="form-label">导入格式</label>
+            <div class="check-group">
+                <label class="glow-radio">
+                    <input type="radio" name="format" value="posts_json" checked>
+                    <span class="rb-dot"></span>
                     文章 JSON
                 </label>
-                <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-                    <input type="radio" name="format" value="posts_md" style="accent-color:var(--glow-accent,#7c5cff)">
+                <label class="glow-radio">
+                    <input type="radio" name="format" value="posts_md">
+                    <span class="rb-dot"></span>
                     文章 Markdown（ZIP）
                 </label>
             </div>
-            <p style="font-size:0.78rem;color:rgba(255,255,255,0.4);margin:8px 0 0">
+            <p class="form-hint">
                 JSON 格式与本站「数据导出」的文章 JSON 格式一致；Markdown ZIP 需含 YAML front matter。
             </p>
         </div>
 
         <!-- 文件上传 -->
         <div style="margin-bottom:16px">
-            <label style="font-size:0.85rem;color:rgba(255,255,255,0.6);display:block;margin-bottom:8px">选择文件</label>
-            <input type="file" name="file" accept=".json,.zip" required style="width:100%;padding:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.8)">
+            <label class="form-label">选择文件</label>
+            <label class="file-drop-zone" id="fileDropZone">
+                <span class="file-drop-icon">📎</span>
+                <span class="file-drop-text">点击选择文件，或拖拽 <strong>.json</strong> / <strong>.zip</strong> 到此处</span>
+                <span class="file-drop-hint" id="fileNameHint">支持文章 JSON 或 Markdown ZIP 格式</span>
+                <input type="file" name="file" accept=".json,.zip" required id="fileInput">
+            </label>
         </div>
 
         <!-- 选项 -->
         <div style="margin-bottom:16px">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;color:rgba(255,255,255,0.6)">
-                <input type="checkbox" name="dry_run" style="accent-color:var(--glow-accent,#7c5cff)">
-                仅预检（不实际写入，仅报告可导入数量）
-            </label>
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;color:rgba(255,255,255,0.6);margin-top:8px">
-                <input type="checkbox" name="overwrite" style="accent-color:var(--glow-accent,#7c5cff)">
-                覆盖同名（slug 冲突时更新现有文章，否则跳过）
-            </label>
+            <div class="check-list">
+                <label class="glow-checkbox">
+                    <input type="checkbox" name="dry_run">
+                    <span class="cb-box"></span>
+                    仅预检（不实际写入，仅报告可导入数量）
+                </label>
+                <label class="glow-checkbox">
+                    <input type="checkbox" name="overwrite">
+                    <span class="cb-box"></span>
+                    覆盖同名（slug 冲突时更新现有文章，否则跳过）
+                </label>
+            </div>
         </div>
 
         <div style="text-align:right">
@@ -58,7 +69,7 @@
 
 <div class="admin-card" style="padding:16px;margin-top:16px">
     <h4 style="margin:0 0 8px">注意事项</h4>
-    <ul style="font-size:0.82rem;color:rgba(255,255,255,0.5);margin:0;padding-left:20px;line-height:1.8">
+    <ul class="note-list">
         <li>导入文章的作者按 username 匹配，找不到则归属当前登录用户</li>
         <li>分类按 name 匹配，找不到的分类会被忽略（文章仍可导入）</li>
         <li>建议先勾选「仅预检」确认无误后再正式导入</li>
@@ -67,6 +78,34 @@
 </div>
 
 <script>
+(function() {
+    var dropZone = document.getElementById('fileDropZone');
+    var fileInput = document.getElementById('fileInput');
+    var fileNameHint = document.getElementById('fileNameHint');
+
+    fileInput.addEventListener('change', function() {
+        if (this.files && this.files.length) {
+            fileNameHint.textContent = '已选择：' + this.files[0].name;
+        }
+    });
+
+    dropZone.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+    });
+    dropZone.addEventListener('dragleave', function() {
+        dropZone.classList.remove('dragover');
+    });
+    dropZone.addEventListener('drop', function(e) {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        if (e.dataTransfer.files && e.dataTransfer.files.length) {
+            fileInput.files = e.dataTransfer.files;
+            fileNameHint.textContent = '已选择：' + e.dataTransfer.files[0].name;
+        }
+    });
+})();
+
 document.getElementById('importForm').addEventListener('submit', function(e) {
     var btn = document.getElementById('importBtn');
     btn.textContent = '导入中…';

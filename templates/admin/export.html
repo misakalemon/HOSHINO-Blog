@@ -19,35 +19,35 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div style="display:grid;gap:12px">
             <!-- 文章 Markdown -->
-            <label style="display:flex;gap:12px;align-items:flex-start;cursor:pointer;padding:12px;border:1px solid rgba(255,255,255,0.08);border-radius:8px" onmouseover="this.style.borderColor='rgba(124,92,255,0.4)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.08)'">
-                <input type="radio" name="format" value="posts_md" checked style="margin-top:4px;accent-color:var(--glow-accent,#7c5cff)">
+            <label class="export-option">
+                <input type="radio" name="format" value="posts_md" checked>
                 <div>
-                    <strong>文章 Markdown（ZIP）</strong>
-                    <p style="font-size:0.8rem;color:rgba(255,255,255,0.5);margin:4px 0 0">每篇文章导出为 .md 文件，含 YAML front matter（标题/slug/日期/分类等），打包为 ZIP。适合迁移到 Hugo/Jekyll/Hexo 等静态博客。</p>
+                    <span class="export-option-title">文章 Markdown（ZIP）</span>
+                    <p class="export-option-desc">每篇文章导出为 .md 文件，含 YAML front matter（标题/slug/日期/分类等），打包为 ZIP。适合迁移到 Hugo/Jekyll/Hexo 等静态博客。</p>
                 </div>
             </label>
             <!-- 文章 JSON -->
-            <label style="display:flex;gap:12px;align-items:flex-start;cursor:pointer;padding:12px;border:1px solid rgba(255,255,255,0.08);border-radius:8px" onmouseover="this.style.borderColor='rgba(124,92,255,0.4)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.08)'">
-                <input type="radio" name="format" value="posts_json" style="margin-top:4px;accent-color:var(--glow-accent,#7c5cff)">
+            <label class="export-option">
+                <input type="radio" name="format" value="posts_json">
                 <div>
-                    <strong>文章 JSON</strong>
-                    <p style="font-size:0.8rem;color:rgba(255,255,255,0.5);margin:4px 0 0">结构化 JSON，含全量文章字段（标题/正文/HTML/分类/作者/状态/时间）。适合程序间迁移或备份。</p>
+                    <span class="export-option-title">文章 JSON</span>
+                    <p class="export-option-desc">结构化 JSON，含全量文章字段（标题/正文/HTML/分类/作者/状态/时间）。适合程序间迁移或备份。</p>
                 </div>
             </label>
             <!-- 全站 JSON -->
-            <label style="display:flex;gap:12px;align-items:flex-start;cursor:pointer;padding:12px;border:1px solid rgba(255,255,255,0.08);border-radius:8px" onmouseover="this.style.borderColor='rgba(124,92,255,0.4)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.08)'">
-                <input type="radio" name="format" value="full_json" style="margin-top:4px;accent-color:var(--glow-accent,#7c5cff)">
+            <label class="export-option">
+                <input type="radio" name="format" value="full_json">
                 <div>
-                    <strong>全站数据 JSON</strong>
-                    <p style="font-size:0.8rem;color:rgba(255,255,255,0.5);margin:4px 0 0">导出全部数据库表（文章/分类/评论/用户/设置等），适合完整迁移。注意：不含上传文件。</p>
+                    <span class="export-option-title">全站数据 JSON</span>
+                    <p class="export-option-desc">导出全部数据库表（文章/分类/评论/用户/设置等），适合完整迁移。注意：不含上传文件。</p>
                 </div>
             </label>
             <!-- 分类 CSV -->
-            <label style="display:flex;gap:12px;align-items:flex-start;cursor:pointer;padding:12px;border:1px solid rgba(255,255,255,0.08);border-radius:8px" onmouseover="this.style.borderColor='rgba(124,92,255,0.4)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.08)'">
-                <input type="radio" name="format" value="categories_csv" style="margin-top:4px;accent-color:var(--glow-accent,#7c5cff)">
+            <label class="export-option">
+                <input type="radio" name="format" value="categories_csv">
                 <div>
-                    <strong>分类列表 CSV</strong>
-                    <p style="font-size:0.8rem;color:rgba(255,255,255,0.5);margin:4px 0 0">导出全部分类（名称/slug/描述/文章数），Excel 可直接打开。</p>
+                    <span class="export-option-title">分类列表 CSV</span>
+                    <p class="export-option-desc">导出全部分类（名称/slug/描述/文章数），Excel 可直接打开。</p>
                 </div>
             </label>
         </div>
@@ -59,10 +59,10 @@
 
 <div class="admin-card" style="padding:16px">
     <h4 style="margin:0 0 8px">说明</h4>
-    <ul style="font-size:0.82rem;color:rgba(255,255,255,0.5);margin:0;padding-left:20px;line-height:1.8">
-        <li>文章 Markdown 导出遵循 <a href="https://jekyllrb.com/docs/front-matter/" target="_blank" rel="noopener" style="color:var(--glow-accent,#7c5cff)">Jekyll Front Matter</a> 规范</li>
+    <ul class="note-list">
+        <li>文章 Markdown 导出遵循 <a href="https://jekyllrb.com/docs/front-matter/" target="_blank" rel="noopener">Jekyll Front Matter</a> 规范</li>
         <li>全站 JSON 导出与备份模块共用底层逻辑，但不含上传文件</li>
-        <li>如需含上传文件的完整备份，请使用<a href="{{ url_for('admin.backup_list') }}" style="color:var(--glow-accent,#7c5cff)">备份管理</a></li>
+        <li>如需含上传文件的完整备份，请使用<a href="{{ url_for('admin.backup_list') }}">备份管理</a></li>
     </ul>
 </div>
 {% endblock %}
