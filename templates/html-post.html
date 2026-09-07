@@ -9,22 +9,22 @@
 {% block title %}{{ post.title }} - Hoshino{% endblock %}
 {% block content %}
 
-<div class="content" style="padding-top:80px;max-width:1800px">
+<div class="content content-pt-80" style="max-width:1800px">
     <div class="row">
         <div class="col-8">
             <div class="post-detail">
-                <div style="text-align:center;margin-bottom:24px">
-                    <div style="display:flex;align-items:center;justify-content:center;gap:24px;margin-bottom:16px">
+                <div class="post-header">
+                    <div class="post-title-row">
                         <button data-action="smartBack" data-arg="{{ url_for('blog.index') }}" class="back-btn">← 返回</button>
-                        <h1 style="font-size:2.2rem;font-weight:250;letter-spacing:-0.02em;line-height:1.2;color:rgba(255,255,255,0.9);margin:0;flex-shrink:0">{{ post.title }}</h1>
+                        <h1 class="post-title">{{ post.title }}</h1>
                         <button data-action="window.print" class="back-btn" style="font-size:0.8rem">🖨️ 打印</button>
                     </div>
-                    <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px">
+                    <div class="cat-tags" style="justify-content:center;margin-top:12px">
                         {% for cat in post.categories %}
                         <span class="pill-light">{{ cat.name }}</span>
                         {% endfor %}
                     </div>
-                    <div style="color:rgba(255,255,255,0.25);font-size:0.8rem;margin-top:12px">
+                    <div class="post-meta">
                         <span>{{ format_date(post.created_at, '%Y/%m/%d') }}</span>
                         <span style="margin-left:12px">{{ comment_count }} 评论</span>
                     </div>
@@ -50,16 +50,16 @@
                 <div class="post-nav" style="display:flex;gap:16px;justify-content:space-between;margin:28px 0;flex-wrap:wrap">
                     <div style="flex:1;min-width:200px">
                         {% if prev_post %}
-                        <a href="{{ url_for('blog.single_post', slug=prev_post.slug) }}" style="display:block;padding:14px 16px;border:1px solid rgba(255,255,255,0.08);border-radius:12px;text-decoration:none;color:var(--text-secondary);transition:all 0.3s">
-                            <div style="font-size:0.7rem;color:rgba(255,255,255,0.4);margin-bottom:4px">← 上一篇</div>
+                        <a href="{{ url_for('blog.single_post', slug=prev_post.slug) }}" class="post-nav-link">
+                            <div class="form-hint" style="margin-bottom:4px">← 上一篇</div>
                             <div style="font-size:0.85rem;color:rgba(255,255,255,0.85)">{{ prev_post.title[:30] }}{% if prev_post.title|length > 30 %}…{% endif %}</div>
                         </a>
                         {% endif %}
                     </div>
                     <div style="flex:1;min-width:200px;text-align:right">
                         {% if next_post %}
-                        <a href="{{ url_for('blog.single_post', slug=next_post.slug) }}" style="display:block;padding:14px 16px;border:1px solid rgba(255,255,255,0.08);border-radius:12px;text-decoration:none;color:var(--text-secondary);transition:all 0.3s">
-                            <div style="font-size:0.7rem;color:rgba(255,255,255,0.4);margin-bottom:4px">下一篇 →</div>
+                        <a href="{{ url_for('blog.single_post', slug=next_post.slug) }}" class="post-nav-link">
+                            <div class="form-hint" style="margin-bottom:4px">下一篇 →</div>
                             <div style="font-size:0.85rem;color:rgba(255,255,255,0.85)">{{ next_post.title[:30] }}{% if next_post.title|length > 30 %}…{% endif %}</div>
                         </a>
                         {% endif %}

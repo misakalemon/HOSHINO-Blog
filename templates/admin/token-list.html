@@ -31,14 +31,14 @@
     <h4 style="margin:0 0 12px;color:rgba(255,255,255,0.9)">创建新令牌</h4>
     <form method="POST" action="{{ url_for('admin.new_token') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
-            <div style="flex:1;min-width:200px">
-                <label style="display:block;color:rgba(255,255,255,0.7);font-size:0.8rem;margin-bottom:4px">名称（如：AI agent 博文发布）</label>
-                <input type="text" name="name" maxlength="128" required placeholder="令牌用途" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.3);color:#fff">
+        <div class="admin-row" style="align-items:flex-end">
+            <div class="form-group" style="flex:1;min-width:200px">
+                <label class="form-hint">名称（如：AI agent 博文发布）</label>
+                <input type="text" name="name" maxlength="128" required placeholder="令牌用途" class="form-control">
             </div>
-            <div style="width:160px">
-                <label style="display:block;color:rgba(255,255,255,0.7);font-size:0.8rem;margin-bottom:4px">过期天数（留空=永久）</label>
-                <input type="number" name="expire_days" min="1" placeholder="如 30" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.3);color:#fff">
+            <div class="form-group" style="width:160px">
+                <label class="form-hint">过期天数（留空=永久）</label>
+                <input type="number" name="expire_days" min="1" placeholder="如 30" class="form-control">
             </div>
             <button type="submit" class="btn btn-primary">生成令牌</button>
         </div>

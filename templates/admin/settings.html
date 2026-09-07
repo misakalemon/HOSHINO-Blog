@@ -23,19 +23,17 @@
         {% set val = settings.get(field.key, '') %}
         <div style="margin-bottom:14px">
             {% if field.type == 'bool' %}
-            <label style="display:flex;align-items:center;gap:8px;color:rgba(255,255,255,0.8);cursor:pointer">
-                <input type="checkbox" name="{{ field.key }}" value="1" {% if val == 'true' %}checked{% endif %}
-                       style="width:18px;height:18px;cursor:pointer">
+            <label class="glow-checkbox">
+                <input type="checkbox" name="{{ field.key }}" value="1" {% if val == 'true' %}checked{% endif %}>
+                <span class="cb-box"></span>
                 <span>{{ field.label }}</span>
             </label>
             {% elif field.type == 'textarea' %}
-            <label style="display:block;color:rgba(255,255,255,0.7);font-size:0.85rem;margin-bottom:4px">{{ field.label }}</label>
-            <textarea name="{{ field.key }}" rows="{{ 8 if field.key in ('custom_css', 'custom_js') else 3 }}"
-                      style="width:100%;padding:10px;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.3);color:#fff;font-family:monospace;font-size:0.85rem;resize:vertical">{{ val }}</textarea>
+            <label class="form-hint" style="display:block;margin-bottom:4px">{{ field.label }}</label>
+            <textarea name="{{ field.key }}" rows="{{ 8 if field.key in ('custom_css', 'custom_js') else 3 }}" class="form-control" style="font-family:monospace">{{ val }}</textarea>
             {% else %}
-            <label style="display:block;color:rgba(255,255,255,0.7);font-size:0.85rem;margin-bottom:4px">{{ field.label }}</label>
-            <input type="text" name="{{ field.key }}" value="{{ val }}"
-                   style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.3);color:#fff">
+            <label class="form-hint" style="display:block;margin-bottom:4px">{{ field.label }}</label>
+            <input type="text" name="{{ field.key }}" value="{{ val }}" class="form-control">
             {% endif %}
         </div>
         {% endfor %}

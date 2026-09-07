@@ -76,8 +76,8 @@
         <h1>{{ site_settings.hero_title|default('最喜欢<br><span class="highlight">小鸟游星野</span>')|safe }}</h1>
         <p>{{ blog_subtitle }}</p>
         <div class="hero-particle-actions">
-            <button id="btnScatter" data-action="_particleToggle">{{ site_settings.hero_button1|default('粒子散开') }}</button>
-            <button data-action="_particleBurst">{{ site_settings.hero_button2|default('星尘迸发') }}</button>
+            <button id="btnScatter" data-action="_particleToggle" class="btn btn-ghost">{{ site_settings.hero_button1|default('粒子散开') }}</button>
+            <button data-action="_particleBurst" class="btn btn-ghost">{{ site_settings.hero_button2|default('星尘迸发') }}</button>
         </div>
         <div class="scroll-hint" data-action="scrollToFeatured"><span>↓ 向下滚动 ↓</span></div>
     </div>
@@ -108,8 +108,8 @@
     </div>
     <!-- 如果没有特色卡片，显示引导提示 -->
     {% else %}
-    <div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:rgba(255,255,255,0.3)">
-        <p style="font-size:0.9rem">暂无特色卡片 — 去<a href="{{ url_for('admin.featured_card_list') }}" style="color:#7abfff">后台添加</a></p>
+    <div class="empty-state" style="grid-column:1/-1">
+        <p>暂无特色卡片 — 去<a href="{{ url_for('admin.featured_card_list') }}" style="color:#7abfff">后台添加</a></p>
     </div>
     {% endfor %}
 </div>
@@ -131,8 +131,7 @@
     {% if wc_keys | length > 1 %}
     <!-- 时间轴滑块 -->
     <div class="wc-timeline" style="margin-top:14px;padding:0 8px">
-        <input type="range" id="wcSlider" min="0" max="{{ wc_keys | length - 1 }}" value="0" step="1"
-               style="width:100%;accent-color:#a78bfa">
+        <input type="range" id="wcSlider" min="0" max="{{ wc_keys | length - 1 }}" value="0" step="1" class="glow-range">
         <div class="wc-timeline-labels" style="display:flex;justify-content:space-between;font-size:0.65rem;color:rgba(255,255,255,0.25);margin-top:4px">
             {% for key in wc_keys %}
             <span>{{ '全部' if key == 'all' else key }}</span>

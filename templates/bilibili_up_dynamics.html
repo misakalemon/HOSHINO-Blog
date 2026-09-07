@@ -9,13 +9,13 @@
 {% extends 'base.html' %}
 {% block title %}{{ up.name or 'UP主' }} 动态 - Hoshino{% endblock %}
 {% block content %}
-<div class="content" style="padding-top:100px;max-width:1400px">
-    <div style="margin-bottom:24px">
-        <a href="{{ url_for('bili_public.index') }}" style="color:rgba(255,255,255,0.3);text-decoration:none;font-size:0.85rem">← B站 UP 主</a>
+<div class="content content-pt-100" style="max-width:1400px">
+    <div class="hero-back">
+        <a href="{{ url_for('bili_public.index') }}" class="back-link">← B站 UP 主</a>
     </div>
 
     <!-- UP 主信息 -->
-    <div style="display:flex;align-items:center;gap:20px;margin-bottom:32px;padding:24px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:20px">
+    <div class="glass-card bili-info-card">
         <div style="flex-shrink:0">
             {% if up.avatar %}
             <img src="{{ up.safe_avatar }}" alt="" referrerpolicy="no-referrer" loading="lazy" style="width:72px;height:72px;border-radius:50%;border:2px solid rgba(255,255,255,0.06);object-fit:cover">
@@ -24,9 +24,9 @@
             {% endif %}
         </div>
         <div>
-            <h1 style="font-size:1.5rem;font-weight:500;color:rgba(255,255,255,0.9);margin:0 0 6px">{{ up.name or 'UP主' }}</h1>
-            <div style="display:flex;flex-wrap:wrap;gap:16px;font-size:0.85rem;color:rgba(255,255,255,0.35)">
-                <span>mid: <a href="https://space.bilibili.com/{{ up.mid }}" target="_blank" style="color:inherit;text-decoration:none;border-bottom:1px dotted rgba(255,255,255,0.2)">{{ up.mid }}</a></span>
+            <h1 class="page-title" style="font-size:1.5rem;text-align:left;margin:0 0 6px">{{ up.name or 'UP主' }}</h1>
+            <div class="up-meta">
+                <span>mid: <a href="https://space.bilibili.com/{{ up.mid }}" target="_blank" style="color:inherit;border-bottom:1px dotted rgba(255,255,255,0.2)">{{ up.mid }}</a></span>
                 <span>📹 {{ up.video_count }} 视频</span>
                 <span>👥 <span style="white-space:nowrap" title="{{ '{:,}'.format(up.follower_count) if up.follower_count else '?' }}">{{ up.follower_count|format_count if up.follower_count else '?' }}</span> 粉丝</span>
             </div>
@@ -34,16 +34,16 @@
     </div>
 
     <!-- Tab 切换栏 -->
-    <div style="display:flex;gap:0;margin-bottom:24px;border-bottom:1px solid rgba(255,255,255,0.06)">
-        <a href="{{ url_for('bili_public.up_videos', up_id=up.id) }}" style="padding:10px 24px;color:rgba(255,255,255,0.35);text-decoration:none;font-size:0.9rem;border-bottom:2px solid transparent;transition:all 0.2s">📹 视频</a>
-        <a href="{{ url_for('bili_public.up_dynamics', up_id=up.id) }}" style="padding:10px 24px;color:#ff8aae;text-decoration:none;font-size:0.9rem;border-bottom:2px solid #ff8aae;margin-bottom:-1px">💬 动态</a>
+    <div class="tab-bar">
+        <a href="{{ url_for('bili_public.up_videos', up_id=up.id) }}" class="tab-link">📹 视频</a>
+        <a href="{{ url_for('bili_public.up_dynamics', up_id=up.id) }}" class="tab-link active">💬 动态</a>
     </div>
 
     <!-- 动态列表 -->
     {% if pagination.items %}
-    <div style="display:flex;flex-direction:column;gap:16px">
+    <div class="search-results">
         {% for d in pagination.items %}
-        <div style="padding:20px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:16px">
+        <div class="glass-card" style="padding:20px">
 
             <!-- 动态头部：类型标签 + 时间 -->
             <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
@@ -79,7 +79,7 @@
                 {% if d.pics and d.pics|length > 0 %}
                 <div style="display:flex;flex-wrap:wrap;gap:8px">
                     {% for pic in d.pics[:9] %}
-                    <img src="{{ pic }}" referrerpolicy="no-referrer" loading="lazy" style="width:120px;height:120px;object-fit:cover;border-radius:8px;border:1px solid rgba(255,255,255,0.06);cursor:pointer" onclick="this.style.width=this.style.width==='120px'?'auto':'120px';this.style.height=this.style.width==='120px'?'120px':'auto'">
+                    <img src="{{ pic }}" referrerpolicy="no-referrer" loading="lazy" class="dynamic-pic" onclick="this.classList.toggle('dynamic-pic-expanded')">
                     {% endfor %}
                     {% if d.pics|length > 9 %}
                     <div style="width:120px;height:120px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.04);border-radius:8px;color:rgba(255,255,255,0.3);font-size:0.8rem">+{{ d.pics|length - 9 }}</div>
@@ -145,10 +145,10 @@
     {% endif %}
 
     {% else %}
-    <div style="padding:48px 24px;text-align:center;color:rgba(255,255,255,0.3);font-size:0.9rem">
-        <div style="font-size:48px;margin-bottom:16px;opacity:0.3">💬</div>
+    <div class="empty-state">
+        <div class="error-icon" style="font-size:48px;opacity:0.3">💬</div>
         <p>暂无动态数据</p>
-        <p style="font-size:0.8rem;margin-top:8px;opacity:0.6">动态会在增量检查时自动爬取（约 30 分钟一次）</p>
+        <p class="form-hint" style="margin-top:8px">动态会在增量检查时自动爬取（约 30 分钟一次）</p>
     </div>
     {% endif %}
 

@@ -9,7 +9,7 @@
 <div class="admin-header">
     <h3>媒体库</h3>
     <form method="GET" action="{{ url_for('admin.media_list') }}" style="display:inline">
-        <input type="text" name="q" value="{{ q }}" placeholder="搜索文件名" style="padding:6px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.3);color:#fff">
+        <input type="text" name="q" value="{{ q }}" placeholder="搜索文件名" class="form-control" style="width:auto;display:inline-block">
         <button type="submit" class="btn btn-primary btn-sm">搜索</button>
     </form>
 </div>
