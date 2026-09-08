@@ -408,9 +408,11 @@ ul { list-style: none; }
 
 /* ── 6. 瀑布流 ──────────────────────────────── */
 /* 使用 CSS column 实现瀑布流自适应列数，无需 JS */
+/* 列数随视口自适应；侧边栏在 ≥768px 占 240-260px，主内容区实际更窄，
+   故 3 列断点提升至 1400px，避免中等屏卡片被挤压过窄 */
 .masonry { column-count: 1; column-gap: 1.5rem; }
 @media (min-width: 640px) { .masonry { column-count: 2; } }
-@media (min-width: 1024px) { .masonry { column-count: 3; } }
+@media (min-width: 1400px) { .masonry { column-count: 3; } }
 /* break-inside: avoid 防止卡片在列中被截断 */
 .masonry-item { break-inside: avoid; margin-bottom: 1.5rem; }
 
@@ -948,7 +950,8 @@ ul { list-style: none; }
 
 /* ── 13. 文章详情 ──────────────────────────────── */
 /* 居中窄列（720px）提高阅读体验 */
-.post-detail { max-width: 1450px; margin: 0 auto; }
+/* 正文收敛到 ~860px 居中，宽屏两侧留白，保持最佳阅读行长 */
+.post-detail { max-width: 860px; margin: 0 auto; }
 .featured-image { border-radius: 20px; overflow: hidden; margin-bottom: 24px; }
 .post-content { font-size: 1rem; line-height: 1.75; color: rgba(255,255,255,0.82); }
 .post-content h1 { font-size: 1.8rem; margin-top: 1.5em; margin-bottom: 0.5em; font-weight: 500; color: rgba(255,255,255,0.95); }

@@ -154,15 +154,7 @@
                         {% endif %}
                     </div>
                 </div>
-                    <div style="flex:1;min-width:200px;text-align:right">
-                        {% if next_post %}
-                        <a href="{{ url_for('blog.single_post', slug=next_post.slug) }}" style="display:block;padding:14px 16px;border:1px solid rgba(255,255,255,0.08);border-radius:12px;text-decoration:none;color:var(--text-secondary);transition:all 0.3s">
-                            <div style="font-size:0.7rem;color:rgba(255,255,255,0.4);margin-bottom:4px">下一篇 →</div>
-                            <div style="font-size:0.85rem;color:rgba(255,255,255,0.85)">{{ next_post.title[:30] }}{% if next_post.title|length > 30 %}…{% endif %}</div>
-                        </a>
-                        {% endif %}
-                    </div>
-                </div>
+
                 {% endif %}
 
                 <!-- 评论区 -->
