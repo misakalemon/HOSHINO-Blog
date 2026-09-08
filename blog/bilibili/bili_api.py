@@ -1071,6 +1071,75 @@ def get_dynamics(mid: int) -> list[dict]:
     return results
 
 
+def _rich_nodes_to_text(nodes) -> str:
+    """将动态富文本节点列表（rich_text_nodes）拼为纯文本。
+
+    B 站动态文字以富文本节点数组存储，每个节点含 text（@、表情、链接均适用）；
+    表情节点 text 可能为空，此时回退到 emoji.text。
+    """
+    parts = []
+    for node in nodes or []:
+        if not isinstance(node, dict):
+            continue
+        text = node.get('text') or node.get('orig_text') or ''
+        if not text and isinstance(node.get('emoji'), dict):
+            text = node.get('emoji', {}).get('text') or ''
+        if text:
+            parts.append(text)
+    return ''.join(parts)
+
+
+def _extract_dynamic_text(mod_dynamic: dict, major: dict) -> str:
+    """提取动态文字内容，优先富文本节点，回退纯文本字段。
+
+    新图文（MAJOR_TYPE_OPUS）文字在 major.opus.summary，
+    其余类型（文字/老九宫格图文/视频）文字在 module_dynamic.desc。
+    """
+    major_type = (major or {}).get('type', '')
+
+    if major_type == 'MAJOR_TYPE_OPUS':
+        opus = major.get('opus') or {}
+        summary = opus.get('summary') or {}
+        text = _rich_nodes_to_text(summary.get('rich_text_nodes'))
+        return text or (summary.get('text') or '')
+
+    desc = mod_dynamic.get('desc') or {}
+    text = _rich_nodes_to_text(desc.get('rich_text_nodes'))
+    return text or (desc.get('text') or '')
+
+
+def _extract_dynamic_pics(major: dict) -> list[str]:
+    """提取动态图片 URL 列表。
+
+    新图文（MAJOR_TYPE_OPUS）图片在 major.opus.pics[].url，
+    老九宫格图文图片在 major.draw.items[].src；URL 以 // 开头时补 https:。
+    """
+    if not major:
+        return []
+    major_type = major.get('type', '')
+    pics: list[str] = []
+
+    if major_type == 'MAJOR_TYPE_OPUS':
+        opus = major.get('opus') or {}
+        for pic in (opus.get('pics') or []):
+            url = (pic.get('url') or '').strip()
+            if url.startswith('//'):
+                url = 'https:' + url
+            if url:
+                pics.append(url)
+        return pics
+
+    # 老九宫格图文（MAJOR_TYPE_DRAW）及历史数据
+    draw = major.get('draw') or {}
+    for pic_item in (draw.get('items') or []):
+        src = (pic_item.get('src') or '').strip()
+        if src.startswith('//'):
+            src = 'https:' + src
+        if src:
+            pics.append(src)
+    return pics
+
+
 def _parse_dynamic_item(item: dict) -> dict | None:
     """解析单条动态 item，返回标准化字典或 None（无法解析时）。
 
@@ -1099,18 +1168,9 @@ def _parse_dynamic_item(item: dict) -> dict | None:
         except (ValueError, OSError):
             pub_datetime = None
 
-    # 文字内容
-    desc = mod_dynamic.get('desc') or {}
-    content = desc.get('text', '') or ''
-
-    # 图片列表（图文动态）
-    pics: list[str] = []
-    draw = major.get('draw') or {}
-    if draw:
-        for pic_item in (draw.get('items') or []):
-            src = pic_item.get('src', '')
-            if src:
-                pics.append(src)
+    # 文字内容 + 图片列表（区分新图文 opus 与老九宫格 draw）
+    content = _extract_dynamic_text(mod_dynamic, major)
+    pics = _extract_dynamic_pics(major)
 
     # 关联视频 BV 号（视频动态）
     bvid = ''
