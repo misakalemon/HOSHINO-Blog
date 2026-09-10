@@ -1181,6 +1181,7 @@ def _crawl_and_save_dynamics(up: BiliUp, mid: int, emit):
             # 更新已有记录（内容/图片可能变化）
             record = BiliDynamic.query.filter_by(up_id=up.id, dynamic_id=dynamic_id).first()
             if record:
+                record.dynamic_type = dyn.get('dynamic_type', 'UNKNOWN')
                 record.content = dyn.get('content', '') or ''
                 record.pics = dyn.get('pics', []) or []
                 record.bvid = dyn.get('bvid', '') or ''

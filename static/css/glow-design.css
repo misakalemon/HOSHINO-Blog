@@ -959,8 +959,10 @@ ul { list-style: none; }
 .post-content h3 { font-size: 1.2rem; margin-top: 1.5em; margin-bottom: 0.5em; font-weight: 500; color: rgba(255,255,255,0.95); }
 .post-content h4, .post-content h5, .post-content h6 { margin-top: 1.2em; margin-bottom: 0.4em; font-weight: 500; color: rgba(255,255,255,0.9); }
 .post-content p { margin-bottom: 1em; }
-.post-content ul, .post-content ol { margin: 0.5em 0 1em; padding-left: 1.8em; }
+.post-content ul { margin: 0.5em 0 1em; padding-left: 1.8em; list-style-type: disc; }
+.post-content ol { margin: 0.5em 0 1em; padding-left: 1.8em; list-style-type: decimal; }
 .post-content li { margin-bottom: 0.3em; }
+.post-content li::marker { color: rgba(255,255,255,0.45); }
 .post-content li > ul, .post-content li > ol { margin: 0.2em 0; }
 .post-content code:not([class*="language-"]) {
   background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 6px;
@@ -987,10 +989,10 @@ ul { list-style: none; }
   border-radius: 0 12px 12px 0;
 }
 .post-content blockquote p:last-child { margin-bottom: 0; }
-.post-content table { border-collapse: collapse; width: 100%; margin: 1em 0; overflow-x: auto; display: block; }
+.post-content table { border-collapse: collapse; width: 100%; margin: 1em 0; display: block; overflow-x: auto; }
 .post-content th, .post-content td {
   border: 1px solid rgba(255,255,255,0.12);
-  padding: 10px 14px; text-align: left;
+  padding: 10px 14px; text-align: left; overflow-wrap: break-word;
 }
 .post-content th { background: rgba(255,255,255,0.05); font-weight: 600; }
 .post-content td { background: rgba(255,255,255,0.02); }
