@@ -401,6 +401,40 @@ function syncEditor() {
       if (h) { html += '<h' + h[1].length + '>' + escapeHtml(h[2]) + '</h' + h[1].length + '>'; continue; }
       // 引用
       if (/^>\s?/.test(t)) { html += '<blockquote>' + escapeHtml(t.replace(/^>\s?/,'')) + '</blockquote>'; continue; }
+      // 表格：检测 | xxx | yyy | 格式行，连续多行组成表格
+      if (/^\|/.test(t) && i + 1 < lines.length && /^\|[\s\-:|]+\|/.test(lines[i + 1].trim())) {
+        if (listType) { html += '</' + listType + '>'; listType = null; }
+        var tableLines = [];
+        while (i < lines.length && /^\|/.test(lines[i].trim())) {
+          tableLines.push(lines[i].trim());
+          i++;
+        }
+        i--;
+        if (tableLines.length >= 2) {
+          var parseRow = function(row) {
+            var cells = row.split('|');
+            cells.shift(); cells.pop();
+            return cells.map(function(c) { return c.trim(); });
+          };
+          var header = parseRow(tableLines[0]);
+          var body = '';
+          for (var r = 2; r < tableLines.length; r++) {
+            var cells = parseRow(tableLines[r]);
+            body += '<tr>';
+            for (var c = 0; c < header.length; c++) {
+              body += '<td>' + escapeHtml(cells[c] || '') + '</td>';
+            }
+            body += '</tr>';
+          }
+          var thead = '<tr>';
+          for (var c = 0; c < header.length; c++) {
+            thead += '<th>' + escapeHtml(header[c]) + '</th>';
+          }
+          thead += '</tr>';
+          html += '<table><thead>' + thead + '</thead><tbody>' + body + '</tbody></table>';
+          continue;
+        }
+      }
       // 无序列表
       if (/^[-*+]\s+/.test(t) || /^[-*+]\s/.test(t)) {
         if (listType !== 'ul') { if (listType) html += '</ul>'; html += '<ul>'; listType = 'ul'; }

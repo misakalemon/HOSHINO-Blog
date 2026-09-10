@@ -104,6 +104,25 @@ _ATTRS_BY_TAG = {
 }
 
 
+def _is_html_content(text: str) -> bool:
+    """检测内容是否为 HTML（来自 Tiptap 编辑器）而非 Markdown。
+
+    Tiptap 编辑器通过 getHTML() 输出 HTML，内容以 <p>、<h1> 等块标签开头。
+    旧版文章或直接编辑的内容为 Markdown 纯文本，不以 HTML 标签开头。
+
+    Args:
+        text: 文章内容
+    Returns:
+        True 表示内容是 HTML，应直接 bleach.clean 不经过 markdown()
+    """
+    if not text:
+        return False
+    stripped = text.lstrip()
+    return stripped.startswith(('<p', '<h1', '<h2', '<h3', '<h4', '<h5', '<h6',
+                                '<ul', '<ol', '<div', '<table', '<blockquote',
+                                '<pre', '<hr'))
+
+
 def _allow_attrs(tag, name, value):
     """bleach 属性白名单回调：判断指定标签的某个属性是否允许保留。
 
@@ -550,12 +569,23 @@ def single_post(slug):
     if rendered_content is None:
         from markdown import markdown
 
-        # Markdown → HTML → 清理 XSS（三步流水线）
-        rendered_content = bleach.clean(
-            markdown(post.content, extensions=['fenced_code', 'codehilite', 'tables']),
-            tags=ALLOWED_TAGS,
-            attributes=ALLOWED_ATTRS,
-        )
+        # Tiptap 编辑器输出 HTML，需与旧版 Markdown 内容区分处理：
+        # - HTML 内容（含 <p>/<h1> 等块标签）：直接 bleach.clean，不经过 markdown()
+        #   否则 markdown() 会把 HTML 块原样透传，不解析其中的 Markdown 语法，
+        #   导致用户在编辑器中输入的表格/列表 Markdown 标记无法渲染
+        # - Markdown 内容（纯文本）：正常 markdown() → bleach.clean 流水线
+        if _is_html_content(post.content):
+            rendered_content = bleach.clean(
+                post.content,
+                tags=ALLOWED_TAGS,
+                attributes=ALLOWED_ATTRS,
+            )
+        else:
+            rendered_content = bleach.clean(
+                markdown(post.content, extensions=['fenced_code', 'codehilite', 'tables']),
+                tags=ALLOWED_TAGS,
+                attributes=ALLOWED_ATTRS,
+            )
         cache_set(cache_key, rendered_content, 3600)
 
     comment_count = post.published_comments()
