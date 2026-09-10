@@ -708,6 +708,62 @@ new ResizeObserver(h).observe(document.body);})();
     )
 
 
+@blog_bp.route('/post/<slug>/debug-render')
+def debug_render(slug):
+    """临时调试端点：显示文章原始内容和渲染管线各步骤结果。"""
+    from flask import jsonify
+    post = Post.query.filter_by(slug=slug, is_published=True).first_or_404()
+
+    from .cache import cache_get, cache_set
+    cache_key = f'post:rendered:{post.id}:{post.updated_at.timestamp() if post.updated_at else ""}'
+    cached = cache_get(cache_key)
+
+    is_html = _is_html_content(post.content)
+    raw = post.content or ''
+
+    if is_html:
+        fixed = _fix_html_tables(raw)
+        from markdown import markdown
+        rendered = bleach.clean(fixed, tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS)
+        steps = ['HTML detected -> _fix_html_tables -> bleach.clean']
+    else:
+        preprocessed = _preprocess_markdown_tables(raw)
+        from markdown import markdown
+        md_html = markdown(preprocessed, extensions=['fenced_code', 'codehilite', 'tables'])
+        rendered = bleach.clean(md_html, tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS)
+        steps = ['Markdown detected -> _preprocess_markdown_tables -> markdown() -> bleach.clean']
+        if preprocessed != raw:
+            steps.append('preprocessor modified content (table split)')
+
+    return jsonify({
+        'slug': slug,
+        'post_id': post.id,
+        'updated_at': str(post.updated_at) if post.updated_at else None,
+        'cache_key': cache_key,
+        'cache_hit': cached is not None,
+        'is_html_content': is_html,
+        'steps': steps,
+        'raw_content_head': raw[:500],
+        'raw_content_len': len(raw),
+        'raw_has_pipe': '|' in raw,
+        'raw_has_table_sep': bool(re.search(r'\|\s*[-:]+\s*\|', raw)),
+        'raw_has_p_tag': '<p>' in raw or '<p ' in raw,
+        'rendered_has_table': '<table>' in rendered,
+        'rendered_head': rendered[:500],
+    })
+
+
+@blog_bp.route('/post/<slug>/clear-cache')
+def clear_post_cache(slug):
+    """临时端点：清除指定文章的渲染缓存。"""
+    from flask import jsonify
+    post = Post.query.filter_by(slug=slug, is_published=True).first_or_404()
+    from .cache import cache_get, cache_set
+    cache_key = f'post:rendered:{post.id}:{post.updated_at.timestamp() if post.updated_at else ""}'
+    cache_set(cache_key, None, 1)
+    return jsonify({'ok': True, 'message': f'cache cleared: {cache_key}'})
+
+
 @blog_bp.route('/post/<slug>', methods=['GET', 'POST'])
 def single_post(slug):
     """文章详情：渲染 Markdown 正文 + 评论列表 + 评论表单。
