@@ -123,6 +123,88 @@ def _is_html_content(text: str) -> bool:
                                 '<pre', '<hr'))
 
 
+def _preprocess_markdown_tables(text: str) -> str:
+    """预处理单行表格：检测换行符丢失的表格并拆分为多行。
+
+    内容经 API 或编辑器入库时换行符可能丢失，导致表格所有行拼成一行。
+    Python-Markdown 的 tables 扩展要求每行独占一行，单行表格无法解析。
+
+    策略：检测以 | 开头且含分隔行模式（| --- |）的行，
+    按管道符位置拆分为多行后交回 markdown() 渲染。
+    """
+    if not text or '|' not in text:
+        return text
+
+    lines = text.split('\n')
+    result = []
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped.startswith('|'):
+            result.append(line)
+            continue
+
+        # 检测分隔行模式：| --- | 或 |:---:| 或 | ---:|
+        # 分隔行单元格只含 -、:、空格
+        sep_cells = re.findall(r'\|([^|]*)', stripped)
+        sep_indices = [i for i, c in enumerate(sep_cells) if re.fullmatch(r'\s*[-:]+\s*', c)]
+
+        if len(sep_indices) < 2:
+            result.append(line)
+            continue
+
+        # 从分隔行确定列数：找最长的连续分隔单元格序列
+        best_start, best_len = sep_indices[0], 1
+        cur_start, cur_len = sep_indices[0], 1
+        for i in range(1, len(sep_indices)):
+            if sep_indices[i] == sep_indices[i - 1] + 1:
+                cur_len += 1
+            else:
+                if cur_len > best_len:
+                    best_start, best_len = cur_start, cur_len
+                cur_start, cur_len = sep_indices[i], 1
+        if cur_len > best_len:
+            best_start, best_len = cur_start, cur_len
+
+        num_cols = best_len
+        if num_cols < 2:
+            result.append(line)
+            continue
+
+        pipes_per_row = num_cols + 1
+        pipe_positions = [i for i, c in enumerate(stripped) if c == '|']
+        total_pipes = len(pipe_positions)
+
+        if total_pipes % pipes_per_row != 0:
+            result.append(line)
+            continue
+
+        num_rows = total_pipes // pipes_per_row
+        if num_rows < 2:
+            result.append(line)
+            continue
+
+        # 按管道符位置拆分为多行
+        table_lines = []
+        for row_idx in range(num_rows):
+            start_pipe = row_idx * pipes_per_row
+            end_pipe = start_pipe + pipes_per_row
+            if end_pipe > len(pipe_positions):
+                break
+            start_pos = pipe_positions[start_pipe]
+            end_pos = pipe_positions[end_pipe - 1] + 1
+            row = stripped[start_pos:end_pos].strip()
+            if row:
+                table_lines.append(row)
+
+        if len(table_lines) >= 2:
+            result.extend(table_lines)
+        else:
+            result.append(line)
+
+    return '\n'.join(result)
+
+
 def _allow_attrs(tag, name, value):
     """bleach 属性白名单回调：判断指定标签的某个属性是否允许保留。
 
@@ -581,8 +663,10 @@ def single_post(slug):
                 attributes=ALLOWED_ATTRS,
             )
         else:
+            # 预处理：拆分换行符丢失的单行表格
+            md_content = _preprocess_markdown_tables(post.content)
             rendered_content = bleach.clean(
-                markdown(post.content, extensions=['fenced_code', 'codehilite', 'tables']),
+                markdown(md_content, extensions=['fenced_code', 'codehilite', 'tables']),
                 tags=ALLOWED_TAGS,
                 attributes=ALLOWED_ATTRS,
             )
