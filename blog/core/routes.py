@@ -205,6 +205,113 @@ def _preprocess_markdown_tables(text: str) -> str:
     return '\n'.join(result)
 
 
+def _fix_html_tables(html: str) -> str:
+    """修复 HTML 内容中 <p> 标签内的表格语法。
+
+    Tiptap 编辑器的 mdToHtml 粘贴转换器不支持表格，
+    粘贴的 Markdown 表格被原样保留在 <p> 标签中（管道符为纯文本）。
+    此函数检测 <p>| ... | ... |</p> 模式，转换为 <table> 元素。
+    """
+    if not html or '<p>' not in html:
+        return html
+
+    # 逐个检查 <p>...</p>，避免贪婪正则在长内容上回溯爆炸
+    p_pattern = re.compile(r'<p([^>]*)>(.*?)</p>', re.DOTALL)
+
+    def _replace_table_p(match):
+        attrs = match.group(1)
+        content = match.group(2).strip()
+
+        # 必须以 | 开头且含分隔行模式才处理
+        if not content.startswith('|'):
+            return match.group(0)
+        # 检测分隔行：至少两个连续的 | --- | 模式
+        if not re.search(r'\|\s*[-:]+\s*\|(\s*[-:]+\s*\|)+', content):
+            return match.group(0)
+
+        # 用与 _preprocess_markdown_tables 相同的逻辑拆分
+        sep_cells = re.findall(r'\|([^|]*)', content)
+        sep_indices = [i for i, c in enumerate(sep_cells)
+                       if re.fullmatch(r'\s*[-:]+\s*', c)]
+        if len(sep_indices) < 2:
+            return match.group(0)
+
+        # 找最长的连续分隔单元格序列
+        best_start, best_len = sep_indices[0], 1
+        cur_start, cur_len = sep_indices[0], 1
+        for i in range(1, len(sep_indices)):
+            if sep_indices[i] == sep_indices[i - 1] + 1:
+                cur_len += 1
+            else:
+                if cur_len > best_len:
+                    best_start, best_len = cur_start, cur_len
+                cur_start, cur_len = sep_indices[i], 1
+        if cur_len > best_len:
+            best_start, best_len = cur_start, cur_len
+
+        num_cols = best_len
+        if num_cols < 2:
+            return match.group(0)
+
+        pipes_per_row = num_cols + 1
+        pipe_positions = [i for i, c in enumerate(content) if c == '|']
+        total_pipes = len(pipe_positions)
+        if total_pipes % pipes_per_row != 0:
+            return match.group(0)
+
+        num_rows = total_pipes // pipes_per_row
+        if num_rows < 2:
+            return match.group(0)
+
+        # 拆分为行
+        rows = []
+        for row_idx in range(num_rows):
+            sp = row_idx * pipes_per_row
+            ep = sp + pipes_per_row
+            if ep > len(pipe_positions):
+                break
+            start_pos = pipe_positions[sp]
+            end_pos = pipe_positions[ep - 1] + 1
+            row = content[start_pos:end_pos].strip()
+            if row:
+                rows.append(row)
+
+        if len(rows) < 2:
+            return match.group(0)
+
+        # 解析单元格
+        def parse_cells(row):
+            cells = row.split('|')
+            cells.pop(0)
+            cells.pop()
+            return [c.strip() for c in cells]
+
+        def md_inline(text):
+            """单元格内简单 Markdown 转 HTML。"""
+            text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
+            text = re.sub(r'`(.+?)`', r'<code>\1</code>', text)
+            return text
+
+        # 生成 <table>
+        header = parse_cells(rows[0])
+        thead = '<thead><tr>' + ''.join(
+            f'<th>{md_inline(c)}</th>' for c in header
+        ) + '</tr></thead>'
+
+        tbody = '<tbody>'
+        for row in rows[2:]:
+            cells = parse_cells(row)
+            tbody += '<tr>' + ''.join(
+                f'<td>{md_inline(cells[i] if i < len(cells) else "")}</td>'
+                for i in range(num_cols)
+            ) + '</tr>'
+        tbody += '</tbody>'
+
+        return f'<table>{thead}{tbody}</table>'
+
+    return p_pattern.sub(_replace_table_p, html)
+
+
 def _allow_attrs(tag, name, value):
     """bleach 属性白名单回调：判断指定标签的某个属性是否允许保留。
 
@@ -657,8 +764,10 @@ def single_post(slug):
         #   导致用户在编辑器中输入的表格/列表 Markdown 标记无法渲染
         # - Markdown 内容（纯文本）：正常 markdown() → bleach.clean 流水线
         if _is_html_content(post.content):
+            # HTML 内容（Tiptap 输出）：修复 <p> 中的表格语法后直接 bleach.clean
+            html_content = _fix_html_tables(post.content)
             rendered_content = bleach.clean(
-                post.content,
+                html_content,
                 tags=ALLOWED_TAGS,
                 attributes=ALLOWED_ATTRS,
             )
