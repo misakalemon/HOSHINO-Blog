@@ -568,15 +568,19 @@ def _migrate_bili_video_fields(app):
 
 
 def _migrate_bili_indexes(app):
-    """迁移：为 BiliVideo/BiliVideoHistory 表添加复合索引。
+    """迁移：为 BiliVideo/BiliVideoHistory/Comment 表添加复合索引。
 
     添加的索引：
       ix_bili_video_up_pubdatetime    — bili_videos (up_id, pub_datetime)
         加速按 UP 主和时间排序的视频查询
       ix_bili_video_up_updated        — bili_videos (up_id, updated_at)
         加速按 UP 主和更新时间排序的视频查询
+      ix_bili_video_up_pubdate        — bili_videos (up_id, pubdate)
+        列表与爬虫热点选择普遍 order_by(pubdate)，原索引列不匹配会 filesort
       ix_bili_video_history_video_recorded — bili_video_history (video_id, recorded_at)
         加速按视频 ID 和时间范围的历史快照查询
+      ix_comments_post_approved       — comments (post_id, is_approved)
+        文章页按 (post_id, is_approved) 过滤已审评论
 
     先检查索引是否已存在（inspector.get_indexes），
     避免重复创建导致错误。
@@ -590,11 +594,14 @@ def _migrate_bili_indexes(app):
 
     existing = {ix['name'] for ix in inspector.get_indexes('bili_videos')}
     existing.update(ix['name'] for ix in inspector.get_indexes('bili_video_history'))
+    existing.update(ix['name'] for ix in inspector.get_indexes('comments'))
 
     index_defs = {
         'ix_bili_video_up_pubdatetime': 'CREATE INDEX ix_bili_video_up_pubdatetime ON bili_videos (up_id, pub_datetime)',
         'ix_bili_video_up_updated': 'CREATE INDEX ix_bili_video_up_updated ON bili_videos (up_id, updated_at)',
+        'ix_bili_video_up_pubdate': 'CREATE INDEX ix_bili_video_up_pubdate ON bili_videos (up_id, pubdate)',
         'ix_bili_video_history_video_recorded': 'CREATE INDEX ix_bili_video_history_video_recorded ON bili_video_history (video_id, recorded_at)',
+        'ix_comments_post_approved': 'CREATE INDEX ix_comments_post_approved ON comments (post_id, is_approved)',
     }
 
     for name, ddl in index_defs.items():

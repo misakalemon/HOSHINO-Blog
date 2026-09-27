@@ -96,8 +96,8 @@ def index():
         # 读取 B站词云（兼容旧表缺少 period/source 列的情况）
         bili_wordcloud = None
         bili_wordcloud_periods = []  # [(period_label, data), ...]
-        from ..core.models import WordCloudConfig
-        wc_config = WordCloudConfig.get_or_create().to_dict()
+        from ..wordcloud.generator import get_wordcloud_config
+        wc_config = get_wordcloud_config().to_dict()
         try:
             # 全量词云
             wc = WordCloudData.query.filter_by(post_id=None, source='bili', period='all').first()
@@ -174,8 +174,8 @@ def up_videos(up_id):
     # 读取该 UP 主的专属词云
     bili_wordcloud = None
     bili_wordcloud_periods = []
-    from ..core.models import WordCloudConfig
-    wc_config = WordCloudConfig.get_or_create().to_dict()
+    from ..wordcloud.generator import get_wordcloud_config
+    wc_config = get_wordcloud_config().to_dict()
     try:
         # 全量 UP 主词云
         wc = WordCloudData.query.filter_by(post_id=None, source='bili', period=f'up_{up_id}').first()
@@ -343,7 +343,8 @@ def video_detail(video_id):
         post_id=None, source='bili_video', period=f'bvid_{video.bvid}'
     ).first()
     wc_data = wc_record.data if wc_record and wc_record.data else []
-    wc_config = WordCloudConfig.get_or_create().to_dict()
+    from ..wordcloud.generator import get_wordcloud_config
+    wc_config = get_wordcloud_config().to_dict()
 
     comments = (
         BiliVideoComment.query.filter_by(video_id=video.id)

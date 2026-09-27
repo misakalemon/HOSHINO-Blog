@@ -15,12 +15,83 @@ import os
 import queue
 import re
 import threading
+import time
 from collections import Counter
 from typing import List, Optional
 
 from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
+
+# ── 词云配置进程级缓存 ────────────────────────────────
+# WordCloudConfig 是单行配置，但它在逐视频（全量 6 万+ 条）与逐篇文本的
+# 热路径上被反复查询（本模块内原有 7 处 get_or_create 调用），配置行不存在
+# 时还会在只读路径触发 commit。这里缓存"列名→值"快照（默认 60 秒 TTL），
+# 一轮全量预计算可减少数万次 SELECT。
+_CONFIG_CACHE: dict = {'snapshot': None, 'to_dict': None, 'ts': 0.0}
+_CONFIG_CACHE_LOCK = threading.Lock()
+_CONFIG_CACHE_TTL = float(os.environ.get('WORDCLOUD_CFG_CACHE_TTL', '60'))
+
+
+class _ConfigView:
+    """词云配置的只读快照视图（属性访问语义与 ORM 对象一致）。
+
+    不缓存 ORM 对象本身：跨 session/请求访问会触发 DetachedInstanceError。
+    ``to_dict()`` 返回缓存的模板字典（与 WordCloudConfig.to_dict() 同源，
+    在缓存刷新时一次性生成，无重复映射逻辑）。
+    """
+
+    __slots__ = ('_snapshot', '_view')
+
+    def __init__(self, snapshot: dict, view: dict):
+        object.__setattr__(self, '_snapshot', snapshot)
+        object.__setattr__(self, '_view', view)
+
+    def __getattr__(self, name):
+        try:
+            return object.__getattribute__(self, '_snapshot')[name]
+        except KeyError:
+            raise AttributeError(name) from None
+
+    def to_dict(self):
+        """返回模板/前端使用的配置字典（副本，调用方可安全修改）。"""
+        return dict(object.__getattribute__(self, '_view'))
+
+
+def get_wordcloud_config():
+    """获取词云配置（进程级 TTL 缓存）。
+
+    热路径（逐视频 / 逐篇文本 / 每次页面渲染）务必使用本函数，不要直接调用
+    ``WordCloudConfig.get_or_create()``：前者在逐视频预计算中会产生数万次
+    查询，后者让每个页面渲染都多一条 SELECT（并在配置行缺失时于读路径 commit）。
+
+    后台保存配置后可调用 :func:`invalidate_wordcloud_config_cache` 立即生效；
+    跨进程（Web 改了配置、Worker 正在跑）最迟 TTL 后生效。
+    """
+    now = time.time()
+    snap = _CONFIG_CACHE['snapshot']
+    if snap is not None and now - _CONFIG_CACHE['ts'] < _CONFIG_CACHE_TTL:
+        return _ConfigView(snap, _CONFIG_CACHE['to_dict'])
+    from ..core.models import WordCloudConfig
+
+    cfg = WordCloudConfig.get_or_create()
+    snap = {c.name: getattr(cfg, c.name) for c in cfg.__table__.columns}
+    # 在 ORM 对象仍绑定 session 时取模板字典，避免 detached 访问
+    view = cfg.to_dict()
+    with _CONFIG_CACHE_LOCK:
+        _CONFIG_CACHE['snapshot'] = snap
+        _CONFIG_CACHE['to_dict'] = view
+        _CONFIG_CACHE['ts'] = now
+    return _ConfigView(snap, view)
+
+
+def invalidate_wordcloud_config_cache():
+    """清空词云配置缓存（后台修改配置后调用，使其在本进程立即生效）。"""
+    with _CONFIG_CACHE_LOCK:
+        _CONFIG_CACHE['snapshot'] = None
+        _CONFIG_CACHE['to_dict'] = None
+        _CONFIG_CACHE['ts'] = 0.0
+
 
 # ── 内存监控 ──────────────────────────────────────────
 try:
@@ -468,8 +539,7 @@ def compute_word_frequencies(text: str, top_n: int = 60) -> Optional[list]:
 
     # 加载用户自定义屏蔽词（每行一个）
     try:
-        from ..core.models import WordCloudConfig
-        cfg = WordCloudConfig.get_or_create()
+        cfg = get_wordcloud_config()
         if cfg.stop_words and cfg.stop_words.strip():
             extra_stops = {
                 w.strip().lower() for w in cfg.stop_words.split('\n')
@@ -522,8 +592,7 @@ def compute_word_frequencies_stream(texts, top_n: int = 60, chunk_size: int = 20
 
     # 加载用户自定义屏蔽词（每行一个）
     try:
-        from ..core.models import WordCloudConfig
-        cfg = WordCloudConfig.get_or_create()
+        cfg = get_wordcloud_config()
         if cfg.stop_words and cfg.stop_words.strip():
             extra_stops = {
                 w.strip().lower() for w in cfg.stop_words.split('\n')
@@ -592,7 +661,7 @@ def precompute_post_wordcloud(post_id):
         return
 
     text = extract_text_for_post(post)
-    top_n = WordCloudConfig.get_or_create().top_n_article
+    top_n = get_wordcloud_config().top_n_article
     data = compute_word_frequencies(text, top_n=top_n) or []
 
     # 原子 upsert（唯一约束 (post_id, source, period) 防并发重复行）
@@ -614,7 +683,7 @@ def precompute_site_wordcloud():
     from ..core.models import Post, WordCloudData, WordCloudConfig
     from sqlalchemy import func
 
-    top_n = WordCloudConfig.get_or_create().top_n_site
+    top_n = get_wordcloud_config().top_n_site
 
     # ── 全量词云 ──
     texts = []
@@ -749,7 +818,7 @@ def precompute_bili_wordclouds():
     from ..core.models import BiliUp, BiliVideo, WordCloudData, WordCloudConfig
     from sqlalchemy import func
 
-    top_n = WordCloudConfig.get_or_create().top_n_bili
+    top_n = get_wordcloud_config().top_n_bili
     _log_memory(logger, 'precompute_bili_wordclouds start')
 
     def _iter_all_texts():
@@ -942,7 +1011,7 @@ def _compute_single_video_wordcloud(video):
     if getattr(video, 'is_deleted', False):
         return
 
-    top_n = WordCloudConfig.get_or_create().top_n_bili
+    top_n = get_wordcloud_config().top_n_bili
     parts = []
     if video.subtitle_text:
         parts.extend([video.subtitle_text] * 5)
@@ -1021,7 +1090,7 @@ def precompute_up_wordclouds(up_id: int):
     up_texts = _bili_texts_from_videos(all_videos)
     up_full = ' '.join(up_texts)
     if up_full.strip():
-        top_n = WordCloudConfig.get_or_create().top_n_bili
+        top_n = get_wordcloud_config().top_n_bili
         up_data = compute_word_frequencies(up_full, top_n=top_n) or []
         period = f'up_{up_id}'
         _upsert_wordcloud(None, 'bili', period, up_data)

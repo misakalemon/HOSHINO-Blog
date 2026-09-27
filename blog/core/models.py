@@ -363,6 +363,11 @@ class Comment(db.Model):
     """
 
     __tablename__ = 'comments'
+    __table_args__ = (
+        # 文章页按 (post_id, is_approved) 过滤后取全部已审评论；
+        # 仅有 post_id 外键与 is_approved 单列索引时无法走复合索引。
+        db.Index('ix_comments_post_approved', 'post_id', 'is_approved'),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     post_id = db.Column(  # 所属文章（外键 → posts.id）
@@ -506,6 +511,9 @@ class BiliVideo(db.Model):
     __table_args__ = (
         db.Index('ix_bili_video_up_pubdatetime', 'up_id', 'pub_datetime'),
         db.Index('ix_bili_video_up_updated', 'up_id', 'updated_at'),
+        # 列表/爬虫热点选择普遍按 pubdate（整型时间戳）倒序，
+        # 而原索引是 (up_id, pub_datetime) → 排序必须 filesort。
+        db.Index('ix_bili_video_up_pubdate', 'up_id', 'pubdate'),
     )
 
     id = db.Column(db.Integer, primary_key=True)
@@ -631,8 +639,12 @@ class BiliUpHistory(db.Model):
         db.DateTime, default=now_cst, index=True
     )
 
-    # lazy='joined'：查询时使用 JOIN 一次性加载关联的 BiliUp，减少 N+1 查询
-    up = db.relationship('BiliUp', backref='history_records', lazy='joined', passive_deletes=True)
+    # lazy='select'（原为 'joined'）：粉丝曲线只读取本行的 recorded_at /
+    # follower_count，JOIN 会把父表 BiliUp 整行随每条快照重复传输
+    # （300 条快照 × 1 行宽 UP），改为按需加载。
+    # 本关系无任何"遍历历史并访问 .up"的调用点（backref history_records
+    # 亦无实际使用），故不会引入 N+1。
+    up = db.relationship('BiliUp', backref='history_records', lazy='select', passive_deletes=True)
 
 
 class BiliVideoHistory(db.Model):
@@ -663,11 +675,15 @@ class BiliVideoHistory(db.Model):
         db.DateTime, default=now_cst, index=True
     )
 
-    # lazy='joined'：查询时 JOIN BiliVideo，避免 N+1
-    # 因为历史快照总是需要关联视频信息，所以使用 joined 加载
+    # lazy='select'（原为 'joined'）：这是全站单次请求传输量最大的浪费点——
+    # 视频历史可达数千条（30 分钟一条），joined 会让每条快照都重复携带
+    # bili_videos 整行（title/description/tags JSON/pic/subtitle_text
+    # MEDIUMTEXT），而曲线只用 7 个计数列 + 时间。
+    # 所有调用点（public_routes 曲线、admin_routes 的 _prev_h / hist_map）
+    # 均只访问历史行自身列，不访问 .video，故不引入 N+1。
     # passive_deletes=True：外键在数据库层已有 ON DELETE CASCADE，
     # 通知 ORM 删除视频时不要在应用层置 NULL 子记录，避免 video_id NOT NULL 冲突
-    video = db.relationship('BiliVideo', backref='history_records', lazy='joined', passive_deletes=True)
+    video = db.relationship('BiliVideo', backref='history_records', lazy='select', passive_deletes=True)
 
 
 class BiliWatchedVideo(db.Model):

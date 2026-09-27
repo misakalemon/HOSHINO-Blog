@@ -2409,6 +2409,10 @@ def wordcloud_config():
         config.updated_at = now_cst()
         db.session.commit()
         _invalidate_page_cache()
+        # 词云配置在 generator 内有进程级 TTL 缓存，保存后立即失效
+        # （跨进程如 Worker 最迟一个 TTL 周期后生效）
+        from ..wordcloud.generator import invalidate_wordcloud_config_cache
+        invalidate_wordcloud_config_cache()
         flash('词云配置已保存', 'success')
         # 自动投递全量词云重算（使屏蔽词等立即生效）
         from ..wordcloud.generator import submit_task

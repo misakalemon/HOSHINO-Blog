@@ -625,9 +625,9 @@ def _render_index(page, category_slug, per_page):
     hero_images = HeroImage.query.filter_by(is_active=True).order_by(HeroImage.sort_order).all()
     hero_image = random.choice(hero_images).image_url if hero_images else None
 
-    # 读取词云配置（单行，惰性初始化）
-    from .models import WordCloudConfig
-    wc_config = WordCloudConfig.get_or_create().to_dict()
+    # 读取词云配置（进程级 TTL 缓存，避免每次渲染多一条 SELECT）
+    from ..wordcloud.generator import get_wordcloud_config
+    wc_config = get_wordcloud_config().to_dict()
     wordcloud_periods = _get_site_wordcloud() if wc_config.get('enabled_site', True) else None
 
     return render_template(
@@ -861,8 +861,9 @@ def single_post(slug):
     # ── 词云数据（从预计算数据库读取，不再实时分词）──
     wordcloud_data = None
     wc_config = None
-    from .models import WordCloudConfig, WordCloudData
-    wc_config = WordCloudConfig.get_or_create().to_dict()
+    from .models import WordCloudData
+    from ..wordcloud.generator import get_wordcloud_config
+    wc_config = get_wordcloud_config().to_dict()
     wc_record = WordCloudData.query.filter_by(post_id=post.id).first()
     if wc_record and wc_record.data:
         wordcloud_data = wc_record.data
