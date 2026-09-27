@@ -57,7 +57,7 @@ MAX_COMMENT_WORKERS = int(os.environ.get('BILI_COMMENT_WORKERS', '3'))
 # 看门狗必判定僵死（持续告警 + 可能重复拉起 Worker）。
 try:
     from blog.infra.logger import LOG_DIR as _LOG_DIR
-except Exception:  # pragma: no cover - 导入期极端异常时退回包内路径
+except Exception:  # pragma: no cover - 导入期极端异常时退回 <root>/logs
     _LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
 
 _ACTIVITY_FILE = os.path.join(_LOG_DIR, '.activity')
@@ -603,6 +603,16 @@ def _init_worker_scheduler(app):
             cmd = [sys.executable, '-m', 'blog.wordcloud.runner'] + list(args)
             from blog.infra.logger import LOG_DIR as _log_dir
             _wc_log_path = os.path.join(_log_dir, 'wordcloud-subprocess.log')
+            # 该文件由日志清理机制之外维护（DailyFileHandler 只回收
+            # hoshino-*/error-* 前缀），且子进程的全部 INFO 日志（含
+            # "每 50 个视频一行"的进度）都会写入，因此启动前按大小轮转，
+            # 保证最多保留当前 + 上一份（默认上限约 5MB×2）。
+            try:
+                _wc_max = 5 * 1024 * 1024
+                if os.path.exists(_wc_log_path) and os.path.getsize(_wc_log_path) > _wc_max:
+                    os.replace(_wc_log_path, _wc_log_path + '.1')
+            except OSError:
+                pass
             try:
                 # 子进程输出落独立日志文件（不再 DEVNULL），失败有迹可查
                 _wc_log = open(_wc_log_path, 'ab', buffering=0)
@@ -633,11 +643,14 @@ def _init_worker_scheduler(app):
             )
 
             def _watch_wc_start(_p=proc, _a=args, _lp=_wc_log_path):
-                """启动失败检测：3 秒后已退出说明启动即失败，记 ERROR 便于排查。"""
+                """启动失败检测：3 秒内已退出且返回码非 0 视为启动失败。
+
+                返回码 0 属合法的快速成功退出（例如无可处理数据），不告警。
+                """
                 try:
                     time.sleep(3)
                     rc = _p.poll()
-                    if rc is not None:
+                    if rc not in (None, 0):
                         app.logger.error(
                             '词云子进程启动后立即退出 (returncode=%s) args=%s，详见 %s',
                             rc, _a, _lp,

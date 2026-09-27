@@ -24,6 +24,82 @@ if _TEST_BACKEND == 'sqlite':
     if os.path.exists(_sqlite_path):
         os.remove(_sqlite_path)
     os.environ['DATABASE_URL'] = f'sqlite:///{_sqlite_path}'
+
+    # ── SQLite 兼容 shim ─────────────────────────────
+    # 生产代码含 MySQL 专有函数，SQLite 下会报 "no such function"：
+    #   - 首页加权随机排序（blog/core/routes.py:_render_index）用
+    #     unix_timestamp() + rand() —— 这是无条件执行的请求路径，
+    #     不注册 shim 会让 / 在 SQLite 下直接报错（test_home_page 与
+    #     test_security 的响应头测试都会失败）。
+    #   - 词云按月分组用 date_format()。
+    # 注意：shim 只保证 SQL 可执行，排序权重的具体数值与 MySQL 不逐一
+    #       等价（测试只断言状态码与结构，不受影响）。
+    #       词云的 ON DUPLICATE KEY UPDATE 无法 shim（MySQL 方言 insert），
+    #       该路径由 CI 的 mysql-integration job 覆盖，SQLite job 不覆盖。
+    import random as _random
+    import sqlite3 as _sqlite3
+    from datetime import datetime as _dt
+
+    from sqlalchemy import event as _sa_event
+    from sqlalchemy.engine import Engine as _Engine
+
+    def _sqlite_unix_timestamp(value):
+        """MySQL UNIX_TIMESTAMP(datetime) 的等价实现（秒级整数）。"""
+        if value is None:
+            return 0
+        if isinstance(value, (int, float)):
+            return int(value)
+        text = str(value).strip()
+        for parser in (
+            _dt.fromisoformat,
+            lambda s: _dt.strptime(s, '%Y-%m-%d %H:%M:%S'),
+            lambda s: _dt.strptime(s, '%Y-%m-%d'),
+        ):
+            try:
+                return int(parser(text).timestamp())
+            except (ValueError, TypeError):
+                continue
+        return 0
+
+    def _sqlite_date_format(value, fmt):
+        """MySQL DATE_FORMAT(datetime, '%Y-%m') 的等价实现。
+
+        MySQL 与 Python strftime 的占位符对 %Y/%m/%d/%H/%M/%S 一致。
+        """
+        if value is None:
+            return None
+        text = str(value).strip()
+        try:
+            parsed = _dt.fromisoformat(text)
+        except ValueError:
+            try:
+                parsed = _dt.strptime(text, '%Y-%m-%d %H:%M:%S')
+            except ValueError:
+                return None
+        try:
+            return parsed.strftime(fmt)
+        except (ValueError, TypeError):
+            return None
+
+    @_sa_event.listens_for(_Engine, 'connect')
+    def _register_sqlite_shims(dbapi_connection, connection_record):
+        """为 SQLite 连接注册 MySQL 函数 shim（可选启用外键约束）。"""
+        if not isinstance(dbapi_connection, _sqlite3.Connection):
+            return
+        dbapi_connection.create_function('unix_timestamp', 1, _sqlite_unix_timestamp)
+        dbapi_connection.create_function('rand', 0, _random.random)
+        dbapi_connection.create_function('rand', 1, lambda seed: _random.random())
+        dbapi_connection.create_function('date_format', 2, _sqlite_date_format)
+        # 外键约束默认保持 SQLite 原生行为（foreign_keys=OFF）。
+        # 原因：生产 MySQL 的外键是开启的，但 SQLite 开启后会严格校验插入顺序
+        # （不通过 relationship 关联、直接写外键列的测试数据会 IntegrityError）。
+        # 需要验证级联删除等外键语义时，显式设置 TEST_SQLITE_FK=1 再跑测试。
+        if os.environ.get('TEST_SQLITE_FK') == '1':
+            cursor = dbapi_connection.cursor()
+            try:
+                cursor.execute('PRAGMA foreign_keys=ON')
+            finally:
+                cursor.close()
 else:
     os.environ.setdefault('DB_HOST', '127.0.0.1')
     os.environ.setdefault('DB_USER', 'hoshino_test')

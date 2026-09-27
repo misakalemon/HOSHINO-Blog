@@ -149,3 +149,41 @@ def test_config_view_unknown_attribute_raises(gen_module):
     view = gen_module._ConfigView({}, {})
     with pytest.raises(AttributeError):
         _ = view.not_exist
+
+
+# ── 5. SQLite 测试后端的兼容层必须存在 ───────────────────
+def test_sqlite_backend_registers_mysql_function_shims():
+    """SQLite 后端必须为 MySQL 专有函数注册 shim。
+
+    生产代码含 MySQL 专有 SQL：
+      - 首页加权随机排序（blog/core/routes.py:_render_index）用
+        unix_timestamp() + rand()，这是无条件执行的请求路径；
+      - 词云按月分组用 date_format()。
+    若 conftest 的 shim 被移除，SQLite（默认测试后端）下这些路径会报
+    "no such function"，测试将失败或（更糟）在异常被吞的路径上"假绿"。
+    """
+    src = _read('tests/conftest.py')
+    assert "create_function('unix_timestamp'" in src, 'SQLite 缺少 unix_timestamp shim'
+    assert "create_function('rand'" in src, 'SQLite 缺少 rand shim'
+    assert "create_function('date_format'" in src, 'SQLite 缺少 date_format shim'
+    assert 'TEST_SQLITE_FK' in src, (
+        '应保留可选的外键严格模式开关（TEST_SQLITE_FK=1）：'
+        'SQLite 默认关闭外键，而生产 MySQL 的级联删除依赖外键生效，'
+        '需要时可开启以验证级联语义'
+    )
+
+
+def test_mysql_only_paths_are_known():
+    """固化"SQLite 无法覆盖"的 MySQL 专有路径清单。
+
+    这些路径只能在 CI 的 mysql-integration job 中验证；此断言的作用是
+    当有人改动这些代码时提醒复核（断言失败通常意味着该清单需要更新，
+    或对应实现已改为方言无关）。
+    """
+    assert 'func.unix_timestamp' in _read('blog/core/routes.py'), (
+        '首页排序若已改为方言无关实现，请同步更新本清单与 conftest 的 shim 说明'
+    )
+    gen_src = _read('blog/wordcloud/generator.py')
+    assert 'on_duplicate_key_update' in gen_src, (
+        '词云 upsert 若已改为方言无关实现（如 merge/ON CONFLICT），请更新本清单'
+    )

@@ -51,7 +51,7 @@ HOSHINO Blog 是一个基于 Python Flask 框架构建的个人博客系统。�
 | 内容渲染 | 原生 HTML（支持富文本标签 + Prism 代码高亮） |
 | 代码高亮 | Prism.js（前端）+ Pygments（后端） |
 | B站 API | bilibili-api-python >=17.0 |
-| 爬虫 | requests + curl_cffi + beautifulsoup4 + selenium（Docker Chrome） |
+| 爬虫 | requests + curl_cffi + beautifulsoup4 + lxml（浏览器采集链已下线，selenium 依赖已移除） |
 | 中文分词 | jieba（精确模式 + 300+ 停用词） |
 | 邮件 | SMTP（163/petalmail，支持批量订阅通知） |
 | 词云渲染 | 零依赖纯 Canvas（5 种形状 + 3 套配色） |
@@ -155,6 +155,9 @@ conda env create -f environment.yml
 
 # 3. 激活环境（环境名须与 environment.yml 的 name 及 start.bat 默认值一致）
 conda activate blog_env
+# 注：environment.yml 的环境名已由 hoshino-blog 统一为 blog_env。
+#     若你此前按旧名建过环境，可继续沿用旧环境并通过
+#     set HOSHINO_CONDA_ENV=<旧环境名> 启动，或重新执行上面的 conda env create。
 
 # 4. 创建 MySQL 数据库
 mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS hoshino_blog DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"

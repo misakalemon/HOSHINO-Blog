@@ -122,4 +122,4 @@ jobs:
           cache: pip
 
       - run: pip install pip-audit
-      - run: pip-audit -r requirements.txt --severity high
+      - run: pip-audit -r requirements.txt
