@@ -710,8 +710,16 @@ new ResizeObserver(h).observe(document.body);})();
 
 @blog_bp.route('/post/<slug>/debug-render')
 def debug_render(slug):
-    """临时调试端点：显示文章原始内容和渲染管线各步骤结果。"""
+    """临时调试端点（仅管理员）：显示文章原始内容和渲染管线各步骤结果。"""
     from flask import jsonify
+    from flask_login import current_user
+
+    # 该端点会回显文章原文片段与缓存键，必须限制为管理员访问
+    if not current_user.is_authenticated:
+        abort(401)
+    if not current_user.is_admin:
+        abort(403)
+
     post = Post.query.filter_by(slug=slug, is_published=True).first_or_404()
 
     from .cache import cache_get, cache_set
@@ -755,12 +763,23 @@ def debug_render(slug):
 
 @blog_bp.route('/post/<slug>/clear-cache')
 def clear_post_cache(slug):
-    """临时端点：清除指定文章的渲染缓存。"""
+    """临时端点（仅管理员）：清除指定文章的渲染缓存。
+
+    该端点可被匿名反复调用以击穿缓存，因此限制为管理员。
+    """
     from flask import jsonify
+    from flask_login import current_user
+
+    if not current_user.is_authenticated:
+        abort(401)
+    if not current_user.is_admin:
+        abort(403)
+
     post = Post.query.filter_by(slug=slug, is_published=True).first_or_404()
-    from .cache import cache_get, cache_set
+    from .cache import cache_delete
     cache_key = f'post:rendered:{post.id}:{post.updated_at.timestamp() if post.updated_at else ""}'
-    cache_set(cache_key, None, 1)
+    # 使用 cache_delete 真正删除键（原实现写 None 会留下 "null" 值）
+    cache_delete(cache_key)
     return jsonify({'ok': True, 'message': f'cache cleared: {cache_key}'})
 
 

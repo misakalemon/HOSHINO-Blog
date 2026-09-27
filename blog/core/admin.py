@@ -273,11 +273,21 @@ def _check_active():
 
 
 def _registration_enabled():
-    """注册是否开放：DB 站点设置优先，回退 ENABLE_REGISTRATION 环境变量。"""
+    """注册是否开放：DB 站点设置优先，回退 ENABLE_REGISTRATION 环境变量。
+
+    注意：回退分支必须读取 Flask 配置，**绝不能调用自身**——否则在
+    site_settings 表缺少 enable_registration 行时（SiteSetting.get 返回
+    None）会无限递归 RecursionError，导致 /admin/login 与 /admin/register
+    直接 500（该函数在登录页每次 GET 的渲染路径上被调用）。
+    """
     db_val = SiteSetting.get('enable_registration', None)
     if db_val is not None:
-        return db_val.lower() in ('true', '1')
-    return _registration_enabled()
+        return str(db_val).lower() in ('true', '1')
+    try:
+        return bool(current_app.config.get('ENABLE_REGISTRATION', False))
+    except RuntimeError:
+        # 无应用上下文（脚本/离线调用）时按"关闭注册"处理
+        return False
 
 
 def admin_required(f):

@@ -46,14 +46,21 @@ MAX_COMMENT_WORKERS = int(os.environ.get('BILI_COMMENT_WORKERS', '3'))
 
 
 # ── 业务心跳（供 logwatch 看门狗判定僵死）──────────────────────
-# Worker 周期性刷新 logs/.activity（内容：Unix时间戳 + 最近业务活动
+# Worker 周期性刷新 <LOG_DIR>/.activity（内容：Unix时间戳 + 最近业务活动
 # 类型，只写文件、不写日志——与「移除刷屏心跳日志」的决策兼容）。
 # 任何业务活动（增量/深扫/词云/任务完成）即时更新；主循环每
 # BILI_ACTIVITY_INTERVAL（默认 5 分钟）兜底刷新一次，
 # logwatch 据此判定「无业务活动超阈值」是否僵死。
-_ACTIVITY_FILE = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), 'blog', 'logs', '.activity'
-)
+#
+# 路径必须与 blog.infra.logwatch 读取的路径同源（都取 logger.LOG_DIR）：
+# 历史上 worker 写 blog/logs/、看门狗读 <root>/logs/，导致心跳文件永不重合，
+# 看门狗必判定僵死（持续告警 + 可能重复拉起 Worker）。
+try:
+    from blog.infra.logger import LOG_DIR as _LOG_DIR
+except Exception:  # pragma: no cover - 导入期极端异常时退回包内路径
+    _LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
+
+_ACTIVITY_FILE = os.path.join(_LOG_DIR, '.activity')
 _ACTIVITY_LOCK = threading.Lock()
 _last_activity_refresh = [0.0]
 _last_activity_type = ['startup']
@@ -589,20 +596,56 @@ def _init_worker_scheduler(app):
         # 与爬虫进程彻底隔离 GIL 与内存；子进程自带 WORKER_PROCESS=1 跳过迁移。
         def _spawn_wordcloud(*args):
             _root = os.path.dirname(os.path.abspath(__file__))
-            cmd = [sys.executable, '-m', 'blog.wordcloud.generator_runner'] + list(args)
+            # 模块名必须与文件路径一致：blog/wordcloud/runner.py → blog.wordcloud.runner
+            # （曾误写为 blog.wordcloud.generator_runner，该模块不存在，
+            #   导致每日 04:00 / 每周一 04:30 的词云预计算每次都
+            #   ModuleNotFoundError 静默退出，词云长期不更新）
+            cmd = [sys.executable, '-m', 'blog.wordcloud.runner'] + list(args)
+            from blog.infra.logger import LOG_DIR as _log_dir
+            _wc_log_path = os.path.join(_log_dir, 'wordcloud-subprocess.log')
+            try:
+                # 子进程输出落独立日志文件（不再 DEVNULL），失败有迹可查
+                _wc_log = open(_wc_log_path, 'ab', buffering=0)
+            except Exception:
+                _wc_log = subprocess.DEVNULL
+                _wc_log_path = '(不可用)'
             try:
                 proc = subprocess.Popen(
                     cmd,
                     cwd=_root,
                     stdin=subprocess.DEVNULL,
-                    stdout=subprocess.DEVNULL,
-                    stderr=sys.stderr,
+                    stdout=_wc_log,
+                    stderr=subprocess.STDOUT,
                     env={**os.environ, 'WORKER_PROCESS': '1'},
                 )
             except Exception as e:
                 app.logger.error('词云子进程启动失败 %s: %s', args, e)
                 return None
-            app.logger.info('词云子进程已启动 (PID=%d) args=%s', proc.pid, args)
+            finally:
+                # 父进程副本可立即关闭：Popen 已把句柄复制给子进程
+                try:
+                    if _wc_log is not subprocess.DEVNULL:
+                        _wc_log.close()
+                except Exception:
+                    pass
+            app.logger.info(
+                '词云子进程已启动 (PID=%d) args=%s 日志=%s', proc.pid, args, _wc_log_path
+            )
+
+            def _watch_wc_start(_p=proc, _a=args, _lp=_wc_log_path):
+                """启动失败检测：3 秒后已退出说明启动即失败，记 ERROR 便于排查。"""
+                try:
+                    time.sleep(3)
+                    rc = _p.poll()
+                    if rc is not None:
+                        app.logger.error(
+                            '词云子进程启动后立即退出 (returncode=%s) args=%s，详见 %s',
+                            rc, _a, _lp,
+                        )
+                except Exception:
+                    pass
+
+            threading.Thread(target=_watch_wc_start, daemon=True).start()
             # 业务心跳：词云调度触发即视为业务活动（子进程自身为 CPU 密集、无需再写心跳）
             record_activity('wordcloud_subproc')
             return proc
@@ -703,7 +746,8 @@ def main():
     recover_backup_tasks()
 
     # 记录本进程 PID 供 logwatch 看门狗（BILI_WATCHDOG_RESTART=1 时按此重启）
-    _pid_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'blog', 'logs')
+    # 路径与看门狗读取端同源（logwatch.WORKER_PID_FILE = <LOG_DIR>/worker.pid）
+    _pid_dir = _LOG_DIR
     try:
         os.makedirs(_pid_dir, exist_ok=True)
         with open(os.path.join(_pid_dir, 'worker.pid'), 'w') as _pf:

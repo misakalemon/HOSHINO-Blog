@@ -6,8 +6,8 @@
 爬虫 asyncio 事件循环（历史上 04:54 后日志戛然而止即此故障）。
 
 用法：
-    python -m blog.wordcloud.generator_runner --all   # 全站词云（每日 04:00）
-    python -m blog.wordcloud.generator_runner --bili  # B站词云  (每周一 04:30)
+    python -m blog.wordcloud.runner --all   # 全站词云（每日 04:00）
+    python -m blog.wordcloud.runner --bili  # B站词云  (每周一 04:30)
 
 内部流程：create_app()（WORKER_PROCESS=1，跳过迁移 DDL）
 → precompute_all_wordclouds() / precompute_bili_wordclouds() → 结束
@@ -17,9 +17,9 @@ import argparse
 import os
 import sys
 
-# 兼容直接执行 python blog/wordcloud_runner.py：注入项目根目录到 sys.path，
+# 兼容直接执行 python blog/wordcloud/runner.py：注入项目根目录到 sys.path，
 # 否则 sys.path[0]=blog/ 目录，from app import create_app 会 ModuleNotFoundError。
-# 官方启动路径是 python -m blog.wordcloud.generator_runner（worker.py 已保证 cwd=项目根）。
+# 官方启动路径是 python -m blog.wordcloud.runner（worker.py 已保证 cwd=项目根）。
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
