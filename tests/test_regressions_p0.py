@@ -31,58 +31,79 @@ def test_registration_enabled_has_no_self_recursion():
 
     修复前 ``return _registration_enabled()`` 在 site_settings 缺
     enable_registration 行时无限递归 → RecursionError → 登录页 500。
+    权限层已抽至 blog/core/security.py（函数名 registration_enabled）。
     """
-    tree = ast.parse(_read('blog/core/admin.py'))
+    tree = ast.parse(_read('blog/core/security.py'))
     found = False
     for node in ast.walk(tree):
-        if isinstance(node, ast.FunctionDef) and node.name == '_registration_enabled':
+        if isinstance(node, ast.FunctionDef) and node.name == 'registration_enabled':
             found = True
             for sub in ast.walk(node):
                 if (
                     isinstance(sub, ast.Call)
                     and isinstance(sub.func, ast.Name)
-                    and sub.func.id == '_registration_enabled'
+                    and sub.func.id == 'registration_enabled'
                 ):
                     raise AssertionError(
-                        '_registration_enabled 内仍有自我递归调用：'
+                        'registration_enabled 内仍有自我递归调用：'
                         'site_settings 缺少 enable_registration 行时会 RecursionError'
                     )
-    assert found, '未找到 _registration_enabled 定义'
+    assert found, '未找到 registration_enabled 定义'
+
+
+@pytest.mark.pure
+def test_admin_reexports_security_layer():
+    """admin.py 必须再导出权限层，保证既有导入路径与调用点不破。"""
+    src = _read('blog/core/admin.py')
+    assert 'from .security import' in src
+    for alias in ('admin_required', 'author_required', 'editor_required'):
+        assert alias in src
+    assert 'registration_enabled as _registration_enabled' in src
+    assert 'check_active as _check_active' in src
+
+
+@pytest.mark.pure
+def test_security_layer_does_not_import_views():
+    """权限层不得反向导入视图模块（这是抽取它的目的）。"""
+    src = _read('blog/core/security.py')
+    assert 'from .admin import' not in src
+    assert 'from .routes import' not in src
+    assert 'import admin' not in src
 
 
 @pytest.mark.pure
 def test_registration_enabled_falls_back_to_config(monkeypatch):
     """无 DB 设置行时回退到 Flask 配置（而不是递归崩溃）。"""
-    admin_mod = pytest.importorskip('blog.core.admin')
+    sec = pytest.importorskip('blog.core.security')
     from flask import Flask
 
     monkeypatch.setattr(
-        admin_mod.SiteSetting, 'get', classmethod(lambda cls, key, default=None: None)
+        sec.SiteSetting, 'get', classmethod(lambda cls, key, default=None: None)
     )
     app = Flask(__name__)
 
     app.config['ENABLE_REGISTRATION'] = True
     with app.app_context():
-        assert admin_mod._registration_enabled() is True
+        assert sec.registration_enabled() is True
 
     app.config['ENABLE_REGISTRATION'] = False
     with app.app_context():
-        assert admin_mod._registration_enabled() is False
+        assert sec.registration_enabled() is False
 
 
 @pytest.mark.pure
 def test_registration_enabled_prefers_db_value(monkeypatch):
     """DB 有设置行时以 DB 值为准。"""
-    admin_mod = pytest.importorskip('blog.core.admin')
+    sec = pytest.importorskip('blog.core.security')
     from flask import Flask
 
     monkeypatch.setattr(
-        admin_mod.SiteSetting, 'get', classmethod(lambda cls, key, default=None: 'true')
+        sec.SiteSetting, 'get', classmethod(lambda cls, key, default=None: 'true')
     )
     app = Flask(__name__)
     app.config['ENABLE_REGISTRATION'] = False
     with app.app_context():
-        assert admin_mod._registration_enabled() is True
+        assert sec.registration_enabled() is True
 
 
 # ── 2. 词云子进程模块名必须真实存在 ──────────────────────

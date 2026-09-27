@@ -51,7 +51,7 @@ from blog.core.models import (
     BiliWatchedVideo,
     db,
 )
-from ..core.admin import editor_required
+from ..core.security import editor_required
 from ..core.utils import now_cst
 from .bili_api import thread_sleep, ensure_semaphore
 

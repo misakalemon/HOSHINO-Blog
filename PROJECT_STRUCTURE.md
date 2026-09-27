@@ -15,8 +15,8 @@ hoshino-blog/
 │   ├── __init__.py         # 包初始化（蓝图声明/模型导入/迁移函数）
 │   ├── core/               # 核心业务逻辑
 │   │   ├── models.py       # SQLAlchemy ORM 模型
-│+ posts_md     — 文章导出为 Markdown zip（每篇一个 .md，含 YAML front matter）
 │   │   ├── admin.py        # 后台管理路由（/admin/*）
+│   │   ├── security.py     # 权限装饰器与访问控制（admin/editor/author_required）
 │   │   ├── routes.py       # 前台路由（首页/文章/分类/评论/联系）
 │   │   ├── api.py          # 外部 API 蓝图（/api/v1/*）
 │   │   ├── forms.py        # WTForms 表单定义

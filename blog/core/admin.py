@@ -50,7 +50,6 @@ import os
 import threading
 import time
 import uuid
-from functools import wraps
 
 from flask import (
     abort,
@@ -266,70 +265,15 @@ def _invalidate_page_cache(*prefixes):
 # ═══════════════════════════════════════════════
 # 权限控制装饰器
 # ═══════════════════════════════════════════════
-def _check_active():
-    """检查当前用户是否被禁用，禁用则 403。"""
-    if not current_user.is_active:
-        abort(403)
-
-
-def _registration_enabled():
-    """注册是否开放：DB 站点设置优先，回退 ENABLE_REGISTRATION 环境变量。
-
-    注意：回退分支必须读取 Flask 配置，**绝不能调用自身**——否则在
-    site_settings 表缺少 enable_registration 行时（SiteSetting.get 返回
-    None）会无限递归 RecursionError，导致 /admin/login 与 /admin/register
-    直接 500（该函数在登录页每次 GET 的渲染路径上被调用）。
-    """
-    db_val = SiteSetting.get('enable_registration', None)
-    if db_val is not None:
-        return str(db_val).lower() in ('true', '1')
-    try:
-        return bool(current_app.config.get('ENABLE_REGISTRATION', False))
-    except RuntimeError:
-        # 无应用上下文（脚本/离线调用）时按"关闭注册"处理
-        return False
-
-
-def admin_required(f):
-    """装饰器：仅允许管理员访问（同时检查用户未被禁用）。"""
-
-    @wraps(f)
-    @login_required
-    def decorated_function(*args, **kwargs):
-        _check_active()
-        if not current_user.is_admin:
-            abort(403)
-        return f(*args, **kwargs)
-
-    return decorated_function
-
-
-def editor_required(f):
-    """装饰器：允许管理员和编辑访问（同时检查用户未被禁用）。"""
-
-    @wraps(f)
-    @login_required
-    def decorated_function(*args, **kwargs):
-        _check_active()
-        if not current_user.is_editor:
-            abort(403)
-        return f(*args, **kwargs)
-
-    return decorated_function
-
-
-def author_required(f):
-    """装饰器：允许管理员、编辑和作者访问（同时检查用户未被禁用）。"""
-
-    @wraps(f)
-    @login_required
-    def decorated_function(*args, **kwargs):
-        _check_active()
-        if not current_user.is_author:
-            abort(403)
-        return f(*args, **kwargs)
-
-    return decorated_function
+# 已抽至 blog/core/security.py（解除 bilibili 包与 api 层对巨型视图模块的
+# 反向依赖）；此处再导出以保持既有导入路径与调用点不变。
+from .security import (  # noqa: E402  (需在 admin_bp 等导入之后集中排布)
+    admin_required,
+    author_required,
+    editor_required,
+)
+from .security import check_active as _check_active  # noqa: E402
+from .security import registration_enabled as _registration_enabled  # noqa: E402
 
 
 # ═══════════════════════════════════════════════
