@@ -270,8 +270,10 @@ export function createFullToolbar(editor, options) {
           editor.chain().focus().setImage({ src: url, style, alt: 'image' }).run()
         },
       })
-    }).catch(() => {
-      if (typeof showToast === 'function') showToast('图片上传失败', 'error')
+    }).catch(err => {
+      if (typeof showToast === 'function') {
+        showToast((err && err.message) || '图片上传失败', 'error')
+      }
     })
   }))
   insertGroup.appendChild(btn('Table', '插入表格', () => {

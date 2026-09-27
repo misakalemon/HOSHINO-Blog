@@ -121,6 +121,11 @@ export function createContextMenu(editor, options = {}) {
           if (options.uploadUrl && options.csrfToken && options.uploadImageWithCrop) {
             options.uploadImageWithCrop(options.uploadUrl, options.csrfToken).then(url => {
               editor.chain().focus().setImage({ src: url, alt: 'image' }).run()
+            }).catch(err => {
+              // 上传失败需给出反馈（后端错误消息优先），避免静默无响应
+              if (typeof showToast === 'function') {
+                showToast((err && err.message) || '图片上传失败', 'error')
+              }
             })
           }
         },

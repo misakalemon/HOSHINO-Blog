@@ -515,10 +515,12 @@ export function uploadImageWithCrop(uploadUrl, csrfToken) {
             headers: { 'X-CSRFToken': csrfToken },
             body: formData,
           })
-            .then(r => r.json())
-            .then(data => {
-              if (data.url) resolve(data.url)
-              else reject(new Error('上传失败'))
+            .then(r => r.json().catch(() => ({})).then(data => ({ ok: r.ok, data })))
+            .then(({ ok, data }) => {
+              // 4xx 时后端返回 {"error": "..."}（如"图片过大"），
+              // 需把该消息透出，否则用户只看到笼统的"上传失败"
+              if (ok && data.url) resolve(data.url)
+              else reject(new Error(data.error || '上传失败'))
             })
             .catch(reject)
         })
@@ -530,10 +532,10 @@ export function uploadImageWithCrop(uploadUrl, csrfToken) {
           headers: { 'X-CSRFToken': csrfToken },
           body: formData,
         })
-          .then(r => r.json())
-          .then(data => {
-            if (data.url) resolve(data.url)
-            else reject(new Error('上传失败'))
+          .then(r => r.json().catch(() => ({})).then(data => ({ ok: r.ok, data })))
+          .then(({ ok, data }) => {
+            if (ok && data.url) resolve(data.url)
+            else reject(new Error(data.error || '上传失败'))
           })
           .catch(reject)
       }

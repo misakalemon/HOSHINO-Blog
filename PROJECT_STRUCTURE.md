@@ -17,6 +17,7 @@ hoshino-blog/
 │   │   ├── models.py       # SQLAlchemy ORM 模型
 │   │   ├── admin.py        # 后台管理路由（/admin/*）
 │   │   ├── security.py     # 权限装饰器与访问控制（admin/editor/author_required）
+│   │   ├── images.py       # 图片上传统一处理（校验/EXIF 转正/模式归一/编码/落盘）
 │   │   ├── routes.py       # 前台路由（首页/文章/分类/评论/联系）
 │   │   ├── api.py          # 外部 API 蓝图（/api/v1/*）
 │   │   ├── forms.py        # WTForms 表单定义

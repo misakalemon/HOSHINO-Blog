@@ -77,7 +77,9 @@ function handleFiles(files) {
     if (!files || !files.length) return;
     var csrf = document.querySelector('meta[name="csrf-token"]').content;
     var prog = document.getElementById('uploadProgress');
+    var errors = [];
     var done = 0, total = files.length;
+    prog.style.color = '';
     prog.textContent = '上传中 0/' + total;
     Array.prototype.forEach.call(files, function(file) {
         var fd = new FormData();
@@ -86,14 +88,32 @@ function handleFiles(files) {
             method: 'POST',
             headers: {'X-CSRFToken': csrf},
             body: fd
-        }).then(function(r){ return r.json(); }).then(function(){
-            done++;
-            prog.textContent = '上传中 ' + done + '/' + total;
-            if (done >= total) { location.reload(); }
+        }).then(function(r){
+            // 后端在 4xx 时返回 {"error": "..."}：必须读出消息，
+            // 否则 400（如"图片过大"）会被误当成功并静默 reload
+            return r.json().catch(function(){ return {}; }).then(function(data){
+                return {ok: r.ok, data: data};
+            });
+        }).then(function(res){
+            if (!res.ok || !res.data.url) {
+                errors.push(file.name + '：' + (res.data.error || '上传失败'));
+            }
         }).catch(function(){
+            errors.push(file.name + '：网络错误');
+        }).then(function(){
             done++;
-            prog.textContent = '上传中 ' + done + '/' + total + '（部分失败）';
-            if (done >= total) { location.reload(); }
+            if (done >= total) {
+                if (errors.length) {
+                    prog.style.color = '#ff6b6b';
+                    prog.textContent = '失败 ' + errors.length + '/' + total + '：' + errors.join('；');
+                } else {
+                    prog.textContent = '上传完成';
+                    location.reload();
+                }
+            } else {
+                prog.textContent = '上传中 ' + done + '/' + total +
+                    (errors.length ? '（失败 ' + errors.length + '）' : '');
+            }
         });
     });
 }

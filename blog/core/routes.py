@@ -335,7 +335,7 @@ def _allow_attrs(tag, name, value):
 ALLOWED_ATTRS = _allow_attrs
 
 # 缩略图缓存版本号（修改此值使旧缓存自动失效并清理）
-THUMB_CACHE_VER = 'v3'
+THUMB_CACHE_VER = 'v4'
 
 
 # ── 侧边栏数据缓存（Redis，降级友好） ─────────
@@ -1363,15 +1363,22 @@ def thumbnail():
                             mimetype=mime_type,
                             headers={'Cache-Control': 'public, max-age=2592000'},
                         )
+            from .images import normalize_image
+
             img = Image.open(img_path)
+            # EXIF 方向转正 + 色彩模式归一（P/PA/LA/CMYK/16 位 → RGB/RGBA）：
+            # 复用上传链路的统一实现，避免手机竖拍照片在缩略图里横躺、
+            # 以及 CMYK 等模式在转 WebP 时报错
+            img = normalize_image(img)
             # 只缩小不放大（ratio 最大为 1.0），保持原始宽高比
             ratio = min(w / img.width, 1.0)
             if ratio < 1:
                 new_w = int(img.width * ratio)
                 new_h = int(img.height * ratio)
                 img = img.resize((new_w, new_h), Image.LANCZOS)
-            # JPEG 不支持 RGBA 模式，先转换为 RGB
-            if output_fmt == 'JPEG' and img.mode in ('RGBA', 'P'):
+            # JPEG 不支持透明通道：normalize_image 已把 P/LA 归一为 RGBA/RGB，
+            # 此处兜底覆盖缩放后仍带 alpha 的场景
+            if output_fmt == 'JPEG' and img.mode in ('RGBA', 'LA', 'P'):
                 img = img.convert('RGB')
             img.save(cache_path, output_fmt, **save_kwargs)
             with open(cache_path, 'rb') as f:

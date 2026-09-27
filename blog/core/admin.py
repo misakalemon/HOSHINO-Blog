@@ -49,7 +49,6 @@ import logging
 import os
 import threading
 import time
-import uuid
 
 from flask import (
     abort,
@@ -1613,84 +1612,41 @@ def profile():
         elif 'avatar' in request.files:
             file = request.files['avatar']
             if file and file.filename:
-                # 从文件名提取扩展名，用于后续格式判断和保存
-                ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'png'
-                if ext in ('png', 'jpg', 'jpeg', 'gif', 'webp'):
-                    import io as _io
-
-                    from PIL import Image
-
-                    # Magic Bytes 校验：防止改名绕过扩展名上传非图片文件
-                    _magic = file.read(12)
-                    file.seek(0)
-                    _valid_magic = (
-                        _magic.startswith(b'\x89PNG')
-                        or _magic.startswith(b'\xff\xd8')
-                        or _magic.startswith(b'GIF87a')
-                        or _magic.startswith(b'GIF89a')
-                        or (len(_magic) >= 12 and _magic.startswith(b'RIFF') and _magic[8:12] == b'WEBP')
+                from .images import (
+                    ImageUploadError,
+                    process_upload,
+                    safe_remove_upload,
+                    save_upload,
+                )
+                try:
+                    result = process_upload(
+                        file,
+                        max_side=200,
+                        allowed_exts=('png', 'jpg', 'jpeg', 'gif', 'webp'),
                     )
-                    if not _valid_magic:
-                        flash('头像文件不是有效的图片', 'error')
-                        return render_template('admin/profile.html', form=form)
-                    try:
-                        # 解压炸弹防护：限制最大像素数
-                        if not hasattr(Image, 'MAX_IMAGE_PIXELS'):
-                            Image.MAX_IMAGE_PIXELS = 50_000_000
-                        Image.MAX_IMAGE_PIXELS = 50_000_000
-                        img = Image.open(file)
-                        img.verify()
-                        file.seek(0)
-                        img = Image.open(file)
-                        # 缩放到 200px 宽（保持宽高比），仅缩小不放大
-                        ratio = min(200 / img.width, 1.0)
-                        if ratio < 1:
-                            h = int(img.height * ratio)
-                            img = img.resize((200, h), Image.LANCZOS)
-                        buf = _io.BytesIO()
-                        # GIF 保持 GIF（保留动画）；JPEG 用 JPEG；其他统一转 WebP
-                        if ext == 'gif':
-                            img.save(buf, 'GIF')
-                            save_ext = 'gif'
-                        elif ext in ('jpg', 'jpeg'):
-                            img.save(buf, 'JPEG', quality=85, optimize=True)
-                            save_ext = 'jpg'
-                        else:
-                            img.save(buf, 'WEBP', quality=85, method=6)
-                            save_ext = 'webp'
-                        buf.seek(0)
-                        # 生成 UUID 文件名，避免用户间头像覆盖
-                        filename = 'avatar_' + str(uuid.uuid4()) + '.' + save_ext
-                        from flask import current_app
-
-                        upload_dir = os.path.join(current_app.root_path, 'static', 'uploads')
-                        os.makedirs(upload_dir, exist_ok=True)
-                        # 删除旧头像文件（本地上传的头像），避免磁盘文件累积
-                        # 安全：realpath 规范化后校验必须位于 static/uploads/ 内，
-                        # 防止历史遗留/构造的 avatar 值含 '..' 穿越删除任意文件
-                        if current_user.avatar and current_user.avatar.startswith('uploads/avatar_'):
-                            old_path = os.path.realpath(
-                                os.path.join(current_app.root_path, 'static', current_user.avatar)
-                            )
-                            uploads_real = os.path.realpath(upload_dir)
-                            if old_path.startswith(uploads_real + os.sep) and os.path.isfile(old_path):
-                                try:
-                                    os.remove(old_path)
-                                except OSError:
-                                    pass
-                        with open(os.path.join(upload_dir, filename), 'wb') as f:
-                            f.write(buf.getvalue())
-                        current_user.avatar = 'uploads/' + filename
-                        logger.info('更新头像: user=%s new=%s', current_user.username, filename)
-                    except Exception:
-                        # 解码/处理失败（如 magic bytes 通过但 PIL 无法解码的损坏图片）
-                        logger.warning('头像处理失败: user=%s file=%s',
-                                       current_user.username, file.filename, exc_info=True)
-                        flash('头像处理失败，请更换图片文件', 'error')
-                        return render_template('admin/profile.html', form=form)
-                else:
-                    flash('不支持的头像格式（支持 png/jpg/jpeg/gif/webp）', 'error')
+                except ImageUploadError as e:
+                    flash(str(e), 'error')
                     return render_template('admin/profile.html', form=form)
+                except Exception:
+                    logger.warning(
+                        '头像处理失败: user=%s file=%s',
+                        current_user.username, file.filename, exc_info=True,
+                    )
+                    flash('头像处理失败，请更换图片文件', 'error')
+                    return render_template('admin/profile.html', form=form)
+                filename, rel_path = save_upload(result['data'], result['ext'], 'avatar')
+                # 删除旧头像（safe_remove_upload 内部做 realpath 校验，防路径穿越）
+                if current_user.avatar and current_user.avatar.startswith('uploads/avatar_'):
+                    safe_remove_upload(current_user.avatar)
+                current_user.avatar = rel_path
+                logger.info(
+                    '更新头像: user=%s new=%s (%dx%d, %dKB)',
+                    current_user.username,
+                    filename,
+                    result['width'],
+                    result['height'],
+                    result['bytes'] // 1024,
+                )
 
         # ── 邮箱：检查唯一性 ──────────────────
         if form.email.data and form.email.data != current_user.email:
@@ -1735,96 +1691,44 @@ def upload_image():
     """图片上传接口（供富文本编辑器调用）。
 
     接收 multipart/form-data，字段名 'file'。
-    返回 JSON: {"url": "/static/uploads/xxx.jpg"}
+    返回 JSON: {"url": "/static/uploads/xxx.webp"}
 
-    支持的格式：png, jpg, jpeg, gif, webp
-    上传后存入 static/uploads/，文件名使用 UUID 避免冲突。
+    校验与处理统一由 blog/core/images.py 完成：
+      扩展名 + 魔数 + 体积校验、EXIF 方向转正、色彩模式归一、
+      最长边限制（UPLOAD_MAX_SIDE）、统一转 WebP（GIF 保留格式与动画）、
+      UUID 文件名、落盘到 UPLOAD_FOLDER。
 
-    注意：
-      - 此路由使用 @login_required（不要求 admin），
-        方便所有登录用户编辑文章时上传图片。
-      - 前端编辑器中插入图片通过此 API 返回的 URL 实现。
+    注意：使用 @author_required（作者及以上角色）即可上传，
+    方便所有能编辑文章的用户插图。
 
     Returns:
-        JSON: 成功 → {"url": "/static/uploads/xxx.jpg"}
+        JSON: 成功 → {"url": "/static/uploads/xxx.webp"}
               失败 → {"error": "错误信息"}, 400
     """
+    from .images import ImageUploadError, process_upload, save_upload
+
     if 'file' not in request.files:
         return jsonify({'error': '没有文件'}), 400
     file = request.files['file']
-    if not file.filename:
-        return jsonify({'error': '空文件'}), 400
-    # 校验文件扩展名白名单
-    ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'png'
-    if ext not in ('png', 'jpg', 'jpeg', 'gif', 'webp'):
-        return jsonify({'error': '不支持的格式'}), 400
-    # 校验 Magic Bytes（文件头签名），防止通过改名绕过后缀检查
-    import io as _io
-
-    magic = file.read(12)
-    file.seek(0)
-    # 各格式魔数签名：PNG(‰PNG), JPEG(ÿØ), GIF87a/GIF89a, WEBP(RIFF....WEBP)
-    is_valid_magic = (
-        magic.startswith(b'\x89PNG')
-        or magic.startswith(b'\xff\xd8')
-        or magic.startswith(b'GIF87a')
-        or magic.startswith(b'GIF89a')
-        or (len(magic) >= 12 and magic.startswith(b'RIFF') and magic[8:12] == b'WEBP')
-    )
-    if not is_valid_magic:
-        return jsonify({'error': '文件内容不是有效的图片'}), 400
-    # 使用 PIL 重新编码图片（统一质量控制，同时阻断二次构造的恶意图片）
     try:
-        from PIL import Image
-
-        # 解压炸弹防护：与 /thumb 路由一致，拒绝超大像素图片
-        # （防止恶意构造的 PNG/JPEG 声明海量像素耗尽内存）
-        if not hasattr(Image, 'MAX_IMAGE_PIXELS'):
-            Image.MAX_IMAGE_PIXELS = 50_000_000
-        Image.MAX_IMAGE_PIXELS = 50_000_000
-
-        img = Image.open(file)
-        img.verify()
-        file.seek(0)
-        img = Image.open(file)
+        result = process_upload(file)
+    except ImageUploadError as e:
+        return jsonify({'error': str(e)}), 400
     except Exception:
-        return jsonify({'error': '无法解析图片文件'}), 400
-    # 限制上传图片的最大边长（富文本内嵌图片，超大原图会导致页面加载缓慢）
-    # 超出则等比缩小（仅缩小不放大）
-    try:
-        max_side = int(os.environ.get('UPLOAD_MAX_SIDE', '4096'))
-    except (ValueError, TypeError):
-        max_side = 4096
-    if max_side > 0 and max(img.width, img.height) > max_side:
-        ratio = max_side / max(img.width, img.height)
-        img = img.resize((int(img.width * ratio), int(img.height * ratio)), Image.LANCZOS)
-    try:
-        buf = _io.BytesIO()
-        if ext == 'gif':
-            img.save(buf, 'GIF')  # GIF 保持原格式（保留动画）
-        else:
-            img.save(buf, 'WEBP', quality=85, method=6)  # 非 GIF 统一转 WebP，减小体积
-        buf.seek(0)
-    except Exception:
+        # 未预期的处理异常（例如 Pillow 编码器缺失）：记录堆栈并给出可读提示
+        logger.exception('图片上传处理异常: %s', getattr(file, 'filename', '?'))
         return jsonify({'error': '图片处理失败'}), 400
-    # 生成 UUID 文件名，避免路径冲突和文件名猜测
-    filename = str(uuid.uuid4()) + ('.webp' if ext != 'gif' else '.gif')
-    from flask import current_app
-
-    upload_dir = os.path.join(current_app.root_path, 'static', 'uploads')
-    os.makedirs(upload_dir, exist_ok=True)
-    with open(os.path.join(upload_dir, filename), 'wb') as f:
-        f.write(buf.getvalue())
+    filename, rel_path = save_upload(result['data'], result['ext'], 'img')
     logger.info(
-        '图片上传: %s → uploads/%s (%dx%d, %dKB)',
+        '图片上传: %s → %s (%dx%d, %dKB%s)',
         file.filename,
-        filename,
-        img.width,
-        img.height,
-        buf.tell() // 1024,
+        rel_path,
+        result['width'],
+        result['height'],
+        result['bytes'] // 1024,
+        '，动画' if result['animated'] else '',
     )
-    url = url_for('static', filename='uploads/' + filename)
-    return jsonify({'url': url})
+    return jsonify({'url': url_for('static', filename=rel_path)})
 
 
 # ═══════════════════════════════════════════════
@@ -2300,51 +2204,31 @@ def wordcloud_config():
         elif 'shape_image' in request.files:
             file = request.files['shape_image']
             if file and file.filename:
-                ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else 'png'
-                if ext not in ('png', 'webp', 'jpg', 'jpeg'):
-                    flash('仅支持 PNG / WebP / JPEG 格式的形状图片', 'danger')
-                    return render_template('admin/wordcloud_config.html', form=form, config=config)
+                from .images import (
+                    ImageUploadError,
+                    process_upload,
+                    safe_remove_upload,
+                    save_upload,
+                )
                 try:
-                    from PIL import Image
-                    import io as _io
-                    magic = file.read(12)
-                    file.seek(0)
-                    if magic[:8] != b'\x89PNG\r\n\x1a\n' and magic[:4] not in (b'\xff\xd8', b'RIFF'):
-                        flash('不是有效的图片文件', 'danger')
-                        return render_template('admin/wordcloud_config.html', form=form, config=config)
-                    # 解压炸弹防护：与其他上传入口一致，限制最大像素数
-                    if not hasattr(Image, 'MAX_IMAGE_PIXELS'):
-                        Image.MAX_IMAGE_PIXELS = 50_000_000
-                    Image.MAX_IMAGE_PIXELS = 50_000_000
-                    img = Image.open(file)
-                    img.verify()
-                    file.seek(0)
-                    img = Image.open(file)
-                    w, h_ = img.size
-                    if max(w, h_) > 512:
-                        scale = 512 / max(w, h_)
-                        img = img.resize((int(w * scale), int(h_ * scale)), Image.LANCZOS)
-                    buf = _io.BytesIO()
-                    img.save(buf, 'WEBP', quality=80)
-                    filename = 'shape_' + str(uuid.uuid4()) + '.webp'
-                    upload_dir = os.path.join(current_app.root_path, 'static', 'uploads')
-                    os.makedirs(upload_dir, exist_ok=True)
-                    path = os.path.join(upload_dir, filename)
-                    with open(path, 'wb') as f:
-                        f.write(buf.getvalue())
-# 删除旧形状图片
-                    if config.shape_image:
-                        old_path = os.path.join(current_app.root_path, 'static', config.shape_image)
-                        if os.path.isfile(old_path):
-                            try: os.remove(old_path)
-                            except OSError: pass
-                    config.shape_image = 'uploads/' + filename
-                    # 标记图片已上传，populate_obj 后强制切 custom
-                    request._shape_uploaded = True
-                    flash('形状图片已上传', 'success')
-                except Exception as e:
-                    flash(f'形状图片处理失败: {e}', 'danger')
+                    result = process_upload(
+                        file,
+                        max_side=512,
+                        quality=80,
+                        allowed_exts=('png', 'webp', 'jpg', 'jpeg'),
+                    )
+                except ImageUploadError as e:
+                    flash(f'形状图片处理失败：{e}', 'danger')
                     return render_template('admin/wordcloud_config.html', form=form, config=config)
+                filename, rel_path = save_upload(result['data'], result['ext'], 'shape')
+                # 删除旧形状图片：safe_remove_upload 内含 realpath 校验，
+                # 修复原实现直接拼路径删除、缺少路径穿越防护的问题
+                if config.shape_image:
+                    safe_remove_upload(config.shape_image)
+                config.shape_image = rel_path
+                # 标记图片已上传，populate_obj 后强制切 custom
+                request._shape_uploaded = True
+                flash('形状图片已上传', 'success')
 
         form.populate_obj(config)
         # 如果上传了自定义形状图片，强制 shape 为 custom（覆盖表单提交值）
