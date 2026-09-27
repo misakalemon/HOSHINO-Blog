@@ -24,7 +24,7 @@ import re
 from functools import wraps
 
 import bleach
-from flask import Blueprint, abort, g, jsonify, request
+from flask import Blueprint, abort, g, jsonify, request, url_for
 
 from .admin import _invalidate_sidebar_cache, _sanitize_html
 from .models import ApiToken, Category, Post, User, db
@@ -469,4 +469,60 @@ def whoami():
             'is_editor': user.is_editor,
             'is_admin': user.is_admin,
         },
+    })
+
+
+@api_bp.route('/uploads', methods=['POST'])
+@token_required
+def upload_image():
+    """上传图片（Bearer Token 认证），供外部客户端/自动化在文章中插图。
+
+    请求：multipart/form-data，字段名 ``file``（与后台 Web 入口一致，
+    因此客户端可复用同一套上传代码）。
+
+    权限：令牌对应用户需为作者及以上（与后台插图权限 @author_required 对齐）；
+    普通只读令牌返回 403。
+
+    处理流程与 Web 端**完全共用** blog/core/images.py：
+      扩展名 + 魔数 + 体积校验（UPLOAD_MAX_BYTES）、EXIF 方向转正、
+      色彩模式归一（CMYK/P/LA → RGB/RGBA）、最长边限制、
+      统一转 WebP（GIF 保留格式与动画）、UUID 文件名。
+
+    返回：
+        200 {"ok": true, "url": "/static/uploads/img_xxx.webp",
+             "width": int, "height": int, "bytes": int, "animated": bool}
+        400 {"ok": false, "error": "..."}   — 校验/处理失败（消息可直接展示）
+        403 {"ok": false, "error": "..."}   — 权限不足
+    """
+    if not getattr(g.token_user, 'is_author', False):
+        return jsonify({'ok': False, 'error': '当前令牌无权上传图片（需作者及以上权限）'}), 403
+
+    file = request.files.get('file')
+    if file is None:
+        return jsonify({'ok': False, 'error': '没有文件（字段名应为 file）'}), 400
+
+    from .images import ImageUploadError, process_upload, save_upload
+
+    try:
+        result = process_upload(file)
+    except ImageUploadError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+    except Exception:
+        logger.exception('API 图片上传处理异常: %s', getattr(file, 'filename', '?'))
+        return jsonify({'ok': False, 'error': '图片处理失败'}), 400
+
+    filename, rel_path = save_upload(result['data'], result['ext'], 'img')
+    logger.info(
+        'API 图片上传: %s → %s (%dx%d, %dKB) by user=%d',
+        file.filename, rel_path, result['width'], result['height'],
+        result['bytes'] // 1024, g.token_user.id,
+    )
+    return jsonify({
+        'ok': True,
+        'url': url_for('static', filename=rel_path),
+        'filename': filename,
+        'width': result['width'],
+        'height': result['height'],
+        'bytes': result['bytes'],
+        'animated': result['animated'],
     })

@@ -1248,6 +1248,44 @@ def rss_feed():
 # ═══════════════════════════════════════════════
 # 缩略图生成
 # ═══════════════════════════════════════════════
+def _thumb_response(body, mime_type, source_path):
+    """构造缩略图响应：带 ETag / Last-Modified 并支持条件请求 304。
+
+    ETag 由「源图 mtime + 源图大小 + 缩略图缓存版本」派生：
+      - 源图被替换（mtime/size 变化）→ ETag 变化 → 客户端重新拉取
+      - THUMB_CACHE_VER 升级（缩略图算法/参数变化）→ ETag 变化
+    命中 If-None-Match 时返回 304（空 body），避免重复传输整张图片；
+    图片是页面体积主体，回访与站内跳转因此可省下大部分带宽。
+
+    实现注意（实测坑）：
+      - 使用**强 ETag**（不带 W/ 前缀）：Werkzeug 的 request.if_none_match
+        会直接忽略弱 ETag，导致条件请求永不命中。
+      - 成员判断用**去引号的裸值**：Werkzeug 解析头部后以裸值存储
+        （'"abc"' → {'abc'}），带引号比较同样永不命中。
+    """
+    from email.utils import formatdate
+
+    etag = None
+    last_modified = None
+    try:
+        st = os.stat(source_path)
+        etag = f'"{int(st.st_mtime)}-{st.st_size}-{THUMB_CACHE_VER}"'
+        last_modified = formatdate(st.st_mtime, usegmt=True)
+    except OSError:
+        pass
+
+    if etag and request.if_none_match and etag.strip('"') in request.if_none_match:
+        resp = Response(status=304)
+    else:
+        resp = Response(body, mimetype=mime_type)
+    if etag:
+        resp.headers['ETag'] = etag
+    if last_modified:
+        resp.headers['Last-Modified'] = last_modified
+    resp.headers['Cache-Control'] = 'public, max-age=2592000'
+    return resp
+
+
 @blog_bp.route('/thumb')
 def thumbnail():
     """动态生成图片缩略图并缓存到磁盘。
@@ -1335,11 +1373,7 @@ def thumbnail():
         cache_mtime = os.path.getmtime(cache_path)
         if cache_mtime >= img_mtime:
             with open(cache_path, 'rb') as f:
-                return Response(
-                    f.read(),
-                    mimetype=mime_type,
-                    headers={'Cache-Control': 'public, max-age=2592000'},
-                )
+                return _thumb_response(f.read(), mime_type, img_path)
     # ── 生成缩略图 ──────────────────────────
     try:
         from PIL import Image
@@ -1358,11 +1392,7 @@ def thumbnail():
                 cache_mtime = os.path.getmtime(cache_path)
                 if cache_mtime >= img_mtime:
                     with open(cache_path, 'rb') as f:
-                        return Response(
-                            f.read(),
-                            mimetype=mime_type,
-                            headers={'Cache-Control': 'public, max-age=2592000'},
-                        )
+                        return _thumb_response(f.read(), mime_type, img_path)
             from .images import normalize_image
 
             img = Image.open(img_path)
@@ -1382,14 +1412,14 @@ def thumbnail():
                 img = img.convert('RGB')
             img.save(cache_path, output_fmt, **save_kwargs)
             with open(cache_path, 'rb') as f:
-                return Response(
-                    f.read(), mimetype=mime_type, headers={'Cache-Control': 'public, max-age=2592000'}
-                )
+                return _thumb_response(f.read(), mime_type, img_path)
     except Exception as e:
         # 缩略图生成失败时，降级返回原始图片（避免页面图片缺失）
         logger.error('缩略图失败: %s w=%d error=%s', path, w, e)
         with open(img_path, 'rb') as f:
-            return Response(f.read(), mimetype=mimetypes.guess_type(path)[0] or 'image/jpeg')
+            return _thumb_response(
+                f.read(), mimetypes.guess_type(path)[0] or 'image/jpeg', img_path
+            )
 
 
 # ── 缓存清理辅助函数 ──────────────────────────

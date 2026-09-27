@@ -661,6 +661,7 @@ arc/search API（按 pubdate 倒序翻页）
 | POST | `/api/v1/posts` | 创建文章 |
 | PUT | `/api/v1/posts/<id_or_slug>` | 编辑文章（仅传需改字段） |
 | DELETE | `/api/v1/posts/<id_or_slug>` | 删除文章 |
+| POST | `/api/v1/uploads` | 上传图片（multipart 字段 `file`，需作者及以上令牌；统一转 WebP、EXIF 转正、最长边限制） |
 
 认证：`Authorization: Bearer <token>`，令牌在后台 `/admin/tokens` 申请。
 categories 支持 id / slug / name 三种形式。响应含 `url` 和 `word_count` 字段。

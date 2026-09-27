@@ -261,6 +261,51 @@ def _invalidate_page_cache(*prefixes):
         cache_delete_pattern(f'{prefix}:*')
 
 
+def _remove_upload_if_unreferenced(rel_path):
+    """删除上传文件，但仅当没有任何记录仍引用它（安全清理）。
+
+    背景：特色卡片封面与 Hero 画像在"替换图片"或"删除记录"后会留下
+    不再被引用的文件，长期累积；而直接删除有误删风险（多条记录可能
+    手工填写同一路径）。因此先做全库引用检查，确认无引用才删除。
+
+    路径兼容两种存法：'uploads/x.webp' 与 '/static/uploads/x.webp'；
+    外链（http/https）与 emoji 等非本地路径直接跳过。
+
+    Returns:
+        bool: 是否实际删除了文件。
+    """
+    if not rel_path or not isinstance(rel_path, str):
+        return False
+    normalized = rel_path.strip()
+    if normalized.startswith('/static/'):
+        normalized = normalized[len('/static/'):]
+    if not normalized.startswith('uploads/'):
+        return False
+
+    from .models import FeaturedCard, HeroImage, Post, User, WordCloudConfig
+
+    variants = (normalized, '/static/' + normalized)
+    referenced = (
+        FeaturedCard.query.filter(
+            db.or_(FeaturedCard.icon.in_(variants), FeaturedCard.image_url.in_(variants))
+        ).first()
+        or HeroImage.query.filter(HeroImage.image_url.in_(variants)).first()
+        or Post.query.filter(Post.cover_image.in_(variants)).first()
+        or User.query.filter(User.avatar.in_(variants)).first()
+        or WordCloudConfig.query.filter(WordCloudConfig.shape_image.in_(variants)).first()
+    )
+    if referenced is not None:
+        logger.info('保留仍被引用的上传文件: %s', normalized)
+        return False
+
+    from .images import safe_remove_upload
+
+    removed = safe_remove_upload(normalized)
+    if removed:
+        logger.info('已清理不再引用的上传文件: %s', normalized)
+    return removed
+
+
 # ═══════════════════════════════════════════════
 # 权限控制装饰器
 # ═══════════════════════════════════════════════
@@ -1842,6 +1887,7 @@ def edit_featured_card(id):
     if form.validate_on_submit():
         if not _validate_url_protocol_local(form.link.data) or not _validate_image_url_local(form.image_url.data):
             return render_template('admin/featured-card-form.html', form=form, editing=True)
+        old_paths = (card.icon, card.image_url)   # 保存成功且不再被引用时清理
         card.title = form.title.data
         card.description = form.description.data or ''
         card.icon = form.icon.data or '✦'
@@ -1856,6 +1902,10 @@ def edit_featured_card(id):
             db.session.rollback()
             flash(f'更新失败: {e}', 'error')
             return render_template('admin/featured-card-form.html', form=form, editing=True)
+        # 替换/移除封面后清理旧文件（helper 内含全库引用检查，避免误删共享图片）
+        for old in old_paths:
+            if old and old not in (card.icon, card.image_url):
+                _remove_upload_if_unreferenced(old)
         from .cache import cache_delete
         cache_delete('home:featured_cards')
         _invalidate_page_cache('page:index')
@@ -1874,14 +1924,18 @@ def edit_featured_card(id):
 @admin_bp.route('/featured-cards/<int:id>/delete', methods=['POST'])
 @admin_required
 def delete_featured_card(id):
-    """删除特色卡片。
+    """删除特色卡片，并清理不再被引用的封面图片。
 
     Args:
         id: 卡片 ID
     """
     card = FeaturedCard.query.get_or_404(id)
+    old_paths = (card.icon, card.image_url)
     db.session.delete(card)
     db.session.commit()
+    # 记录删除后，未被其他记录引用的图片文件一并清理（helper 内含引用检查）
+    for old in old_paths:
+        _remove_upload_if_unreferenced(old)
     from .cache import cache_delete
     cache_delete('home:featured_cards')
     _invalidate_page_cache('page:index')
@@ -2121,8 +2175,10 @@ def edit_hero_image(id):
     """编辑 Hero 粒子画像。
 
     可修改标题、排序、启用状态、图片。
-    图片通过前端裁剪 → upload_image API 处理后传入 URL，
-    此处仅读取 image_url 字段更新记录，有值则替换，无值保留原图。
+    图片通过前端裁剪 → upload_image API 处理后传入 URL：
+      - 表单提交 image_url 有值 → 替换为新图
+      - 提交 remove_image=1     → 显式移除图片（前台降级为纯文字 Hero）
+      - 两者都没有               → 保留原图
 
     Args:
         id: HeroImage ID
@@ -2136,7 +2192,12 @@ def edit_hero_image(id):
         image.title = form.title.data or ''
         image.sort_order = form.sort_order.data or 0
         image.is_active = form.is_active.data
-        if form.image_url.data:
+        old_url = image.image_url
+        if request.form.get('remove_image') == '1':
+            # 显式移除图片：置为 ''（字段为 NOT NULL，允许空串）。
+            # 前台 {% if hero_image %} 对空串为假 → 自动降级为纯文字 Hero。
+            image.image_url = ''
+        elif form.image_url.data:
             raw_url = (form.image_url.data or '').strip()
             from .utils import is_safe_image_url
             if raw_url and not is_safe_image_url(raw_url):
@@ -2147,6 +2208,9 @@ def edit_hero_image(id):
             else:
                 image.image_url = raw_url
         db.session.commit()
+        # 图片被替换或移除后，清理不再被引用的旧文件（helper 内含引用检查）
+        if old_url and old_url != image.image_url:
+            _remove_upload_if_unreferenced(old_url)
         _invalidate_page_cache('page:index')
         flash('Hero 画像已更新', 'success')
         return redirect(url_for('admin.hero_image_list'))
@@ -2163,16 +2227,19 @@ def edit_hero_image(id):
 @admin_bp.route('/hero-images/<int:id>/delete', methods=['POST'])
 @admin_required
 def delete_hero_image(id):
-    """删除 Hero 粒子画像。
+    """删除 Hero 粒子画像，并清理不再被引用的图片文件。
 
-    从数据库中删除记录（不删除物理文件，避免其他记录引用同一文件）。
+    图片文件先做全库引用检查（见 _remove_upload_if_unreferenced），
+    仅当没有其他记录引用同一文件时才删除，避免误删共享图片。
 
     Args:
         id: HeroImage ID
     """
     image = HeroImage.query.get_or_404(id)
+    old_url = image.image_url
     db.session.delete(image)
     db.session.commit()
+    _remove_upload_if_unreferenced(old_url)
     _invalidate_page_cache('page:index')
     flash('Hero 画像已删除', 'success')
     return redirect(url_for('admin.hero_image_list'))

@@ -164,7 +164,7 @@ def test_process_upload_applies_exif_orientation():
 
 # ── 5. 编码与格式选择 ────────────────────────────
 def test_process_upload_converts_png_to_webp():
-    result = process_upload(FakeUpload(make_image_bytes('PNG'), 'a.png'), )
+    result = process_upload(FakeUpload(make_image_bytes('PNG'), 'a.png'))
     assert result['ext'] == 'webp'
     assert Image.open(io.BytesIO(result['data'])).format == 'WEBP'
 
@@ -172,14 +172,14 @@ def test_process_upload_converts_png_to_webp():
 def test_process_upload_converts_cmyk_jpeg_without_error():
     """CMYK 图片转 WebP 不再报错（此前模式未归一）。"""
     data = make_image_bytes('JPEG', mode='CMYK')
-    result = process_upload(FakeUpload(data, 'print.jpg'), )
+    result = process_upload(FakeUpload(data, 'print.jpg'))
     assert result['ext'] == 'webp'
     assert Image.open(io.BytesIO(result['data'])).mode in ('RGB', 'RGBA')
 
 
 def test_process_upload_keeps_gif_format():
     data = make_image_bytes('GIF', size=(16, 16), mode='P')
-    result = process_upload(FakeUpload(data, 'a.gif'), )
+    result = process_upload(FakeUpload(data, 'a.gif'))
     assert result['ext'] == 'gif'
     assert Image.open(io.BytesIO(result['data'])).format == 'GIF'
 
@@ -187,7 +187,7 @@ def test_process_upload_keeps_gif_format():
 def test_process_upload_preserves_animation_frames():
     """动画 GIF 必须保留全部帧（此前 img.save 只写当前帧）。"""
     data = make_animated_gif(n_frames=3)
-    result = process_upload(FakeUpload(data, 'anim.gif'), )
+    result = process_upload(FakeUpload(data, 'anim.gif'))
     assert result['animated'] is True
     assert result['ext'] == 'gif'
     reopened = Image.open(io.BytesIO(result['data']))
@@ -218,7 +218,7 @@ def test_process_upload_resizes_only_when_larger():
 
 
 def test_process_upload_result_shape():
-    result = process_upload(FakeUpload(make_image_bytes('PNG'), 'a.png'), )
+    result = process_upload(FakeUpload(make_image_bytes('PNG'), 'a.png'))
     for key in ('data', 'ext', 'width', 'height', 'animated', 'source_ext', 'bytes'):
         assert key in result, f'结果缺少字段 {key}'
     assert result['bytes'] == len(result['data'])
@@ -230,4 +230,99 @@ def test_process_upload_rejects_corrupt_image():
     """魔数正确但内容损坏 → 抛出可展示的错误而非崩溃。"""
     broken = b'\x89PNG\r\n\x1a\n' + b'\x00' * 40
     with pytest.raises(ImageUploadError):
-        process_upload(FakeUpload(broken, 'broken.png'), )
+        process_upload(FakeUpload(broken, 'broken.png'))
+
+
+# ── 8. 缩略图条件请求（需 Flask app）─────────────────
+def test_thumbnail_sets_etag(app, client):
+    """缩略图应返回强 ETag 与 Last-Modified（图片是页面体积主体）。"""
+    rv = client.get('/thumb?path=images/avatar/main-avatar.jpg&w=40')
+    assert rv.status_code == 200
+    etag = rv.headers.get('ETag')
+    assert etag, '缺少 ETag'
+    assert etag.startswith('"') and not etag.startswith('W/'), (
+        '必须使用强 ETag：Werkzeug 的 request.if_none_match 会忽略弱 ETag'
+        '（W/ 前缀），条件请求将永不命中'
+    )
+    assert rv.headers.get('Last-Modified')
+    assert rv.headers.get('Cache-Control') == 'public, max-age=2592000'
+
+
+def test_thumbnail_returns_304_on_matching_etag(app, client):
+    """回传相同 ETag 应得 304 且无 body（省下整张图片的传输）。"""
+    url = '/thumb?path=images/avatar/main-avatar.jpg&w=40'
+    etag = client.get(url).headers.get('ETag')
+    rv = client.get(url, headers={'If-None-Match': etag})
+    assert rv.status_code == 304
+    assert rv.data == b''
+
+
+def test_thumbnail_returns_200_on_stale_etag(app, client):
+    """ETag 不匹配时应正常返回图片（避免误命中导致图片不更新）。"""
+    rv = client.get(
+        '/thumb?path=images/avatar/main-avatar.jpg&w=40',
+        headers={'If-None-Match': '"stale-etag"'},
+    )
+    assert rv.status_code == 200
+    assert rv.data
+
+
+# ── 9. REST API 上传端点 ─────────────────────────────
+def test_api_upload_requires_token(client):
+    """未携带 Bearer Token 访问上传端点应 401。"""
+    rv = client.post('/api/v1/uploads')
+    assert rv.status_code == 401
+
+
+@pytest.fixture
+def api_author_token(app, _db):
+    """创建作者用户 + 有效令牌，返回 (raw_token, user_id)。"""
+    from blog.core.models import ApiToken, User
+
+    with app.app_context():
+        user = User(username='upload_author', email='up@t.com', role='author', is_active=True)
+        user.set_password('p')
+        _db.session.add(user)
+        _db.session.commit()
+        raw, _token = ApiToken.generate(user.id, 'upload-token')
+        return raw, user.id
+
+
+def test_api_upload_rejects_missing_file(app, client, api_author_token):
+    """带令牌但未带 file 字段 → 400（而非 500）。"""
+    raw, _ = api_author_token
+    rv = client.post('/api/v1/uploads', headers={'Authorization': f'Bearer {raw}'})
+    assert rv.status_code == 400
+    assert rv.get_json()['ok'] is False
+
+
+def test_api_upload_rejects_invalid_image(app, client, api_author_token):
+    """内容不是图片 → 400 并返回可展示的错误消息。"""
+    raw, _ = api_author_token
+    rv = client.post(
+        '/api/v1/uploads',
+        headers={'Authorization': f'Bearer {raw}'},
+        data={'file': (io.BytesIO(b'not an image'), 'fake.png')},
+        content_type='multipart/form-data',
+    )
+    assert rv.status_code == 400
+    assert rv.get_json()['ok'] is False
+
+
+def test_api_upload_success(app, client, api_author_token, tmp_path, monkeypatch):
+    """合法图片 → 200 且返回 url/尺寸信息，文件落在上传目录。"""
+    monkeypatch.setitem(app.config, 'UPLOAD_FOLDER', str(tmp_path))
+    raw, _ = api_author_token
+    rv = client.post(
+        '/api/v1/uploads',
+        headers={'Authorization': f'Bearer {raw}'},
+        data={'file': (io.BytesIO(make_image_bytes('PNG', (32, 16))), 'ok.png')},
+        content_type='multipart/form-data',
+    )
+    assert rv.status_code == 200, rv.data
+    payload = rv.get_json()
+    assert payload['ok'] is True
+    assert payload['url'].startswith('/static/uploads/img_')
+    assert payload['url'].endswith('.webp'), '非 GIF 应统一转 WebP'
+    assert (payload['width'], payload['height']) == (32, 16)
+    assert list(tmp_path.glob('img_*.webp')), '文件未写入配置的上传目录'

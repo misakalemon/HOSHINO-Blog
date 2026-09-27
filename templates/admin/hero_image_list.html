@@ -35,7 +35,7 @@
             {% for img in images %}
             <tr>
                 <td>{{ img.sort_order }}</td>
-                <td><img src="{{ img.image_url }}" style="width:60px;height:60px;object-fit:contain;background:#1a1a2e;border-radius:8px"></td>
+                <td>{% if img.image_url %}<img src="{{ img.image_url }}" style="width:60px;height:60px;object-fit:contain;background:#1a1a2e;border-radius:8px">{% else %}<span style="color:var(--text-muted);font-size:12px">无图片</span>{% endif %}</td>
                 <td>{{ img.title or '(未命名)' }}</td>
                 <td>{{ '启用' if img.is_active else '禁用' }}</td>
                 <td>{{ img.created_at.strftime('%Y-%m-%d') if img.created_at else '-' }}</td>
