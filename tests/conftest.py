@@ -11,10 +11,12 @@ os.environ['FLASK_ENV'] = 'testing'
 os.environ['SECRET_KEY'] = 'test-secret-key-for-unit-tests'
 
 # ── 数据库后端选择 ──────────────────────────────
-# TEST_DB_BACKEND=sqlite  → 用 SQLite 文件数据库（无需 MySQL）
-# TEST_DB_BACKEND=mysql   → 用 MySQL（需配置 hoshino_test 用户）
-# 默认 mysql，但 MySQL 不可用时自动回退 sqlite
-_TEST_BACKEND = os.environ.get('TEST_DB_BACKEND', 'mysql')
+# TEST_DB_BACKEND=sqlite  → 用 SQLite 文件数据库（无需 MySQL，默认）
+# TEST_DB_BACKEND=mysql   → 用 MySQL（需配置 hoshino_test 用户；CI 的 integration job 使用）
+#
+# 默认改为 sqlite：此前默认 mysql 且无回退，未装 MySQL 的环境会静默 skip
+# 约 43% 的测试（160/369），导致"测试通过"名不副实。
+_TEST_BACKEND = os.environ.get('TEST_DB_BACKEND', 'sqlite')
 
 if _TEST_BACKEND == 'sqlite':
     # 用临时文件 SQLite，避免 :memory: 多连接问题
@@ -64,10 +66,10 @@ def _compile_mediumtext_sqlite(element, compiler, **kw):
 
 @pytest.fixture(scope='session')
 def app():
-    """创建测试用 Flask 应用实例
+    """创建测试用 Flask 应用实例。
 
-    MySQL 不可用时跳过整个测试套件（而不是收集阶段直接报错），
-    使测试可在未配置 MySQL 的机器/CI 上安全运行。
+    TEST_DB_BACKEND=mysql 时先预检 MySQL 连接，不可用则跳过整个测试套件
+    （便于在没有 MySQL 的机器上安全运行）；sqlite 后端无需预检。
     """
     if _TEST_BACKEND != 'sqlite':
         try:

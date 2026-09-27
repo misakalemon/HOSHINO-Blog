@@ -1,0 +1,27 @@
+# HOSHINO Blog — pre-commit 钩子配置
+# 安装：pip install pre-commit && pre-commit install
+# 手动全量运行：pre-commit run --all-files
+#
+# 设计说明：ruff 钩子先只启用"一定不会误报"的最小规则集
+# （E9 语法错误、F63/F7/F82 未定义名与无效断言），保证钩子首日可用；
+# pyproject.toml 中已配置完整规则集（E/F/I/W/UP/N/SIM/PL），
+# 待存量清理完成后可把 args 改为 ['--fix']（即使用完整配置）。
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+        args: ['--markdown-linebreak-ext=md']
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: ['--maxkb=900']   # static/js/tiptap-editor.js 约 597KB
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.12.9
+    hooks:
+      - id: ruff
+        args: ['--select', 'E9,F63,F7,F82', '--fix']

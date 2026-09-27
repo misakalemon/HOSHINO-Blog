@@ -54,15 +54,13 @@ beautifulsoup4==4.12.2
 # lxml>=5.2.1：4.9.3 存在多个已知 CVE（CVE-2024-35178/35179/52595/56167、CVE-2025-24928）
 lxml>=5.2.1
 
-# --- Docker 浏览器爬虫 ---
-selenium==4.29.0
+# --- 系统监控（Worker 内存水位 GC；worker.py / wordcloud/generator.py 直接 import）---
+# 此前漏声明：缺失时 WORKER_MEM_LIMIT / WORKER_MEM_GC_SECONDS 水位 GC 会静默失效
+psutil>=5.9
 
 # --- Bilibili API ---
 bilibili-api-python==17.3.12
 qrcode[pil]==8.0
-
-# --- Launcher 图形界面 ---
-Eel==0.18.0
 
 # --- 中文分词 ---
 jieba==0.42.1
@@ -72,3 +70,7 @@ waitress==3.0.2
 
 # --- 日志处理（跨进程日志文件锁，logger.py 直接依赖） ---
 portalocker>=2.0
+
+# 已移除（全仓库无任何 import，详见 docs/changelog 的 launcher/selenium 下线记录）：
+#   selenium==4.29.0   — Docker 浏览器爬虫（docker-compose.yml 的 chrome 容器亦无代码调用）
+#   Eel==0.18.0        — 图形启动器（launcher.py 已删除）

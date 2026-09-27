@@ -3,6 +3,10 @@ import datetime
 import pytest
 from blog.core.utils import LRUDict, RateLimiter, now_cst, get_client_ip, validate_url_protocol, escape_like, CST
 
+# 本文件全部为纯函数测试，不依赖数据库/Flask 应用上下文：
+# 标记 pure 后 autouse 的 DB fixture 会跳过（无需 MySQL 也能运行）
+pytestmark = pytest.mark.pure
+
 
 class TestLRUDict:
     def test_maxsize_eviction(self):

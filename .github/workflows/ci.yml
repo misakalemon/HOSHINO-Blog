@@ -1,0 +1,125 @@
+name: CI
+
+# 说明：本工作流使用 GitHub Actions 语法。
+#   若在 GitCode 上使用且其 Actions 不读取 .github/workflows/，
+#   把本文件复制到 .gitcode/workflows/ci.yml 即可（内容无需改动）。
+# 本地等效校验见 check.bat（无需 CI 也能跑同一套检查）。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Lint + Test (SQLite)
+    runs-on: ubuntu-latest
+    env:
+      TEST_DB_BACKEND: sqlite
+      SECRET_KEY: ci-test-secret-key
+      WORKER_PROCESS: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: 安装依赖
+        run: pip install -r requirements-dev.txt
+
+      - name: 语法与未定义名检查（最小必过集）
+        run: ruff check --select E9,F63,F7,F82 .
+
+      - name: 测试与覆盖率
+        run: pytest --cov=blog --cov-report=term-missing --cov-report=xml
+
+      - name: 上传覆盖率报告
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage.xml
+          if-no-files-found: ignore
+
+  mysql-integration:
+    name: Integration (MySQL 8)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: hoshino_blog_test
+          MYSQL_USER: hoshino_test
+          MYSQL_PASSWORD: hoshino_test_pass
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      TEST_DB_BACKEND: mysql
+      DB_HOST: 127.0.0.1
+      DB_USER: hoshino_test
+      DB_PASS: hoshino_test_pass
+      DB_NAME: hoshino_blog_test
+      SECRET_KEY: ci-test-secret-key
+      WORKER_PROCESS: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: 安装依赖
+        run: pip install -r requirements-dev.txt
+
+      - name: MySQL 语义下的测试（upsert / 索引 / 迁移路径）
+        run: pytest -q
+
+  frontend-build:
+    name: 编辑器构建产物一致性
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 安装前端依赖
+        run: npm ci || npm install
+
+      - name: 重新构建编辑器
+        run: npm run build:editor
+
+      - name: 构建产物必须与源码同步
+        run: git diff --exit-code -- static/js static/css
+
+  dependency-audit:
+    name: 依赖漏洞扫描（非阻塞）
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - run: pip install pip-audit
+      - run: pip-audit -r requirements.txt --severity high

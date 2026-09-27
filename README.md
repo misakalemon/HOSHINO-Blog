@@ -150,11 +150,11 @@ HOSHINO Blog 是一个基于 Python Flask 框架构建的个人博客系统。�
 git clone <your-repo-url>
 cd hoshino_blog
 
-# 2. 通过 Conda 创建环境（自动安装全部依赖）
+# 2. 通过 Conda 创建环境（自动安装全部依赖，环境名 blog_env）
 conda env create -f environment.yml
 
-# 3. 激活环境
-conda activate hoshino-blog
+# 3. 激活环境（环境名须与 environment.yml 的 name 及 start.bat 默认值一致）
+conda activate blog_env
 
 # 4. 创建 MySQL 数据库
 mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS hoshino_blog DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"

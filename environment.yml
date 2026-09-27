@@ -3,7 +3,7 @@
 # 更新环境：conda env update -f environment.yml
 # 导出环境：conda env export --no-builds > environment.yml
 
-name: hoshino-blog
+name: blog_env
 
 channels:
   - conda-forge
@@ -70,11 +70,13 @@ dependencies:
   # --- 日志处理（跨进程日志文件锁） ---
   - portalocker>=2.0
 
+  # --- 系统监控（Worker 内存水位 GC） ---
+  - psutil>=5.9
+
   # --- pip 安装（conda-forge 未打包或版本滞后的包）---
   - pip
   - pip:
-    - selenium==4.29.0
-    - bilibili-api-python>=17.0.0
+    - bilibili-api-python>=17.3,<18
     - qrcode[pil]>=7.4
-    - Eel>=0.18
     - jieba>=0.42
+    # selenium / Eel 已移除（全仓库无 import；launcher.py 与浏览器爬虫均已下线）
