@@ -5,6 +5,9 @@ __pycache__/
 *.egg
 venv/
 
+# 本地依赖清单（含机器相关版本差异，如 requirements.local.txt，不入库）
+*.local.txt
+
 # Node.js
 node_modules/
 
