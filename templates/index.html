@@ -95,8 +95,8 @@
 {% if not (search_query is defined and search_query) %}
 <div class="featured-grid">
     {% for card in featured_cards %}
-    {% set _icon_is_img = card.icon and (card.icon.startswith('uploads/') or card.icon.startswith('/static/')) %}
-    {# 图片来源优先级：icon（站内图片路径）> image_url（"图片 URL 备选"字段，支持外链）> emoji 图标 #}
+    {% set _icon_is_img = card.icon and (card.icon.startswith('uploads/') or card.icon.startswith('images/') or card.icon.startswith('/static/') or card.icon.startswith('http')) %}
+    {# 图片来源优先级：icon（站内路径或外链）> image_url（"图片 URL 备选"字段）> emoji 图标 #}
     {% set _card_img = card.icon if _icon_is_img else (card.image_url or '') %}
     <div class="featured-card">
         <!-- 卡片图标区域：支持 emoji 图标、站内上传图片或外链图片 -->

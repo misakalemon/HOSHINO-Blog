@@ -26,9 +26,9 @@
         <tr>
             <td data-label="排序">{{ c.sort_order }}</td>
             <!-- 图标列：站内图片 / 外链图片（image_url 备选）/ emoji -->
-            {% set _icon_is_img = c.icon and (c.icon.startswith('uploads/') or c.icon.startswith('/static/')) %}
+            {% set _icon_is_img = c.icon and (c.icon.startswith('uploads/') or c.icon.startswith('images/') or c.icon.startswith('/static/') or c.icon.startswith('http')) %}
             {% set _card_img = c.icon if _icon_is_img else (c.image_url or '') %}
-            <td data-label="图标" style="{% if _card_img %}padding:4px{% else %}font-size:1.3rem{% endif %}">{% if _card_img %}<img src="{{ _card_img if _card_img.startswith('http') else url_for('static', filename=_card_img.replace('/static/', '')) }}" alt="{{ c.title }}" style="width:40px;height:40px;border-radius:8px;object-fit:cover;display:block">{% else %}{{ c.icon or '✦' }}{% endif %}</td>
+            <td data-label="图标" style="{% if _card_img %}padding:4px{% else %}font-size:1.3rem{% endif %}">{% if _card_img %}<img src="{{ image_src(_card_img) }}" alt="{{ c.title }}" style="width:40px;height:40px;border-radius:8px;object-fit:cover;display:block">{% else %}{{ c.icon or '✦' }}{% endif %}</td>
             <td data-label="标题"><strong>{{ c.title }}</strong></td>
             <td data-label="标签">
                 <!-- 通过 cat_lookup 映射标签 ID 到中文名 -->

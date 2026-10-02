@@ -89,7 +89,8 @@
 (function() {
   var existingIcon = '{{ form.icon.data or "" }}';
   // 编辑模式：如果已有图标路径且为图片类型，则加载预览
-  if (existingIcon && (existingIcon.startsWith('uploads/') || existingIcon.startsWith('/static/'))) {
+  // （站内 uploads/ images/ /static/ 或外链 http(s) 都算图片）
+  if (existingIcon && (existingIcon.startsWith('uploads/') || existingIcon.startsWith('images/') || existingIcon.startsWith('/static/') || existingIcon.startsWith('http'))) {
     var url = existingIcon.startsWith('/static/') ? existingIcon : '/static/' + existingIcon;
     document.getElementById('iconPreview').innerHTML = '<img src="' + url + '" alt="icon">';
     document.getElementById('iconPreview').style.display = 'block';
