@@ -29,7 +29,7 @@ from flask import Blueprint, abort, g, jsonify, request, url_for
 from .admin import _invalidate_sidebar_cache, _sanitize_html
 from .models import ApiToken, Category, Post, User, db
 from .routes import ALLOWED_ATTRS, ALLOWED_TAGS
-from .utils import is_safe_image_url, now_cst
+from .utils import is_safe_image_url, normalize_upload_path, now_cst
 
 logger = logging.getLogger(__name__)
 
@@ -175,7 +175,7 @@ def _validate_post_payload(data, editing=False):
         cover_str = str(cover)[:512]
         if cover_str and not is_safe_image_url(cover_str):
             return None, 'cover_image 必须是 http/https URL 或站内路径', 422
-        fields['cover_image'] = cover_str
+        fields['cover_image'] = normalize_upload_path(cover_str)
     elif not editing:
         fields['cover_image'] = ''
 

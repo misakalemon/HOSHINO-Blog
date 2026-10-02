@@ -111,6 +111,32 @@ def is_safe_image_url(url: str) -> bool:
                          'uploads/', 'images/'))
 
 
+def normalize_upload_path(value):
+    """规范化图片字段的站内路径：去掉 /static/ 前缀，外链与空值原样返回。
+
+    背景：图片字段（cover_image / avatar / icon 等）允许三类取值——
+    外链、"站内绝对路径"（/static/uploads/x.webp）与"相对路径"
+    （uploads/x.webp，前端裁剪上传回填的形式）。而缩略图服务 /thumb
+    要求相对 static 的形式，历史上混入的带前缀值会让 os.path.join 被
+    绝对路径覆盖 → 路径校验失败 404 → 前端 data-hide-on-error 隐藏图片
+    → 页面表现为"封面空白"。
+
+    在写入端统一为规范形式（模板侧再由 image_src() 兜底）：
+      '/static/uploads/x.webp' → 'uploads/x.webp'
+      'static/uploads/x.webp'  → 'uploads/x.webp'
+      'https://…'              → 原样保留
+      ''/None                  → ''
+    """
+    if not value or not isinstance(value, str):
+        return value or ''
+    v = value.strip()
+    if v.startswith('/static/'):
+        v = v[len('/static/'):]
+    elif v.startswith('static/'):
+        v = v[len('static/'):]
+    return v
+
+
 def build_site_url(endpoint: str, **values) -> str:
     """生成站点绝对 URL（供邮件链接等需要外链的场景）。
 

@@ -38,7 +38,7 @@
         <!-- 头像与基本信息 -->
         <div class="admin-profile-header">
             <div class="admin-avatar-wrap">
-                <img src="{{ url_for('blog.thumbnail', path=current_user.avatar or 'images/avatar/main-avatar.jpg', w=120) }}"
+                <img src="{{ image_src(current_user.avatar or 'images/avatar/main-avatar.jpg', 120) }}"
                      alt="avatar" class="admin-avatar">
                 <label for="avatarInput" class="admin-avatar-edit">✎</label>
             </div>

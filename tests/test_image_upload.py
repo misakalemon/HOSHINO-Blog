@@ -267,6 +267,84 @@ def test_thumbnail_returns_200_on_stale_etag(app, client):
     assert rv.data
 
 
+# ── 10. 封面空白（white cover）回归测试 ──────────────
+# 现象：封面显示为空白。根因是该字段允许"外链"与"/static/ 前缀"两类值，
+# 而 /thumb 此前只处理相对路径 → 前者落到占位透明 GIF、后者触发 404，
+# 前端 data-hide-on-error 再把图片隐藏，页面看起来就是"封面都是白的"。
+PLACEHOLDER_GIF = (
+    b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff'
+    b'\x00\x00\x00!\xf9\x04\x00\x00\x00\x00\x00,\x00\x00\x00\x00'
+    b'\x01\x00\x01\x00\x00\x02\x02D\x01\x00;'
+)
+
+
+def test_thumb_accepts_static_prefixed_path(app, client):
+    """带 /static/ 前缀的历史/API 写入值也能正常出图（此前 404 → 白封面）。"""
+    rv = client.get('/thumb?path=/static/images/avatar/main-avatar.jpg&w=40')
+    assert rv.status_code == 200
+    assert rv.data != PLACEHOLDER_GIF
+    assert len(rv.data) > 200
+
+
+def test_thumb_redirects_external_cover(app, client):
+    """外链封面应 302 到原图（此前落到占位透明 GIF，页面表现为白封面）。"""
+    rv = client.get('/thumb?path=https://example.com/cover.jpg')
+    assert rv.status_code == 302
+    assert rv.headers['Location'] == 'https://example.com/cover.jpg'
+
+
+def test_thumb_upgrades_http_cover_to_https(app, client):
+    """http 外链升级为 https，否则会被浏览器按混合内容阻止。"""
+    rv = client.get('/thumb?path=http://example.com/cover.jpg')
+    assert rv.status_code == 302
+    assert rv.headers['Location'] == 'https://example.com/cover.jpg'
+
+
+def test_thumb_does_not_redirect_non_http_scheme(app, client):
+    """非 http(s) 伪协议不得进入重定向（避免开放重定向 / XSS）。"""
+    rv = client.get('/thumb?path=javascript:alert(1)')
+    assert 'javascript' not in (rv.headers.get('Location') or '')
+
+
+def test_thumb_keeps_path_traversal_protection(app, client):
+    """路径穿越防护不得因本次归一化改动而被削弱。"""
+    assert client.get('/thumb?path=../config.py').status_code == 404
+    assert client.get('/thumb?path=../../etc/passwd').status_code == 404
+
+
+def test_thumb_missing_file_returns_placeholder(app, client):
+    """站内文件确实缺失时仍返回占位图（保持原有兜底，不抛 500）。"""
+    rv = client.get('/thumb?path=uploads/definitely-missing.webp&w=40')
+    assert rv.status_code == 200
+    assert rv.data == PLACEHOLDER_GIF
+
+
+def test_normalize_upload_path():
+    """写入端规范化：去 /static/ 前缀，外链与空值原样（空值归一为空串）。"""
+    from blog.core.utils import normalize_upload_path as n
+
+    assert n('/static/uploads/x.webp') == 'uploads/x.webp'
+    assert n('static/uploads/x.webp') == 'uploads/x.webp'
+    assert n('uploads/x.webp') == 'uploads/x.webp'
+    assert n('  images/a.jpg  ') == 'images/a.jpg'
+    assert n('https://cdn.com/a.png') == 'https://cdn.com/a.png'
+    assert n('') == ''
+    assert n(None) == ''
+
+
+def test_image_src_template_global(app, client):
+    """模板全局 image_src：外链直连并升级 https，站内路径走缩略图。"""
+    from blog.core.routes import image_src
+
+    with app.test_request_context('/'):
+        assert image_src('https://cdn.com/a.png') == 'https://cdn.com/a.png'
+        assert image_src('http://cdn.com/a.png') == 'https://cdn.com/a.png'
+        rv = image_src('/static/uploads/x.webp', 400)
+        assert '/thumb' in rv and 'path=uploads/x.webp' in rv and 'w=400' in rv
+        assert image_src('') == ''
+        assert image_src(None) == ''
+
+
 # ── 9. REST API 上传端点 ─────────────────────────────
 def test_api_upload_requires_token(client):
     """未携带 Bearer Token 访问上传端点应 401。"""

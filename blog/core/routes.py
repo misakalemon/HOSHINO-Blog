@@ -1313,6 +1313,30 @@ def thumbnail():
 
     from flask import current_app
 
+    # ── 路径形式归一（兼容三类写入来源）──────────────────
+    #   1) 'uploads/x.webp'         — 规范形式（相对 static）
+    #   2) '/static/uploads/x.webp' — API / 早期版本 / 导入写入的带前缀形式
+    #   3) 'https://…'              — 外链封面（api.py、forms.py、
+    #                                 tools/upload_post.py 均允许写入）
+    # 此前只支持形式 1：形式 2 会因 os.path.join 被绝对路径覆盖而触发
+    # 路径校验 404（前端 data-hide-on-error 把图片隐藏），形式 3 会走到
+    # "文件不存在 → 占位透明 GIF" 分支——两者在页面上都表现为"封面空白"。
+    raw_path = (path or '').strip()
+    if raw_path.startswith(('http://', 'https://')):
+        # 外链直接重定向：不代理内容（无 SSRF 风险），也避免白图分支。
+        # http 升级为 https：站点通常以 https 提供服务，重定向到 http
+        # 会被浏览器按混合内容阻止，同样表现为封面空白。
+        if raw_path.startswith('http://'):
+            raw_path = 'https://' + raw_path[len('http://'):]
+        return redirect(raw_path)
+    if raw_path.startswith('/static/'):
+        raw_path = raw_path[len('/static/'):]
+    elif raw_path.startswith('static/'):
+        raw_path = raw_path[len('static/'):]
+    path = raw_path
+    if not path:
+        abort(404)
+
     # 路径安全检查：禁止目录遍历（规范化后验证前缀是否为 static_dir）
     # 注意：必须用 static_dir + os.sep 前缀比较，防止 "static2" 这类
     # 以 "static" 开头的兄弟目录被字符串前缀匹配绕过（路径穿越漏洞）。
@@ -1463,6 +1487,46 @@ def _cleanup_old_cache(cache_dir, current_ver):
 
 
 # ── 模板全局函数 ──────────────────────────────
+@blog_bp.app_template_global()
+def image_src(path, w=400, fmt=None):
+    """模板中解析图片地址：外链直连，站内路径走缩略图服务。
+
+    统一处理三类取值（文章封面、用户头像、侧边栏缩略图等）：
+      - 外链（http/https）→ 原样返回，由浏览器直连。此前这类值会被送进
+        /thumb，因"文件不存在"落到占位透明 GIF 分支，页面表现为封面空白。
+      - '/static/uploads/x.webp' → 去掉前缀后交给缩略图（兼容 API / 早期
+        版本 / 导入工具写入的带前缀形式）
+      - 'uploads/x.webp'、'images/x.jpg' → 交给缩略图服务
+
+    用法：``{{ image_src(post.cover_image, 400) }}``
+    """
+    if path is None:
+        return ''
+    value = str(path).strip()
+    if not value:
+        return ''
+    if value.startswith(('http://', 'https://')):
+        # http 外链升级为 https：站点以 https 提供服务时，
+        # http 图片会被浏览器按混合内容阻止（页面表现为封面空白）
+        if value.startswith('http://'):
+            value = 'https://' + value[len('http://'):]
+        return value
+    if value.startswith('/static/'):
+        value = value[len('/static/'):]
+    elif value.startswith('static/'):
+        value = value[len('static/'):]
+    if not value:
+        return ''
+    params = {'path': value, 'w': w}
+    if fmt:
+        params['fmt'] = fmt
+    try:
+        return url_for('blog.thumbnail', **params)
+    except Exception:
+        # 无请求上下文等极端情形：退化为静态文件路径
+        return url_for('static', filename=value)
+
+
 @blog_bp.app_template_global()
 def format_date(dt, fmt='%Y/%m/%d'):
     """在 Jinja2 模板中格式化日期。

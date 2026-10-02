@@ -38,7 +38,7 @@
                 ></iframe>
 
                 <div class="author-box">
-                    <img src="{{ url_for('blog.thumbnail', path=post.author.avatar, w=120) }}" alt="{{ post.author.display_name or post.author.username }}" loading="lazy" decoding="async">
+                    <img src="{{ image_src(post.author.avatar, 120) }}" alt="{{ post.author.display_name or post.author.username }}" loading="lazy" decoding="async">
                     <div class="info">
                         <h5>{{ post.author.display_name or post.author.username }}</h5>
                         <p>{{ post.author.bio or '博主' }}</p>

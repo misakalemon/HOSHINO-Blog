@@ -16,6 +16,11 @@ node_modules/
 # Database
 *.db
 
+# 缩略图磁盘缓存（/thumb 运行时生成，可随时重建）
+static/.thumb_cache/
+# 词云/上传的运行时产物目录（如存在）
+static/uploads/tmp/
+
 # IDE
 .idea/
 .vscode/

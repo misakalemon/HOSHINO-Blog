@@ -20,11 +20,12 @@
     <!-- 视频信息 -->
     <div class="glass-card" style="margin-bottom:24px">
         {% if video.pic %}
-        <div style="margin-bottom:20px">
+        {# 容器复用 .img-glow：外链封面加载失败时显示深色渐变骨架，
+           而不是露出页面背景（浅色主题下看起来就是"白封面"）#}
+        <div class="img-glow" style="margin-bottom:20px">
             {% set pic_url = video.pic.replace('http://', 'https://') %}
             <img src="{{ pic_url }}@640w_360h_1c.webp" alt="视频封面" 
                  referrerpolicy="no-referrer" 
-                 crossorigin="anonymous"
                  loading="lazy" 
                  onerror="this.onerror=null;this.src='{{ pic_url }}'"
                  style="width:100%;max-width:640px;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.3);display:block;margin:0 auto">

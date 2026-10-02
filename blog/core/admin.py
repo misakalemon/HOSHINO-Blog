@@ -68,7 +68,15 @@ import bleach
 
 from .. import admin_bp
 from .routes import ALLOWED_TAGS, ALLOWED_ATTRS
-from .utils import LRUDict, now_cst, get_client_ip, validate_url_protocol, is_safe_image_url, escape_like
+from .utils import (
+    LRUDict,
+    escape_like,
+    get_client_ip,
+    is_safe_image_url,
+    normalize_upload_path,
+    now_cst,
+    validate_url_protocol,
+)
 
 
 # iframe 允许嵌入的视频平台域名白名单（防止嵌入钓鱼/恶意页面）
@@ -716,7 +724,7 @@ def new_post():
             slug=form.slug.data,
             summary=form.summary.data,
             content=form.content.data,
-            cover_image=form.cover_image.data or '',
+            cover_image=normalize_upload_path(form.cover_image.data),
             html_content=html_content,
             html_file_url='',
             author_id=current_user.id,
@@ -803,7 +811,7 @@ def edit_post(id):
         post.slug = form.slug.data
         post.summary = form.summary.data
         post.content = form.content.data
-        post.cover_image = form.cover_image.data or ''
+        post.cover_image = normalize_upload_path(form.cover_image.data)
         post.is_published = form.is_published.data
         post.is_top = form.is_top.data
         post.updated_at = now_cst()

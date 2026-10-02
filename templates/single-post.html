@@ -74,7 +74,7 @@
                 <!-- 文章封面图（可选） -->
                 {% if post.cover_image %}
                 <div class="featured-image">
-                    <img src="{{ url_for('blog.thumbnail', path=post.cover_image, w=800) }}" alt="{{ post.title }}" decoding="async" fetchpriority="high" style="display: block; margin: 0 auto;">
+                    <img src="{{ image_src(post.cover_image, 800) }}" alt="{{ post.title }}" decoding="async" fetchpriority="high" style="display: block; margin: 0 auto;">
                 </div>
                 {% endif %}
 
@@ -113,7 +113,7 @@
 
                 <!-- 作者信息 -->
                 <div class="author-box">
-                    <img src="{{ url_for('blog.thumbnail', path=post.author.avatar, w=120) }}" alt="{{ post.author.display_name or post.author.username }}" loading="lazy" decoding="async">
+                    <img src="{{ image_src(post.author.avatar, 120) }}" alt="{{ post.author.display_name or post.author.username }}" loading="lazy" decoding="async">
                     <div class="info">
                         <h5>{{ post.author.display_name or post.author.username }}</h5>
                         <p>{{ post.author.bio or '博主' }}</p>
